@@ -440,18 +440,29 @@ export class Repositories {
   }
 
   patchUser(id: string, patch: { name?: string; status?: string; passwordHash?: string; role?: UserRole; merchantId?: string | null }): UserRecord | undefined {
-    this.db.sqlite
-      .prepare(`
-        UPDATE users
-        SET name = COALESCE(?, name),
-            status = COALESCE(?, status),
-            password_hash = COALESCE(?, password_hash),
-            role = COALESCE(?, role),
-            merchant_id = COALESCE(?, merchant_id),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `)
-      .run(patch.name ?? null, patch.status ?? null, patch.passwordHash ?? null, patch.role ?? null, patch.merchantId ?? null, id);
+    const assignments = ["updated_at = CURRENT_TIMESTAMP"];
+    const values: Array<string | null> = [];
+    if (patch.name !== undefined) {
+      assignments.push("name = ?");
+      values.push(patch.name);
+    }
+    if (patch.status !== undefined) {
+      assignments.push("status = ?");
+      values.push(patch.status);
+    }
+    if (patch.passwordHash !== undefined) {
+      assignments.push("password_hash = ?");
+      values.push(patch.passwordHash);
+    }
+    if (patch.role !== undefined) {
+      assignments.push("role = ?");
+      values.push(patch.role);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "merchantId")) {
+      assignments.push("merchant_id = ?");
+      values.push(patch.merchantId ?? null);
+    }
+    this.db.sqlite.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).run(...values, id);
     return this.getUserById(id);
   }
 

@@ -122,11 +122,12 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/users/:id", { preHandler: adminOnly }, async (request, reply) => {
     const body = request.body ?? {};
+    const role = body.role === "platform_admin" || body.role === "merchant_admin" || body.role === "merchant_operator" ? body.role : undefined;
     const user = deps.repos.patchUser(request.params.id, {
       name: typeof body.name === "string" ? body.name : undefined,
       status: body.status === "active" || body.status === "disabled" ? body.status : undefined,
-      role: body.role === "platform_admin" || body.role === "merchant_admin" || body.role === "merchant_operator" ? body.role : undefined,
-      merchantId: typeof body.merchantId === "string" ? body.merchantId : undefined,
+      role,
+      merchantId: role === "platform_admin" ? null : typeof body.merchantId === "string" ? body.merchantId : undefined,
       passwordHash: typeof body.password === "string" && body.password.length >= 8 ? hashPassword(body.password) : undefined
     });
     if (!user) return reply.code(404).send({ error: "user not found" });

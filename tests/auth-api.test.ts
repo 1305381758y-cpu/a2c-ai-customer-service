@@ -86,4 +86,53 @@ describe("auth api", () => {
 
     await app.close();
   });
+
+  it("clears merchant ownership when a user is promoted to platform admin", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "Admin123456" }
+    });
+    const cookie = String(login.headers["set-cookie"]);
+
+    const merchant = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie },
+      payload: { name: "角色测试商户" }
+    });
+    const user = await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie },
+      payload: {
+        merchantId: merchant.json().id,
+        email: "promote@test.local",
+        name: "待升级用户",
+        password: "Merchant123456",
+        role: "merchant_operator"
+      }
+    });
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: `/api/admin/users/${user.json().id}`,
+      headers: { cookie },
+      payload: { role: "platform_admin" }
+    });
+
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().role).toBe("platform_admin");
+    expect(patched.json().merchantId).toBeNull();
+
+    await app.close();
+  });
 });

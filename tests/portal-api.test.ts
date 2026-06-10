@@ -225,4 +225,113 @@ describe("portal api", () => {
 
     await app.close();
   });
+
+  it("sends manual merchant messages through A2C with the conversation account", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentBodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 200, data: { accessToken: "token-for-test", expireIn: 3600 } });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentBodies.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `manual-${sentBodies.length}` });
+      }
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "手动发送测试" }
+      });
+      const merchantId = merchant.json().id as string;
+
+      await app.inject({
+        method: "PATCH",
+        url: `/api/admin/merchants/${merchantId}/config`,
+        headers: { cookie: adminCookie },
+        payload: {
+          a2cBaseUrl: "https://a2c.test/api/openapi",
+          a2cAppId: "app-id",
+          a2cAppSecret: "app-secret",
+          a2cAccountPhone: "manual-a2c-account"
+        }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: {
+          merchantId,
+          email: "manual-merchant@test.local",
+          name: "手动发送员",
+          password: "Merchant123456",
+          role: "merchant_operator"
+        }
+      });
+      const merchantCookie = await login(app, "manual-merchant@test.local", "Merchant123456");
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: "/webhooks/a2c",
+        payload: {
+          id: "manual-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "manual-customer-message-1",
+            content: "phone +60123456789 tg @customer_123",
+            from: "manual-customer-phone",
+            to: "manual-a2c-account",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000),
+            nickname: "手动客户"
+          }
+        }
+      });
+      expect(webhook.json().status).toBe("handoff");
+
+      const conversations = await app.inject({
+        method: "GET",
+        url: "/api/merchant/conversations?status=human_handoff",
+        headers: { cookie: merchantCookie }
+      });
+      const conversationId = conversations.json().rows[0].id as string;
+
+      const sent = await app.inject({
+        method: "POST",
+        url: `/api/merchant/conversations/${conversationId}/send`,
+        headers: { cookie: merchantCookie },
+        payload: { type: "image", url: "https://cdn.example/image.png", caption: "图片说明", fileName: "image.png" }
+      });
+
+      expect(sent.statusCode).toBe(200);
+      expect(sent.json().externalId).toBe("manual-1");
+      expect(sentBodies[0]).toMatchObject({
+        to: "manual-customer-phone",
+        senderPhoneNumber: "manual-a2c-account",
+        type: 2,
+        url: "https://cdn.example/image.png",
+        caption: "图片说明",
+        fileName: "image.png"
+      });
+
+      const messages = await app.inject({
+        method: "GET",
+        url: `/api/merchant/conversations/${conversationId}/messages`,
+        headers: { cookie: merchantCookie }
+      });
+      const outbound = messages.json().rows.find((row: { direction: string; content: string }) => row.direction === "outbound" && row.content === "图片说明");
+      expect(outbound).toBeTruthy();
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
