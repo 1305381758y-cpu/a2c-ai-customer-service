@@ -62,6 +62,22 @@ export interface KnowledgeItemRecord {
   enabled: boolean;
 }
 
+export interface CustomerMemoryRecord {
+  id: number;
+  merchantId: string;
+  customerKey: string;
+  conversationId: string;
+  language: string;
+  stage: string;
+  extractedPhone: string;
+  extractedTelegram: string;
+  lastIntent: string;
+  summary: string;
+  facts: Record<string, unknown>;
+  operatorNotes: string;
+  updatedAt: string;
+}
+
 export interface MessageInput {
   conversationId: string;
   direction: "inbound" | "outbound";
@@ -170,6 +186,93 @@ export class Repositories {
       `)
       .all(conversationId, limit)
       .reverse() as Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+  }
+
+  getCustomerMemoryByConversation(conversationId: string): CustomerMemoryRecord | undefined {
+    const conversation = this.getConversation(conversationId);
+    if (!conversation) return undefined;
+    return this.getCustomerMemory(conversation.merchantId, conversation.customerPhone);
+  }
+
+  getCustomerMemory(merchantId: string, customerKey: string): CustomerMemoryRecord | undefined {
+    const row = this.db.sqlite
+      .prepare("SELECT * FROM customer_memories WHERE merchant_id = ? AND customer_key = ?")
+      .get(merchantId, customerKey) as Record<string, unknown> | undefined;
+    return row ? mapCustomerMemory(row) : undefined;
+  }
+
+  updateCustomerMemoryFromMessage(conversation: Conversation, input: { intent: string; content: string; direction: "inbound" | "outbound" }): CustomerMemoryRecord {
+    const existing = this.getCustomerMemory(conversation.merchantId, conversation.customerPhone);
+    const facts = existing?.facts ?? {};
+    const recentSignals = Array.isArray(facts.recentSignals) ? facts.recentSignals as Array<Record<string, unknown>> : [];
+    const signal = {
+      direction: input.direction,
+      intent: input.intent,
+      content: clipText(input.content, 180),
+      at: new Date().toISOString()
+    };
+    const lastIntent = input.direction === "inbound" || input.intent !== "unknown" ? input.intent : existing?.lastIntent ?? "unknown";
+    const nextFacts = {
+      ...facts,
+      customerPhone: conversation.customerPhone,
+      a2cAccountPhone: conversation.a2cAccountPhone,
+      nickname: conversation.nickname,
+      lastIntent,
+      lastMessage: clipText(input.content, 180),
+      recentSignals: [...recentSignals, signal].slice(-10)
+    };
+    const summary = buildCustomerMemorySummary(conversation, lastIntent, existing?.operatorNotes ?? "");
+
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO customer_memories
+          (merchant_id, customer_key, conversation_id, language, stage, extracted_phone, extracted_telegram, last_intent, summary, facts_json, operator_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(merchant_id, customer_key) DO UPDATE SET
+          conversation_id = excluded.conversation_id,
+          language = excluded.language,
+          stage = excluded.stage,
+          extracted_phone = excluded.extracted_phone,
+          extracted_telegram = excluded.extracted_telegram,
+          last_intent = excluded.last_intent,
+          summary = excluded.summary,
+          facts_json = excluded.facts_json,
+          updated_at = CURRENT_TIMESTAMP
+      `)
+      .run(
+        conversation.merchantId,
+        conversation.customerPhone,
+        conversation.id,
+        conversation.language,
+        conversation.stage,
+        conversation.extractedPhone,
+        conversation.extractedTelegram,
+        lastIntent,
+        summary,
+        JSON.stringify(nextFacts),
+        existing?.operatorNotes ?? ""
+      );
+    return this.getCustomerMemory(conversation.merchantId, conversation.customerPhone)!;
+  }
+
+  patchCustomerMemory(conversationId: string, merchantId: string | undefined, patch: Record<string, unknown>): CustomerMemoryRecord | undefined {
+    const conversation = this.getConversation(conversationId);
+    if (!conversation || (merchantId && conversation.merchantId !== merchantId)) return undefined;
+    const existing = this.getCustomerMemory(conversation.merchantId, conversation.customerPhone)
+      ?? this.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: "", direction: "inbound" });
+    const facts = typeof patch.facts === "object" && patch.facts !== null && !Array.isArray(patch.facts)
+      ? patch.facts as Record<string, unknown>
+      : existing.facts;
+    const operatorNotes = typeof patch.operatorNotes === "string" ? patch.operatorNotes : existing.operatorNotes;
+    const summary = buildCustomerMemorySummary(conversation, existing.lastIntent, operatorNotes);
+    this.db.sqlite
+      .prepare(`
+        UPDATE customer_memories
+        SET facts_json = ?, operator_notes = ?, summary = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE merchant_id = ? AND customer_key = ?
+      `)
+      .run(JSON.stringify(facts), operatorNotes, summary, conversation.merchantId, conversation.customerPhone);
+    return this.getCustomerMemory(conversation.merchantId, conversation.customerPhone);
   }
 
   listConversations(filters: { merchantId?: string; status?: string; language?: string; handoffStatus?: string; limit?: number } = {}): Conversation[] {
@@ -537,6 +640,49 @@ function mapKnowledgeItem(row: Record<string, unknown>): KnowledgeItemRecord {
   };
 }
 
+function mapCustomerMemory(row: Record<string, unknown>): CustomerMemoryRecord {
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
+    customerKey: String(row.customer_key ?? ""),
+    conversationId: String(row.conversation_id ?? ""),
+    language: String(row.language ?? "unknown"),
+    stage: String(row.stage ?? "need_platform_register"),
+    extractedPhone: String(row.extracted_phone ?? ""),
+    extractedTelegram: String(row.extracted_telegram ?? ""),
+    lastIntent: String(row.last_intent ?? "unknown"),
+    summary: String(row.summary ?? ""),
+    facts: parseJsonObject(row.facts_json),
+    operatorNotes: String(row.operator_notes ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
 function normalizeKnowledgeType(value: unknown): KnowledgeItemRecord["type"] {
   return value === "script" || value === "rule" || value === "forbidden" || value === "faq" ? value : "faq";
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(String(value || "{}")) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function clipText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+function buildCustomerMemorySummary(conversation: Conversation, lastIntent: string, operatorNotes: string): string {
+  const parts = [
+    `客户语言: ${conversation.language || "unknown"}`,
+    `当前阶段: ${conversation.stage}`,
+    `最近意图: ${lastIntent || "unknown"}`,
+    `手机号: ${conversation.extractedPhone || "未识别"}`,
+    `Telegram: ${conversation.extractedTelegram || "未识别"}`
+  ];
+  if (operatorNotes.trim()) parts.push(`人工备注: ${clipText(operatorNotes.trim(), 220)}`);
+  return parts.join("；");
 }

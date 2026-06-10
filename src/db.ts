@@ -129,6 +129,25 @@ export function migrate(db: DatabaseSync): void {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
+
+    CREATE TABLE IF NOT EXISTS customer_memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      customer_key TEXT NOT NULL,
+      conversation_id TEXT,
+      language TEXT DEFAULT 'unknown',
+      stage TEXT DEFAULT 'need_platform_register',
+      extracted_phone TEXT DEFAULT '',
+      extracted_telegram TEXT DEFAULT '',
+      last_intent TEXT DEFAULT 'unknown',
+      summary TEXT DEFAULT '',
+      facts_json TEXT DEFAULT '{}',
+      operator_notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, customer_key),
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    );
   `);
 
   ensureColumn(db, "training_samples", "merchant_id", "TEXT DEFAULT 'default'");
@@ -137,6 +156,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "customer_memories", "merchant_id", "TEXT DEFAULT 'default'");
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
   db.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES ('default')").run();
@@ -144,6 +164,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE conversations SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE messages SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE handoff_events SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE customer_memories SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
 }
 
 function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {

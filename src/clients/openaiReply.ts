@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { AppConfig } from "../config.js";
-import type { Conversation, KnowledgeItemRecord } from "../repositories.js";
+import type { Conversation, CustomerMemoryRecord, KnowledgeItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 
 export interface ReplyInput {
@@ -9,6 +9,7 @@ export interface ReplyInput {
   history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   samples: TrainingSampleForSearch[];
   knowledge: KnowledgeItemRecord[];
+  memory?: CustomerMemoryRecord;
 }
 
 export interface AiReply {
@@ -44,7 +45,8 @@ export class OpenAIReplyClient {
             conversation: input.conversation,
             recentHistory: input.history,
             relevantTrainingSamples: input.samples,
-            knowledgeItems: input.knowledge
+            knowledgeItems: input.knowledge,
+            customerMemory: input.memory ?? null
           })
         }
       ],
@@ -89,6 +91,7 @@ function buildSystemPrompt(config: AppConfig): string {
 安全和业务规则：
 - 优先参考 relevantTrainingSamples 中的标准回复。
 - 同时参考 knowledgeItems 中启用的 FAQ、话术、规则和禁用表达。
+- 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。

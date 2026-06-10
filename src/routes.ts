@@ -104,6 +104,16 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
   });
+  app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
+    const memory = deps.repos.getCustomerMemoryByConversation(request.params.id);
+    if (!memory) return reply.code(404).send({ error: "memory not found" });
+    return memory;
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
+    const memory = deps.repos.patchCustomerMemory(request.params.id, undefined, request.body ?? {});
+    if (!memory) return reply.code(404).send({ error: "memory not found" });
+    return memory;
+  });
   app.post("/api/admin/users", { preHandler: adminOnly }, async (request) => {
     const body = z.object({
       merchantId: z.string().nullable().optional(),
@@ -198,6 +208,17 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
+  });
+  app.get<{ Params: { id: string } }>("/api/merchant/conversations/:id/memory", { preHandler: merchantRoles }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
+    const memory = deps.repos.getCustomerMemoryByConversation(request.params.id) ?? deps.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: "", direction: "inbound" });
+    return memory;
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/conversations/:id/memory", { preHandler: merchantRoles }, async (request, reply) => {
+    const memory = deps.repos.patchCustomerMemory(request.params.id, scopedMerchantId(request), request.body ?? {});
+    if (!memory) return reply.code(404).send({ error: "memory not found" });
+    return memory;
   });
   app.patch<{ Params: { conversationId: string }; Body: { handoffStatus?: "pending" | "processing" | "done" } }>("/api/merchant/handoffs/:conversationId", { preHandler: merchantRoles }, async (request, reply) => {
     const status = request.body?.handoffStatus;

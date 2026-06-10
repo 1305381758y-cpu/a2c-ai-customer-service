@@ -68,6 +68,7 @@ export class WebhookProcessor {
     conversation.stage = analysis.stage;
     conversation.extractedPhone = conversation.extractedPhone || analysis.phone;
     conversation.extractedTelegram = conversation.extractedTelegram || analysis.telegram;
+    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
 
     if (conversation.extractedPhone && conversation.extractedTelegram) {
       conversation.stage = "ready_for_handoff";
@@ -91,7 +92,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, memory: inboundMemory });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -127,6 +128,7 @@ export class WebhookProcessor {
       rawPayload: { samples: samples.map((sample) => sample.id) }
     });
     this.repos.updateConversation(conversation);
+    this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
     return { status: "replied", conversationId: conversation.id };
   }

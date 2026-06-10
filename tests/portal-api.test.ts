@@ -216,12 +216,84 @@ describe("portal api", () => {
     const outbound = messages.json().rows.find((row: { direction: string }) => row.direction === "outbound");
     expect(outbound.content).toBe("请点击专属链接注册：https://merchant.example/register");
 
+    const memory = await app.inject({
+      method: "GET",
+      url: `/api/merchant/conversations/${conversations.json().rows[0].id}/memory`,
+      headers: { cookie: merchantCookie }
+    });
+    expect(memory.statusCode).toBe(200);
+    expect(memory.json().summary).toContain("最近意图: ask_link");
+    expect(memory.json().facts.recentSignals.length).toBeGreaterThanOrEqual(2);
+
+    const patchedMemory = await app.inject({
+      method: "PATCH",
+      url: `/api/merchant/conversations/${conversations.json().rows[0].id}/memory`,
+      headers: { cookie: merchantCookie },
+      payload: { operatorNotes: "客户偏好葡语，优先发送简短说明。" }
+    });
+    expect(patchedMemory.statusCode).toBe(200);
+    expect(patchedMemory.json().operatorNotes).toContain("葡语");
+
     const adminConversations = await app.inject({
       method: "GET",
       url: `/api/admin/conversations?merchantId=${merchantId}`,
       headers: { cookie: adminCookie }
     });
     expect(adminConversations.json().rows).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("keeps customer memory isolated between merchants", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchantA = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "记忆商户A" } });
+    const merchantB = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "记忆商户B" } });
+    await app.inject({ method: "PATCH", url: `/api/admin/merchants/${merchantA.json().id}/config`, headers: { cookie: adminCookie }, payload: { a2cAccountPhone: "memory-a2c-a" } });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId: merchantA.json().id, email: "memory-a@test.local", name: "A", password: "Merchant123456", role: "merchant_admin" }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId: merchantB.json().id, email: "memory-b@test.local", name: "B", password: "Merchant123456", role: "merchant_admin" }
+    });
+    const cookieA = await login(app, "memory-a@test.local", "Merchant123456");
+    const cookieB = await login(app, "memory-b@test.local", "Merchant123456");
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/a2c",
+      payload: {
+        id: "memory-event-a",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "memory-message-a",
+          content: "olá, quero fazer cadastro",
+          from: "memory-customer",
+          to: "memory-a2c-a",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000)
+        }
+      }
+    });
+
+    const conversationsA = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: cookieA } });
+    const conversationId = conversationsA.json().rows[0].id as string;
+
+    const forbidden = await app.inject({
+      method: "GET",
+      url: `/api/merchant/conversations/${conversationId}/memory`,
+      headers: { cookie: cookieB }
+    });
+    expect(forbidden.statusCode).toBe(404);
 
     await app.close();
   });
