@@ -1,0 +1,19 @@
+﻿客户消息,标准回复,适用阶段,客户意图,语言,关键词,优先级,是否启用
+"Olá, quero saber mais","Olá! Posso te orientar passo a passo. Primeiro, precisamos concluir o cadastro na plataforma. Você quer que eu envie o link de cadastro?",need_platform_register,greeting,pt-BR,"olá, oi, saber mais, cadastro",80,是
+Como faço o cadastro?,"Claro. Abra o link de cadastro no navegador, preencha seu telefone, e-mail, senha e o código de convite. Depois de concluir, me avise para seguirmos para a próxima etapa.",need_platform_register,ask_platform_register,pt-BR,"cadastro, cadastrar, conta, registrar",90,是
+Me envie o link,"Claro, vou te enviar o link de cadastro e o código de convite. Use preferencialmente o Chrome para abrir o link. Se tiver qualquer dúvida durante o cadastro, me chame aqui.",need_platform_register,ask_link,pt-BR,"link, url, acesso, convite",90,是
+Já fiz o cadastro,"Perfeito. Por favor, envie o número de telefone usado no cadastro para que possamos localizar sua conta e continuar o atendimento.",need_phone_or_tg,platform_register_done,pt-BR,"cadastrei, concluí, terminei, registrado",85,是
+Meu telefone é +55 11 91234-5678,Recebi seu número. Agora preciso também da sua conta do Telegram para finalizar a verificação e encaminhar seu atendimento.,need_phone_or_tg,provide_phone,pt-BR,"telefone, celular, número",80,是
+Preciso do Telegram?,"Sim. Precisamos do seu usuário do Telegram para continuar o atendimento. Se ainda não tiver, baixe o Telegram pela Play Store ou App Store, crie sua conta e me envie seu @usuário.",need_phone_or_tg,ask_tg_register,pt-BR,"telegram, tg, usuário, conta",85,是
+Meu Telegram é @cliente123,Recebi seu Telegram. Agora envie também o número de telefone usado no cadastro para finalizar a verificação.,need_phone_or_tg,provide_telegram,pt-BR,"telegram, usuário, @",80,是
+Meu telefone é +55 11 91234-5678 e meu Telegram é @cliente123,Obrigado. Já recebi seu telefone e Telegram. Vou encaminhar seu atendimento para a equipe responsável continuar com você.,ready_for_handoff,provide_phone_and_telegram,pt-BR,"telefone, telegram, dados completos",100,是
+Isso é seguro?,"Entendo sua preocupação. Antes de continuar, confira sempre se está usando o link oficial informado pela empresa e não envie senha, código de verificação, dados bancários ou documentos sensíveis pelo chat. Posso te orientar somente no cadastro e na confirmação do telefone e Telegram.",need_platform_register,trust_concern,pt-BR,"seguro, confiável, golpe, verdade",90,是
+Não consigo fazer o cadastro,"Sem problema. Me diga em qual etapa você parou: abrir o link, preencher telefone/e-mail, criar senha ou informar o código de convite. Eu te ajudo passo a passo.",need_platform_register,need_help,pt-BR,"ajuda, não consigo, como faço, erro",85,是
+Quero falar com atendente,"Claro. Vou encaminhar sua conversa para atendimento humano. Para localizar seu cadastro, envie seu telefone e seu Telegram, se ainda não enviou.",need_phone_or_tg,human_request,pt-BR,"atendente, humano, suporte",80,是
+你好,您好！我可以一步步协助您。请先完成平台开户，完成后把注册手机号和 Telegram 账号发给我。,need_platform_register,greeting,zh,"你好, 您好, 咨询",70,是
+怎么注册,请打开开户链接，填写手机号、邮箱、密码和邀请码。注册完成后告诉我，如果过程中有不懂的地方，我会继续协助您。,need_platform_register,ask_platform_register,zh,"注册, 开户, 链接, 邀请码",85,是
+发我链接,好的，我会把开户链接和邀请码发给您。建议使用 Chrome 浏览器打开。注册完成后请告诉我。,need_platform_register,ask_link,zh,"链接, 入口, 邀请码",85,是
+注册好了,好的，请把您注册使用的手机号码发送给我，以便继续核对并进入下一步。,need_phone_or_tg,platform_register_done,zh,"注册好了, 已注册, 完成",80,是
+我不会操作,没关系，请告诉我您卡在哪一步：打不开链接、填写手机号/邮箱、设置密码，还是填写邀请码？我会一步步帮您。,need_platform_register,need_help,zh,"不会, 帮我, 怎么操作",80,是
+这个安全吗,理解您的顾虑。请只使用官方确认的链接，不要在聊天中发送密码、验证码、银行卡、证件等敏感信息。我可以协助您完成注册和确认手机号、Telegram。,need_platform_register,trust_concern,zh,"安全, 可靠吗, 真的假的",90,是
+我要人工,好的，我会为您转人工。为了让人工客服定位到您，请发送注册手机号和 Telegram 账号。,need_phone_or_tg,human_request,zh,"人工, 客服, 真人",80,是

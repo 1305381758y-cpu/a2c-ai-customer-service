@@ -11,6 +11,7 @@ describe("message analyzer", () => {
     expect(detectLanguage("你好")).toBe("zh");
     expect(detectLanguage("hello")).toBe("en");
     expect(detectLanguage("saya mahu daftar")).toBe("ms");
+    expect(detectLanguage("olá, quero fazer cadastro")).toBe("pt-BR");
   });
 
   it("classifies phone and telegram completion", () => {
@@ -22,5 +23,7 @@ describe("message analyzer", () => {
   it("classifies registration questions before generic help", () => {
     expect(analyzeMessage("我要怎么注册").intent).toBe("ask_platform_register");
     expect(analyzeMessage("how to register").intent).toBe("ask_platform_register");
+    expect(analyzeMessage("como faço o cadastro?").intent).toBe("ask_platform_register");
+    expect(analyzeMessage("isso é seguro?").intent).toBe("trust_concern");
   });
 });
