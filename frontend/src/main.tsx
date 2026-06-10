@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
 import "./styles.css";
@@ -6,7 +6,8 @@ import "./styles.css";
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
 type Merchant = { id: string; name: string; status: string };
 type Conversation = { id: string; merchantId: string; customerPhone: string; a2cAccountPhone: string; nickname: string; language: string; stage: string; extractedPhone: string; extractedTelegram: string; status: string; handoffStatus: string };
-type Sample = { id: number; customerMessage: string; standardReply: string; stage: string; intent: string; language: string; keywords: string; priority: number };
+type Sample = { id: number; customerMessage: string; standardReply: string; stage: string; intent: string; language: string; keywords: string; priority: number; enabled?: boolean };
+type Knowledge = { id: number; merchantId: string; type: string; title: string; content: string; language: string; priority: number; enabled: boolean };
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -58,8 +59,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "用户", Users], ["config", "配置", Settings], ["conversations", "会话", MessageSquare], ["samples", "样本", Upload], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "用户", Users], ["config", "配置", Settings], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   return (
     <div className="app">
       <aside>
@@ -73,7 +74,8 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {view === "merchants" && <Merchants />}
         {view === "users" && <UsersPage />}
         {view === "config" && <Config platform={user.role === "platform_admin"} />}
-        {view === "samples" && <Samples />}
+        {view === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
+        {view === "samples" && <Samples platform={user.role === "platform_admin"} />}
         {view === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
         {view === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs />}
       </main>
@@ -90,13 +92,15 @@ function Dashboard({ platform }: { platform: boolean }) {
 function Merchants() {
   const [rows, setRows] = useRows<Merchant>("/api/admin/merchants");
   const [name, setName] = useState("");
-  return <section><div className="toolbar"><input placeholder="商户名称" value={name} onChange={(e) => setName(e.target.value)} /><button onClick={async () => { await api("/api/admin/merchants", { method: "POST", body: JSON.stringify({ name }) }); setName(""); setRows(await loadRows("/api/admin/merchants")); }}>新增商户</button></div><Table rows={rows} columns={["name", "status", "id"]} /></section>;
+  const [selected, setSelected] = useState<Merchant | null>(null);
+  return <div className="split"><section><div className="toolbar"><input placeholder="商户名称" value={name} onChange={(e) => setName(e.target.value)} /><button onClick={async () => { await api("/api/admin/merchants", { method: "POST", body: JSON.stringify({ name }) }); setName(""); setRows(await loadRows("/api/admin/merchants")); }}>新增商户</button></div><Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} /></section><section>{selected ? <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => { await api(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) }); setRows(await loadRows("/api/admin/merchants")); }} /> : <p>选择商户后可修改名称和状态。</p>}</section></div>;
 }
 
 function UsersPage() {
   const [rows, setRows] = useRows<Record<string, string>>("/api/admin/users");
   const [form, setForm] = useState({ email: "", name: "", password: "Admin123456", role: "merchant_admin", merchantId: "default" });
-  return <section><div className="toolbar wrap">{["email","name","password","merchantId"].map((k) => <input key={k} placeholder={k} value={(form as any)[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />)}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option>merchant_admin</option><option>merchant_operator</option><option>platform_admin</option></select><button onClick={async () => { await api("/api/admin/users", { method: "POST", body: JSON.stringify(form) }); setRows(await loadRows("/api/admin/users")); }}>新增用户</button></div><Table rows={rows} columns={["email", "name", "role", "merchantId", "status"]} /></section>;
+  const [selected, setSelected] = useState<Record<string, string> | null>(null);
+  return <div className="split"><section><div className="toolbar wrap">{["email","name","password","merchantId"].map((k) => <input key={k} placeholder={k} value={(form as any)[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />)}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option>merchant_admin</option><option>merchant_operator</option><option>platform_admin</option></select><button onClick={async () => { await api("/api/admin/users", { method: "POST", body: JSON.stringify(form) }); setRows(await loadRows("/api/admin/users")); }}>新增用户</button></div><Table rows={rows} columns={["email", "name", "role", "merchantId", "status"]} onRow={setSelected} /></section><section>{selected ? <Editor title="用户设置" value={{ name: selected.name, status: selected.status, role: selected.role, merchantId: selected.merchantId || "", password: "" }} fields={["name", "status", "role", "merchantId", "password"]} selects={{ status: ["active", "disabled"], role: ["platform_admin", "merchant_admin", "merchant_operator"] }} onSave={async (patch) => { if (!patch.password) delete patch.password; await api(`/api/admin/users/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) }); setRows(await loadRows("/api/admin/users")); }} /> : <p>选择用户后可停用、改角色或重置密码。</p>}</section></div>;
 }
 
 function Config({ platform }: { platform: boolean }) {
@@ -109,10 +113,21 @@ function Config({ platform }: { platform: boolean }) {
   return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><button onClick={async () => setForm(await api(url, { method: "PATCH", body: JSON.stringify(form) }))}>保存配置</button></section>;
 }
 
-function Samples() {
-  const [rows, setRows] = useRows<Sample>("/api/merchant/training-samples?enabled=true");
+function Samples({ platform = false }: { platform?: boolean }) {
+  const base = platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
+  const [rows, setRows] = useRows<Sample>(base);
   const [file, setFile] = useState<File | null>(null);
-  return <section><div className="toolbar"><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows("/api/merchant/training-samples?enabled=true")); }}>上传样本</button></div><Table rows={rows} columns={["customerMessage", "standardReply", "intent", "stage", "language", "priority"]} /></section>;
+  const [selected, setSelected] = useState<Sample | null>(null);
+  return <div className="split"><section><div className="toolbar">{!platform && <><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows(base)); }}>上传样本</button></>}</div><Table rows={rows} columns={["customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="样本编辑" value={selected as any} fields={["customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); setRows(await loadRows(base)); }} /> : <p>{platform ? "平台端可查看和编辑全局样本；上传请在商户端完成。" : "选择样本后可编辑标准回复、意图、阶段和启用状态。"}</p>}</section></div>;
+}
+
+function KnowledgePage({ platform }: { platform: boolean }) {
+  const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
+  const [rows, setRows] = useRows<Knowledge>(base);
+  const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", type: "faq", title: "", content: "", language: "zh", priority: "0" });
+  const [selected, setSelected] = useState<Knowledge | null>(null);
+  const reload = async () => setRows(await loadRows(base));
+  return <div className="split"><section><div className="toolbar wrap">{platform && <input placeholder="merchantId" value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })} />}<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option>faq</option><option>script</option><option>rule</option><option>forbidden</option></select><input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /><input placeholder="内容" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /><button onClick={async () => { await api(base, { method: "POST", body: JSON.stringify(coercePatch(form)) }); setForm({ ...form, title: "", content: "" }); reload(); }}>新增知识</button></div><Table rows={rows} columns={["type", "title", "content", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="知识库编辑" value={selected as any} fields={["type", "title", "content", "language", "priority", "enabled"]} selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); reload(); }} /> : <p>FAQ、话术、规则、禁用表达会在 AI 回复时被引用。</p>}</section></div>;
 }
 
 function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
@@ -131,6 +146,20 @@ function ConversationDetail({ platform = false, conversation, refresh }: { platf
 
 function Table<T extends Record<string, any>>({ rows, columns, onRow }: { rows: T[]; columns: string[]; onRow?: (row: T) => void }) {
   return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i} onClick={() => onRow?.(row)}>{columns.map((c) => <td key={c}>{String(row[c] ?? "")}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function Editor({ title, value, fields, selects, onSave }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void> }) {
+  const [draft, setDraft] = useState<Record<string, any>>(value);
+  useEffect(() => setDraft(value), [value]);
+  return <div><h3>{title}</h3><div className="form-grid">{fields.map((field) => <label key={field}>{label(field)}{selects?.[field] ? <select value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />}</label>)}</div><button onClick={() => onSave(draft)}>保存</button></div>;
+}
+
+function coercePatch(input: Record<string, any>) {
+  const patch = { ...input };
+  if ("priority" in patch) patch.priority = Number(patch.priority || 0);
+  if (patch.enabled === "true") patch.enabled = true;
+  if (patch.enabled === "false") patch.enabled = false;
+  return patch;
 }
 
 function useRows<T>(url: string): [T[], (rows: T[]) => void] {
@@ -153,12 +182,12 @@ function roleName(role: string) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", active: "活跃会话", pendingHandoffs: "待接管",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", active: "活跃会话", pendingHandoffs: "待接管",
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C App ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号",
     openaiApiKey: "OpenAI Key", openaiModel: "OpenAI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
-    platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明"
+    platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", enabled: "启用", password: "新密码"
   } as Record<string, string>)[key] || key;
 }
 

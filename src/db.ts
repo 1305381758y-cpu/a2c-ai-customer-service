@@ -115,6 +115,20 @@ export function migrate(db: DatabaseSync): void {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS knowledge_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT DEFAULT 'default',
+      type TEXT NOT NULL DEFAULT 'faq',
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      language TEXT DEFAULT 'zh',
+      priority INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
   `);
 
   ensureColumn(db, "training_samples", "merchant_id", "TEXT DEFAULT 'default'");
@@ -122,6 +136,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "handoff_status", "TEXT DEFAULT 'pending'");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
   db.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES ('default')").run();

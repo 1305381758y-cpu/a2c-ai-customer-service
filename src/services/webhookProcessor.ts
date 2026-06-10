@@ -83,6 +83,7 @@ export class WebhookProcessor {
     }
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, enabled: true });
+    const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, enabled: true });
     const samples = rankSamples(enabledSamples, {
       text: content,
       language: analysis.language,
@@ -90,7 +91,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;

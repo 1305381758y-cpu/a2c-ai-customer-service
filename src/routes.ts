@@ -57,6 +57,39 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listUsers({ merchantId: request.query.merchantId }).map(maskUser)
   }));
+  app.get<{ Querystring: { merchantId?: string; type?: string; enabled?: string } }>("/api/admin/knowledge", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listKnowledgeItems({
+      merchantId: request.query.merchantId,
+      type: request.query.type,
+      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
+    })
+  }));
+  app.post<{ Body: Record<string, unknown> }>("/api/admin/knowledge", { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      return deps.repos.createKnowledgeItem(String(request.body?.merchantId || "default"), request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid knowledge item" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/knowledge/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.patchKnowledgeItem(Number(request.params.id), request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "knowledge item not found" });
+    return row;
+  });
+  app.get<{ Querystring: { merchantId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/admin/training-samples", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listTrainingSamples({
+      merchantId: request.query.merchantId,
+      language: request.query.language,
+      intent: request.query.intent,
+      stage: request.query.stage,
+      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
+    })
+  }));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/training-samples/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.patchTrainingSample(Number(request.params.id), request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "sample not found" });
+    return row;
+  });
   app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: request.query.merchantId,
@@ -113,6 +146,25 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.get<{ Querystring: { type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.listKnowledgeItems({
+      merchantId: scopedMerchantId(request),
+      type: request.query.type,
+      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
+    })
+  }));
+  app.post<{ Body: Record<string, unknown> }>("/api/merchant/knowledge", { preHandler: merchantAdmins }, async (request, reply) => {
+    try {
+      return deps.repos.createKnowledgeItem(scopedMerchantId(request), request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid knowledge item" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/knowledge/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.patchKnowledgeItem(Number(request.params.id), request.body ?? {}, scopedMerchantId(request));
+    if (!row) return reply.code(404).send({ error: "knowledge item not found" });
+    return row;
+  });
 
   app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({

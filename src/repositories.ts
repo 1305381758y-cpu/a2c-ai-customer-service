@@ -51,6 +51,17 @@ export interface UserRecord {
   status: "active" | "disabled";
 }
 
+export interface KnowledgeItemRecord {
+  id: number;
+  merchantId: string;
+  type: "faq" | "script" | "rule" | "forbidden";
+  title: string;
+  content: string;
+  language: string;
+  priority: number;
+  enabled: boolean;
+}
+
 export interface MessageInput {
   conversationId: string;
   direction: "inbound" | "outbound";
@@ -254,6 +265,82 @@ export class Repositories {
     return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
   }
 
+  listKnowledgeItems(filters: { merchantId?: string; type?: string; enabled?: boolean } = {}): KnowledgeItemRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.type) {
+      clauses.push("type = ?");
+      params.push(filters.type);
+    }
+    if (typeof filters.enabled === "boolean") {
+      clauses.push("enabled = ?");
+      params.push(filters.enabled ? 1 : 0);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    return this.db.sqlite
+      .prepare(`
+        SELECT id, merchant_id, type, title, content, language, priority, enabled
+        FROM knowledge_items
+        ${where}
+        ORDER BY priority DESC, id DESC
+        LIMIT 500
+      `)
+      .all(...params)
+      .map((row) => mapKnowledgeItem(row as Record<string, unknown>));
+  }
+
+  createKnowledgeItem(merchantId: string, input: Record<string, unknown>): KnowledgeItemRecord {
+    const title = String(input.title || "").trim();
+    const content = String(input.content || "").trim();
+    if (!title || !content) throw new Error("title and content are required");
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO knowledge_items (merchant_id, type, title, content, language, priority, enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        merchantId,
+        normalizeKnowledgeType(input.type),
+        title,
+        content,
+        String(input.language || "zh"),
+        Number(input.priority || 0),
+        input.enabled === false ? 0 : 1
+      );
+    const row = this.db.sqlite.prepare("SELECT * FROM knowledge_items WHERE id = last_insert_rowid()").get() as Record<string, unknown>;
+    return mapKnowledgeItem(row);
+  }
+
+  patchKnowledgeItem(id: number, patch: Record<string, unknown>, merchantId?: string): KnowledgeItemRecord | undefined {
+    const allowed: Record<string, string> = {
+      type: "type",
+      title: "title",
+      content: "content",
+      language: "language",
+      priority: "priority",
+      enabled: "enabled"
+    };
+    const entries = Object.entries(patch).filter(([key]) => key in allowed);
+    if (entries.length) {
+      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
+      const values = entries.map(([key, value]) => {
+        if (key === "enabled") return value ? 1 : 0;
+        if (key === "priority") return Number(value || 0);
+        if (key === "type") return normalizeKnowledgeType(value);
+        return String(value ?? "");
+      }) as Array<string | number>;
+      const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+      this.db.sqlite.prepare(`UPDATE knowledge_items SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
+    }
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const row = this.db.sqlite.prepare(`SELECT * FROM knowledge_items ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    return row ? mapKnowledgeItem(row) : undefined;
+  }
+
   insertHandoffEvent(conversationId: string, telegramMessage: string, sent: boolean, error = ""): void {
     this.db.sqlite
       .prepare("INSERT INTO handoff_events (merchant_id, conversation_id, telegram_message, sent, error) VALUES ((SELECT merchant_id FROM conversations WHERE id = ?), ?, ?, ?, ?)")
@@ -424,4 +511,21 @@ function mapUser(row: Record<string, unknown>): UserRecord {
     role: String(row.role) as UserRole,
     status: String(row.status ?? "active") as "active" | "disabled"
   };
+}
+
+function mapKnowledgeItem(row: Record<string, unknown>): KnowledgeItemRecord {
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
+    type: normalizeKnowledgeType(row.type),
+    title: String(row.title ?? ""),
+    content: String(row.content ?? ""),
+    language: String(row.language ?? "zh"),
+    priority: Number(row.priority ?? 0),
+    enabled: Boolean(Number(row.enabled ?? 1))
+  };
+}
+
+function normalizeKnowledgeType(value: unknown): KnowledgeItemRecord["type"] {
+  return value === "script" || value === "rule" || value === "forbidden" || value === "faq" ? value : "faq";
 }
