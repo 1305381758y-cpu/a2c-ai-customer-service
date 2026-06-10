@@ -1,5 +1,8 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { A2CClient } from "./clients/a2c.js";
 import { OpenAIReplyClient } from "./clients/openaiReply.js";
 import { TelegramClient } from "./clients/telegram.js";
@@ -8,21 +11,36 @@ import { openDb } from "./db.js";
 import { Repositories } from "./repositories.js";
 import { registerRoutes } from "./routes.js";
 import { WebhookProcessor } from "./services/webhookProcessor.js";
+import { hashPassword } from "./auth.js";
 
 export function buildApp(config: AppConfig) {
   const app = Fastify({ logger: true });
   const db = openDb(config.DATABASE_URL);
   const repos = new Repositories(db);
+  repos.ensureBootstrapAdmin({
+    email: config.DEFAULT_ADMIN_EMAIL,
+    passwordHash: hashPassword(config.DEFAULT_ADMIN_PASSWORD)
+  });
   const processor = new WebhookProcessor(
     repos,
     new OpenAIReplyClient(config),
     new A2CClient(config),
-    new TelegramClient(config)
+    new TelegramClient(config),
+    config
   );
 
   app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024 }
   });
+  const publicDir = join(process.cwd(), "dist", "public");
+  const assetsDir = join(publicDir, "assets");
+  if (existsSync(assetsDir)) {
+    app.register(fastifyStatic, {
+      root: assetsDir,
+      prefix: "/assets/",
+      decorateReply: false
+    });
+  }
   registerRoutes(app, { config, repos, processor });
 
   return app;

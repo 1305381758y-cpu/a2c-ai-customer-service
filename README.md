@@ -19,6 +19,7 @@ npm run dev
 - `GET /internal/conversations/:id/messages` 查询会话消息，需 `X-API-Key`。
 - `POST /webhooks/a2c` 接收 A2C Webhook。
 - `GET /health` 健康检查。
+- `/` 前端管理系统入口，默认管理员由 `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` 配置。
 
 样本推荐字段：
 

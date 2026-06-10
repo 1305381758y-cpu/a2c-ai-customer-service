@@ -4,9 +4,11 @@ import type { Db } from "./db.js";
 import type { ConversationStage, IntentLabel } from "./domain/intents.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
+import type { UserRole } from "./auth.js";
 
 export interface Conversation {
   id: string;
+  merchantId: string;
   customerPhone: string;
   a2cAccountPhone: string;
   nickname: string;
@@ -15,7 +17,38 @@ export interface Conversation {
   extractedPhone: string;
   extractedTelegram: string;
   status: "active" | "human_handoff";
+  handoffStatus: "pending" | "processing" | "done";
   handoffNotified: number;
+}
+
+export interface MerchantRecord {
+  id: string;
+  name: string;
+  status: "active" | "disabled";
+}
+
+export interface MerchantConfigRecord {
+  merchantId: string;
+  a2cBaseUrl: string;
+  a2cAppId: string;
+  a2cAppSecret: string;
+  a2cAccountPhone: string;
+  openaiApiKey: string;
+  openaiModel: string;
+  telegramBotToken: string;
+  telegramHandoffChatId: string;
+  platformRegisterUrl: string;
+  tgRegisterGuideUrl: string;
+}
+
+export interface UserRecord {
+  id: string;
+  merchantId: string | null;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: UserRole;
+  status: "active" | "disabled";
 }
 
 export interface MessageInput {
@@ -34,23 +67,31 @@ export interface MessageInput {
 export class Repositories {
   constructor(private readonly db: Db) {}
 
-  insertTrainingSamples(samples: ImportedTrainingSample[]): number {
-    return insertTrainingSamples(this.db, samples);
+  insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default"): number {
+    return insertTrainingSamples(this.db, samples, merchantId);
   }
 
-  getOrCreateConversation(customerPhone: string, a2cAccountPhone: string, nickname = ""): Conversation {
+  ensureBootstrapAdmin(input: { email: string; passwordHash: string }): void {
+    const existing = this.db.sqlite.prepare("SELECT id FROM users WHERE role = 'platform_admin' LIMIT 1").get();
+    if (existing) return;
+    this.db.sqlite
+      .prepare("INSERT INTO users (id, merchant_id, email, name, password_hash, role) VALUES (?, NULL, ?, ?, ?, 'platform_admin')")
+      .run(randomUUID(), input.email, "平台管理员", input.passwordHash);
+  }
+
+  getOrCreateConversation(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default"): Conversation {
     const existing = this.db.sqlite
-      .prepare("SELECT * FROM conversations WHERE customer_phone = ? AND a2c_account_phone = ?")
-      .get(customerPhone, a2cAccountPhone) as Record<string, unknown> | undefined;
+      .prepare("SELECT * FROM conversations WHERE merchant_id = ? AND customer_phone = ? AND a2c_account_phone = ?")
+      .get(merchantId, customerPhone, a2cAccountPhone) as Record<string, unknown> | undefined;
     if (existing) return mapConversation(existing);
 
     const id = randomUUID();
     this.db.sqlite
       .prepare(`
-        INSERT INTO conversations (id, customer_phone, a2c_account_phone, nickname)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO conversations (id, merchant_id, customer_phone, a2c_account_phone, nickname)
+        VALUES (?, ?, ?, ?, ?)
       `)
-      .run(id, customerPhone, a2cAccountPhone, nickname);
+      .run(id, merchantId, customerPhone, a2cAccountPhone, nickname);
     return this.getConversation(id)!;
   }
 
@@ -64,7 +105,7 @@ export class Repositories {
       .prepare(`
         UPDATE conversations
         SET language = ?, stage = ?, extracted_phone = ?, extracted_telegram = ?,
-            status = ?, handoff_notified = ?, updated_at = CURRENT_TIMESTAMP
+            status = ?, handoff_status = ?, handoff_notified = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `)
       .run(
@@ -73,6 +114,7 @@ export class Repositories {
         conversation.extractedPhone,
         conversation.extractedTelegram,
         conversation.status,
+        conversation.handoffStatus,
         conversation.handoffNotified,
         conversation.id
       );
@@ -83,10 +125,11 @@ export class Repositories {
       this.db.sqlite
         .prepare(`
           INSERT INTO messages
-            (conversation_id, direction, external_id, content, msg_type, language, intent, phone_detected, telegram_detected, raw_payload)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (merchant_id, conversation_id, direction, external_id, content, msg_type, language, intent, phone_detected, telegram_detected, raw_payload)
+          VALUES ((SELECT merchant_id FROM conversations WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
+          input.conversationId,
           input.conversationId,
           input.direction,
           input.externalId ?? null,
@@ -118,7 +161,7 @@ export class Repositories {
       .reverse() as Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   }
 
-  listConversations(filters: { status?: string; language?: string; limit?: number } = {}): Conversation[] {
+  listConversations(filters: { merchantId?: string; status?: string; language?: string; handoffStatus?: string; limit?: number } = {}): Conversation[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.status) {
@@ -128,6 +171,10 @@ export class Repositories {
     if (filters.language) {
       clauses.push("language = ?");
       params.push(filters.language);
+    }
+    if (filters.handoffStatus) {
+      clauses.push("handoff_status = ?");
+      params.push(filters.handoffStatus);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
@@ -145,7 +192,7 @@ export class Repositories {
       .map((row) => mapConversation(row as Record<string, unknown>));
   }
 
-  listTrainingSamples(filters: { language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
+  listTrainingSamples(filters: { merchantId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.language) {
@@ -177,7 +224,7 @@ export class Repositories {
       .all(...params) as unknown as TrainingSampleForSearch[];
   }
 
-  patchTrainingSample(id: number, patch: Record<string, unknown>): Record<string, unknown> | undefined {
+  patchTrainingSample(id: number, patch: Record<string, unknown>, merchantId?: string): Record<string, unknown> | undefined {
     const allowed: Record<string, string> = {
       customerMessage: "customer_message",
       standardReply: "standard_reply",
@@ -192,21 +239,140 @@ export class Repositories {
     if (entries.length) {
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
       const values = entries.map(([key, value]) => (key === "enabled" ? (value ? 1 : 0) : value)) as Array<string | number | null>;
-      this.db.sqlite.prepare(`UPDATE training_samples SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values, id);
+      const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+      this.db.sqlite.prepare(`UPDATE training_samples SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
     }
-    return this.db.sqlite.prepare("SELECT * FROM training_samples WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
   }
 
   insertHandoffEvent(conversationId: string, telegramMessage: string, sent: boolean, error = ""): void {
     this.db.sqlite
-      .prepare("INSERT INTO handoff_events (conversation_id, telegram_message, sent, error) VALUES (?, ?, ?, ?)")
-      .run(conversationId, telegramMessage, sent ? 1 : 0, error);
+      .prepare("INSERT INTO handoff_events (merchant_id, conversation_id, telegram_message, sent, error) VALUES ((SELECT merchant_id FROM conversations WHERE id = ?), ?, ?, ?, ?)")
+      .run(conversationId, conversationId, telegramMessage, sent ? 1 : 0, error);
+  }
+
+  listMerchants(): MerchantRecord[] {
+    return this.db.sqlite.prepare("SELECT id, name, status FROM merchants ORDER BY created_at DESC").all().map(mapMerchant);
+  }
+
+  createMerchant(name: string): MerchantRecord {
+    const id = randomUUID();
+    this.db.sqlite.prepare("INSERT INTO merchants (id, name) VALUES (?, ?)").run(id, name);
+    this.db.sqlite.prepare("INSERT INTO merchant_configs (merchant_id) VALUES (?)").run(id);
+    return this.getMerchant(id)!;
+  }
+
+  getMerchant(id: string): MerchantRecord | undefined {
+    const row = this.db.sqlite.prepare("SELECT id, name, status FROM merchants WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    return row ? mapMerchant(row) : undefined;
+  }
+
+  patchMerchant(id: string, patch: Record<string, unknown>): MerchantRecord | undefined {
+    const name = typeof patch.name === "string" ? patch.name : undefined;
+    const status = patch.status === "active" || patch.status === "disabled" ? patch.status : undefined;
+    if (name !== undefined || status !== undefined) {
+      this.db.sqlite
+        .prepare("UPDATE merchants SET name = COALESCE(?, name), status = COALESCE(?, status), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        .run(name ?? null, status ?? null, id);
+    }
+    return this.getMerchant(id);
+  }
+
+  getMerchantConfig(merchantId: string): MerchantConfigRecord {
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    const row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
+    return mapMerchantConfig(row);
+  }
+
+  patchMerchantConfig(merchantId: string, patch: Record<string, unknown>): MerchantConfigRecord {
+    const allowed: Record<string, string> = {
+      a2cBaseUrl: "a2c_base_url",
+      a2cAppId: "a2c_app_id",
+      a2cAppSecret: "a2c_app_secret",
+      a2cAccountPhone: "a2c_account_phone",
+      openaiApiKey: "openai_api_key",
+      openaiModel: "openai_model",
+      telegramBotToken: "telegram_bot_token",
+      telegramHandoffChatId: "telegram_handoff_chat_id",
+      platformRegisterUrl: "platform_register_url",
+      tgRegisterGuideUrl: "tg_register_guide_url"
+    };
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && typeof value === "string");
+    if (entries.length) {
+      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
+      this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([, value]) => value as string), merchantId);
+    }
+    return this.getMerchantConfig(merchantId);
+  }
+
+  findMerchantByA2CAccount(accountPhone: string): MerchantRecord {
+    const row = this.db.sqlite
+      .prepare(`
+        SELECT m.*
+        FROM merchants m
+        JOIN merchant_configs c ON c.merchant_id = m.id
+        WHERE m.status = 'active' AND c.a2c_account_phone = ?
+        LIMIT 1
+      `)
+      .get(accountPhone) as Record<string, unknown> | undefined;
+    return row ? mapMerchant(row) : this.getMerchant("default")!;
+  }
+
+  getUserByEmail(email: string): UserRecord | undefined {
+    const row = this.db.sqlite.prepare("SELECT * FROM users WHERE lower(email) = lower(?)").get(email) as Record<string, unknown> | undefined;
+    return row ? mapUser(row) : undefined;
+  }
+
+  getUserById(id: string): UserRecord | undefined {
+    const row = this.db.sqlite.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    return row ? mapUser(row) : undefined;
+  }
+
+  listUsers(filters: { merchantId?: string } = {}): UserRecord[] {
+    const where = filters.merchantId ? "WHERE merchant_id = ?" : "";
+    const params = filters.merchantId ? [filters.merchantId] : [];
+    return this.db.sqlite.prepare(`SELECT * FROM users ${where} ORDER BY created_at DESC`).all(...params).map((row) => mapUser(row as Record<string, unknown>));
+  }
+
+  createUser(input: { merchantId: string | null; email: string; name: string; passwordHash: string; role: UserRole }): UserRecord {
+    const id = randomUUID();
+    this.db.sqlite
+      .prepare("INSERT INTO users (id, merchant_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, input.merchantId, input.email, input.name, input.passwordHash, input.role);
+    return this.getUserById(id)!;
+  }
+
+  patchUser(id: string, patch: { name?: string; status?: string; passwordHash?: string; role?: UserRole; merchantId?: string | null }): UserRecord | undefined {
+    this.db.sqlite
+      .prepare(`
+        UPDATE users
+        SET name = COALESCE(?, name),
+            status = COALESCE(?, status),
+            password_hash = COALESCE(?, password_hash),
+            role = COALESCE(?, role),
+            merchant_id = COALESCE(?, merchant_id),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .run(patch.name ?? null, patch.status ?? null, patch.passwordHash ?? null, patch.role ?? null, patch.merchantId ?? null, id);
+    return this.getUserById(id);
+  }
+
+  updateHandoffStatus(conversationId: string, merchantId: string, handoffStatus: "pending" | "processing" | "done"): Conversation | undefined {
+    this.db.sqlite
+      .prepare("UPDATE conversations SET handoff_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?")
+      .run(handoffStatus, conversationId, merchantId);
+    const row = this.db.sqlite.prepare("SELECT * FROM conversations WHERE id = ? AND merchant_id = ?").get(conversationId, merchantId) as Record<string, unknown> | undefined;
+    return row ? mapConversation(row) : undefined;
   }
 }
 
 function mapConversation(row: Record<string, unknown>): Conversation {
   return {
     id: String(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
     customerPhone: String(row.customer_phone),
     a2cAccountPhone: String(row.a2c_account_phone),
     nickname: String(row.nickname ?? ""),
@@ -215,6 +381,39 @@ function mapConversation(row: Record<string, unknown>): Conversation {
     extractedPhone: String(row.extracted_phone ?? ""),
     extractedTelegram: String(row.extracted_telegram ?? ""),
     status: String(row.status ?? "active") as "active" | "human_handoff",
+    handoffStatus: String(row.handoff_status ?? "pending") as "pending" | "processing" | "done",
     handoffNotified: Number(row.handoff_notified ?? 0)
+  };
+}
+
+function mapMerchant(row: Record<string, unknown>): MerchantRecord {
+  return { id: String(row.id), name: String(row.name), status: String(row.status ?? "active") as "active" | "disabled" };
+}
+
+function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
+  return {
+    merchantId: String(row.merchant_id),
+    a2cBaseUrl: String(row.a2c_base_url ?? ""),
+    a2cAppId: String(row.a2c_app_id ?? ""),
+    a2cAppSecret: String(row.a2c_app_secret ?? ""),
+    a2cAccountPhone: String(row.a2c_account_phone ?? ""),
+    openaiApiKey: String(row.openai_api_key ?? ""),
+    openaiModel: String(row.openai_model ?? "gpt-5-mini"),
+    telegramBotToken: String(row.telegram_bot_token ?? ""),
+    telegramHandoffChatId: String(row.telegram_handoff_chat_id ?? ""),
+    platformRegisterUrl: String(row.platform_register_url ?? ""),
+    tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
+  };
+}
+
+function mapUser(row: Record<string, unknown>): UserRecord {
+  return {
+    id: String(row.id),
+    merchantId: row.merchant_id ? String(row.merchant_id) : null,
+    email: String(row.email),
+    name: String(row.name),
+    passwordHash: String(row.password_hash),
+    role: String(row.role) as UserRole,
+    status: String(row.status ?? "active") as "active" | "disabled"
   };
 }

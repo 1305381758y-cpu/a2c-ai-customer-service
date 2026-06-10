@@ -28,6 +28,9 @@ Render 创建 Blueprint 时，需要手动填写以下 `sync: false` 的变量�
 
 ```bash
 INTERNAL_API_KEY=后台接口密钥，建议随机强密码
+SESSION_SECRET=登录会话密钥，建议随机强密码
+DEFAULT_ADMIN_EMAIL=默认平台管理员邮箱
+DEFAULT_ADMIN_PASSWORD=默认平台管理员密码，至少8位
 A2C_APP_ID=A2C开放平台App ID
 A2C_APP_SECRET=A2C开放平台App Secret
 OPENAI_API_KEY=OpenAI API Key

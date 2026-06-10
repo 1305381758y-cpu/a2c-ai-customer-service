@@ -6,6 +6,7 @@ RUN npm ci
 FROM deps AS build
 WORKDIR /app
 COPY tsconfig.json tsconfig.build.json ./
+COPY frontend ./frontend
 COPY src ./src
 RUN npm run build
 

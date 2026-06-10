@@ -13,6 +13,9 @@ const envSchema = z.object({
   TELEGRAM_HANDOFF_CHAT_ID: z.string().optional().default(""),
   PLATFORM_REGISTER_URL: z.string().optional().default(""),
   TG_REGISTER_GUIDE_URL: z.string().optional().default("")
+  ,SESSION_SECRET: z.string().default("change-this-session-secret"),
+  DEFAULT_ADMIN_EMAIL: z.string().default("admin@example.com"),
+  DEFAULT_ADMIN_PASSWORD: z.string().default("Admin123456")
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

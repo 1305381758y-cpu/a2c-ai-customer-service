@@ -1,8 +1,10 @@
 import { analyzeMessage } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import type { A2CClient } from "../clients/a2c.js";
-import type { OpenAIReplyClient } from "../clients/openaiReply.js";
-import type { TelegramClient } from "../clients/telegram.js";
+import { A2CClient } from "../clients/a2c.js";
+import { OpenAIReplyClient } from "../clients/openaiReply.js";
+import { TelegramClient } from "../clients/telegram.js";
+import type { AppConfig } from "../config.js";
+import type { MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { buildHandoffMessage } from "./handoff.js";
 
@@ -30,7 +32,8 @@ export class WebhookProcessor {
     private readonly repos: Repositories,
     private readonly ai: OpenAIReplyClient,
     private readonly a2c: A2CClient,
-    private readonly telegram: TelegramClient
+    private readonly telegram: TelegramClient,
+    private readonly config: AppConfig
   ) {}
 
   async process(payload: A2CWebhookPayload): Promise<{ status: string; conversationId?: string }> {
@@ -38,7 +41,13 @@ export class WebhookProcessor {
 
     const data = payload.data;
     const content = data.content || data.caption || data.url || "";
-    const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "");
+    const merchant = this.repos.findMerchantByA2CAccount(data.to);
+    const merchantConfig = this.repos.getMerchantConfig(merchant.id);
+    const runtimeConfig = appConfigForMerchant(this.config, merchantConfig);
+    const ai = new OpenAIReplyClient(runtimeConfig);
+    const a2c = new A2CClient(runtimeConfig);
+    const telegram = new TelegramClient(runtimeConfig);
+    const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id);
     const analysis = analyzeMessage(content, conversation.language);
 
     const inserted = this.repos.insertMessage({
@@ -73,7 +82,7 @@ export class WebhookProcessor {
       return { status: "already_handoff", conversationId: conversation.id };
     }
 
-    const enabledSamples = this.repos.listTrainingSamples({ enabled: true });
+    const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, enabled: true });
     const samples = rankSamples(enabledSamples, {
       text: content,
       language: analysis.language,
@@ -81,7 +90,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await this.ai.generateReply({ customerText: content, conversation, history, samples });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -89,14 +98,14 @@ export class WebhookProcessor {
     if (aiReply.stage === "ready_for_handoff" || (conversation.extractedPhone && conversation.extractedTelegram)) {
       conversation.stage = "ready_for_handoff";
       conversation.status = "human_handoff";
-      await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString());
+      await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
       this.repos.updateConversation(conversation);
       return { status: "handoff", conversationId: conversation.id };
     }
 
     let externalId = "";
     try {
-      externalId = await this.a2c.sendMessage({
+      externalId = await a2c.sendMessage({
         to: data.from,
         senderPhoneNumber: data.to,
         type: "text",
@@ -121,17 +130,32 @@ export class WebhookProcessor {
     return { status: "replied", conversationId: conversation.id };
   }
 
-  private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string): Promise<void> {
+  private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string, telegram = this.telegram): Promise<void> {
     if (conversation.handoffNotified) return;
     const history = this.repos.listConversationMessages(conversation.id, 8);
     const summary = history.map((item) => `${item.direction}: ${item.content}`).join("\n");
     const message = buildHandoffMessage({ conversation, lastMessageId, lastMessageTime, summary });
     try {
-      await this.telegram.sendHandoffMessage(message);
+      await telegram.sendHandoffMessage(message);
       conversation.handoffNotified = 1;
       this.repos.insertHandoffEvent(conversation.id, message, true);
     } catch (error) {
       this.repos.insertHandoffEvent(conversation.id, message, false, error instanceof Error ? error.message : "unknown");
     }
   }
+}
+
+function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord): AppConfig {
+  return {
+    ...config,
+    A2C_BASE_URL: merchantConfig.a2cBaseUrl || config.A2C_BASE_URL,
+    A2C_APP_ID: merchantConfig.a2cAppId || config.A2C_APP_ID,
+    A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
+    OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
+    OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
+    TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
+    PLATFORM_REGISTER_URL: merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
+    TG_REGISTER_GUIDE_URL: merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
+  };
 }
