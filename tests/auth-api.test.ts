@@ -33,4 +33,57 @@ describe("auth api", () => {
 
     await app.close();
   });
+
+  it("keeps merchant data isolated and ignores masked secret patches", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "Admin123456" }
+    });
+    const cookie = String(login.headers["set-cookie"]);
+
+    const merchant = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie },
+      payload: { name: "商户A" }
+    });
+    const merchantId = merchant.json().id as string;
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie },
+      payload: { a2cAppSecret: "real-secret-value", openaiApiKey: "sk-real-value" }
+    });
+    const masked = await app.inject({
+      method: "GET",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie }
+    });
+    expect(masked.json().a2cAppSecret).toContain("••••");
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie },
+      payload: { a2cAppSecret: masked.json().a2cAppSecret, platformRegisterUrl: "https://example.com/register" }
+    });
+    const maskedAgain = await app.inject({
+      method: "GET",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie }
+    });
+    expect(maskedAgain.json().a2cAppSecret).toBe(masked.json().a2cAppSecret);
+
+    await app.close();
+  });
 });

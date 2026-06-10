@@ -52,11 +52,25 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return merchant;
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, request.body ?? {})));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listUsers({ merchantId: request.query.merchantId }).map(maskUser)
   }));
+  app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listConversations({
+      merchantId: request.query.merchantId,
+      status: request.query.status,
+      handoffStatus: request.query.handoffStatus,
+      language: request.query.language,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/admin/conversations/:id/messages", { preHandler: adminOnly }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
+    return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
+  });
   app.post("/api/admin/users", { preHandler: adminOnly }, async (request) => {
     const body = z.object({
       merchantId: z.string().nullable().optional(),
@@ -98,7 +112,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     };
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
-  app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), request.body ?? {})));
+  app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
 
   app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
@@ -242,6 +256,15 @@ function maskSecret(value: string): string {
   if (!value) return "";
   if (value === "CHANGE_ME") return value;
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
+}
+
+function cleanConfigPatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (typeof value === "string" && value.includes("••••")) continue;
+    cleaned[key] = value;
+  }
+  return cleaned;
 }
 
 function maskUser<T extends { passwordHash?: string }>(user: T): Omit<T, "passwordHash"> {

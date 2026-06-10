@@ -74,8 +74,8 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {view === "users" && <UsersPage />}
         {view === "config" && <Config platform={user.role === "platform_admin"} />}
         {view === "samples" && <Samples />}
-        {view === "conversations" && <Conversations />}
-        {view === "handoffs" && <Conversations handoffs />}
+        {view === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
+        {view === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs />}
       </main>
     </div>
   );
@@ -115,17 +115,18 @@ function Samples() {
   return <section><div className="toolbar"><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows("/api/merchant/training-samples?enabled=true")); }}>上传样本</button></div><Table rows={rows} columns={["customerMessage", "standardReply", "intent", "stage", "language", "priority"]} /></section>;
 }
 
-function Conversations({ handoffs = false }: { handoffs?: boolean }) {
-  const [rows, setRows] = useRows<Conversation>(`/api/merchant/conversations?limit=100${handoffs ? "&status=human_handoff" : ""}`);
+function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
+  const base = platform ? "/api/admin/conversations" : "/api/merchant/conversations";
+  const [rows, setRows] = useRows<Conversation>(`${base}?limit=100${handoffs ? "&status=human_handoff" : ""}`);
   const [selected, setSelected] = useState<Conversation | null>(null);
-  return <div className="split"><section><Table rows={rows} columns={["customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} /></section><section>{selected ? <ConversationDetail conversation={selected} refresh={async () => setRows(await loadRows(`/api/merchant/conversations?limit=100${handoffs ? "&status=human_handoff" : ""}`))} /> : <p>选择一个会话查看详情</p>}</section></div>;
+  return <div className="split"><section><Table rows={rows} columns={platform ? ["merchantId", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"] : ["customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} /></section><section>{selected ? <ConversationDetail platform={platform} conversation={selected} refresh={async () => setRows(await loadRows(`${base}?limit=100${handoffs ? "&status=human_handoff" : ""}`))} /> : <p>选择一个会话查看详情</p>}</section></div>;
 }
 
-function ConversationDetail({ conversation, refresh }: { conversation: Conversation; refresh: () => void }) {
+function ConversationDetail({ platform = false, conversation, refresh }: { platform?: boolean; conversation: Conversation; refresh: () => void }) {
   const [messages, setMessages] = useState<Array<Record<string, string>>>([]);
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
-  useEffect(() => { api<{ rows: Array<Record<string, string>> }>(`/api/merchant/conversations/${conversation.id}/messages`).then((r) => setMessages(r.rows)); }, [conversation.id]);
-  return <div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"}</p><div className="toolbar"><select value={conversation.handoffStatus} onChange={async (e) => { await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select></div><div className="messages">{messages.map((m, i) => <article key={i} className={m.direction}>{m.content}<small>{m.intent}</small></article>)}</div><div className="send"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="文本内容" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><button onClick={async () => { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); }}><Send size={16}/>发送</button></div></div>;
+  useEffect(() => { api<{ rows: Array<Record<string, string>> }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages`).then((r) => setMessages(r.rows)); }, [conversation.id, platform]);
+  return <div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"}</p>{!platform && <div className="toolbar"><select value={conversation.handoffStatus} onChange={async (e) => { await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select></div>}<div className="messages">{messages.map((m, i) => <article key={i} className={m.direction}>{m.content}<small>{m.intent}</small></article>)}</div>{!platform && <div className="send"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="文本内容" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><button onClick={async () => { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); }}><Send size={16}/>发送</button></div>}</div>;
 }
 
 function Table<T extends Record<string, any>>({ rows, columns, onRow }: { rows: T[]; columns: string[]; onRow?: (row: T) => void }) {

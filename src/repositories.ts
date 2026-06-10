@@ -164,6 +164,10 @@ export class Repositories {
   listConversations(filters: { merchantId?: string; status?: string; language?: string; handoffStatus?: string; limit?: number } = {}): Conversation[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
     if (filters.status) {
       clauses.push("status = ?");
       params.push(filters.status);
@@ -195,6 +199,10 @@ export class Repositories {
   listTrainingSamples(filters: { merchantId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
     if (filters.language) {
       clauses.push("language = ?");
       params.push(filters.language);
