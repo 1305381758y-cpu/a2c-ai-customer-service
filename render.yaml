@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: a2c-ai-customer-service
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.1
+      - key: DATABASE_URL
+        value: /var/data/app.db
+      - key: INTERNAL_API_KEY
+        sync: false
+      - key: A2C_BASE_URL
+        value: https://openapi.a2c.chat/api/openapi
+      - key: A2C_APP_ID
+        sync: false
+      - key: A2C_APP_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_HANDOFF_CHAT_ID
+        sync: false
+      - key: PLATFORM_REGISTER_URL
+        sync: false
+      - key: TG_REGISTER_GUIDE_URL
+        sync: false
+    disk:
+      name: a2c-ai-data
+      mountPath: /var/data
+      sizeGB: 1

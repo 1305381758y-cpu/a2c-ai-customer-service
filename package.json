@@ -1,0 +1,31 @@
+{
+  "name": "a2c-ai-customer-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.14.0",
+    "npm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --experimental-sqlite dist/server.js",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.3",
+    "fastify": "^5.6.2",
+    "csv-parse": "^6.1.0",
+    "openai": "^6.9.1",
+    "read-excel-file": "^6.0.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.13"
+  }
+}

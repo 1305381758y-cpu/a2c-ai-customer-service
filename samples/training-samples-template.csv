@@ -1,0 +1,7 @@
+客户消息,标准回复,适用阶段,客户意图,语言,关键词,优先级,是否启用
+你好,您好，请先完成平台开户，完成后把手机号和 Telegram 账号发给我。,need_platform_register,greeting,zh,你好 注册 开户,10,是
+我要怎么注册,请点击开户链接完成开户注册，完成后把您的手机号发给我，我继续帮您处理。,need_platform_register,ask_platform_register,zh,注册 开户 链接,20,是
+链接发我,这是开户链接：{{PLATFORM_REGISTER_URL}}。注册完成后请把手机号和 Telegram 账号发给我。,need_platform_register,ask_link,zh,链接 入口 网址,20,是
+我已经注册好了,好的，请再把您的 Telegram 账号发给我，格式可以是 @username 或 t.me/username。,need_phone_or_tg,platform_register_done,zh,注册好了 完成,20,是
+不会注册tg,您可以先下载 Telegram App，注册后把 @ 开头的账号或 t.me 链接发给我，我帮您继续处理。,need_tg_register,ask_tg_register,zh,tg telegram 电报 飞机,20,是
+Is this safe?,"Yes, please only complete the platform registration and send your phone number plus Telegram account. Do not share any password or verification code.",need_platform_register,trust_concern,en,safe trust real,15,是
