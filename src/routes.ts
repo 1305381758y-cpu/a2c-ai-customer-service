@@ -58,6 +58,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: request.params.id }) }));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: adminOnly }, async (request, reply) => syncA2CAccounts(request, reply, deps, request.params.id));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id", { preHandler: adminOnly }, async (request, reply) => {
@@ -195,6 +196,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.get("/api/merchant/config/check", { preHandler: merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/a2c/accounts", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: scopedMerchantId(request) }) }));
   app.post("/api/merchant/a2c/accounts/sync", { preHandler: merchantAdmins }, async (request, reply) => syncA2CAccounts(request, reply, deps, scopedMerchantId(request)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/a2c/accounts/:id", { preHandler: merchantAdmins }, async (request, reply) => {
@@ -429,6 +431,100 @@ async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, dep
   } catch (error) {
     return reply.code(502).send({ error: error instanceof Error ? error.message : "A2C accounts sync failed" });
   }
+}
+
+type ConfigCheckItem = {
+  key: string;
+  label: string;
+  ok: boolean;
+  status: "ok" | "missing" | "error" | "waiting";
+  detail: string;
+};
+
+async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
+  const merchant = deps.repos.getMerchant(merchantId);
+  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
+  const cfg = deps.repos.getMerchantConfig(merchantId);
+  const runtimeConfig = appConfigForMerchant(deps.config, cfg);
+  const checks: ConfigCheckItem[] = [];
+
+  checks.push(await checkA2C(runtimeConfig));
+  checks.push(await checkOpenAI(runtimeConfig));
+  checks.push(await checkTelegram(runtimeConfig));
+  checks.push({
+    key: "platformRegisterUrl",
+    label: "开户链接",
+    ok: Boolean(runtimeConfig.PLATFORM_REGISTER_URL),
+    status: runtimeConfig.PLATFORM_REGISTER_URL ? "ok" : "missing",
+    detail: runtimeConfig.PLATFORM_REGISTER_URL || "未配置，AI 回复里无法给客户开户链接"
+  });
+
+  return {
+    ok: checks.every((item) => item.ok),
+    rows: checks,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+async function checkA2C(config: AppConfig): Promise<ConfigCheckItem> {
+  if (!config.A2C_APP_ID || !config.A2C_APP_SECRET) {
+    return { key: "a2c", label: "A2C", ok: false, status: "missing", detail: "缺少 A2C App ID 或密钥" };
+  }
+  try {
+    const accounts = await new A2CClient(config).listAccounts();
+    return { key: "a2c", label: "A2C", ok: true, status: "ok", detail: `连接正常，拉取到 ${accounts.length} 个客服账号` };
+  } catch (error) {
+    return { key: "a2c", label: "A2C", ok: false, status: "error", detail: error instanceof Error ? error.message : "A2C 检测失败" };
+  }
+}
+
+async function checkOpenAI(config: AppConfig): Promise<ConfigCheckItem> {
+  const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
+  if (!apiKey) return { key: "openai", label: "OpenAI", ok: false, status: "missing", detail: "缺少 OpenAI Key，客户消息会降级使用样本/默认话术" };
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.OPENAI_MODEL,
+        input: "Reply with OK only."
+      })
+    });
+    const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
+    if (!response.ok) throw new Error(body.error?.message || response.statusText);
+    return { key: "openai", label: "OpenAI", ok: true, status: "ok", detail: `模型 ${config.OPENAI_MODEL} 可用，客户消息会优先调用 AI 回复` };
+  } catch (error) {
+    return { key: "openai", label: "OpenAI", ok: false, status: "error", detail: error instanceof Error ? error.message : "OpenAI 检测失败" };
+  }
+}
+
+async function checkTelegram(config: AppConfig): Promise<ConfigCheckItem> {
+  if (!config.TELEGRAM_BOT_TOKEN) return { key: "telegram", label: "Telegram", ok: false, status: "missing", detail: "缺少 TG 机器人 Token" };
+  try {
+    const me = await fetchTelegram(config.TELEGRAM_BOT_TOKEN, "getMe");
+    if (!me.ok) throw new Error(me.description || "TG 机器人 Token 无效");
+    if (!config.TELEGRAM_HANDOFF_CHAT_ID) {
+      return { key: "telegram", label: "Telegram", ok: false, status: "waiting", detail: "机器人可用，但尚未绑定接管群。请拉群并发送 /bind" };
+    }
+    const chat = await fetchTelegram(config.TELEGRAM_BOT_TOKEN, "getChat", { chat_id: config.TELEGRAM_HANDOFF_CHAT_ID });
+    if (!chat.ok) throw new Error(chat.description || "TG 群 ID 无效或机器人不在群里");
+    const title = typeof chat.result === "object" && chat.result && "title" in chat.result ? String((chat.result as { title?: string }).title || config.TELEGRAM_HANDOFF_CHAT_ID) : config.TELEGRAM_HANDOFF_CHAT_ID;
+    return { key: "telegram", label: "Telegram", ok: true, status: "ok", detail: `机器人和接管群可用：${title}` };
+  } catch (error) {
+    return { key: "telegram", label: "Telegram", ok: false, status: "error", detail: error instanceof Error ? error.message : "Telegram 检测失败" };
+  }
+}
+
+async function fetchTelegram(botToken: string, method: string, body?: Record<string, unknown>): Promise<{ ok: boolean; description?: string; result?: unknown }> {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return await response.json().catch(() => ({ ok: false, description: response.statusText })) as { ok: boolean; description?: string; result?: unknown };
 }
 
 async function setupTelegramWebhook(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {

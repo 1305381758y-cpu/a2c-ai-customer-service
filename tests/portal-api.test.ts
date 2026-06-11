@@ -219,6 +219,12 @@ describe("portal api", () => {
       url: `/api/merchant/conversations/${conversations.json().rows[0].id}/messages`,
       headers: { cookie: merchantCookie }
     });
+    const inbound = messages.json().rows.find((row: { direction: string }) => row.direction === "inbound");
+    expect(inbound.rawPayload).toMatchObject({
+      originalContent: "发我链接",
+      translatedContent: "发我链接",
+      targetLanguage: "zh-CN"
+    });
     const outbound = messages.json().rows.find((row: { direction: string }) => row.direction === "outbound");
     expect(outbound.content).toBe("请点击专属链接注册：https://merchant.example/register");
 
@@ -744,6 +750,87 @@ describe("portal api", () => {
       const invalidConfig = await app.inject({ method: "GET", url: "/api/merchant/config", headers: { cookie: merchantCookie } });
       expect(invalidConfig.json().telegramHandoffChatStatus).toBe("invalid");
       expect(invalidConfig.json().telegramHandoffChatError).toContain("removed");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("checks merchant integration config status", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 200, data: { accessToken: "token-for-check", expireIn: 3600 } });
+      }
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "check-a2c-account", verifiedName: "检测账号" }] });
+      }
+      if (url.endsWith("/v1/responses")) {
+        return Response.json({ output_text: "OK" });
+      }
+      if (url.includes("api.telegram.org") && url.endsWith("/getMe")) {
+        return Response.json({ ok: true, result: { username: "check_bot" } });
+      }
+      if (url.includes("api.telegram.org") && url.endsWith("/getChat")) {
+        return Response.json({ ok: true, result: { title: "检测接管群" } });
+      }
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "配置检测商户" }
+      });
+      const merchantId = merchant.json().id as string;
+
+      await app.inject({
+        method: "PATCH",
+        url: `/api/admin/merchants/${merchantId}/config`,
+        headers: { cookie: adminCookie },
+        payload: {
+          a2cBaseUrl: "https://a2c.test/api/openapi",
+          a2cAppId: "app-id",
+          a2cAppSecret: "app-secret",
+          openaiApiKey: "sk-test",
+          openaiModel: "gpt-5-mini",
+          telegramBotToken: "tg-token",
+          telegramHandoffChatId: "-100123",
+          platformRegisterUrl: "https://merchant.example/register"
+        }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: {
+          merchantId,
+          email: "check-merchant@test.local",
+          name: "配置检测员",
+          password: "Merchant123456",
+          role: "merchant_admin"
+        }
+      });
+      const merchantCookie = await login(app, "check-merchant@test.local", "Merchant123456");
+      const checked = await app.inject({
+        method: "GET",
+        url: "/api/merchant/config/check",
+        headers: { cookie: merchantCookie }
+      });
+
+      expect(checked.statusCode).toBe(200);
+      expect(checked.json().ok).toBe(true);
+      expect(checked.json().rows.map((row: { key: string; ok: boolean }) => [row.key, row.ok])).toEqual([
+        ["a2c", true],
+        ["openai", true],
+        ["telegram", true],
+        ["platformRegisterUrl", true]
+      ]);
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

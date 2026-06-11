@@ -20,6 +20,8 @@ export interface AiReply {
   extractedPhone: string;
   extractedTelegram: string;
   shouldHandoff: boolean;
+  fallback?: boolean;
+  error?: string;
 }
 
 export class OpenAIReplyClient {
@@ -33,48 +35,55 @@ export class OpenAIReplyClient {
   async generateReply(input: ReplyInput): Promise<AiReply> {
     if (!this.client) return fallbackReply(input, this.config);
 
-    const response = await this.client.responses.create({
-      model: this.config.OPENAI_MODEL,
-      input: [
-        {
-          role: "system",
-          content: buildSystemPrompt(this.config)
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            customerText: input.customerText,
-            conversation: input.conversation,
-            recentHistory: input.history,
-            relevantTrainingSamples: input.samples,
-            knowledgeItems: input.knowledge,
-            trainingMaterials: input.trainingMaterials ?? [],
-            customerMemory: input.memory ?? null
-          })
-        }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "customer_service_reply",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              reply: { type: "string" },
-              language: { type: "string" },
-              stage: { type: "string" },
-              extractedPhone: { type: "string" },
-              extractedTelegram: { type: "string" },
-              shouldHandoff: { type: "boolean" }
-            },
-            required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "shouldHandoff"]
+    try {
+      const response = await this.client.responses.create({
+        model: this.config.OPENAI_MODEL,
+        input: [
+          {
+            role: "system",
+            content: buildSystemPrompt(this.config)
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              customerText: input.customerText,
+              conversation: input.conversation,
+              recentHistory: input.history,
+              relevantTrainingSamples: input.samples,
+              knowledgeItems: input.knowledge,
+              trainingMaterials: input.trainingMaterials ?? [],
+              customerMemory: input.memory ?? null
+            })
+          }
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "customer_service_reply",
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                reply: { type: "string" },
+                language: { type: "string" },
+                stage: { type: "string" },
+                extractedPhone: { type: "string" },
+                extractedTelegram: { type: "string" },
+                shouldHandoff: { type: "boolean" }
+              },
+              required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "shouldHandoff"]
+            }
           }
         }
-      }
-    });
+      });
 
-    return JSON.parse(response.output_text) as AiReply;
+      return JSON.parse(response.output_text) as AiReply;
+    } catch (error) {
+      const fallback = fallbackReply(input, this.config);
+      fallback.fallback = true;
+      fallback.error = error instanceof Error ? error.message : "OpenAI reply failed";
+      return fallback;
+    }
   }
 }
 
@@ -118,7 +127,8 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
     stage: input.conversation.stage,
     extractedPhone: input.conversation.extractedPhone,
     extractedTelegram: input.conversation.extractedTelegram,
-    shouldHandoff: false
+    shouldHandoff: false,
+    fallback: true
   };
 }
 

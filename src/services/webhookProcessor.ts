@@ -7,6 +7,7 @@ import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { buildHandoffMessage } from "./handoff.js";
+import { translateForOperator } from "./translation.js";
 
 export interface A2CWebhookPayload {
   id: string;
@@ -49,6 +50,7 @@ export class WebhookProcessor {
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id);
     const analysis = analyzeMessage(content, conversation.language);
+    const inboundTranslation = await translateForOperator(runtimeConfig, content, analysis.language);
 
     const inserted = this.repos.insertMessage({
       conversationId: conversation.id,
@@ -60,7 +62,12 @@ export class WebhookProcessor {
       intent: analysis.intent,
       phoneDetected: analysis.phone,
       telegramDetected: analysis.telegram,
-      rawPayload: payload
+      rawPayload: {
+        ...payload,
+        originalContent: inboundTranslation.originalText,
+        translatedContent: inboundTranslation.translatedText,
+        targetLanguage: inboundTranslation.targetLanguage
+      }
     });
     if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };
 
@@ -130,7 +137,7 @@ export class WebhookProcessor {
       msgType: "text",
       language: aiReply.language || conversation.language,
       intent: "unknown",
-      rawPayload: { samples: samples.map((sample) => sample.id), trainingMaterials: trainingMaterials.map((item) => item.id) }
+      rawPayload: { samples: samples.map((sample) => sample.id), trainingMaterials: trainingMaterials.map((item) => item.id), aiFallback: Boolean(aiReply.fallback), aiError: aiReply.error || "" }
     });
     this.repos.updateConversation(conversation);
     this.repos.upsertCustomerFromConversation(conversation);

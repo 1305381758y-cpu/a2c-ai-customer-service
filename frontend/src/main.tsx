@@ -14,6 +14,7 @@ type TrainingMaterial = { id: number; merchantId: string; sourceType: string; fi
 type TrainingMaterialItem = { id: number; kind: string; title: string; content: string; intent: string; stage: string; language: string; enabled: boolean };
 type A2CAccount = { id: number; merchantId: string; apiPhone: string; wabaId: string; status: number; numberStatus: number; qualityRating: number; messagingLimit: number; verifiedName: string; enabled: boolean; syncedAt: string };
 type ChatMessage = { direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; manual?: boolean } };
+type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 type Filters = Record<string, string>;
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -124,11 +125,20 @@ function Config({ platform }: { platform: boolean }) {
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
   const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
   const a2cSyncUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts/sync` : "/api/merchant/a2c/accounts/sync";
+  const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
   const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : form.merchantId || "default"}`;
+  const [checks, setChecks] = useState<ConfigCheck[]>([]);
   useEffect(() => { api<Record<string, string>>(url).then(setForm).catch(() => null); }, [url]);
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
+  useEffect(() => { setChecks([]); }, [merchantId]);
   const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "openaiApiKey", "openaiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+  const runConfigCheck = async () => {
+    setMessage("正在检测配置...");
+    const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(checkUrl);
+    setChecks(result.rows);
+    setMessage("配置检测完成。");
+  };
   const saveConfig = async () => {
     setMessage("");
     const saved = await api<Record<string, string>>(url, { method: "PATCH", body: JSON.stringify(form) });
@@ -165,7 +175,7 @@ function Config({ platform }: { platform: boolean }) {
     setForm(result.config);
     setMessage("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind。");
   };
-  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="memory"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label></div><div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><button onClick={saveConfig}>保存配置</button><button onClick={() => syncA2CAccounts()}>同步A2C客服账号</button></div><div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} /><div className="account-actions">{a2cAccounts.map((row) => <button key={row.id} onClick={() => toggleA2CAccount(row)}>{row.apiPhone} · {row.enabled ? "停用" : "启用"}</button>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
+  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="memory"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label></div><div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><button onClick={saveConfig}>保存配置</button><button onClick={() => syncA2CAccounts()}>同步A2C客服账号</button><button onClick={runConfigCheck}>检测配置</button></div>{checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}<div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} /><div className="account-actions">{a2cAccounts.map((row) => <button key={row.id} onClick={() => toggleA2CAccount(row)}>{row.apiPhone} · {row.enabled ? "停用" : "启用"}</button>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {
@@ -265,8 +275,9 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   const payload = message.rawPayload || {};
   const original = payload.originalContent || "";
   const translated = payload.translatedContent || "";
-  const showTranslation = message.direction === "outbound" && original && translated;
-  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{message.direction === "outbound" ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{showTranslation ? <div className="translation-block"><strong>客服原文</strong><p>{original}</p><strong>发送译文{payload.targetLanguage ? ` · ${payload.targetLanguage}` : ""}</strong><p>{translated}</p></div> : <p>{message.content}</p>}<small>{message.intent} · {message.language}</small></article>;
+  const showTranslation = Boolean(original && translated);
+  const isOutbound = message.direction === "outbound";
+  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{showTranslation ? <div className="translation-block"><strong>{isOutbound ? "客服原文" : "客户原文"}</strong><p>{original}</p><strong>{isOutbound ? "发送译文" : "中文译文"}{payload.targetLanguage ? ` · ${payload.targetLanguage}` : ""}</strong><p>{translated}</p></div> : <p>{message.content}</p>}<small>{message.intent} · {message.language}</small></article>;
 }
 
 function Table<T extends Record<string, any>>({ rows, columns, onRow }: { rows: T[]; columns: string[]; onRow?: (row: T) => void }) {
@@ -338,7 +349,7 @@ function label(key: string) {
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "CSV", xlsx: "Excel", docx: "Word", txt: "文本", image: "图片",
     lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
     conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID",
-    unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效", apiPhone: "客服账号", verifiedName: "显示名称",
+    ok: "正常", missing: "未配置", error: "异常", unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效", apiPhone: "客服账号", verifiedName: "显示名称",
     wabaId: "WABA ID", numberStatus: "号码状态", qualityRating: "质量评分", messagingLimit: "消息额度", syncedAt: "同步时间"
   } as Record<string, string>)[key] || key;
 }

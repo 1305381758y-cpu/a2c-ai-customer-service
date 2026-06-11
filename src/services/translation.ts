@@ -7,7 +7,32 @@ export interface TranslationResult {
   targetLanguage: string;
 }
 
+const OPERATOR_LANGUAGE = "zh-CN";
+
 export async function translateForCustomer(config: AppConfig, text: string, targetLanguage: string): Promise<TranslationResult> {
+  return translateText(
+    config,
+    text,
+    targetLanguage || "unknown",
+    "Translate the user's customer-service message into the target language. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translated message."
+  );
+}
+
+export async function translateForOperator(config: AppConfig, text: string, sourceLanguage: string): Promise<TranslationResult> {
+  const language = sourceLanguage || "unknown";
+  if (language === "zh" || language === "zh-CN" || language === "cn") {
+    const originalText = text.trim();
+    return { originalText, translatedText: originalText, targetLanguage: OPERATOR_LANGUAGE };
+  }
+  return translateText(
+    config,
+    text,
+    OPERATOR_LANGUAGE,
+    "Translate the customer's incoming message into Simplified Chinese for a customer-service operator. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translation."
+  );
+}
+
+async function translateText(config: AppConfig, text: string, targetLanguage: string, systemPrompt: string): Promise<TranslationResult> {
   const originalText = text.trim();
   const language = targetLanguage || "unknown";
   const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
@@ -22,7 +47,7 @@ export async function translateForCustomer(config: AppConfig, text: string, targ
       input: [
         {
           role: "system",
-          content: "Translate the user's customer-service message into the target language. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translated message."
+          content: systemPrompt
         },
         {
           role: "user",
