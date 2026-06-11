@@ -846,6 +846,20 @@ describe("portal api", () => {
         fileName: "image.png"
       });
 
+      const textSent = await app.inject({
+        method: "POST",
+        url: `/api/merchant/conversations/${conversationId}/send`,
+        headers: { cookie: merchantCookie },
+        payload: { type: "text", content: "请把手机号和 Telegram 发给我" }
+      });
+      expect(textSent.statusCode).toBe(200);
+      expect(sentBodies[1]).toMatchObject({
+        to: "manual-customer-phone",
+        senderPhoneNumber: "manual-a2c-account",
+        type: 1,
+        content: "请把手机号和 Telegram 发给我"
+      });
+
       const messages = await app.inject({
         method: "GET",
         url: `/api/merchant/conversations/${conversationId}/messages`,
@@ -853,6 +867,11 @@ describe("portal api", () => {
       });
       const outbound = messages.json().rows.find((row: { direction: string; content: string }) => row.direction === "outbound" && row.content === "图片说明");
       expect(outbound).toBeTruthy();
+      const translated = messages.json().rows.find((row: { rawPayload?: { originalContent?: string } }) => row.rawPayload?.originalContent === "请把手机号和 Telegram 发给我");
+      expect(translated.rawPayload).toMatchObject({
+        originalContent: "请把手机号和 Telegram 发给我",
+        translatedContent: "请把手机号和 Telegram 发给我"
+      });
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

@@ -11,6 +11,7 @@ import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
+import { translateForCustomer } from "./services/translation.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: WebhookProcessor }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -302,13 +303,17 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
-    const client = new A2CClient(appConfigForMerchant(deps.config, cfg));
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg);
+    const client = new A2CClient(runtimeConfig);
+    const type = request.body?.type ?? "text";
+    const translation = type === "text" ? await translateForCustomer(runtimeConfig, request.body?.content || "", conversation.language) : undefined;
+    const outgoingContent = translation?.translatedText || request.body?.content;
     try {
       const externalId = await client.sendMessage({
         to: conversation.customerPhone,
         senderPhoneNumber: conversation.a2cAccountPhone,
-        type: request.body?.type ?? "text",
-        content: request.body?.content,
+        type,
+        content: outgoingContent,
         url: request.body?.url,
         caption: request.body?.caption,
         fileName: request.body?.fileName
@@ -317,13 +322,18 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
         conversationId: conversation.id,
         direction: "outbound",
         externalId,
-        content: request.body?.content || request.body?.caption || request.body?.url || "",
-        msgType: request.body?.type ?? "text",
+        content: outgoingContent || request.body?.caption || request.body?.url || "",
+        msgType: type,
         language: conversation.language,
         intent: "unknown",
-        rawPayload: { manual: true }
+        rawPayload: {
+          manual: true,
+          originalContent: translation?.originalText,
+          translatedContent: translation?.translatedText,
+          targetLanguage: translation?.targetLanguage
+        }
       });
-      return { externalId };
+      return { externalId, translation };
     } catch (error) {
       return reply.code(502).send({ error: error instanceof Error ? error.message : "send failed" });
     }

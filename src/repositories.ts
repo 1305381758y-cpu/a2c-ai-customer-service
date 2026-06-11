@@ -158,6 +158,16 @@ export interface MessageInput {
   rawPayload?: unknown;
 }
 
+export interface ConversationMessageRecord {
+  direction: string;
+  content: string;
+  msgType: string;
+  language: string;
+  intent: string;
+  rawPayload: Record<string, unknown>;
+  createdAt: string;
+}
+
 export class Repositories {
   constructor(private readonly db: Db) {}
 
@@ -342,17 +352,18 @@ export class Repositories {
     }
   }
 
-  listConversationMessages(conversationId: string, limit = 20): Array<{ direction: string; content: string; intent: string; createdAt: string }> {
+  listConversationMessages(conversationId: string, limit = 20): ConversationMessageRecord[] {
     return this.db.sqlite
       .prepare(`
-        SELECT direction, content, intent, created_at AS createdAt
+        SELECT direction, content, msg_type, language, intent, raw_payload, created_at
         FROM messages
         WHERE conversation_id = ?
         ORDER BY id DESC
         LIMIT ?
       `)
       .all(conversationId, limit)
-      .reverse() as Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+      .reverse()
+      .map((row) => mapConversationMessage(row as Record<string, unknown>));
   }
 
   getCustomerMemoryByConversation(conversationId: string): CustomerMemoryRecord | undefined {
@@ -1012,6 +1023,18 @@ function mapConversation(row: Record<string, unknown>): Conversation {
     status: String(row.status ?? "active") as "active" | "human_handoff",
     handoffStatus: String(row.handoff_status ?? "pending") as "pending" | "processing" | "done",
     handoffNotified: Number(row.handoff_notified ?? 0)
+  };
+}
+
+function mapConversationMessage(row: Record<string, unknown>): ConversationMessageRecord {
+  return {
+    direction: String(row.direction),
+    content: String(row.content ?? ""),
+    msgType: String(row.msg_type ?? "text"),
+    language: String(row.language ?? "unknown"),
+    intent: String(row.intent ?? "unknown"),
+    rawPayload: parseJsonObject(row.raw_payload),
+    createdAt: String(row.created_at ?? "")
   };
 }
 

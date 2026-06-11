@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, Contact, FileText, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
 import "./styles.css";
@@ -13,6 +13,7 @@ type CustomerMemory = { id: number; summary: string; facts: Record<string, unkno
 type TrainingMaterial = { id: number; merchantId: string; sourceType: string; filename: string; status: string; itemCount: number; sampleCount: number; knowledgeCount: number; warnings: string[]; createdAt: string; rawText?: string };
 type TrainingMaterialItem = { id: number; kind: string; title: string; content: string; intent: string; stage: string; language: string; enabled: boolean };
 type A2CAccount = { id: number; merchantId: string; apiPhone: string; wabaId: string; status: number; numberStatus: number; qualityRating: number; messagingLimit: number; verifiedName: string; enabled: boolean; syncedAt: string };
+type ChatMessage = { direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; manual?: boolean } };
 type Filters = Record<string, string>;
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -237,14 +238,35 @@ function Conversations({ platform = false, handoffs = false }: { platform?: bool
 }
 
 function ConversationDetail({ platform = false, conversation, refresh }: { platform?: boolean; conversation: Conversation; refresh: () => void }) {
-  const [messages, setMessages] = useState<Array<Record<string, string>>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memory, setMemory] = useState<CustomerMemory | null>(null);
   const [notes, setNotes] = useState("");
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
-  useEffect(() => { api<{ rows: Array<Record<string, string>> }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages`).then((r) => setMessages(r.rows)); }, [conversation.id, platform]);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const loadMessages = async () => {
+    const res = await api<{ rows: ChatMessage[] }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages?limit=100`);
+    setMessages(res.rows);
+  };
+  useEffect(() => {
+    loadMessages().catch(() => null);
+    const timer = window.setInterval(() => loadMessages().catch(() => null), 3000);
+    return () => window.clearInterval(timer);
+  }, [conversation.id, platform]);
+  useEffect(() => {
+    const node = messagesRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [messages.length, conversation.id]);
   useEffect(() => { api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => { setMemory(item); setNotes(item.operatorNotes || ""); }).catch(() => { setMemory(null); setNotes(""); }); }, [conversation.id, platform]);
   const memoryUrl = `${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`;
-  return <div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"}</p>{!platform && <div className="toolbar"><select value={conversation.handoffStatus} onChange={async (e) => { await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select></div>}<div className="memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={async () => { const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); }}>保存记忆</button>{memory && <pre>{JSON.stringify(memory.facts, null, 2)}</pre>}</div><div className="messages">{messages.map((m, i) => <article key={i} className={m.direction}>{m.content}<small>{m.intent}</small></article>)}</div>{!platform && <div className="send"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="文本内容" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><button onClick={async () => { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); }}><Send size={16}/>发送</button></div>}</div>;
+  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"} · {conversation.language}</p></div>{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}</div><div className="memory compact-memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={async () => { const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); }}>保存记忆</button></div><div className="chat-window" ref={messagesRef}>{messages.map((m, i) => <ChatBubble key={`${m.createdAt}-${i}`} message={m} />)}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><button onClick={async () => { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); await loadMessages(); }}><Send size={16}/>发送</button></div>}</div>;
+}
+
+function ChatBubble({ message }: { message: ChatMessage }) {
+  const payload = message.rawPayload || {};
+  const original = payload.originalContent || "";
+  const translated = payload.translatedContent || "";
+  const showTranslation = message.direction === "outbound" && original && translated;
+  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{message.direction === "outbound" ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{showTranslation ? <div className="translation-block"><strong>客服原文</strong><p>{original}</p><strong>发送译文{payload.targetLanguage ? ` · ${payload.targetLanguage}` : ""}</strong><p>{translated}</p></div> : <p>{message.content}</p>}<small>{message.intent} · {message.language}</small></article>;
 }
 
 function Table<T extends Record<string, any>>({ rows, columns, onRow }: { rows: T[]; columns: string[]; onRow?: (row: T) => void }) {
@@ -294,6 +316,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function roleName(role: string) {
   return ({ platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营" } as Record<string, string>)[role] || role;
+}
+
+function formatTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function label(key: string) {
