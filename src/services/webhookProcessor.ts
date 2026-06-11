@@ -36,12 +36,12 @@ export class WebhookProcessor {
     private readonly config: AppConfig
   ) {}
 
-  async process(payload: A2CWebhookPayload): Promise<{ status: string; conversationId?: string }> {
+  async process(payload: A2CWebhookPayload, merchantId?: string): Promise<{ status: string; conversationId?: string }> {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };
 
     const data = payload.data;
     const content = data.content || data.caption || data.url || "";
-    const merchant = this.repos.findMerchantByA2CAccount(data.to);
+    const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig);
     const ai = new OpenAIReplyClient(runtimeConfig);

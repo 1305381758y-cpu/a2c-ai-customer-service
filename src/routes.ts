@@ -363,6 +363,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return reply.code(200).send(result);
   });
 
+  app.post<{ Params: { merchantId: string } }>("/webhooks/a2c/:merchantId", async (request, reply) => {
+    const merchant = deps.repos.getMerchant(request.params.merchantId);
+    if (!merchant || merchant.status !== "active") return reply.code(404).send({ error: "merchant not found" });
+    const result = await deps.processor.process(request.body as never, merchant.id);
+    return reply.code(200).send(result);
+  });
+
   app.post<{ Params: { merchantId: string }; Body: TelegramUpdate }>("/webhooks/telegram/:merchantId", async (request, reply) => {
     const merchant = deps.repos.getMerchant(request.params.merchantId);
     if (!merchant) return reply.code(404).send({ error: "merchant not found" });

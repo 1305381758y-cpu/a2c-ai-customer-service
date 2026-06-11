@@ -598,6 +598,71 @@ describe("portal api", () => {
     }
   });
 
+  it("routes merchant-specific A2C webhook urls directly to the merchant", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchant = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "专属Webhook商户" }
+    });
+    const merchantId = merchant.json().id as string;
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId, email: "merchant-webhook@test.local", name: "Webhook商户", password: "Merchant123456", role: "merchant_admin" }
+    });
+    const merchantCookie = await login(app, "merchant-webhook@test.local", "Merchant123456");
+
+    const webhook = await app.inject({
+      method: "POST",
+      url: `/webhooks/a2c/${merchantId}`,
+      payload: {
+        id: "merchant-webhook-event-1",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "merchant-webhook-message-1",
+          content: "你好",
+          from: "merchant-webhook-customer",
+          to: "unconfigured-a2c-account",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000)
+        }
+      }
+    });
+    expect(webhook.statusCode).toBe(200);
+    expect(webhook.json().status).toBe("replied");
+
+    const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+    expect(conversations.json().rows).toHaveLength(1);
+    expect(conversations.json().rows[0]).toMatchObject({ merchantId, a2cAccountPhone: "unconfigured-a2c-account" });
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/webhooks/a2c/not-a-merchant",
+      payload: {
+        id: "merchant-webhook-event-2",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "merchant-webhook-message-2",
+          content: "你好",
+          from: "merchant-webhook-customer",
+          to: "unconfigured-a2c-account",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000)
+        }
+      }
+    });
+    expect(invalid.statusCode).toBe(404);
+
+    await app.close();
+  });
+
   it("auto-binds telegram handoff chat from bot group updates", async () => {
     const originalFetch = globalThis.fetch;
     const telegramCalls: Array<Record<string, unknown>> = [];
