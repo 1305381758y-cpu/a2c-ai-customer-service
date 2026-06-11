@@ -5,6 +5,7 @@ import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
+import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
@@ -89,6 +90,20 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const row = deps.repos.patchTrainingSample(Number(request.params.id), request.body ?? {});
     if (!row) return reply.code(404).send({ error: "sample not found" });
     return row;
+  });
+  app.get<{ Querystring: { merchantId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/admin/training-materials", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listTrainingMaterials({
+      merchantId: request.query.merchantId,
+      sourceType: request.query.sourceType,
+      status: request.query.status,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.get<{ Params: { id: string } }>("/api/admin/training-materials/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    const material = deps.repos.getTrainingMaterial(id);
+    if (!material) return reply.code(404).send({ error: "material not found" });
+    return { material, items: deps.repos.listTrainingMaterialItems(id) };
   });
   app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
@@ -178,6 +193,22 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
 
   app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
+  app.post("/api/merchant/training-materials/import", { preHandler: merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
+  app.get<{ Querystring: { sourceType?: string; status?: string; limit?: string } }>("/api/merchant/training-materials", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.listTrainingMaterials({
+      merchantId: scopedMerchantId(request),
+      sourceType: request.query.sourceType,
+      status: request.query.status,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.get<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: merchantRoles }, async (request, reply) => {
+    const id = Number(request.params.id);
+    const merchantId = scopedMerchantId(request);
+    const material = deps.repos.getTrainingMaterial(id, merchantId);
+    if (!material) return reply.code(404).send({ error: "material not found" });
+    return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
+  });
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       merchantId: scopedMerchantId(request),
@@ -309,6 +340,75 @@ async function importSamples(request: FastifyRequest, reply: FastifyReply, deps:
     return { imported, enabled: imported };
   } catch (error) {
     return reply.code(400).send({ error: "invalid training sample file", message: error instanceof Error ? error.message : "unknown parse error" });
+  }
+}
+
+async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
+  const file = await request.file();
+  if (!file) return reply.code(400).send({ error: "file is required" });
+  const buffer = await file.toBuffer();
+  try {
+    const merchantConfig = deps.repos.getMerchantConfig(merchantId);
+    const parsed = await parseTrainingMaterial({
+      buffer,
+      filename: file.filename,
+      mimeType: file.mimetype,
+      openaiApiKey: merchantConfig.openaiApiKey || deps.config.OPENAI_API_KEY,
+      openaiModel: merchantConfig.openaiModel || deps.config.OPENAI_MODEL
+    });
+    const material = deps.repos.createTrainingMaterial({
+      merchantId,
+      sourceType: parsed.sourceType,
+      filename: file.filename,
+      mimeType: file.mimetype,
+      rawText: parsed.rawText,
+      warnings: parsed.warnings
+    });
+
+    let sampleCount = 0;
+    let knowledgeCount = 0;
+    for (const sample of parsed.samples) {
+      const created = deps.repos.createTrainingSample(merchantId, sample);
+      sampleCount += 1;
+      deps.repos.addTrainingMaterialItem({
+        materialId: material.id,
+        merchantId,
+        kind: "sample",
+        sampleId: created.id,
+        title: sample.customerMessage.slice(0, 80),
+        content: `${sample.customerMessage}\n${sample.standardReply}`,
+        intent: sample.intent,
+        stage: sample.stage,
+        language: sample.language,
+        enabled: sample.enabled
+      });
+    }
+    for (const item of parsed.knowledge) {
+      const created = deps.repos.createKnowledgeItem(merchantId, item);
+      knowledgeCount += 1;
+      deps.repos.addTrainingMaterialItem({
+        materialId: material.id,
+        merchantId,
+        kind: "knowledge",
+        knowledgeId: created.id,
+        title: item.title,
+        content: item.content,
+        intent: "unknown",
+        stage: "",
+        language: item.language,
+        enabled: item.enabled
+      });
+    }
+
+    const finalized = deps.repos.finalizeTrainingMaterial(material.id, merchantId, {
+      itemCount: sampleCount + knowledgeCount,
+      sampleCount,
+      knowledgeCount,
+      warnings: parsed.warnings
+    });
+    return { material: finalized, imported: sampleCount + knowledgeCount, samples: sampleCount, knowledge: knowledgeCount, warnings: finalized.warnings };
+  } catch (error) {
+    return reply.code(400).send({ error: "invalid training material file", message: error instanceof Error ? error.message : "unknown parse error" });
   }
 }
 

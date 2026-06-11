@@ -130,6 +130,42 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS training_materials (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT DEFAULT 'default',
+      source_type TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      mime_type TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'enabled',
+      raw_text TEXT DEFAULT '',
+      item_count INTEGER DEFAULT 0,
+      sample_count INTEGER DEFAULT 0,
+      knowledge_count INTEGER DEFAULT 0,
+      warnings_json TEXT DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS training_material_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      material_id INTEGER NOT NULL,
+      merchant_id TEXT DEFAULT 'default',
+      kind TEXT NOT NULL,
+      sample_id INTEGER,
+      knowledge_id INTEGER,
+      title TEXT DEFAULT '',
+      content TEXT NOT NULL,
+      intent TEXT DEFAULT 'unknown',
+      stage TEXT DEFAULT '',
+      language TEXT DEFAULT 'zh',
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(material_id) REFERENCES training_materials(id),
+      FOREIGN KEY(sample_id) REFERENCES training_samples(id),
+      FOREIGN KEY(knowledge_id) REFERENCES knowledge_items(id)
+    );
+
     CREATE TABLE IF NOT EXISTS customer_memories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT NOT NULL,
@@ -156,6 +192,8 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "training_materials", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "training_material_items", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customer_memories", "merchant_id", "TEXT DEFAULT 'default'");
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
@@ -164,6 +202,8 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE conversations SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE messages SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE handoff_events SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE training_materials SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE training_material_items SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE customer_memories SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
 }
 

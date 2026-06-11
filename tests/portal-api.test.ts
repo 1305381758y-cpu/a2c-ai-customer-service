@@ -25,19 +25,20 @@ async function login(app: ReturnType<typeof buildApp>, email: string, password: 
   return String(response.headers["set-cookie"]);
 }
 
-function csvUploadPayload(csv: string) {
+function multipartUploadPayload(filename: string, contentType: string, content: string | Buffer) {
   const boundary = "----codex-test-boundary";
-  const body = Buffer.from(
+  const contentBuffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  const head = Buffer.from(
     [
       `--${boundary}`,
-      'Content-Disposition: form-data; name="file"; filename="samples.csv"',
-      "Content-Type: text/csv; charset=utf-8",
+      `Content-Disposition: form-data; name="file"; filename="${filename}"`,
+      `Content-Type: ${contentType}`,
       "",
-      csv,
-      `--${boundary}--`,
       ""
     ].join("\r\n")
   );
+  const tail = Buffer.from(["", `--${boundary}--`, ""].join("\r\n"));
+  const body = Buffer.concat([head, contentBuffer, tail]);
   return {
     payload: body,
     headers: {
@@ -45,6 +46,10 @@ function csvUploadPayload(csv: string) {
       "content-length": String(body.length)
     }
   };
+}
+
+function csvUploadPayload(csv: string) {
+  return multipartUploadPayload("samples.csv", "text/csv; charset=utf-8", csv);
 }
 
 describe("portal api", () => {
@@ -240,6 +245,121 @@ describe("portal api", () => {
       headers: { cookie: adminCookie }
     });
     expect(adminConversations.json().rows).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("imports merchant training materials into samples and knowledge with tenant isolation", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchantA = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "素材商户A" }
+    });
+    const merchantB = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "素材商户B" }
+    });
+    const merchantAId = merchantA.json().id as string;
+    const merchantBId = merchantB.json().id as string;
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId: merchantAId, email: "materials-a@test.local", name: "素材A", password: "Merchant123456", role: "merchant_admin" }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId: merchantBId, email: "materials-b@test.local", name: "素材B", password: "Merchant123456", role: "merchant_admin" }
+    });
+    const cookieA = await login(app, "materials-a@test.local", "Merchant123456");
+    const cookieB = await login(app, "materials-b@test.local", "Merchant123456");
+
+    const csv = [
+      "客户消息,标准回复,适用阶段,客户意图,语言,关键词,优先级,是否启用",
+      "注册链接在哪里,请使用固定注册链接：https://merchant-a.example/register,need_platform_register,ask_link,zh,链接,80,是"
+    ].join("\n");
+    const csvUpload = multipartUploadPayload("chat-samples.csv", "text/csv; charset=utf-8", csv);
+    const csvImport = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-materials/import",
+      headers: { cookie: cookieA, ...csvUpload.headers },
+      payload: csvUpload.payload
+    });
+    expect(csvImport.statusCode).toBe(200);
+    expect(csvImport.json()).toMatchObject({ imported: 1, samples: 1, knowledge: 0 });
+
+    const txtUpload = multipartUploadPayload("faq.txt", "text/plain; charset=utf-8", "开户链接必须保持为 https://merchant-a.example/register\n\nTelegram 引导要提醒客户发送 @username。");
+    const txtImport = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-materials/import",
+      headers: { cookie: cookieA, ...txtUpload.headers },
+      payload: txtUpload.payload
+    });
+    expect(txtImport.statusCode).toBe(200);
+    expect(txtImport.json()).toMatchObject({ imported: 2, samples: 0, knowledge: 2 });
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><text>客户完成注册后，收集手机号和 Telegram。</text></svg>`;
+    const imageUpload = multipartUploadPayload("script.svg", "image/svg+xml", svg);
+    const imageImport = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-materials/import",
+      headers: { cookie: cookieA, ...imageUpload.headers },
+      payload: imageUpload.payload
+    });
+    expect(imageImport.statusCode).toBe(200);
+    expect(imageImport.json()).toMatchObject({ imported: 1, samples: 0, knowledge: 1 });
+
+    const samples = await app.inject({
+      method: "GET",
+      url: "/api/merchant/training-samples?intent=ask_link&enabled=true",
+      headers: { cookie: cookieA }
+    });
+    expect(samples.json().rows[0].standardReply).toContain("https://merchant-a.example/register");
+
+    const knowledge = await app.inject({
+      method: "GET",
+      url: "/api/merchant/knowledge?type=script&enabled=true",
+      headers: { cookie: cookieA }
+    });
+    expect(knowledge.json().rows.map((row: { content: string }) => row.content).join("\n")).toContain("Telegram");
+
+    const materials = await app.inject({
+      method: "GET",
+      url: "/api/merchant/training-materials",
+      headers: { cookie: cookieA }
+    });
+    expect(materials.json().rows).toHaveLength(3);
+    const materialId = materials.json().rows[0].id as number;
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/api/merchant/training-materials/${materialId}`,
+      headers: { cookie: cookieA }
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().items.length).toBeGreaterThan(0);
+
+    const forbidden = await app.inject({
+      method: "GET",
+      url: `/api/merchant/training-materials/${materialId}`,
+      headers: { cookie: cookieB }
+    });
+    expect(forbidden.statusCode).toBe(404);
+
+    const adminList = await app.inject({
+      method: "GET",
+      url: `/api/admin/training-materials?merchantId=${merchantAId}`,
+      headers: { cookie: adminCookie }
+    });
+    expect(adminList.json().rows).toHaveLength(3);
 
     await app.close();
   });

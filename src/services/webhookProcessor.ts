@@ -85,6 +85,7 @@ export class WebhookProcessor {
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, enabled: true });
     const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, enabled: true });
+    const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20);
     const samples = rankSamples(enabledSamples, {
       text: content,
       language: analysis.language,
@@ -92,7 +93,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, memory: inboundMemory });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -125,7 +126,7 @@ export class WebhookProcessor {
       msgType: "text",
       language: aiReply.language || conversation.language,
       intent: "unknown",
-      rawPayload: { samples: samples.map((sample) => sample.id) }
+      rawPayload: { samples: samples.map((sample) => sample.id), trainingMaterials: trainingMaterials.map((item) => item.id) }
     });
     this.repos.updateConversation(conversation);
     this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });

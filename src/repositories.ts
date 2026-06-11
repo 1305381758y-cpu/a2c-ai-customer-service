@@ -78,6 +78,37 @@ export interface CustomerMemoryRecord {
   updatedAt: string;
 }
 
+export interface TrainingMaterialRecord {
+  id: number;
+  merchantId: string;
+  sourceType: string;
+  filename: string;
+  mimeType: string;
+  status: "enabled" | "disabled";
+  rawText: string;
+  itemCount: number;
+  sampleCount: number;
+  knowledgeCount: number;
+  warnings: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingMaterialItemRecord {
+  id: number;
+  materialId: number;
+  merchantId: string;
+  kind: "sample" | "knowledge";
+  sampleId: number | null;
+  knowledgeId: number | null;
+  title: string;
+  content: string;
+  intent: string;
+  stage: string;
+  language: string;
+  enabled: boolean;
+}
+
 export interface MessageInput {
   conversationId: string;
   direction: "inbound" | "outbound";
@@ -96,6 +127,28 @@ export class Repositories {
 
   insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default"): number {
     return insertTrainingSamples(this.db, samples, merchantId);
+  }
+
+  createTrainingSample(merchantId: string, sample: ImportedTrainingSample): { id: number } {
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO training_samples
+          (merchant_id, customer_message, standard_reply, stage, intent, language, keywords, priority, enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        merchantId,
+        sample.customerMessage,
+        sample.standardReply,
+        sample.stage,
+        sample.intent,
+        sample.language,
+        sample.keywords,
+        sample.priority,
+        sample.enabled ? 1 : 0
+      );
+    const row = this.db.sqlite.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
+    return { id: Number(row.id) };
   }
 
   ensureBootstrapAdmin(input: { email: string; passwordHash: string }): void {
@@ -444,6 +497,141 @@ export class Repositories {
     return row ? mapKnowledgeItem(row) : undefined;
   }
 
+  createTrainingMaterial(input: {
+    merchantId: string;
+    sourceType: string;
+    filename: string;
+    mimeType: string;
+    rawText: string;
+    warnings: string[];
+  }): TrainingMaterialRecord {
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO training_materials
+          (merchant_id, source_type, filename, mime_type, raw_text, warnings_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .run(input.merchantId, input.sourceType, input.filename, input.mimeType, input.rawText, JSON.stringify(input.warnings));
+    const row = this.db.sqlite.prepare("SELECT * FROM training_materials WHERE id = last_insert_rowid()").get() as Record<string, unknown>;
+    return mapTrainingMaterial(row);
+  }
+
+  addTrainingMaterialItem(input: {
+    materialId: number;
+    merchantId: string;
+    kind: "sample" | "knowledge";
+    sampleId?: number;
+    knowledgeId?: number;
+    title: string;
+    content: string;
+    intent?: string;
+    stage?: string;
+    language?: string;
+    enabled?: boolean;
+  }): TrainingMaterialItemRecord {
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO training_material_items
+          (material_id, merchant_id, kind, sample_id, knowledge_id, title, content, intent, stage, language, enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        input.materialId,
+        input.merchantId,
+        input.kind,
+        input.sampleId ?? null,
+        input.knowledgeId ?? null,
+        input.title,
+        input.content,
+        input.intent ?? "unknown",
+        input.stage ?? "",
+        input.language ?? "zh",
+        input.enabled === false ? 0 : 1
+      );
+    const row = this.db.sqlite.prepare("SELECT * FROM training_material_items WHERE id = last_insert_rowid()").get() as Record<string, unknown>;
+    return mapTrainingMaterialItem(row);
+  }
+
+  finalizeTrainingMaterial(id: number, merchantId: string, counts: { itemCount: number; sampleCount: number; knowledgeCount: number; warnings?: string[] }): TrainingMaterialRecord {
+    this.db.sqlite
+      .prepare(`
+        UPDATE training_materials
+        SET item_count = ?, sample_count = ?, knowledge_count = ?, warnings_json = COALESCE(?, warnings_json), updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND merchant_id = ?
+      `)
+      .run(
+        counts.itemCount,
+        counts.sampleCount,
+        counts.knowledgeCount,
+        counts.warnings ? JSON.stringify(counts.warnings) : null,
+        id,
+        merchantId
+      );
+    return this.getTrainingMaterial(id, merchantId)!;
+  }
+
+  listTrainingMaterials(filters: { merchantId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.sourceType) {
+      clauses.push("source_type = ?");
+      params.push(filters.sourceType);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    params.push(limit);
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM training_materials
+        ${where}
+        ORDER BY id DESC
+        LIMIT ?
+      `)
+      .all(...params)
+      .map((row) => mapTrainingMaterial(row as Record<string, unknown>));
+  }
+
+  getTrainingMaterial(id: number, merchantId?: string): TrainingMaterialRecord | undefined {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const row = this.db.sqlite.prepare(`SELECT * FROM training_materials ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    return row ? mapTrainingMaterial(row) : undefined;
+  }
+
+  listTrainingMaterialItems(materialId: number, merchantId?: string): TrainingMaterialItemRecord[] {
+    const where = merchantId ? "WHERE material_id = ? AND merchant_id = ?" : "WHERE material_id = ?";
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM training_material_items
+        ${where}
+        ORDER BY id ASC
+      `)
+      .all(materialId, ...(merchantId ? [merchantId] : []))
+      .map((row) => mapTrainingMaterialItem(row as Record<string, unknown>));
+  }
+
+  listTrainingMaterialSnippets(merchantId: string, limit = 12): TrainingMaterialItemRecord[] {
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM training_material_items
+        WHERE merchant_id = ? AND enabled = 1
+        ORDER BY id DESC
+        LIMIT ?
+      `)
+      .all(merchantId, limit)
+      .map((row) => mapTrainingMaterialItem(row as Record<string, unknown>));
+  }
+
   insertHandoffEvent(conversationId: string, telegramMessage: string, sent: boolean, error = ""): void {
     this.db.sqlite
       .prepare("INSERT INTO handoff_events (merchant_id, conversation_id, telegram_message, sent, error) VALUES ((SELECT merchant_id FROM conversations WHERE id = ?), ?, ?, ?, ?)")
@@ -658,6 +846,41 @@ function mapCustomerMemory(row: Record<string, unknown>): CustomerMemoryRecord {
   };
 }
 
+function mapTrainingMaterial(row: Record<string, unknown>): TrainingMaterialRecord {
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
+    sourceType: String(row.source_type ?? "txt"),
+    filename: String(row.filename ?? ""),
+    mimeType: String(row.mime_type ?? ""),
+    status: String(row.status ?? "enabled") as "enabled" | "disabled",
+    rawText: String(row.raw_text ?? ""),
+    itemCount: Number(row.item_count ?? 0),
+    sampleCount: Number(row.sample_count ?? 0),
+    knowledgeCount: Number(row.knowledge_count ?? 0),
+    warnings: parseJsonArray(row.warnings_json),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
+function mapTrainingMaterialItem(row: Record<string, unknown>): TrainingMaterialItemRecord {
+  return {
+    id: Number(row.id),
+    materialId: Number(row.material_id),
+    merchantId: String(row.merchant_id ?? "default"),
+    kind: String(row.kind ?? "knowledge") as "sample" | "knowledge",
+    sampleId: row.sample_id === null || row.sample_id === undefined ? null : Number(row.sample_id),
+    knowledgeId: row.knowledge_id === null || row.knowledge_id === undefined ? null : Number(row.knowledge_id),
+    title: String(row.title ?? ""),
+    content: String(row.content ?? ""),
+    intent: String(row.intent ?? "unknown"),
+    stage: String(row.stage ?? ""),
+    language: String(row.language ?? "zh"),
+    enabled: Boolean(Number(row.enabled ?? 1))
+  };
+}
+
 function normalizeKnowledgeType(value: unknown): KnowledgeItemRecord["type"] {
   return value === "script" || value === "rule" || value === "forbidden" || value === "faq" ? value : "faq";
 }
@@ -668,6 +891,15 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   } catch {
     return {};
+  }
+}
+
+function parseJsonArray(value: unknown): string[] {
+  try {
+    const parsed = JSON.parse(String(value || "[]")) as unknown;
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    return [];
   }
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
+import { Bot, Building2, FileText, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
@@ -9,10 +9,13 @@ type Conversation = { id: string; merchantId: string; customerPhone: string; a2c
 type Sample = { id: number; customerMessage: string; standardReply: string; stage: string; intent: string; language: string; keywords: string; priority: number; enabled?: boolean };
 type Knowledge = { id: number; merchantId: string; type: string; title: string; content: string; language: string; priority: number; enabled: boolean };
 type CustomerMemory = { id: number; summary: string; facts: Record<string, unknown>; operatorNotes: string; updatedAt: string };
+type TrainingMaterial = { id: number; merchantId: string; sourceType: string; filename: string; status: string; itemCount: number; sampleCount: number; knowledgeCount: number; warnings: string[]; createdAt: string; rawText?: string };
+type TrainingMaterialItem = { id: number; kind: string; title: string; content: string; intent: string; stage: string; language: string; enabled: boolean };
 type Filters = Record<string, string>;
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
+  const headers = { ...(options.body === undefined ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
+  const response = await fetch(url, { ...options, headers });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || response.statusText);
   return response.json() as Promise<T>;
 }
@@ -61,8 +64,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "用户", Users], ["config", "配置", Settings], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "用户", Users], ["config", "配置", Settings], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   return (
     <div className="app">
       <aside>
@@ -76,6 +79,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {view === "merchants" && <Merchants />}
         {view === "users" && <UsersPage />}
         {view === "config" && <Config platform={user.role === "platform_admin"} />}
+        {view === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
         {view === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
         {view === "samples" && <Samples platform={user.role === "platform_admin"} />}
         {view === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
@@ -125,6 +129,33 @@ function Samples({ platform = false }: { platform?: boolean }) {
   const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Sample | null>(null);
   return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "language", "intent", "stage", "enabled"] : ["language", "intent", "stage", "enabled"]} selects={{ enabled: ["", "true", "false"] }} onApply={async () => setRows(await loadRows(rowsUrl))} />{!platform && <div className="toolbar"><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows(rowsUrl)); }}>上传样本</button></div>}<Table rows={rows} columns={["customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="样本编辑" value={selected as any} fields={["customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); setRows(await loadRows(rowsUrl)); }} /> : <p>{platform ? "平台端可查看和编辑全局样本；上传请在商户端完成。" : "选择样本后可编辑标准回复、意图、阶段和启用状态。"}</p>}</section></div>;
+}
+
+function TrainingMaterials({ platform = false }: { platform?: boolean }) {
+  const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", sourceType: "", status: "", limit: "100" });
+  const rowsUrl = withQuery(base, platform ? filters : { sourceType: filters.sourceType, status: filters.status, limit: filters.limit });
+  const [rows, setRows] = useRows<TrainingMaterial>(rowsUrl);
+  const [file, setFile] = useState<File | null>(null);
+  const [pasted, setPasted] = useState("");
+  const [selected, setSelected] = useState<TrainingMaterial | null>(null);
+  const [detail, setDetail] = useState<{ material: TrainingMaterial; items: TrainingMaterialItem[] } | null>(null);
+  const [message, setMessage] = useState("");
+  const reload = async () => setRows(await loadRows(rowsUrl));
+  const loadDetail = async (row: TrainingMaterial) => {
+    setSelected(row);
+    setDetail(await api<{ material: TrainingMaterial; items: TrainingMaterialItem[] }>(`${base}/${row.id}`));
+  };
+  const uploadFile = async (upload: File) => {
+    const body = new FormData();
+    body.append("file", upload);
+    const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
+    const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
+    setMessage(`已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
+    await reload();
+  };
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "sourceType", "status", "limit"] : ["sourceType", "status", "limit"]} selects={{ sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader"><div className="toolbar"><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (file) await uploadFile(file); }}>上传素材</button></div><textarea placeholder="粘贴聊天记录、话术、FAQ 或业务规则" value={pasted} onChange={(e) => setPasted(e.target.value)} /><button onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}>导入粘贴文本</button>{message && <div className="notice">{message}</div>}</div>}<Table rows={rows} columns={platform ? ["merchantId", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"] : ["filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]} onRow={loadDetail} /></section><section>{selected && detail ? <div><h3>{detail.material.filename}</h3><p>{detail.material.sourceType} · 生成 {detail.material.itemCount} 条 · 样本 {detail.material.sampleCount} · 知识 {detail.material.knowledgeCount}</p>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{item.kind === "sample" ? "样本" : "知识"} · {item.language}</strong><span>{item.title}</span><small>{item.intent || item.stage}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div> : <p>{platform ? "选择素材查看生成内容。平台端可查看所有商户素材。" : "上传 CSV/XLSX/DOCX/TXT/图片后会立即学习，并自动启用生成内容。"}</p>}</section></div>;
 }
 
 function KnowledgePage({ platform }: { platform: boolean }) {
@@ -209,14 +240,15 @@ function roleName(role: string) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", active: "活跃", pendingHandoffs: "待接管",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", active: "活跃", pendingHandoffs: "待接管",
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C App ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号",
     openaiApiKey: "OpenAI Key", openaiModel: "OpenAI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", enabled: "启用", password: "新密码",
     limit: "数量", true: "启用", false: "停用", faq: "FAQ", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
-    pending: "待处理", processing: "处理中", done: "已完成"
+    pending: "待处理", processing: "处理中", done: "已完成", sourceType: "素材类型", filename: "文件名", itemCount: "生成数", sampleCount: "样本数",
+    knowledgeCount: "知识数", createdAt: "导入时间", csv: "CSV", xlsx: "Excel", docx: "Word", txt: "文本", image: "图片"
   } as Record<string, string>)[key] || key;
 }
 
