@@ -1,8 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
+import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
 import { parseTrainingMaterial } from "./import/trainingMaterials.js";
@@ -55,6 +57,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
+  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listUsers({ merchantId: request.query.merchantId }).map(maskUser)
@@ -182,6 +185,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.post("/api/merchant/telegram/setup-webhook", { preHandler: merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
   app.get<{ Querystring: { type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listKnowledgeItems({
       merchantId: scopedMerchantId(request),
@@ -341,11 +345,114 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return reply.code(200).send(result);
   });
 
+  app.post<{ Params: { merchantId: string }; Body: TelegramUpdate }>("/webhooks/telegram/:merchantId", async (request, reply) => {
+    const merchant = deps.repos.getMerchant(request.params.merchantId);
+    if (!merchant) return reply.code(404).send({ error: "merchant not found" });
+    const expectedSecret = telegramWebhookSecret(deps.config, merchant.id);
+    if (!verifySecret(String(request.headers["x-telegram-bot-api-secret-token"] || ""), expectedSecret)) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const result = bindTelegramUpdate(deps.repos, merchant.id, request.body);
+    return reply.code(200).send(result);
+  });
+
   app.get("/*", async (_request, reply) => {
     const indexPath = join(process.cwd(), "dist", "public", "index.html");
     if (existsSync(indexPath)) return reply.type("text/html; charset=utf-8").send(readFileSync(indexPath, "utf8"));
     return reply.type("text/html; charset=utf-8").send("<h1>A2C AI 自动客服</h1><p>服务已在线运行</p>");
   });
+}
+
+type TelegramUpdate = {
+  update_id?: number;
+  message?: { text?: string; chat?: TelegramChat };
+  my_chat_member?: {
+    chat?: TelegramChat;
+    new_chat_member?: { status?: string };
+  };
+};
+
+type TelegramChat = {
+  id: number | string;
+  type?: string;
+  title?: string;
+};
+
+async function setupTelegramWebhook(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
+  const merchant = deps.repos.getMerchant(merchantId);
+  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
+  const cfg = deps.repos.getMerchantConfig(merchantId);
+  if (!cfg.telegramBotToken) return reply.code(400).send({ error: "telegram bot token is required" });
+  const webhookUrl = `${requestOrigin(request)}/webhooks/telegram/${merchantId}`;
+  try {
+    await TelegramClient.setWebhook({
+      botToken: cfg.telegramBotToken,
+      url: webhookUrl,
+      secretToken: telegramWebhookSecret(deps.config, merchantId)
+    });
+    const status = cfg.telegramHandoffChatId ? "bound" : "waiting";
+    const updated = deps.repos.updateTelegramBinding(merchantId, { status });
+    return { ok: true, webhookUrl, config: maskConfig(updated) };
+  } catch (error) {
+    deps.repos.updateTelegramBinding(merchantId, { status: "invalid", error: error instanceof Error ? error.message : "telegram webhook setup failed" });
+    return reply.code(502).send({ error: error instanceof Error ? error.message : "telegram webhook setup failed" });
+  }
+}
+
+function bindTelegramUpdate(repos: Repositories, merchantId: string, update: TelegramUpdate) {
+  const membership = update.my_chat_member;
+  const membershipChat = membership?.chat;
+  const membershipStatus = membership?.new_chat_member?.status || "";
+  if (membershipChat && isGroupChat(membershipChat)) {
+    if (membershipStatus === "left" || membershipStatus === "kicked") {
+      const config = repos.updateTelegramBinding(merchantId, {
+        chatId: String(membershipChat.id),
+        chatTitle: membershipChat.title || "",
+        status: "invalid",
+        error: "Telegram bot was removed from the handoff group"
+      });
+      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
+    }
+    if (["member", "administrator", "creator"].includes(membershipStatus)) {
+      const config = repos.updateTelegramBinding(merchantId, {
+        chatId: String(membershipChat.id),
+        chatTitle: membershipChat.title || "",
+        status: "bound"
+      });
+      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
+    }
+  }
+
+  const messageChat = update.message?.chat;
+  if (messageChat && isGroupChat(messageChat)) {
+    const config = repos.updateTelegramBinding(merchantId, {
+      chatId: String(messageChat.id),
+      chatTitle: messageChat.title || "",
+      status: "bound"
+    });
+    return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
+  }
+  return { ok: true, status: "ignored" };
+}
+
+function isGroupChat(chat: TelegramChat): boolean {
+  return chat.type === "group" || chat.type === "supergroup";
+}
+
+function requestOrigin(request: FastifyRequest): string {
+  const proto = String(request.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+  const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost";
+  return `${proto}://${host}`;
+}
+
+function telegramWebhookSecret(config: AppConfig, merchantId: string): string {
+  return createHmac("sha256", config.SESSION_SECRET).update(`telegram:${merchantId}`).digest("hex");
+}
+
+function verifySecret(actual: string, expected: string): boolean {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 async function importSamples(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, merchantId: string) {

@@ -37,6 +37,9 @@ export interface MerchantConfigRecord {
   openaiModel: string;
   telegramBotToken: string;
   telegramHandoffChatId: string;
+  telegramHandoffChatTitle: string;
+  telegramHandoffChatStatus: "unbound" | "waiting" | "bound" | "invalid";
+  telegramHandoffChatError: string;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
 }
@@ -777,6 +780,9 @@ export class Repositories {
       openaiModel: "openai_model",
       telegramBotToken: "telegram_bot_token",
       telegramHandoffChatId: "telegram_handoff_chat_id",
+      telegramHandoffChatTitle: "telegram_handoff_chat_title",
+      telegramHandoffChatStatus: "telegram_handoff_chat_status",
+      telegramHandoffChatError: "telegram_handoff_chat_error",
       platformRegisterUrl: "platform_register_url",
       tgRegisterGuideUrl: "tg_register_guide_url"
     };
@@ -787,6 +793,26 @@ export class Repositories {
       this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([, value]) => value as string), merchantId);
     }
     return this.getMerchantConfig(merchantId);
+  }
+
+  updateTelegramBinding(merchantId: string, input: { chatId?: string; chatTitle?: string; status: MerchantConfigRecord["telegramHandoffChatStatus"]; error?: string }): MerchantConfigRecord {
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    this.db.sqlite
+      .prepare(`
+        UPDATE merchant_configs
+        SET telegram_handoff_chat_id = COALESCE(?, telegram_handoff_chat_id),
+            telegram_handoff_chat_title = COALESCE(?, telegram_handoff_chat_title),
+            telegram_handoff_chat_status = ?,
+            telegram_handoff_chat_error = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE merchant_id = ?
+      `)
+      .run(input.chatId ?? null, input.chatTitle ?? null, input.status, input.error ?? "", merchantId);
+    return this.getMerchantConfig(merchantId);
+  }
+
+  markTelegramBindingInvalid(merchantId: string, error: string): MerchantConfigRecord {
+    return this.updateTelegramBinding(merchantId, { status: "invalid", error });
   }
 
   findMerchantByA2CAccount(accountPhone: string): MerchantRecord {
@@ -898,6 +924,9 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     openaiModel: String(row.openai_model ?? "gpt-5-mini"),
     telegramBotToken: String(row.telegram_bot_token ?? ""),
     telegramHandoffChatId: String(row.telegram_handoff_chat_id ?? ""),
+    telegramHandoffChatTitle: String(row.telegram_handoff_chat_title ?? ""),
+    telegramHandoffChatStatus: normalizeTelegramBindingStatus(row.telegram_handoff_chat_status),
+    telegramHandoffChatError: String(row.telegram_handoff_chat_error ?? ""),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
   };
@@ -1003,6 +1032,10 @@ function mapTrainingMaterialItem(row: Record<string, unknown>): TrainingMaterial
 
 function normalizeKnowledgeType(value: unknown): KnowledgeItemRecord["type"] {
   return value === "script" || value === "rule" || value === "forbidden" || value === "faq" ? value : "faq";
+}
+
+function normalizeTelegramBindingStatus(value: unknown): MerchantConfigRecord["telegramHandoffChatStatus"] {
+  return value === "waiting" || value === "bound" || value === "invalid" || value === "unbound" ? value : "unbound";
 }
 
 function parseJsonObject(value: unknown): Record<string, unknown> {

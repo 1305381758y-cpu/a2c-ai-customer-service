@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 
@@ -499,6 +500,93 @@ describe("portal api", () => {
     expect(adminCustomers.json().rows).toHaveLength(1);
 
     await app.close();
+  });
+
+  it("auto-binds telegram handoff chat from bot group updates", async () => {
+    const originalFetch = globalThis.fetch;
+    const telegramCalls: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      telegramCalls.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+      return Response.json({ ok: true, result: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "TG自动绑定商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "telegram-bind@test.local", name: "TG绑定", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "telegram-bind@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { telegramBotToken: "123456:test-token" }
+      });
+      const setup = await app.inject({
+        method: "POST",
+        url: "/api/merchant/telegram/setup-webhook",
+        headers: { cookie: merchantCookie, host: "service.test", "x-forwarded-proto": "https" }
+      });
+      expect(setup.statusCode).toBe(200);
+      expect(setup.json().config.telegramHandoffChatStatus).toBe("waiting");
+      expect(telegramCalls[0]).toMatchObject({
+        url: `https://service.test/webhooks/telegram/${merchantId}`,
+        allowed_updates: ["message", "my_chat_member"]
+      });
+
+      const secret = createHmac("sha256", "test-secret").update(`telegram:${merchantId}`).digest("hex");
+      const bound = await app.inject({
+        method: "POST",
+        url: `/webhooks/telegram/${merchantId}`,
+        headers: { "x-telegram-bot-api-secret-token": secret },
+        payload: {
+          update_id: 1,
+          message: { text: "/bind", chat: { id: -1001234567890, type: "supergroup", title: "阿斯顿接管群" } }
+        }
+      });
+      expect(bound.statusCode).toBe(200);
+      expect(bound.json()).toMatchObject({ ok: true, status: "bound", chatId: "-1001234567890" });
+
+      const config = await app.inject({ method: "GET", url: "/api/merchant/config", headers: { cookie: merchantCookie } });
+      expect(config.json()).toMatchObject({
+        telegramHandoffChatId: "-1001234567890",
+        telegramHandoffChatTitle: "阿斯顿接管群",
+        telegramHandoffChatStatus: "bound"
+      });
+
+      const removed = await app.inject({
+        method: "POST",
+        url: `/webhooks/telegram/${merchantId}`,
+        headers: { "x-telegram-bot-api-secret-token": secret },
+        payload: {
+          update_id: 2,
+          my_chat_member: {
+            chat: { id: -1001234567890, type: "supergroup", title: "阿斯顿接管群" },
+            new_chat_member: { status: "kicked" }
+          }
+        }
+      });
+      expect(removed.statusCode).toBe(200);
+
+      const invalidConfig = await app.inject({ method: "GET", url: "/api/merchant/config", headers: { cookie: merchantCookie } });
+      expect(invalidConfig.json().telegramHandoffChatStatus).toBe("invalid");
+      expect(invalidConfig.json().telegramHandoffChatError).toContain("removed");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("sends manual merchant messages through A2C with the conversation account", async () => {

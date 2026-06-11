@@ -1,5 +1,11 @@
 import type { AppConfig } from "../config.js";
 
+export class TelegramError extends Error {
+  constructor(message: string, readonly status: number, readonly description = "") {
+    super(message);
+  }
+}
+
 export class TelegramClient {
   constructor(private readonly config: AppConfig) {}
 
@@ -18,6 +24,25 @@ export class TelegramClient {
         disable_web_page_preview: true
       })
     });
-    if (!response.ok) throw new Error(`Telegram send failed: ${response.statusText}`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { description?: string };
+      throw new TelegramError(`Telegram send failed: ${body.description || response.statusText}`, response.status, body.description || response.statusText);
+    }
+  }
+
+  static async setWebhook(input: { botToken: string; url: string; secretToken: string }): Promise<void> {
+    const response = await fetch(`https://api.telegram.org/bot${input.botToken}/setWebhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: input.url,
+        secret_token: input.secretToken,
+        allowed_updates: ["message", "my_chat_member"]
+      })
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { description?: string };
+      throw new TelegramError(`Telegram webhook setup failed: ${body.description || response.statusText}`, response.status, body.description || response.statusText);
+    }
   }
 }

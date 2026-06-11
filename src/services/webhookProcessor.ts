@@ -149,7 +149,9 @@ export class WebhookProcessor {
       conversation.handoffNotified = 1;
       this.repos.insertHandoffEvent(conversation.id, message, true);
     } catch (error) {
-      this.repos.insertHandoffEvent(conversation.id, message, false, error instanceof Error ? error.message : "unknown");
+      const errorMessage = error instanceof Error ? error.message : "unknown";
+      this.repos.markTelegramBindingInvalid(conversation.merchantId, errorMessage);
+      this.repos.insertHandoffEvent(conversation.id, message, false, errorMessage);
     }
   }
 }

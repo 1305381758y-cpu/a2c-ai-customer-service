@@ -117,10 +117,19 @@ function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>("/api/admin/merchants");
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
   useEffect(() => { api<Record<string, string>>(url).then(setForm).catch(() => null); }, [url]);
-  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "openaiApiKey", "openaiModel", "telegramBotToken", "telegramHandoffChatId", "platformRegisterUrl", "tgRegisterGuideUrl"];
-  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><button onClick={async () => setForm(await api(url, { method: "PATCH", body: JSON.stringify(form) }))}>保存配置</button></section>;
+  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "openaiApiKey", "openaiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
+  const setupTelegram = async () => {
+    setMessage("");
+    await api(url, { method: "PATCH", body: JSON.stringify(form) });
+    const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
+    const result = await api<{ config: Record<string, string> }>(endpoint, { method: "POST" });
+    setForm(result.config);
+    setMessage("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind。");
+  };
+  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><button onClick={async () => setForm(await api(url, { method: "PATCH", body: JSON.stringify(form) }))}>保存配置</button><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {
@@ -264,7 +273,8 @@ function label(key: string) {
     pending: "待处理", processing: "处理中", done: "已完成", sourceType: "素材类型", filename: "文件名", itemCount: "生成数", sampleCount: "样本数",
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "CSV", xlsx: "Excel", docx: "Word", txt: "文本", image: "图片",
     lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
-    conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID"
+    conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID",
+    unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效"
   } as Record<string, string>)[key] || key;
 }
 

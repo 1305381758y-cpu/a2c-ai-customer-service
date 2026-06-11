@@ -49,6 +49,9 @@ export function migrate(db: DatabaseSync): void {
       openai_model TEXT DEFAULT 'gpt-5-mini',
       telegram_bot_token TEXT DEFAULT '',
       telegram_handoff_chat_id TEXT DEFAULT '',
+      telegram_handoff_chat_title TEXT DEFAULT '',
+      telegram_handoff_chat_status TEXT DEFAULT 'unbound',
+      telegram_handoff_chat_error TEXT DEFAULT '',
       platform_register_url TEXT DEFAULT '',
       tg_register_guide_url TEXT DEFAULT '',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -212,6 +215,9 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "conversations", "handoff_status", "TEXT DEFAULT 'pending'");
   ensureColumn(db, "customers", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "merchant_configs", "telegram_handoff_chat_title", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_configs", "telegram_handoff_chat_status", "TEXT DEFAULT 'unbound'");
+  ensureColumn(db, "merchant_configs", "telegram_handoff_chat_error", "TEXT DEFAULT ''");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
