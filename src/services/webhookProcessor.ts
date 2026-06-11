@@ -66,7 +66,9 @@ export class WebhookProcessor {
         ...payload,
         originalContent: inboundTranslation.originalText,
         translatedContent: inboundTranslation.translatedText,
-        targetLanguage: inboundTranslation.targetLanguage
+        targetLanguage: inboundTranslation.targetLanguage,
+        translationStatus: inboundTranslation.status,
+        translationError: inboundTranslation.error || ""
       }
     });
     if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };

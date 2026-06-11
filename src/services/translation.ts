@@ -5,6 +5,8 @@ export interface TranslationResult {
   originalText: string;
   translatedText: string;
   targetLanguage: string;
+  status: "translated" | "skipped" | "failed";
+  error?: string;
 }
 
 const OPERATOR_LANGUAGE = "zh-CN";
@@ -22,7 +24,7 @@ export async function translateForOperator(config: AppConfig, text: string, sour
   const language = sourceLanguage || "unknown";
   if (language === "zh" || language === "zh-CN" || language === "cn") {
     const originalText = text.trim();
-    return { originalText, translatedText: originalText, targetLanguage: OPERATOR_LANGUAGE };
+    return { originalText, translatedText: originalText, targetLanguage: OPERATOR_LANGUAGE, status: "skipped", error: "客户消息已经是中文" };
   }
   return translateText(
     config,
@@ -37,7 +39,13 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
   const language = targetLanguage || "unknown";
   const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
   if (!originalText || !apiKey || language === "unknown") {
-    return { originalText, translatedText: originalText, targetLanguage: language };
+    return {
+      originalText,
+      translatedText: originalText,
+      targetLanguage: language,
+      status: "skipped",
+      error: !apiKey ? "OpenAI Key 未配置，无法生成译文" : language === "unknown" ? "客户语言未知，无法确定翻译目标语言" : "内容为空"
+    };
   }
 
   try {
@@ -56,8 +64,25 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
       ]
     });
     const translatedText = response.output_text.trim() || originalText;
-    return { originalText, translatedText, targetLanguage: language };
-  } catch {
-    return { originalText, translatedText: originalText, targetLanguage: language };
+    const sameAsOriginal = normalizeForCompare(translatedText) === normalizeForCompare(originalText);
+    return {
+      originalText,
+      translatedText,
+      targetLanguage: language,
+      status: sameAsOriginal ? "failed" : "translated",
+      error: sameAsOriginal ? "译文与原文相同，请检查 OpenAI Key、模型或翻译能力" : undefined
+    };
+  } catch (error) {
+    return {
+      originalText,
+      translatedText: originalText,
+      targetLanguage: language,
+      status: "failed",
+      error: error instanceof Error ? error.message : "翻译失败"
+    };
   }
+}
+
+function normalizeForCompare(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }

@@ -13,7 +13,7 @@ type CustomerMemory = { id: number; summary: string; facts: Record<string, unkno
 type TrainingMaterial = { id: number; merchantId: string; sourceType: string; filename: string; status: string; itemCount: number; sampleCount: number; knowledgeCount: number; warnings: string[]; createdAt: string; rawText?: string };
 type TrainingMaterialItem = { id: number; kind: string; title: string; content: string; intent: string; stage: string; language: string; enabled: boolean };
 type A2CAccount = { id: number; merchantId: string; apiPhone: string; wabaId: string; status: number; numberStatus: number; qualityRating: number; messagingLimit: number; verifiedName: string; enabled: boolean; syncedAt: string };
-type ChatMessage = { direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; manual?: boolean } };
+type ChatMessage = { id: number; direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; translationStatus?: "translated" | "skipped" | "failed"; translationError?: string; manual?: boolean } };
 type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 type Filters = Record<string, string>;
 
@@ -121,6 +121,7 @@ function Config({ platform }: { platform: boolean }) {
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
   const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
@@ -134,32 +135,44 @@ function Config({ platform }: { platform: boolean }) {
   const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "openaiApiKey", "openaiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
   const runConfigCheck = async () => {
+    setError("");
     setMessage("正在检测配置...");
-    const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(checkUrl);
-    setChecks(result.rows);
-    setMessage("配置检测完成。");
+    try {
+      const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(checkUrl);
+      setChecks(result.rows);
+      setMessage("配置检测完成。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "配置检测失败");
+      setMessage("");
+    }
   };
   const saveConfig = async () => {
     setMessage("");
-    const saved = await api<Record<string, string>>(url, { method: "PATCH", body: JSON.stringify(form) });
-    setForm(saved);
-    if (!saved.a2cAppId || !saved.a2cAppSecret) {
-      setMessage("配置已保存。填写 A2C App ID 和密钥后会自动同步客服账号。");
-      return;
-    }
+    setError("");
     try {
+      const saved = await api<Record<string, string>>(url, { method: "PATCH", body: JSON.stringify(form) });
+      setForm(saved);
+      if (!saved.a2cAppId || !saved.a2cAppSecret) {
+        setMessage("配置已保存。填写 A2C App ID 和密钥后会自动同步客服账号。");
+        return;
+      }
       await syncA2CAccounts(true);
     } catch (error) {
-      setMessage(`配置已保存，A2C账号同步失败：${error instanceof Error ? error.message : "请检查 App ID 和密钥"}`);
+      setError(error instanceof Error ? error.message : "保存配置失败");
     }
   };
   const syncA2CAccounts = async (skipSave = false) => {
     setMessage("");
-    if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
-    const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string> }>(a2cSyncUrl, { method: "POST" });
-    setA2CAccounts(result.rows);
-    setForm(result.config);
-    setMessage(`已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
+    setError("");
+    try {
+      if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
+      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string> }>(a2cSyncUrl, { method: "POST" });
+      setA2CAccounts(result.rows);
+      setForm(result.config);
+      setMessage(`已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "同步 A2C 客服账号失败");
+    }
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
     const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
@@ -169,13 +182,18 @@ function Config({ platform }: { platform: boolean }) {
   };
   const setupTelegram = async () => {
     setMessage("");
-    await api(url, { method: "PATCH", body: JSON.stringify(form) });
-    const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
-    const result = await api<{ config: Record<string, string> }>(endpoint, { method: "POST" });
-    setForm(result.config);
-    setMessage("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind。");
+    setError("");
+    try {
+      await api(url, { method: "PATCH", body: JSON.stringify(form) });
+      const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
+      const result = await api<{ config: Record<string, string> }>(endpoint, { method: "POST" });
+      setForm(result.config);
+      setMessage("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "TG 绑定失败");
+    }
   };
-  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="memory"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label></div><div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><button onClick={saveConfig}>保存配置</button><button onClick={() => syncA2CAccounts()}>同步A2C客服账号</button><button onClick={runConfigCheck}>检测配置</button></div>{checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}<div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} /><div className="account-actions">{a2cAccounts.map((row) => <button key={row.id} onClick={() => toggleA2CAccount(row)}>{row.apiPhone} · {row.enabled ? "停用" : "启用"}</button>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
+  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="memory"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label></div><div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中...">同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中...">检测配置</AsyncButton></div>{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}{checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}<div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} rowKey={(row) => row.id} /><div className="account-actions">{a2cAccounts.map((row) => <AsyncButton key={row.id} onClick={() => toggleA2CAccount(row)} busyText="处理中...">{row.apiPhone} · {row.enabled ? "停用" : "启用"}</AsyncButton>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p></div></section>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {
@@ -244,7 +262,7 @@ function Conversations({ platform = false, handoffs = false }: { platform?: bool
   const rowsUrl = withQuery(base, platform ? filters : { status: filters.status, handoffStatus: filters.handoffStatus, language: filters.language, limit: filters.limit });
   const [rows, setRows] = useRows<Conversation>(rowsUrl);
   const [selected, setSelected] = useState<Conversation | null>(null);
-  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "status", "handoffStatus", "language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={async () => setRows(await loadRows(rowsUrl))} /><Table rows={rows} columns={platform ? ["merchantId", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"] : ["customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} /></section><section>{selected ? <ConversationDetail platform={platform} conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} /> : <p>选择一个会话查看详情</p>}</section></div>;
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "status", "handoffStatus", "language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={async () => setRows(await loadRows(rowsUrl))} /><Table rows={rows} columns={platform ? ["merchantId", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"] : ["customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /></section><section>{selected ? <ConversationDetail platform={platform} conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} /> : <p>选择一个会话查看详情</p>}</section></div>;
 }
 
 function ConversationDetail({ platform = false, conversation, refresh }: { platform?: boolean; conversation: Conversation; refresh: () => void }) {
@@ -252,6 +270,8 @@ function ConversationDetail({ platform = false, conversation, refresh }: { platf
   const [memory, setMemory] = useState<CustomerMemory | null>(null);
   const [notes, setNotes] = useState("");
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
+  const [statusMessage, setStatusMessage] = useState("");
+  const [error, setError] = useState("");
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const loadMessages = async () => {
     const res = await api<{ rows: ChatMessage[] }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages?limit=100`);
@@ -268,20 +288,29 @@ function ConversationDetail({ platform = false, conversation, refresh }: { platf
   }, [messages.length, conversation.id]);
   useEffect(() => { api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => { setMemory(item); setNotes(item.operatorNotes || ""); }).catch(() => { setMemory(null); setNotes(""); }); }, [conversation.id, platform]);
   const memoryUrl = `${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`;
-  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"} · {conversation.language}</p></div>{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}</div><div className="memory compact-memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={async () => { const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); }}>保存记忆</button></div><div className="chat-window" ref={messagesRef}>{messages.map((m, i) => <ChatBubble key={`${m.createdAt}-${i}`} message={m} />)}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><button onClick={async () => { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); await loadMessages(); }}><Send size={16}/>发送</button></div>}</div>;
+  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.customerPhone}</h3><p>TG: {conversation.extractedTelegram || "-"} · 手机: {conversation.extractedPhone || "-"} · {conversation.language}</p></div>{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}</div>{error && <div className="error">{error}</div>}{statusMessage && <div className="notice">{statusMessage}</div>}<div className="memory compact-memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></div><div className="chat-window" ref={messagesRef}>{messages.map((m, i) => <ChatBubble key={`${m.id || m.createdAt}-${i}`} message={m} />)}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
 }
 
 function ChatBubble({ message }: { message: ChatMessage }) {
   const payload = message.rawPayload || {};
   const original = payload.originalContent || "";
   const translated = payload.translatedContent || "";
-  const showTranslation = Boolean(original && translated);
+  const translationStatus = payload.translationStatus || (original && translated && normalizeText(original) !== normalizeText(translated) ? "translated" : undefined);
+  const canShowTranslation = Boolean(original && translated && translationStatus === "translated" && normalizeText(original) !== normalizeText(translated));
+  const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查 OpenAI 配置") : "";
   const isOutbound = message.direction === "outbound";
-  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{showTranslation ? <div className="translation-block"><strong>{isOutbound ? "客服原文" : "客户原文"}</strong><p>{original}</p><strong>{isOutbound ? "发送译文" : "中文译文"}{payload.targetLanguage ? ` · ${payload.targetLanguage}` : ""}</strong><p>{translated}</p></div> : <p>{message.content}</p>}<small>{message.intent} · {message.language}</small></article>;
+  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{original ? <div className="translation-block"><strong>{isOutbound ? "客服原文" : "客户原文"}</strong><p>{original}</p>{canShowTranslation ? <><strong>{isOutbound ? "发送译文" : "中文译文"}{payload.targetLanguage ? ` · ${payload.targetLanguage}` : ""}</strong><p>{translated}</p></> : <div className="translation-warning">{translationIssue}</div>}</div> : <p>{message.content}</p>}<small>{message.intent} · {message.language}</small></article>;
 }
 
-function Table<T extends Record<string, any>>({ rows, columns, onRow }: { rows: T[]; columns: string[]; onRow?: (row: T) => void }) {
-  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i} onClick={() => onRow?.(row)}>{columns.map((c) => <td key={c}>{String(row[c] ?? "")}</td>)}</tr>)}</tbody></table></div>;
+function Table<T extends Record<string, any>>({ rows, columns, onRow, selectedKey, rowKey }: { rows: T[]; columns: string[]; onRow?: (row: T) => void; selectedKey?: string | number; rowKey?: (row: T, index: number) => string | number }) {
+  const [internalSelected, setInternalSelected] = useState<string | number | undefined>();
+  const activeKey = selectedKey ?? internalSelected;
+  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""} onClick={() => { setInternalSelected(key); onRow?.(row); }}>{columns.map((c) => <td key={c}>{String(row[c] ?? "")}</td>)}</tr>; })}</tbody></table></div>;
+}
+
+function AsyncButton({ children, busyText, onClick, className }: { children: React.ReactNode; busyText: string; onClick: () => Promise<void>; className?: string }) {
+  const [busy, setBusy] = useState(false);
+  return <button className={className} disabled={busy} aria-busy={busy} onClick={async () => { if (busy) return; setBusy(true); try { await onClick(); } finally { setBusy(false); } }}>{busy ? busyText : children}</button>;
 }
 
 function Editor({ title, value, fields, selects, onSave }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void> }) {
@@ -334,6 +363,10 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }
 
 function label(key: string) {

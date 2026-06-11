@@ -159,6 +159,7 @@ export interface MessageInput {
 }
 
 export interface ConversationMessageRecord {
+  id: number;
   direction: string;
   content: string;
   msgType: string;
@@ -355,7 +356,7 @@ export class Repositories {
   listConversationMessages(conversationId: string, limit = 20): ConversationMessageRecord[] {
     return this.db.sqlite
       .prepare(`
-        SELECT direction, content, msg_type, language, intent, raw_payload, created_at
+        SELECT id, direction, content, msg_type, language, intent, raw_payload, created_at
         FROM messages
         WHERE conversation_id = ?
         ORDER BY id DESC
@@ -1028,6 +1029,7 @@ function mapConversation(row: Record<string, unknown>): Conversation {
 
 function mapConversationMessage(row: Record<string, unknown>): ConversationMessageRecord {
   return {
+    id: Number(row.id ?? 0),
     direction: String(row.direction),
     content: String(row.content ?? ""),
     msgType: String(row.msg_type ?? "text"),

@@ -3,6 +3,7 @@ body { margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe 
 button, input, select, textarea { font: inherit; }
 button { border: 0; border-radius: 6px; background: #155eef; color: #fff; padding: 9px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
 button:hover { background: #0f48bd; }
+button:disabled { cursor: wait; opacity: .68; }
 input, select, textarea { border: 1px solid #d7dce5; border-radius: 6px; padding: 9px 10px; min-width: 0; background: #fff; }
 textarea { width: 100%; min-height: 96px; resize: vertical; }
 label { display: grid; gap: 6px; font-size: 13px; color: #5c6675; }
@@ -34,6 +35,7 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #edf0f5;
 th { background: #f8fafc; color: #667085; font-weight: 600; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: #f8fbff; }
+tbody tr.selected { background: #e8f1ff; box-shadow: inset 3px 0 0 #155eef; }
 .split { display: grid; grid-template-columns: minmax(420px, 1.1fr) minmax(360px, .9fr); gap: 16px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 14px 0; }
 .messages { display: grid; gap: 8px; max-height: 380px; overflow: auto; margin: 14px 0; }
@@ -55,6 +57,7 @@ tbody tr:hover { background: #f8fbff; }
 .translation-block { display: grid; gap: 4px; }
 .translation-block strong { font-size: 12px; color: #344054; }
 .translation-block p { padding: 8px; background: rgba(255,255,255,.75); border-radius: 6px; border: 1px solid rgba(16,24,40,.08); }
+.translation-warning { padding: 8px; border-radius: 6px; background: #fffaeb; color: #b54708; border: 1px solid #fedf89; overflow-wrap: anywhere; }
 .chat-composer { margin: 0; align-items: stretch; }
 .memory { display: grid; gap: 10px; margin: 14px 0; padding: 12px 0; border-top: 1px solid #edf0f5; border-bottom: 1px solid #edf0f5; }
 .memory h3, .memory p { margin: 0; }

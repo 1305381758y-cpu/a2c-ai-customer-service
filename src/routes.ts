@@ -332,7 +332,9 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
           manual: true,
           originalContent: translation?.originalText,
           translatedContent: translation?.translatedText,
-          targetLanguage: translation?.targetLanguage
+          targetLanguage: translation?.targetLanguage,
+          translationStatus: translation?.status,
+          translationError: translation?.error || ""
         }
       });
       return { externalId, translation };
