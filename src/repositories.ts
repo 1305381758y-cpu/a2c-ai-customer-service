@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { insertTrainingSamples } from "./db.js";
 import type { Db } from "./db.js";
+import type { A2CAccount } from "./clients/a2c.js";
 import type { ConversationStage, IntentLabel } from "./domain/intents.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
@@ -42,6 +43,20 @@ export interface MerchantConfigRecord {
   telegramHandoffChatError: string;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
+}
+
+export interface MerchantA2CAccountRecord {
+  id: number;
+  merchantId: string;
+  apiPhone: string;
+  wabaId: string;
+  status: number;
+  numberStatus: number;
+  qualityRating: number;
+  messagingLimit: number;
+  verifiedName: string;
+  enabled: boolean;
+  syncedAt: string;
 }
 
 export interface UserRecord {
@@ -795,6 +810,94 @@ export class Repositories {
     return this.getMerchantConfig(merchantId);
   }
 
+  listMerchantA2CAccounts(filters: { merchantId?: string; enabled?: boolean } = {}): MerchantA2CAccountRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (typeof filters.enabled === "boolean") {
+      clauses.push("enabled = ?");
+      params.push(filters.enabled ? 1 : 0);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM merchant_a2c_accounts
+        ${where}
+        ORDER BY enabled DESC, api_phone ASC
+      `)
+      .all(...params)
+      .map((row) => mapMerchantA2CAccount(row as Record<string, unknown>));
+  }
+
+  syncMerchantA2CAccounts(merchantId: string, accounts: A2CAccount[]): MerchantA2CAccountRecord[] {
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    const upsert = this.db.sqlite.prepare(`
+      INSERT INTO merchant_a2c_accounts
+        (merchant_id, api_phone, waba_id, status, number_status, quality_rating, messaging_limit, verified_name, enabled, synced_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+      ON CONFLICT(merchant_id, api_phone) DO UPDATE SET
+        waba_id = excluded.waba_id,
+        status = excluded.status,
+        number_status = excluded.number_status,
+        quality_rating = excluded.quality_rating,
+        messaging_limit = excluded.messaging_limit,
+        verified_name = excluded.verified_name,
+        synced_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    this.db.sqlite.exec("BEGIN");
+    try {
+      for (const account of accounts) {
+        const apiPhone = String(account.apiPhone || "").trim();
+        if (!apiPhone) continue;
+        upsert.run(
+          merchantId,
+          apiPhone,
+          account.wabaId ?? "",
+          Number(account.status ?? 0),
+          Number(account.numberStatus ?? 0),
+          Number(account.qualityRating ?? 0),
+          Number(account.messagingLimit ?? 0),
+          account.verifiedName ?? ""
+        );
+      }
+      this.db.sqlite.exec("COMMIT");
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+    this.refreshMerchantA2CAccountPhones(merchantId);
+    return this.listMerchantA2CAccounts({ merchantId });
+  }
+
+  patchMerchantA2CAccount(id: number, patch: Record<string, unknown>, merchantId?: string): MerchantA2CAccountRecord | undefined {
+    const row = this.db.sqlite
+      .prepare(`SELECT * FROM merchant_a2c_accounts WHERE id = ? ${merchantId ? "AND merchant_id = ?" : ""}`)
+      .get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    const account = mapMerchantA2CAccount(row);
+    if (typeof patch.enabled === "boolean") {
+      this.db.sqlite
+        .prepare("UPDATE merchant_a2c_accounts SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        .run(patch.enabled ? 1 : 0, id);
+      this.refreshMerchantA2CAccountPhones(account.merchantId);
+    }
+    return this.listMerchantA2CAccounts({ merchantId: account.merchantId }).find((item) => item.id === id);
+  }
+
+  refreshMerchantA2CAccountPhones(merchantId: string): MerchantConfigRecord {
+    const phones = this.listMerchantA2CAccounts({ merchantId, enabled: true }).map((account) => account.apiPhone).join(",");
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    this.db.sqlite
+      .prepare("UPDATE merchant_configs SET a2c_account_phone = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?")
+      .run(phones, merchantId);
+    return this.getMerchantConfig(merchantId);
+  }
+
   updateTelegramBinding(merchantId: string, input: { chatId?: string; chatTitle?: string; status: MerchantConfigRecord["telegramHandoffChatStatus"]; error?: string }): MerchantConfigRecord {
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
     this.db.sqlite
@@ -818,17 +921,20 @@ export class Repositories {
   findMerchantByA2CAccount(accountPhone: string): MerchantRecord {
     const row = this.db.sqlite
       .prepare(`
-        SELECT m.*
+        SELECT DISTINCT m.*
         FROM merchants m
         JOIN merchant_configs c ON c.merchant_id = m.id
+        LEFT JOIN merchant_a2c_accounts a ON a.merchant_id = m.id AND a.enabled = 1
         WHERE m.status = 'active'
           AND (
+            a.api_phone = ?
+            OR
             c.a2c_account_phone = ?
             OR instr(',' || replace(c.a2c_account_phone, ' ', '') || ',', ',' || ? || ',') > 0
           )
         LIMIT 1
       `)
-      .get(accountPhone, accountPhone) as Record<string, unknown> | undefined;
+      .get(accountPhone, accountPhone, accountPhone) as Record<string, unknown> | undefined;
     return row ? mapMerchant(row) : this.getMerchant("default")!;
   }
 
@@ -929,6 +1035,22 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     telegramHandoffChatError: String(row.telegram_handoff_chat_error ?? ""),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
+  };
+}
+
+function mapMerchantA2CAccount(row: Record<string, unknown>): MerchantA2CAccountRecord {
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
+    apiPhone: String(row.api_phone ?? ""),
+    wabaId: String(row.waba_id ?? ""),
+    status: Number(row.status ?? 0),
+    numberStatus: Number(row.number_status ?? 0),
+    qualityRating: Number(row.quality_rating ?? 0),
+    messagingLimit: Number(row.messaging_limit ?? 0),
+    verifiedName: String(row.verified_name ?? ""),
+    enabled: Boolean(Number(row.enabled ?? 1)),
+    syncedAt: String(row.synced_at ?? "")
   };
 }
 

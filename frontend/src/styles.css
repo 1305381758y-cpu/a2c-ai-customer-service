@@ -43,6 +43,9 @@ tbody tr:hover { background: #f8fbff; }
 .memory { display: grid; gap: 10px; margin: 14px 0; padding: 12px 0; border-top: 1px solid #edf0f5; border-bottom: 1px solid #edf0f5; }
 .memory h3, .memory p { margin: 0; }
 .memory pre { margin: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; background: #f8fafc; border: 1px solid #edf0f5; border-radius: 6px; padding: 10px; font-size: 12px; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.account-actions button { background: #344054; }
+.account-actions button:hover { background: #1d2939; }
 .material-uploader { display: grid; gap: 10px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #edf0f5; }
 .material-uploader .toolbar { margin-bottom: 0; flex-wrap: wrap; }
 .material-items article { display: grid; gap: 5px; }

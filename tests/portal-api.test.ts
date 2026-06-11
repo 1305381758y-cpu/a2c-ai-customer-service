@@ -502,6 +502,102 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("syncs A2C sender accounts from merchant credentials and uses them for webhook routing", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 200, data: { accessToken: "a2c-sync-token", expireIn: 3600 } });
+      }
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({
+          code: 200,
+          data: [
+            { apiPhone: "synced-a2c-1", wabaId: "waba-1", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "客服一" },
+            { apiPhone: "synced-a2c-2", wabaId: "waba-2", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "客服二" }
+          ]
+        });
+      }
+      if (url.endsWith("/v1/messages")) {
+        return Response.json({ code: 200, data: "synced-message-id" });
+      }
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "A2C同步商户" }
+      });
+      const merchantId = merchant.json().id as string;
+
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "a2c-sync@test.local", name: "A2C同步", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "a2c-sync@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://a2c.test/api/openapi", a2cAppId: "app-id", a2cAppSecret: "app-secret" }
+      });
+
+      const sync = await app.inject({
+        method: "POST",
+        url: "/api/merchant/a2c/accounts/sync",
+        headers: { cookie: merchantCookie }
+      });
+      expect(sync.statusCode).toBe(200);
+      expect(sync.json().imported).toBe(2);
+      expect(sync.json().rows.map((row: { apiPhone: string }) => row.apiPhone)).toEqual(["synced-a2c-1", "synced-a2c-2"]);
+      expect(sync.json().config.a2cAccountPhone).toBe("synced-a2c-1,synced-a2c-2");
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: "/webhooks/a2c",
+        payload: {
+          id: "a2c-sync-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "a2c-sync-message-1",
+            content: "发注册链接",
+            from: "a2c-sync-customer",
+            to: "synced-a2c-2",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(webhook.json().status).toBe("replied");
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      expect(conversations.json().rows[0]).toMatchObject({ merchantId, a2cAccountPhone: "synced-a2c-2" });
+
+      const accounts = await app.inject({ method: "GET", url: "/api/merchant/a2c/accounts", headers: { cookie: merchantCookie } });
+      const disabled = await app.inject({
+        method: "PATCH",
+        url: `/api/merchant/a2c/accounts/${accounts.json().rows[1].id}`,
+        headers: { cookie: merchantCookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode).toBe(200);
+      expect(disabled.json().config.a2cAccountPhone).toBe("synced-a2c-1");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("auto-binds telegram handoff chat from bot group updates", async () => {
     const originalFetch = globalThis.fetch;
     const telegramCalls: Array<Record<string, unknown>> = [];

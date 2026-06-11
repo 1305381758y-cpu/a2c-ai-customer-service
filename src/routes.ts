@@ -57,6 +57,15 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: request.params.id }) }));
+  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: adminOnly }, async (request, reply) => syncA2CAccounts(request, reply, deps, request.params.id));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchMerchantA2CAccount(id, request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "a2c account not found" });
+    return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
+  });
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
@@ -185,6 +194,15 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.get("/api/merchant/a2c/accounts", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: scopedMerchantId(request) }) }));
+  app.post("/api/merchant/a2c/accounts/sync", { preHandler: merchantAdmins }, async (request, reply) => syncA2CAccounts(request, reply, deps, scopedMerchantId(request)));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/a2c/accounts/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchMerchantA2CAccount(id, request.body ?? {}, scopedMerchantId(request));
+    if (!row) return reply.code(404).send({ error: "a2c account not found" });
+    return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
+  });
   app.post("/api/merchant/telegram/setup-webhook", { preHandler: merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
   app.get<{ Querystring: { type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listKnowledgeItems({
@@ -377,6 +395,24 @@ type TelegramChat = {
   type?: string;
   title?: string;
 };
+
+async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
+  const merchant = deps.repos.getMerchant(merchantId);
+  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
+  const cfg = deps.repos.getMerchantConfig(merchantId);
+  const client = new A2CClient(appConfigForMerchant(deps.config, cfg));
+  try {
+    const accounts = await client.listAccounts();
+    const rows = deps.repos.syncMerchantA2CAccounts(merchantId, accounts);
+    return {
+      imported: rows.length,
+      rows,
+      config: maskConfig(deps.repos.getMerchantConfig(merchantId))
+    };
+  } catch (error) {
+    return reply.code(502).send({ error: error instanceof Error ? error.message : "A2C accounts sync failed" });
+  }
+}
 
 async function setupTelegramWebhook(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
   const merchant = deps.repos.getMerchant(merchantId);

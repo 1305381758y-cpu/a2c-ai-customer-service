@@ -1,5 +1,15 @@
 import type { AppConfig } from "../config.js";
 
+export interface A2CAccount {
+  apiPhone: string;
+  wabaId?: string;
+  status?: number;
+  numberStatus?: number;
+  qualityRating?: number;
+  messagingLimit?: number;
+  verifiedName?: string;
+}
+
 export class A2CClient {
   private accessToken = "";
   private expiresAt = 0;
@@ -41,6 +51,19 @@ export class A2CClient {
       throw new Error(`A2C send failed: ${json.msg || response.statusText}`);
     }
     return json.data ?? "";
+  }
+
+  async listAccounts(): Promise<A2CAccount[]> {
+    const token = await this.getToken();
+    const response = await fetch(`${this.config.A2C_BASE_URL}/v1/accounts`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const json = (await response.json()) as { code?: number; msg?: string; data?: A2CAccount[] };
+    if (!response.ok || json.code !== 200) {
+      throw new Error(`A2C accounts sync failed: ${json.msg || response.statusText}`);
+    }
+    return (json.data ?? []).filter((account) => Boolean(account.apiPhone));
   }
 
   private async getToken(): Promise<string> {
