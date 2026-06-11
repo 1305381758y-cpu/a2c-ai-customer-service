@@ -127,9 +127,23 @@ function Config({ platform }: { platform: boolean }) {
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
   const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "openaiApiKey", "openaiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
-  const syncA2CAccounts = async () => {
+  const saveConfig = async () => {
     setMessage("");
-    await api(url, { method: "PATCH", body: JSON.stringify(form) });
+    const saved = await api<Record<string, string>>(url, { method: "PATCH", body: JSON.stringify(form) });
+    setForm(saved);
+    if (!saved.a2cAppId || !saved.a2cAppSecret) {
+      setMessage("配置已保存。填写 A2C App ID 和密钥后会自动同步客服账号。");
+      return;
+    }
+    try {
+      await syncA2CAccounts(true);
+    } catch (error) {
+      setMessage(`配置已保存，A2C账号同步失败：${error instanceof Error ? error.message : "请检查 App ID 和密钥"}`);
+    }
+  };
+  const syncA2CAccounts = async (skipSave = false) => {
+    setMessage("");
+    if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
     const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string> }>(a2cSyncUrl, { method: "POST" });
     setA2CAccounts(result.rows);
     setForm(result.config);
@@ -149,7 +163,7 @@ function Config({ platform }: { platform: boolean }) {
     setForm(result.config);
     setMessage("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind。");
   };
-  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><button onClick={async () => setForm(await api(url, { method: "PATCH", body: JSON.stringify(form) }))}>保存配置</button><button onClick={syncA2CAccounts}>同步A2C客服账号</button></div><div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥后点击同步，系统会拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} /><div className="account-actions">{a2cAccounts.map((row) => <button key={row.id} onClick={() => toggleA2CAccount(row)}>{row.apiPhone} · {row.enabled ? "停用" : "启用"}</button>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
+  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><button onClick={saveConfig}>保存配置</button><button onClick={() => syncA2CAccounts()}>同步A2C客服账号</button></div><div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；启用的账号会自动用于 webhook 归属和手动发送。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "status", "numberStatus", "qualityRating", "messagingLimit", "enabled", "syncedAt"]} /><div className="account-actions">{a2cAccounts.map((row) => <button key={row.id} onClick={() => toggleA2CAccount(row)}>{row.apiPhone} · {row.enabled ? "停用" : "启用"}</button>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<button onClick={setupTelegram}>设置TG绑定</button><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉入唯一接管群并发送 /bind；系统会自动保存群ID。</p>{message && <div className="notice">{message}</div>}</div></section>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {
