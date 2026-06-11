@@ -87,6 +87,28 @@ export function migrate(db: DatabaseSync): void {
       UNIQUE(merchant_id, customer_phone, a2c_account_phone)
     );
 
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT DEFAULT 'default',
+      customer_key TEXT NOT NULL,
+      nickname TEXT DEFAULT '',
+      first_a2c_account_phone TEXT DEFAULT '',
+      last_a2c_account_phone TEXT DEFAULT '',
+      language TEXT DEFAULT 'unknown',
+      stage TEXT DEFAULT 'need_platform_register',
+      extracted_phone TEXT DEFAULT '',
+      extracted_telegram TEXT DEFAULT '',
+      status TEXT DEFAULT 'active',
+      conversation_count INTEGER DEFAULT 0,
+      last_conversation_id TEXT DEFAULT '',
+      first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, customer_key),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT DEFAULT 'default',
@@ -189,6 +211,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "training_samples", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "conversations", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "conversations", "handoff_status", "TEXT DEFAULT 'pending'");
+  ensureColumn(db, "customers", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
@@ -200,6 +223,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES ('default')").run();
   db.prepare("UPDATE training_samples SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE conversations SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE customers SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE messages SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE handoff_events SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_materials SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();

@@ -418,6 +418,89 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("auto-creates customer profiles from webhooks and merges them per merchant customer", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchantA = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "自动客户商户A" } });
+    const merchantB = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "自动客户商户B" } });
+    const merchantAId = merchantA.json().id as string;
+    const merchantBId = merchantB.json().id as string;
+
+    await app.inject({ method: "PATCH", url: `/api/admin/merchants/${merchantAId}/config`, headers: { cookie: adminCookie }, payload: { a2cAccountPhone: "auto-a2c-a-1,auto-a2c-a-2" } });
+    await app.inject({ method: "PATCH", url: `/api/admin/merchants/${merchantBId}/config`, headers: { cookie: adminCookie }, payload: { a2cAccountPhone: "auto-a2c-b-1" } });
+    await app.inject({ method: "POST", url: "/api/admin/users", headers: { cookie: adminCookie }, payload: { merchantId: merchantAId, email: "auto-customer-a@test.local", name: "A", password: "Merchant123456", role: "merchant_admin" } });
+    await app.inject({ method: "POST", url: "/api/admin/users", headers: { cookie: adminCookie }, payload: { merchantId: merchantBId, email: "auto-customer-b@test.local", name: "B", password: "Merchant123456", role: "merchant_admin" } });
+    const cookieA = await login(app, "auto-customer-a@test.local", "Merchant123456");
+    const cookieB = await login(app, "auto-customer-b@test.local", "Merchant123456");
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/a2c",
+      payload: {
+        id: "auto-customer-event-1",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "auto-customer-message-1",
+          content: "你好，我要注册链接",
+          from: "auto-customer-phone",
+          to: "auto-a2c-a-1",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000),
+          nickname: "自动客户"
+        }
+      }
+    });
+
+    const customersA = await app.inject({ method: "GET", url: "/api/merchant/customers", headers: { cookie: cookieA } });
+    expect(customersA.statusCode).toBe(200);
+    expect(customersA.json().rows).toHaveLength(1);
+    expect(customersA.json().rows[0]).toMatchObject({
+      customerKey: "auto-customer-phone",
+      nickname: "自动客户",
+      lastA2CAccountPhone: "auto-a2c-a-1",
+      conversationCount: 1
+    });
+
+    const customersB = await app.inject({ method: "GET", url: "/api/merchant/customers", headers: { cookie: cookieB } });
+    expect(customersB.json().rows).toHaveLength(0);
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/a2c",
+      payload: {
+        id: "auto-customer-event-2",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "auto-customer-message-2",
+          content: "phone +60123456789 tg @auto_customer",
+          from: "auto-customer-phone",
+          to: "auto-a2c-a-2",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000)
+        }
+      }
+    });
+
+    const merged = await app.inject({ method: "GET", url: "/api/merchant/customers", headers: { cookie: cookieA } });
+    expect(merged.json().rows).toHaveLength(1);
+    expect(merged.json().rows[0]).toMatchObject({
+      customerKey: "auto-customer-phone",
+      lastA2CAccountPhone: "auto-a2c-a-2",
+      extractedPhone: "+60123456789",
+      extractedTelegram: "@auto_customer",
+      status: "human_handoff",
+      conversationCount: 2
+    });
+
+    const adminCustomers = await app.inject({ method: "GET", url: `/api/admin/customers?merchantId=${merchantAId}`, headers: { cookie: adminCookie } });
+    expect(adminCustomers.json().rows).toHaveLength(1);
+
+    await app.close();
+  });
+
   it("sends manual merchant messages through A2C with the conversation account", async () => {
     const originalFetch = globalThis.fetch;
     const sentBodies: Array<Record<string, unknown>> = [];

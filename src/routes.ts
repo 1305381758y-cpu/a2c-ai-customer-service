@@ -37,6 +37,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
 
   app.get("/api/admin/dashboard", { preHandler: adminOnly }, async () => ({
     merchants: deps.repos.listMerchants().length,
+    customers: deps.repos.listCustomers({ limit: 500 }).length,
     conversations: deps.repos.listConversations({ limit: 500 }).length,
     handoffs: deps.repos.listConversations({ status: "human_handoff", limit: 500 }).length,
     samples: deps.repos.listTrainingSamples({ enabled: true }).length
@@ -114,6 +115,14 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.get<{ Querystring: { merchantId?: string; status?: string; language?: string; limit?: string } }>("/api/admin/customers", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listCustomers({
+      merchantId: request.query.merchantId,
+      status: request.query.status,
+      language: request.query.language,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/admin/conversations/:id/messages", { preHandler: adminOnly }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
@@ -163,6 +172,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const merchantId = scopedMerchantId(request);
     const conversations = deps.repos.listConversations({ merchantId, limit: 500 });
     return {
+      customers: deps.repos.listCustomers({ merchantId, limit: 500 }).length,
       conversations: conversations.length,
       active: conversations.filter((item) => item.status === "active").length,
       handoffs: conversations.filter((item) => item.status === "human_handoff").length,
@@ -231,6 +241,14 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       merchantId: scopedMerchantId(request),
       status: request.query.status,
       handoffStatus: request.query.handoffStatus,
+      language: request.query.language,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.get<{ Querystring: { status?: string; language?: string; limit?: string } }>("/api/merchant/customers", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.listCustomers({
+      merchantId: scopedMerchantId(request),
+      status: request.query.status,
       language: request.query.language,
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })

@@ -68,6 +68,7 @@ export class WebhookProcessor {
     conversation.stage = analysis.stage;
     conversation.extractedPhone = conversation.extractedPhone || analysis.phone;
     conversation.extractedTelegram = conversation.extractedTelegram || analysis.telegram;
+    this.repos.upsertCustomerFromConversation(conversation);
     const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
 
     if (conversation.extractedPhone && conversation.extractedTelegram) {
@@ -75,11 +76,13 @@ export class WebhookProcessor {
       conversation.status = "human_handoff";
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString());
       this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
       return { status: "handoff", conversationId: conversation.id };
     }
 
     if (conversation.status === "human_handoff") {
       this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
       return { status: "already_handoff", conversationId: conversation.id };
     }
 
@@ -103,6 +106,7 @@ export class WebhookProcessor {
       conversation.status = "human_handoff";
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
       this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
       return { status: "handoff", conversationId: conversation.id };
     }
 
@@ -129,6 +133,7 @@ export class WebhookProcessor {
       rawPayload: { samples: samples.map((sample) => sample.id), trainingMaterials: trainingMaterials.map((item) => item.id) }
     });
     this.repos.updateConversation(conversation);
+    this.repos.upsertCustomerFromConversation(conversation);
     this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
     return { status: "replied", conversationId: conversation.id };

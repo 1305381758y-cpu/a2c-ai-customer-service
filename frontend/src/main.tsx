@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, FileText, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
+import { Bot, Building2, Contact, FileText, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
 type Merchant = { id: string; name: string; status: string };
 type Conversation = { id: string; merchantId: string; customerPhone: string; a2cAccountPhone: string; nickname: string; language: string; stage: string; extractedPhone: string; extractedTelegram: string; status: string; handoffStatus: string };
+type Customer = { id: number; merchantId: string; customerKey: string; nickname: string; firstA2CAccountPhone: string; lastA2CAccountPhone: string; language: string; stage: string; extractedPhone: string; extractedTelegram: string; status: string; conversationCount: number; lastConversationId: string; firstSeenAt: string; lastSeenAt: string };
 type Sample = { id: number; customerMessage: string; standardReply: string; stage: string; intent: string; language: string; keywords: string; priority: number; enabled?: boolean };
 type Knowledge = { id: number; merchantId: string; type: string; title: string; content: string; language: string; priority: number; enabled: boolean };
 type CustomerMemory = { id: number; summary: string; facts: Record<string, unknown>; operatorNotes: string; updatedAt: string };
@@ -64,8 +65,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "用户", Users], ["config", "配置", Settings], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["customers", "客户", Contact], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   return (
     <div className="app">
       <aside>
@@ -79,6 +80,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {view === "merchants" && <Merchants />}
         {view === "users" && <UsersPage />}
         {view === "config" && <Config platform={user.role === "platform_admin"} />}
+        {view === "customers" && <Customers platform={user.role === "platform_admin"} />}
         {view === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
         {view === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
         {view === "samples" && <Samples platform={user.role === "platform_admin"} />}
@@ -156,6 +158,18 @@ function TrainingMaterials({ platform = false }: { platform?: boolean }) {
     await reload();
   };
   return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "sourceType", "status", "limit"] : ["sourceType", "status", "limit"]} selects={{ sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader"><div className="toolbar"><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (file) await uploadFile(file); }}>上传素材</button></div><textarea placeholder="粘贴聊天记录、话术、FAQ 或业务规则" value={pasted} onChange={(e) => setPasted(e.target.value)} /><button onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}>导入粘贴文本</button>{message && <div className="notice">{message}</div>}</div>}<Table rows={rows} columns={platform ? ["merchantId", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"] : ["filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]} onRow={loadDetail} /></section><section>{selected && detail ? <div><h3>{detail.material.filename}</h3><p>{detail.material.sourceType} · 生成 {detail.material.itemCount} 条 · 样本 {detail.material.sampleCount} · 知识 {detail.material.knowledgeCount}</p>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{item.kind === "sample" ? "样本" : "知识"} · {item.language}</strong><span>{item.title}</span><small>{item.intent || item.stage}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div> : <p>{platform ? "选择素材查看生成内容。平台端可查看所有商户素材。" : "上传 CSV/XLSX/DOCX/TXT/图片后会立即学习，并自动启用生成内容。"}</p>}</section></div>;
+}
+
+function Customers({ platform = false }: { platform?: boolean }) {
+  const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", status: "", language: "", limit: "100" });
+  const rowsUrl = withQuery(base, platform ? filters : { status: filters.status, language: filters.language, limit: filters.limit });
+  const [rows, setRows] = useRows<Customer>(rowsUrl);
+  const [selected, setSelected] = useState<Customer | null>(null);
+  const columns = platform
+    ? ["merchantId", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "status", "conversationCount", "lastSeenAt"]
+    : ["customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "status", "conversationCount", "lastSeenAt"];
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "status", "language", "limit"] : ["status", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"] }} onApply={async () => setRows(await loadRows(rowsUrl))} /><Table rows={rows} columns={columns} onRow={setSelected} /></section><section>{selected ? <div><h3>{selected.customerKey}</h3><p>{selected.nickname || "无昵称"} · {selected.status} · {selected.language}</p><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由 A2C Webhook 自动创建和更新；后台账号仍在“后台账号”里单独管理。</p></div> : <p>客户第一次发消息后会自动出现在这里，不需要手动创建。</p>}</section></div>;
 }
 
 function KnowledgePage({ platform }: { platform: boolean }) {
@@ -240,15 +254,17 @@ function roleName(role: string) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", active: "活跃", pendingHandoffs: "待接管",
-    name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", nickname: "昵称",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", customers: "客户", active: "活跃", pendingHandoffs: "待接管",
+    name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C App ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号",
     openaiApiKey: "OpenAI Key", openaiModel: "OpenAI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", enabled: "启用", password: "新密码",
     limit: "数量", true: "启用", false: "停用", faq: "FAQ", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
     pending: "待处理", processing: "处理中", done: "已完成", sourceType: "素材类型", filename: "文件名", itemCount: "生成数", sampleCount: "样本数",
-    knowledgeCount: "知识数", createdAt: "导入时间", csv: "CSV", xlsx: "Excel", docx: "Word", txt: "文本", image: "图片"
+    knowledgeCount: "知识数", createdAt: "导入时间", csv: "CSV", xlsx: "Excel", docx: "Word", txt: "文本", image: "图片",
+    lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
+    conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID"
   } as Record<string, string>)[key] || key;
 }
 

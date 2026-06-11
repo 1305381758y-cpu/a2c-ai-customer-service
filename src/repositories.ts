@@ -78,6 +78,24 @@ export interface CustomerMemoryRecord {
   updatedAt: string;
 }
 
+export interface CustomerRecord {
+  id: number;
+  merchantId: string;
+  customerKey: string;
+  nickname: string;
+  firstA2CAccountPhone: string;
+  lastA2CAccountPhone: string;
+  language: string;
+  stage: string;
+  extractedPhone: string;
+  extractedTelegram: string;
+  status: "active" | "human_handoff";
+  conversationCount: number;
+  lastConversationId: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
 export interface TrainingMaterialRecord {
   id: number;
   merchantId: string;
@@ -198,6 +216,84 @@ export class Repositories {
         conversation.handoffNotified,
         conversation.id
       );
+  }
+
+  upsertCustomerFromConversation(conversation: Conversation): CustomerRecord {
+    const existing = this.getCustomer(conversation.merchantId, conversation.customerPhone);
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO customers
+          (merchant_id, customer_key, nickname, first_a2c_account_phone, last_a2c_account_phone,
+           language, stage, extracted_phone, extracted_telegram, status, conversation_count, last_conversation_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ON CONFLICT(merchant_id, customer_key) DO UPDATE SET
+          nickname = CASE WHEN excluded.nickname != '' THEN excluded.nickname ELSE customers.nickname END,
+          last_a2c_account_phone = excluded.last_a2c_account_phone,
+          language = excluded.language,
+          stage = excluded.stage,
+          extracted_phone = CASE WHEN excluded.extracted_phone != '' THEN excluded.extracted_phone ELSE customers.extracted_phone END,
+          extracted_telegram = CASE WHEN excluded.extracted_telegram != '' THEN excluded.extracted_telegram ELSE customers.extracted_telegram END,
+          status = excluded.status,
+          conversation_count = (
+            SELECT COUNT(*)
+            FROM conversations
+            WHERE merchant_id = excluded.merchant_id AND customer_phone = excluded.customer_key
+          ),
+          last_conversation_id = excluded.last_conversation_id,
+          last_seen_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      `)
+      .run(
+        conversation.merchantId,
+        conversation.customerPhone,
+        conversation.nickname,
+        existing?.firstA2CAccountPhone || conversation.a2cAccountPhone,
+        conversation.a2cAccountPhone,
+        conversation.language,
+        conversation.stage,
+        conversation.extractedPhone,
+        conversation.extractedTelegram,
+        conversation.status,
+        conversation.id
+      );
+    return this.getCustomer(conversation.merchantId, conversation.customerPhone)!;
+  }
+
+  getCustomer(merchantId: string, customerKey: string): CustomerRecord | undefined {
+    const row = this.db.sqlite
+      .prepare("SELECT * FROM customers WHERE merchant_id = ? AND customer_key = ?")
+      .get(merchantId, customerKey) as Record<string, unknown> | undefined;
+    return row ? mapCustomer(row) : undefined;
+  }
+
+  listCustomers(filters: { merchantId?: string; status?: string; language?: string; limit?: number } = {}): CustomerRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (filters.language) {
+      clauses.push("language = ?");
+      params.push(filters.language);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    params.push(limit);
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM customers
+        ${where}
+        ORDER BY last_seen_at DESC, id DESC
+        LIMIT ?
+      `)
+      .all(...params)
+      .map((row) => mapCustomer(row as Record<string, unknown>));
   }
 
   insertMessage(input: MessageInput): { inserted: boolean } {
@@ -699,10 +795,14 @@ export class Repositories {
         SELECT m.*
         FROM merchants m
         JOIN merchant_configs c ON c.merchant_id = m.id
-        WHERE m.status = 'active' AND c.a2c_account_phone = ?
+        WHERE m.status = 'active'
+          AND (
+            c.a2c_account_phone = ?
+            OR instr(',' || replace(c.a2c_account_phone, ' ', '') || ',', ',' || ? || ',') > 0
+          )
         LIMIT 1
       `)
-      .get(accountPhone) as Record<string, unknown> | undefined;
+      .get(accountPhone, accountPhone) as Record<string, unknown> | undefined;
     return row ? mapMerchant(row) : this.getMerchant("default")!;
   }
 
@@ -825,6 +925,26 @@ function mapKnowledgeItem(row: Record<string, unknown>): KnowledgeItemRecord {
     language: String(row.language ?? "zh"),
     priority: Number(row.priority ?? 0),
     enabled: Boolean(Number(row.enabled ?? 1))
+  };
+}
+
+function mapCustomer(row: Record<string, unknown>): CustomerRecord {
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id ?? "default"),
+    customerKey: String(row.customer_key ?? ""),
+    nickname: String(row.nickname ?? ""),
+    firstA2CAccountPhone: String(row.first_a2c_account_phone ?? ""),
+    lastA2CAccountPhone: String(row.last_a2c_account_phone ?? ""),
+    language: String(row.language ?? "unknown"),
+    stage: String(row.stage ?? "need_platform_register"),
+    extractedPhone: String(row.extracted_phone ?? ""),
+    extractedTelegram: String(row.extracted_telegram ?? ""),
+    status: String(row.status ?? "active") as "active" | "human_handoff",
+    conversationCount: Number(row.conversation_count ?? 0),
+    lastConversationId: String(row.last_conversation_id ?? ""),
+    firstSeenAt: String(row.first_seen_at ?? ""),
+    lastSeenAt: String(row.last_seen_at ?? "")
   };
 }
 
