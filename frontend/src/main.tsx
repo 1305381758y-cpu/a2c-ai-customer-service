@@ -257,12 +257,64 @@ function KnowledgePage({ platform }: { platform: boolean }) {
 }
 
 function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
-  const base = platform ? "/api/admin/conversations" : "/api/merchant/conversations";
+  return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} />;
+}
+
+function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
+  const base = "/api/admin/conversations";
   const [filters, setFilters] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: "", language: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { status: filters.status, handoffStatus: filters.handoffStatus, language: filters.language, limit: filters.limit });
+  const rowsUrl = withQuery(base, filters);
   const [rows, setRows] = useRows<Conversation>(rowsUrl);
   const [selected, setSelected] = useState<Conversation | null>(null);
-  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "status", "handoffStatus", "language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={async () => setRows(await loadRows(rowsUrl))} /><Table rows={rows} columns={platform ? ["merchantId", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"] : ["customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /></section><section>{selected ? <ConversationDetail platform={platform} conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} /> : <p>选择一个会话查看详情</p>}</section></div>;
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={async () => setRows(await loadRows(rowsUrl))} /><Table rows={rows} columns={["merchantId", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /></section><section>{selected ? <ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} /> : <p>选择一个会话查看详情</p>}</section></div>;
+}
+
+function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
+  const [accounts, setAccounts] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
+  const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
+  const [filters, setFilters] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: "", language: "", limit: "100" });
+  const [selected, setSelected] = useState<Conversation | null>(null);
+  const [draftCustomer, setDraftCustomer] = useState<{ customerPhone: string; nickname: string } | null>(null);
+  const [newCustomer, setNewCustomer] = useState({ customerPhone: "", nickname: "" });
+  const [error, setError] = useState("");
+  const rowsUrl = selectedAccount
+    ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
+    : "";
+  const [rows, setRows] = useRows<Conversation>(rowsUrl || "/api/merchant/conversations?limit=1&a2cAccountPhone=__none__");
+
+  useEffect(() => {
+    if (!selectedAccount && accounts.length) setSelectedAccount(accounts.find((account) => account.enabled) || accounts[0]);
+  }, [accounts, selectedAccount]);
+
+  useEffect(() => {
+    setSelected(null);
+    setDraftCustomer(null);
+  }, [selectedAccount?.apiPhone]);
+
+  const reloadAccounts = async () => setAccounts(await loadRows("/api/merchant/a2c/accounts"));
+  const reloadRows = async () => {
+    if (!selectedAccount) return;
+    setRows(await loadRows(rowsUrl));
+  };
+  const openNewCustomer = () => {
+    setError("");
+    const customerPhone = newCustomer.customerPhone.trim();
+    if (!customerPhone) {
+      setError("请先填写客户号码。");
+      return;
+    }
+    setSelected(null);
+    setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
+  };
+
+  return <div className="conversation-workspace"><section className="account-list"><div className="panel-title"><h3>客服账号</h3><AsyncButton busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>同步账号</AsyncButton></div>{accounts.length ? accounts.map((account) => <button key={account.id} className={`list-item ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}><strong>{account.verifiedName || account.apiPhone}</strong><span>{account.apiPhone}</span><small>{account.enabled ? "启用" : "停用"}</small></button>) : <div className="empty-state">配置 A2C Key 后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}</section><section className="customer-list"><div className="panel-title"><h3>客户</h3><span>{selectedAccount?.apiPhone || "未选择客服账号"}</span></div><FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} /><div className="proactive-panel"><strong>新客户</strong><input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(e) => setNewCustomer({ ...newCustomer, customerPhone: e.target.value })} /><input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(e) => setNewCustomer({ ...newCustomer, nickname: e.target.value })} /><button disabled={!selectedAccount} onClick={openNewCustomer}>打开对话框</button>{error && <div className="error">{error}</div>}</div><div className="stack-list">{rows.map((row) => <button key={row.id} className={`list-item ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }}><strong>{row.nickname || row.customerPhone}</strong><span>{row.customerPhone}</span><small>{row.language} · {label(row.stage)} · {label(row.handoffStatus)}</small></button>)}{!rows.length && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}</div></section><section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={reloadRows} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以填写新客户号码后主动发送第一条消息。</p></div>}</section></div>;
+}
+
+function ProactiveConversationDetail({ account, target, onCreated }: { account: A2CAccount; target: { customerPhone: string; nickname: string }; onCreated: (conversation: Conversation) => Promise<void> }) {
+  const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
+  const [statusMessage, setStatusMessage] = useState("");
+  const [error, setError] = useState("");
+  return <div className="conversation-detail proactive-chat"><div className="chat-header"><div><h3>{target.customerPhone}</h3><p>通过客服账号 {account.verifiedName || account.apiPhone} 主动发送</p></div></div>{error && <div className="error">{error}</div>}{statusMessage && <div className="notice">{statusMessage}</div>}<div className="empty-chat compact"><h3>新对话</h3><p>发送第一条消息后，系统会自动创建客户档案和会话记录。</p></div><div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}><option>text</option><option>image</option><option>video</option><option>audio</option><option>document</option></select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体URL" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { const res = await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(account.apiPhone)}/send`, { method: "POST", body: JSON.stringify({ ...send, customerPhone: target.customerPhone, nickname: target.nickname }) }); setStatusMessage("消息已发送，会话已创建。"); await onCreated(res.conversation); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div></div>;
 }
 
 function ConversationDetail({ platform = false, conversation, refresh }: { platform?: boolean; conversation: Conversation; refresh: () => void }) {

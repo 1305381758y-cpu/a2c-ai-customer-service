@@ -964,4 +964,85 @@ describe("portal api", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("lets merchants proactively start a customer chat from a selected A2C account", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentBodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 200, data: { accessToken: "proactive-token", expireIn: 3600 } });
+      }
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({
+          code: 200,
+          data: [{ apiPhone: "proactive-a2c", wabaId: "waba-proactive", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "主动客服" }]
+        });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentBodies.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: "proactive-message-id" });
+      }
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "主动发送商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "proactive@test.local", name: "主动发送", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "proactive@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://a2c.test/api/openapi", a2cAppId: "app-id", a2cAppSecret: "app-secret" }
+      });
+      const sync = await app.inject({
+        method: "POST",
+        url: "/api/merchant/a2c/accounts/sync",
+        headers: { cookie: merchantCookie }
+      });
+      expect(sync.statusCode).toBe(200);
+
+      const sent = await app.inject({
+        method: "POST",
+        url: "/api/merchant/a2c/accounts/proactive-a2c/send",
+        headers: { cookie: merchantCookie },
+        payload: { customerPhone: "proactive-customer", nickname: "新客户", type: "text", content: "Hello, please register first." }
+      });
+
+      expect(sent.statusCode).toBe(200);
+      expect(sent.json().conversation).toMatchObject({ merchantId, customerPhone: "proactive-customer", a2cAccountPhone: "proactive-a2c" });
+      expect(sentBodies[0]).toMatchObject({
+        to: "proactive-customer",
+        senderPhoneNumber: "proactive-a2c",
+        type: 1,
+        content: "Hello, please register first."
+      });
+
+      const conversations = await app.inject({
+        method: "GET",
+        url: "/api/merchant/conversations?a2cAccountPhone=proactive-a2c",
+        headers: { cookie: merchantCookie }
+      });
+      expect(conversations.json().rows).toHaveLength(1);
+      expect(conversations.json().rows[0]).toMatchObject({ customerPhone: "proactive-customer", a2cAccountPhone: "proactive-a2c" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

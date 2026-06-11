@@ -454,7 +454,7 @@ export class Repositories {
     return this.getCustomerMemory(conversation.merchantId, conversation.customerPhone);
   }
 
-  listConversations(filters: { merchantId?: string; status?: string; language?: string; handoffStatus?: string; limit?: number } = {}): Conversation[] {
+  listConversations(filters: { merchantId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; limit?: number } = {}): Conversation[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -472,6 +472,10 @@ export class Repositories {
     if (filters.handoffStatus) {
       clauses.push("handoff_status = ?");
       params.push(filters.handoffStatus);
+    }
+    if (filters.a2cAccountPhone) {
+      clauses.push("a2c_account_phone = ?");
+      params.push(filters.a2cAccountPhone);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);

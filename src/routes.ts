@@ -120,12 +120,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!material) return reply.code(404).send({ error: "material not found" });
     return { material, items: deps.repos.listTrainingMaterialItems(id) };
   });
-  app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: request.query.merchantId,
       status: request.query.status,
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
+      a2cAccountPhone: request.query.a2cAccountPhone,
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
@@ -261,12 +262,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return row;
   });
 
-  app.get<{ Querystring: { status?: string; handoffStatus?: string; language?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: scopedMerchantId(request),
       status: request.query.status,
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
+      a2cAccountPhone: request.query.a2cAccountPhone,
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
@@ -338,6 +340,57 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
         }
       });
       return { externalId, translation };
+    } catch (error) {
+      return reply.code(502).send({ error: error instanceof Error ? error.message : "send failed" });
+    }
+  });
+
+  app.post<{ Params: { apiPhone: string }; Body: ProactiveSendBody }>("/api/merchant/a2c/accounts/:apiPhone/send", { preHandler: merchantRoles }, async (request, reply) => {
+    const merchantId = scopedMerchantId(request);
+    const apiPhone = decodeURIComponent(request.params.apiPhone);
+    const body = proactiveSendSchema.parse(request.body ?? {});
+    const cfg = deps.repos.getMerchantConfig(merchantId);
+    if (!a2cAccountAllowed(deps.repos, merchantId, cfg, apiPhone)) {
+      return reply.code(404).send({ error: "a2c account not found or disabled" });
+    }
+
+    const conversation = deps.repos.getOrCreateConversation(body.customerPhone, apiPhone, body.nickname || "", merchantId);
+    deps.repos.upsertCustomerFromConversation(conversation);
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg);
+    const client = new A2CClient(runtimeConfig);
+    const type = body.type ?? "text";
+    const translation = type === "text" ? await translateForCustomer(runtimeConfig, body.content || "", conversation.language) : undefined;
+    const outgoingContent = translation?.translatedText || body.content;
+    try {
+      const externalId = await client.sendMessage({
+        to: conversation.customerPhone,
+        senderPhoneNumber: conversation.a2cAccountPhone,
+        type,
+        content: outgoingContent,
+        url: body.url,
+        caption: body.caption,
+        fileName: body.fileName
+      });
+      deps.repos.insertMessage({
+        conversationId: conversation.id,
+        direction: "outbound",
+        externalId,
+        content: outgoingContent || body.caption || body.url || "",
+        msgType: type,
+        language: conversation.language,
+        intent: "unknown",
+        rawPayload: {
+          manual: true,
+          proactive: true,
+          originalContent: translation?.originalText,
+          translatedContent: translation?.translatedText,
+          targetLanguage: translation?.targetLanguage,
+          translationStatus: translation?.status,
+          translationError: translation?.error || ""
+        }
+      });
+      deps.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: outgoingContent || body.caption || body.url || "", direction: "outbound" });
+      return { externalId, conversation, translation };
     } catch (error) {
       return reply.code(502).send({ error: error instanceof Error ? error.message : "send failed" });
     }
@@ -416,6 +469,18 @@ type TelegramChat = {
   type?: string;
   title?: string;
 };
+
+const proactiveSendSchema = z.object({
+  customerPhone: z.string().min(1),
+  nickname: z.string().optional(),
+  type: z.enum(["text", "image", "video", "audio", "document"]).optional(),
+  content: z.string().optional(),
+  url: z.string().optional(),
+  caption: z.string().optional(),
+  fileName: z.string().optional()
+});
+
+type ProactiveSendBody = z.infer<typeof proactiveSendSchema>;
 
 async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
   const merchant = deps.repos.getMerchant(merchantId);
@@ -735,6 +800,12 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     PLATFORM_REGISTER_URL: merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
     TG_REGISTER_GUIDE_URL: merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
   };
+}
+
+function a2cAccountAllowed(repos: Repositories, merchantId: string, config: MerchantConfigRecord, apiPhone: string): boolean {
+  const enabledAccount = repos.listMerchantA2CAccounts({ merchantId, enabled: true }).some((account) => account.apiPhone === apiPhone);
+  if (enabledAccount) return true;
+  return config.a2cAccountPhone.split(",").map((item) => item.trim()).filter(Boolean).includes(apiPhone);
 }
 
 function auth(config: AppConfig) {
