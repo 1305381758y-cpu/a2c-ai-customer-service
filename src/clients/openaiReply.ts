@@ -26,7 +26,8 @@ export class OpenAIReplyClient {
   private readonly client?: OpenAI;
 
   constructor(private readonly config: AppConfig) {
-    this.client = config.OPENAI_API_KEY ? new OpenAI({ apiKey: config.OPENAI_API_KEY }) : undefined;
+    const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
+    this.client = apiKey ? new OpenAI({ apiKey }) : undefined;
   }
 
   async generateReply(input: ReplyInput): Promise<AiReply> {
