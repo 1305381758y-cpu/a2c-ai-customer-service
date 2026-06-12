@@ -39,6 +39,8 @@ export function extractWhatsApp(text: string): string {
 
 export function detectLanguage(text: string, fallback = "unknown"): string {
   if (/[\u0E00-\u0E7F]/.test(text)) return "th";
+  if (/[\u3040-\u30FF]/.test(text)) return "ja";
+  if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) return "ja";
   if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
   const lower = text.toLowerCase();
   if (/\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih)\b/.test(lower)) return "ms";
@@ -74,7 +76,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (/(优惠|活动|奖励|promotion|bonus|reward|promo|promoção|promocao|bônus|bonus|recompensa)/i.test(text)) return "ask_promotion";
   if (/(安全|真的假的|可信|靠谱吗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
   if (/(不会|帮我|怎么|如何|help|how|cannot|can't|tak tahu|tidak tahu|bantuan|ajuda|como faço|não consigo|nao consigo)/i.test(text)) return "need_help";
-  if (/^(hi|hello|hey|你好|您好|哈喽|hai|halo|สวัสดี|olá|ola|oi)\b/i.test(lower)) return "greeting";
+  if (/^(こんにちは|こんばんは|おはよう)/i.test(lower) || /^(hi|hello|hey|你好|您好|哈喽|hai|halo|สวัสดี|olá|ola|oi)\b/i.test(lower)) return "greeting";
   if (lower.length <= 2 || /(.)\1{6,}/.test(lower)) return "irrelevant_or_spam";
   return "unknown";
 }

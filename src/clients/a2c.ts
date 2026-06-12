@@ -11,6 +11,11 @@ type TokenCacheEntry = {
 
 const tokenCache = new Map<string, TokenCacheEntry>();
 
+export interface A2CTokenStore {
+  get(cacheKey: string): { accessToken: string; expiresAt: number } | undefined;
+  set(cacheKey: string, accessToken: string, expiresAt: number): void;
+}
+
 export interface A2CAccount {
   apiPhone: string;
   wabaId?: string;
@@ -25,7 +30,7 @@ export class A2CClient {
   private accessToken = "";
   private expiresAt = 0;
 
-  constructor(private readonly config: AppConfig) {}
+  constructor(private readonly config: AppConfig, private readonly tokenStore?: A2CTokenStore) {}
 
   get enabled(): boolean {
     return Boolean(this.config.A2C_APP_ID && this.config.A2C_APP_SECRET);
@@ -90,6 +95,13 @@ export class A2CClient {
       this.expiresAt = cached.expiresAt;
       return cached.accessToken;
     }
+    const stored = this.tokenStore?.get(cacheKey);
+    if (stored?.accessToken && Date.now() < stored.expiresAt - TOKEN_REFRESH_SKEW_MS) {
+      this.accessToken = stored.accessToken;
+      this.expiresAt = stored.expiresAt;
+      tokenCache.set(cacheKey, { accessToken: this.accessToken, expiresAt: this.expiresAt });
+      return stored.accessToken;
+    }
     if (cached?.pending) {
       const token = await cached.pending;
       const updated = tokenCache.get(cacheKey);
@@ -118,6 +130,7 @@ export class A2CClient {
       this.accessToken = json.data.accessToken;
       this.expiresAt = Date.now() + json.data.expireIn * 1000;
       tokenCache.set(cacheKey, { accessToken: this.accessToken, expiresAt: this.expiresAt });
+      this.tokenStore?.set(cacheKey, this.accessToken, this.expiresAt);
       return this.accessToken;
     } catch (error) {
       const cached = tokenCache.get(cacheKey);

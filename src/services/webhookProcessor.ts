@@ -48,7 +48,7 @@ export class WebhookProcessor {
     const country = this.repos.getMerchantCountry(countryId) ?? this.repos.ensureDefaultCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
     const ai = new GeminiReplyClient(runtimeConfig);
-    const a2c = new A2CClient(runtimeConfig);
+    const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     const analysis = analyzeMessage(content, conversation.language);

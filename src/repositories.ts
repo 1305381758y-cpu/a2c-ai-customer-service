@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { insertTrainingSamples } from "./db.js";
 import type { Db } from "./db.js";
-import type { A2CAccount } from "./clients/a2c.js";
+import type { A2CAccount, A2CTokenStore } from "./clients/a2c.js";
 import type { ConversationStage, IntentLabel } from "./domain/intents.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
@@ -48,6 +48,9 @@ export interface MerchantConfigRecord {
   telegramHandoffChatTitle: string;
   telegramHandoffChatStatus: "unbound" | "waiting" | "bound" | "invalid";
   telegramHandoffChatError: string;
+  a2cTokenCacheKey: string;
+  a2cAccessToken: string;
+  a2cTokenExpiresAt: number;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
 }
@@ -975,6 +978,29 @@ export class Repositories {
     return mapMerchantConfig(row);
   }
 
+  a2cTokenStore(merchantId: string): A2CTokenStore {
+    return {
+      get: (cacheKey) => {
+        const config = this.getMerchantConfig(merchantId);
+        if (config.a2cTokenCacheKey !== cacheKey || !config.a2cAccessToken || !config.a2cTokenExpiresAt) return undefined;
+        return { accessToken: config.a2cAccessToken, expiresAt: config.a2cTokenExpiresAt };
+      },
+      set: (cacheKey, accessToken, expiresAt) => {
+        this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+        this.db.sqlite
+          .prepare(`
+            UPDATE merchant_configs
+            SET a2c_token_cache_key = ?,
+                a2c_access_token = ?,
+                a2c_token_expires_at = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE merchant_id = ?
+          `)
+          .run(cacheKey, accessToken, expiresAt, merchantId);
+      }
+    };
+  }
+
   ensureDefaultCountry(merchantId: string): MerchantCountryRecord {
     const id = `${merchantId}:default`;
     this.db.sqlite.prepare(`
@@ -1351,6 +1377,9 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     telegramHandoffChatTitle: String(row.telegram_handoff_chat_title ?? ""),
     telegramHandoffChatStatus: normalizeTelegramBindingStatus(row.telegram_handoff_chat_status),
     telegramHandoffChatError: String(row.telegram_handoff_chat_error ?? ""),
+    a2cTokenCacheKey: String(row.a2c_token_cache_key ?? ""),
+    a2cAccessToken: String(row.a2c_access_token ?? ""),
+    a2cTokenExpiresAt: Number(row.a2c_token_expires_at ?? 0),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
   };

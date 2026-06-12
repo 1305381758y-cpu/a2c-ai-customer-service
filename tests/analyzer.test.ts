@@ -10,6 +10,8 @@ describe("message analyzer", () => {
   it("detects languages", () => {
     expect(detectLanguage("你好")).toBe("zh");
     expect(detectLanguage("hello")).toBe("en");
+    expect(detectLanguage("こんにちは")).toBe("ja");
+    expect(detectLanguage("登録したいです")).toBe("ja");
     expect(detectLanguage("saya mahu daftar")).toBe("ms");
     expect(detectLanguage("olá, quero fazer cadastro")).toBe("pt-BR");
   });
@@ -25,5 +27,6 @@ describe("message analyzer", () => {
     expect(analyzeMessage("how to register").intent).toBe("ask_platform_register");
     expect(analyzeMessage("como faço o cadastro?").intent).toBe("ask_platform_register");
     expect(analyzeMessage("isso é seguro?").intent).toBe("trust_concern");
+    expect(analyzeMessage("こんにちは").intent).toBe("greeting");
   });
 });

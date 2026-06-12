@@ -160,9 +160,10 @@ function buildSystemPrompt(config: AppConfig): string {
 
 function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: AppConfig): AiReply {
   if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
+  const expectedLanguage = input.conversation.language && input.conversation.language !== "unknown" ? input.conversation.language : "";
   return {
     reply: value.reply.trim(),
-    language: typeof value.language === "string" && value.language ? value.language : input.conversation.language,
+    language: expectedLanguage || (typeof value.language === "string" && value.language ? value.language : input.conversation.language),
     stage: typeof value.stage === "string" && value.stage ? value.stage : input.conversation.stage,
     extractedPhone: typeof value.extractedPhone === "string" ? value.extractedPhone : input.conversation.extractedPhone,
     extractedTelegram: typeof value.extractedTelegram === "string" ? value.extractedTelegram : input.conversation.extractedTelegram,
@@ -195,5 +196,6 @@ function defaultReply(language: string, config: AppConfig): string {
   if (language === "th") return `กรุณาสมัครบัญชีแพลตฟอร์มให้เสร็จก่อน จากนั้นส่งเบอร์โทรและบัญชี Telegram ของคุณมาให้เรา${link}`;
   if (language === "vi") return `Vui lòng hoàn tất đăng ký tài khoản nền tảng trước, sau đó gửi số điện thoại và tài khoản Telegram của bạn.${link}`;
   if (language === "pt-BR") return `Conclua primeiro o cadastro na plataforma. Depois, envie seu número de telefone e sua conta do Telegram.${link}`;
+  if (language === "ja") return `まずプラットフォーム登録を完了してください。完了後、電話番号とTelegramアカウントを送ってください。${link}`;
   return `请先完成平台开户，完成后把您的手机号和 Telegram 账号发给我。${link}`;
 }

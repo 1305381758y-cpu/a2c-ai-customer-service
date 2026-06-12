@@ -354,7 +354,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
     const country = deps.repos.getMerchantCountry(conversation.countryId);
     const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
-    const client = new A2CClient(runtimeConfig);
+    const client = new A2CClient(runtimeConfig, deps.repos.a2cTokenStore(conversation.merchantId));
     const type = request.body?.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, request.body?.content || "", conversation.language) : undefined;
     const outgoingContent = translation?.translatedText || request.body?.content;
@@ -404,7 +404,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     deps.repos.upsertCustomerFromConversation(conversation);
     const country = deps.repos.getMerchantCountry(conversation.countryId);
     const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
-    const client = new A2CClient(runtimeConfig);
+    const client = new A2CClient(runtimeConfig, deps.repos.a2cTokenStore(merchantId));
     const type = body.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, body.content || "", conversation.language) : undefined;
     const outgoingContent = translation?.translatedText || body.content;
@@ -533,7 +533,7 @@ async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, dep
   const merchant = deps.repos.getMerchant(merchantId);
   if (!merchant) return reply.code(404).send({ error: "merchant not found" });
   const cfg = deps.repos.getMerchantConfig(merchantId);
-  const client = new A2CClient(appConfigForMerchant(deps.config, cfg));
+  const client = new A2CClient(appConfigForMerchant(deps.config, cfg), deps.repos.a2cTokenStore(merchantId));
   try {
     const accounts = await client.listAccounts();
     const rows = deps.repos.syncMerchantA2CAccounts(merchantId, accounts);
@@ -562,7 +562,7 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   const runtimeConfig = appConfigForMerchant(deps.config, cfg);
   const checks: ConfigCheckItem[] = [];
 
-  checks.push(await checkA2C(runtimeConfig));
+  checks.push(await checkA2C(runtimeConfig, deps.repos.a2cTokenStore(merchantId)));
   checks.push(await checkGemini(runtimeConfig));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push({
@@ -580,12 +580,12 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   };
 }
 
-async function checkA2C(config: AppConfig): Promise<ConfigCheckItem> {
+async function checkA2C(config: AppConfig, tokenStore?: ConstructorParameters<typeof A2CClient>[1]): Promise<ConfigCheckItem> {
   if (!config.A2C_APP_ID || !config.A2C_APP_SECRET) {
     return { key: "a2c", label: "A2C", ok: false, status: "missing", detail: "缺少 A2C App ID 或密钥" };
   }
   try {
-    const accounts = await new A2CClient(config).listAccounts();
+    const accounts = await new A2CClient(config, tokenStore).listAccounts();
     return { key: "a2c", label: "A2C", ok: true, status: "ok", detail: `连接正常，拉取到 ${accounts.length} 个客服账号` };
   } catch (error) {
     return { key: "a2c", label: "A2C", ok: false, status: "error", detail: error instanceof Error ? error.message : "A2C 检测失败" };
@@ -799,8 +799,9 @@ function scopedMerchantId(request: FastifyRequest): string {
 }
 
 function maskConfig(config: MerchantConfigRecord) {
+  const { a2cTokenCacheKey: _cacheKey, a2cAccessToken: _accessToken, a2cTokenExpiresAt: _expiresAt, ...safeConfig } = config;
   return {
-    ...config,
+    ...safeConfig,
     a2cAppSecret: maskSecret(config.a2cAppSecret),
     openaiApiKey: maskSecret(config.openaiApiKey),
     googleAiApiKey: maskSecret(config.googleAiApiKey),
