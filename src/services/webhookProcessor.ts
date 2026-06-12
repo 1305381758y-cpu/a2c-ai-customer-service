@@ -1,7 +1,7 @@
 import { analyzeMessage } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { A2CClient } from "../clients/a2c.js";
-import { OpenAIReplyClient } from "../clients/openaiReply.js";
+import { GeminiReplyClient } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord } from "../repositories.js";
@@ -31,7 +31,7 @@ export interface A2CWebhookPayload {
 export class WebhookProcessor {
   constructor(
     private readonly repos: Repositories,
-    private readonly ai: OpenAIReplyClient,
+    private readonly ai: GeminiReplyClient,
     private readonly a2c: A2CClient,
     private readonly telegram: TelegramClient,
     private readonly config: AppConfig
@@ -47,7 +47,7 @@ export class WebhookProcessor {
     const countryId = this.repos.countryIdForA2CAccount(merchant.id, data.to);
     const country = this.repos.getMerchantCountry(countryId) ?? this.repos.ensureDefaultCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-    const ai = new OpenAIReplyClient(runtimeConfig);
+    const ai = new GeminiReplyClient(runtimeConfig);
     const a2c = new A2CClient(runtimeConfig);
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
@@ -178,6 +178,8 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
     OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
+    GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
+    GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
     PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,

@@ -33,7 +33,7 @@ DEFAULT_ADMIN_EMAIL=默认平台管理员邮箱
 DEFAULT_ADMIN_PASSWORD=默认平台管理员密码，至少8位
 A2C_APP_ID=A2C开放平台App ID
 A2C_APP_SECRET=A2C开放平台App Secret
-OPENAI_API_KEY=OpenAI API Key
+GOOGLE_AI_API_KEY=Google AI Studio API Key
 TELEGRAM_BOT_TOKEN=Telegram机器人Token
 TELEGRAM_HANDOFF_CHAT_ID=人工接管群ID
 PLATFORM_REGISTER_URL=甲方平台开户链接
@@ -46,10 +46,10 @@ TG_REGISTER_GUIDE_URL=Telegram注册说明链接，可为空
 NODE_VERSION=24.14.1
 DATABASE_URL=/var/data/app.db
 A2C_BASE_URL=https://openapi.a2c.chat/api/openapi
-OPENAI_MODEL=gpt-5-mini
+GOOGLE_AI_MODEL=gemini-2.5-flash
 ```
 
-如果 OpenAI 账号没有默认模型权限，可在 Render 环境变量里把 `OPENAI_MODEL` 改成该账号可用的 Responses API 文本模型。
+如果 Google AI Studio 账号需要指定其他模型，可在 Render 环境变量里把 `GOOGLE_AI_MODEL` 改成可用的 Gemini 模型。
 
 ## A2C Webhook 地址
 
@@ -106,5 +106,5 @@ curl "https://你的Render域名/internal/conversations?limit=20" \
 - 不要使用免费无磁盘环境保存 SQLite 数据；重启会丢数据。
 - Render Persistent Disk 需要付费服务计划。
 - `INTERNAL_API_KEY` 不要发给普通客服，只给系统管理员。
-- A2C、OpenAI、Telegram 的密钥都只填写在 Render 环境变量，不要写进代码仓库。
+- A2C、Google AI Studio、Telegram 的密钥都只填写在 Render 环境变量，不要写进代码仓库。
 - 首次发布后，先导入样本，再打开 A2C Webhook。

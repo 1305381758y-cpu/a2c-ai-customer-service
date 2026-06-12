@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import type { AppConfig } from "../config.js";
 import type { Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
@@ -26,69 +26,91 @@ export interface AiReply {
   error?: string;
 }
 
-export class OpenAIReplyClient {
-  private readonly client?: OpenAI;
+export type GeminiConfig = Pick<AppConfig, "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">;
+
+const replySchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    reply: { type: Type.STRING },
+    language: { type: Type.STRING },
+    stage: { type: Type.STRING },
+    extractedPhone: { type: Type.STRING },
+    extractedTelegram: { type: Type.STRING },
+    extractedWhatsApp: { type: Type.STRING },
+    shouldHandoff: { type: Type.BOOLEAN }
+  },
+  required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "shouldHandoff"],
+  propertyOrdering: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "shouldHandoff"]
+};
+
+export class GeminiReplyClient {
+  private readonly client?: GoogleGenAI;
 
   constructor(private readonly config: AppConfig) {
-    const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
-    this.client = apiKey ? new OpenAI({ apiKey }) : undefined;
+    const apiKey = geminiApiKey(config);
+    this.client = apiKey ? new GoogleGenAI({ apiKey }) : undefined;
   }
 
   async generateReply(input: ReplyInput): Promise<AiReply> {
     if (!this.client) return fallbackReply(input, this.config);
 
     try {
-      const response = await this.client.responses.create({
-        model: this.config.OPENAI_MODEL,
-        input: [
-          {
-            role: "system",
-            content: buildSystemPrompt(this.config)
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              customerText: input.customerText,
-              conversation: input.conversation,
-              recentHistory: input.history,
-              relevantTrainingSamples: input.samples,
-              knowledgeItems: input.knowledge,
-              trainingMaterials: input.trainingMaterials ?? [],
-              customerMemory: input.memory ?? null,
-              country: input.country ?? null
-            })
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "customer_service_reply",
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                reply: { type: "string" },
-                language: { type: "string" },
-                stage: { type: "string" },
-                extractedPhone: { type: "string" },
-                extractedTelegram: { type: "string" },
-                extractedWhatsApp: { type: "string" },
-                shouldHandoff: { type: "boolean" }
-              },
-              required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "shouldHandoff"]
-            }
-          }
+      const response = await this.client.models.generateContent({
+        model: geminiModel(this.config),
+        contents: JSON.stringify({
+          customerText: input.customerText,
+          conversation: input.conversation,
+          recentHistory: input.history,
+          relevantTrainingSamples: input.samples,
+          knowledgeItems: input.knowledge,
+          trainingMaterials: input.trainingMaterials ?? [],
+          customerMemory: input.memory ?? null,
+          country: input.country ?? null
+        }),
+        config: {
+          systemInstruction: buildSystemPrompt(this.config),
+          responseMimeType: "application/json",
+          responseSchema: replySchema,
+          temperature: 0.25
         }
       });
 
-      return JSON.parse(response.output_text) as AiReply;
+      return normalizeAiReply(JSON.parse(response.text?.trim() || "{}"), input, this.config);
     } catch (error) {
       const fallback = fallbackReply(input, this.config);
       fallback.fallback = true;
-      fallback.error = error instanceof Error ? error.message : "OpenAI reply failed";
+      fallback.error = error instanceof Error ? error.message : "Gemini reply failed";
       return fallback;
     }
   }
+}
+
+export async function generateGeminiText(
+  config: GeminiConfig,
+  contents: string | Part[],
+  options: { systemInstruction?: string; temperature?: number } = {}
+): Promise<string> {
+  const apiKey = geminiApiKey(config);
+  if (!apiKey) throw new Error("Google AI Studio Key 未配置");
+  const client = new GoogleGenAI({ apiKey });
+  const response = await client.models.generateContent({
+    model: geminiModel(config),
+    contents,
+    config: {
+      systemInstruction: options.systemInstruction,
+      temperature: options.temperature ?? 0.2
+    }
+  });
+  return response.text?.trim() || "";
+}
+
+export function geminiApiKey(config: GeminiConfig): string {
+  const value = config.GOOGLE_AI_API_KEY || "";
+  return value === "CHANGE_ME" ? "" : value;
+}
+
+export function geminiModel(config: GeminiConfig): string {
+  return config.GOOGLE_AI_MODEL || "gemini-2.5-flash";
 }
 
 function buildSystemPrompt(config: AppConfig): string {
@@ -120,6 +142,19 @@ function buildSystemPrompt(config: AppConfig): string {
 
 输出必须是 JSON，字段为 reply、language、stage、extractedPhone、extractedTelegram、extractedWhatsApp、shouldHandoff。
 `;
+}
+
+function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: AppConfig): AiReply {
+  if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
+  return {
+    reply: value.reply.trim(),
+    language: typeof value.language === "string" && value.language ? value.language : input.conversation.language,
+    stage: typeof value.stage === "string" && value.stage ? value.stage : input.conversation.stage,
+    extractedPhone: typeof value.extractedPhone === "string" ? value.extractedPhone : input.conversation.extractedPhone,
+    extractedTelegram: typeof value.extractedTelegram === "string" ? value.extractedTelegram : input.conversation.extractedTelegram,
+    extractedWhatsApp: typeof value.extractedWhatsApp === "string" ? value.extractedWhatsApp : input.conversation.extractedWhatsApp,
+    shouldHandoff: Boolean(value.shouldHandoff)
+  };
 }
 
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {

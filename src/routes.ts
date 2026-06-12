@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
+import { generateGeminiText, geminiApiKey, geminiModel } from "./clients/gemini.js";
 import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
@@ -562,7 +563,7 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   const checks: ConfigCheckItem[] = [];
 
   checks.push(await checkA2C(runtimeConfig));
-  checks.push(await checkOpenAI(runtimeConfig));
+  checks.push(await checkGemini(runtimeConfig));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push({
     key: "platformRegisterUrl",
@@ -591,26 +592,14 @@ async function checkA2C(config: AppConfig): Promise<ConfigCheckItem> {
   }
 }
 
-async function checkOpenAI(config: AppConfig): Promise<ConfigCheckItem> {
-  const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
-  if (!apiKey) return { key: "openai", label: "OpenAI", ok: false, status: "missing", detail: "缺少 OpenAI Key，客户消息会降级使用样本/默认话术" };
+async function checkGemini(config: AppConfig): Promise<ConfigCheckItem> {
+  const apiKey = geminiApiKey(config);
+  if (!apiKey) return { key: "gemini", label: "Google AI Studio / Gemini", ok: false, status: "missing", detail: "缺少 Google AI Studio Key，客户消息会降级使用样本/默认话术" };
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: config.OPENAI_MODEL,
-        input: "Reply with OK only."
-      })
-    });
-    const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
-    if (!response.ok) throw new Error(body.error?.message || response.statusText);
-    return { key: "openai", label: "OpenAI", ok: true, status: "ok", detail: `模型 ${config.OPENAI_MODEL} 可用，客户消息会优先调用 AI 回复` };
+    await generateGeminiText(config, "Reply with OK only.");
+    return { key: "gemini", label: "Google AI Studio / Gemini", ok: true, status: "ok", detail: `模型 ${geminiModel(config)} 可用，客户消息会优先调用 AI 回复` };
   } catch (error) {
-    return { key: "openai", label: "OpenAI", ok: false, status: "error", detail: error instanceof Error ? error.message : "OpenAI 检测失败" };
+    return { key: "gemini", label: "Google AI Studio / Gemini", ok: false, status: "error", detail: error instanceof Error ? error.message : "Gemini 检测失败" };
   }
 }
 
@@ -742,8 +731,8 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
       buffer,
       filename: file.filename,
       mimeType: file.mimetype,
-      openaiApiKey: merchantConfig.openaiApiKey || deps.config.OPENAI_API_KEY,
-      openaiModel: merchantConfig.openaiModel || deps.config.OPENAI_MODEL
+      googleAiApiKey: merchantConfig.googleAiApiKey || deps.config.GOOGLE_AI_API_KEY,
+      googleAiModel: merchantConfig.googleAiModel || deps.config.GOOGLE_AI_MODEL
     });
     const material = deps.repos.createTrainingMaterial({
       merchantId,
@@ -814,6 +803,7 @@ function maskConfig(config: MerchantConfigRecord) {
     ...config,
     a2cAppSecret: maskSecret(config.a2cAppSecret),
     openaiApiKey: maskSecret(config.openaiApiKey),
+    googleAiApiKey: maskSecret(config.googleAiApiKey),
     telegramBotToken: maskSecret(config.telegramBotToken)
   };
 }
@@ -854,6 +844,8 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
     OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
+    GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
+    GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
     PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,

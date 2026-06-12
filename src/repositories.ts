@@ -41,6 +41,8 @@ export interface MerchantConfigRecord {
   a2cAccountPhone: string;
   openaiApiKey: string;
   openaiModel: string;
+  googleAiApiKey: string;
+  googleAiModel: string;
   telegramBotToken: string;
   telegramHandoffChatId: string;
   telegramHandoffChatTitle: string;
@@ -1046,6 +1048,8 @@ export class Repositories {
       a2cAccountPhone: "a2c_account_phone",
       openaiApiKey: "openai_api_key",
       openaiModel: "openai_model",
+      googleAiApiKey: "google_ai_api_key",
+      googleAiModel: "google_ai_model",
       telegramBotToken: "telegram_bot_token",
       telegramHandoffChatId: "telegram_handoff_chat_id",
       telegramHandoffChatTitle: "telegram_handoff_chat_title",
@@ -1316,6 +1320,8 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     a2cAccountPhone: String(row.a2c_account_phone ?? ""),
     openaiApiKey: String(row.openai_api_key ?? ""),
     openaiModel: String(row.openai_model ?? "gpt-5-mini"),
+    googleAiApiKey: String(row.google_ai_api_key ?? ""),
+    googleAiModel: String(row.google_ai_model ?? "gemini-2.5-flash"),
     telegramBotToken: String(row.telegram_bot_token ?? ""),
     telegramHandoffChatId: String(row.telegram_handoff_chat_id ?? ""),
     telegramHandoffChatTitle: String(row.telegram_handoff_chat_title ?? ""),

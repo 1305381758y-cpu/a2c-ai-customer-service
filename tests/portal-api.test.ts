@@ -10,7 +10,7 @@ function testConfig() {
     SESSION_SECRET: "test-secret",
     DEFAULT_ADMIN_EMAIL: "admin@test.local",
     DEFAULT_ADMIN_PASSWORD: "Admin123456",
-    OPENAI_API_KEY: "",
+    GOOGLE_AI_API_KEY: "",
     A2C_APP_ID: "",
     A2C_APP_SECRET: ""
   });
@@ -766,8 +766,8 @@ describe("portal api", () => {
       if (url.endsWith("/v1/accounts")) {
         return Response.json({ code: 200, data: [{ apiPhone: "check-a2c-account", verifiedName: "检测账号" }] });
       }
-      if (url.endsWith("/v1/responses")) {
-        return Response.json({ output_text: "OK" });
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: "OK" }] } }] });
       }
       if (url.includes("api.telegram.org") && url.endsWith("/getMe")) {
         return Response.json({ ok: true, result: { username: "check_bot" } });
@@ -797,8 +797,8 @@ describe("portal api", () => {
           a2cBaseUrl: "https://a2c.test/api/openapi",
           a2cAppId: "app-id",
           a2cAppSecret: "app-secret",
-          openaiApiKey: "sk-test",
-          openaiModel: "gpt-5-mini",
+          googleAiApiKey: "gemini-test",
+          googleAiModel: "gemini-2.5-flash",
           telegramBotToken: "tg-token",
           telegramHandoffChatId: "-100123",
           platformRegisterUrl: "https://merchant.example/register"
@@ -827,7 +827,7 @@ describe("portal api", () => {
       expect(checked.json().ok).toBe(true);
       expect(checked.json().rows.map((row: { key: string; ok: boolean }) => [row.key, row.ok])).toEqual([
         ["a2c", true],
-        ["openai", true],
+        ["gemini", true],
         ["telegram", true],
         ["platformRegisterUrl", true]
       ]);

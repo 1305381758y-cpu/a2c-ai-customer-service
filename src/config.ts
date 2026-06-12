@@ -9,6 +9,8 @@ const envSchema = z.object({
   A2C_APP_SECRET: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
   OPENAI_MODEL: z.string().default("gpt-5-mini"),
+  GOOGLE_AI_API_KEY: z.string().optional().default(""),
+  GOOGLE_AI_MODEL: z.string().default("gemini-2.5-flash"),
   TELEGRAM_BOT_TOKEN: z.string().optional().default(""),
   TELEGRAM_HANDOFF_CHAT_ID: z.string().optional().default(""),
   PLATFORM_REGISTER_URL: z.string().optional().default(""),

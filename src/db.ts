@@ -47,6 +47,8 @@ export function migrate(db: DatabaseSync): void {
       a2c_account_phone TEXT DEFAULT '',
       openai_api_key TEXT DEFAULT '',
       openai_model TEXT DEFAULT 'gpt-5-mini',
+      google_ai_api_key TEXT DEFAULT '',
+      google_ai_model TEXT DEFAULT 'gemini-2.5-flash',
       telegram_bot_token TEXT DEFAULT '',
       telegram_handoff_chat_id TEXT DEFAULT '',
       telegram_handoff_chat_title TEXT DEFAULT '',
@@ -281,6 +283,8 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_title", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_status", "TEXT DEFAULT 'unbound'");
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_error", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_configs", "google_ai_api_key", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_configs", "google_ai_model", "TEXT DEFAULT 'gemini-2.5-flash'");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");

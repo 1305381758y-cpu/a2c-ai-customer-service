@@ -1,5 +1,6 @@
-import OpenAI from "openai";
+import type { Part } from "@google/genai";
 import mammoth from "mammoth";
+import { generateGeminiText } from "../clients/gemini.js";
 import { parseTrainingSamples, type ImportedTrainingSample } from "./trainingSamples.js";
 
 export type TrainingMaterialSourceType = "csv" | "xlsx" | "docx" | "txt" | "image";
@@ -23,8 +24,8 @@ export async function parseTrainingMaterial(input: {
   buffer: Buffer;
   filename: string;
   mimeType?: string;
-  openaiApiKey?: string;
-  openaiModel?: string;
+  googleAiApiKey?: string;
+  googleAiModel?: string;
 }): Promise<ParsedTrainingMaterial> {
   const sourceType = detectSourceType(input.filename, input.mimeType);
   const warnings: string[] = [];
@@ -46,7 +47,7 @@ export async function parseTrainingMaterial(input: {
   }
 
   if (sourceType === "image") {
-    const text = await extractImageText(input.buffer, input.filename, input.mimeType, input.openaiApiKey, input.openaiModel, warnings);
+    const text = await extractImageText(input.buffer, input.filename, input.mimeType, input.googleAiApiKey, input.googleAiModel, warnings);
     return buildTextMaterial(sourceType, input.filename, text, warnings);
   }
 
@@ -87,8 +88,8 @@ async function extractImageText(
   buffer: Buffer,
   filename: string,
   mimeType = "",
-  openaiApiKey = "",
-  openaiModel = "gpt-5-mini",
+  googleAiApiKey = "",
+  googleAiModel = "gemini-2.5-flash",
   warnings: string[]
 ): Promise<string> {
   const name = filename.toLowerCase();
@@ -107,25 +108,17 @@ async function extractImageText(
     if (text) return text;
   }
 
-  if (!openaiApiKey) {
-    warnings.push("图片 OCR 需要配置商户 OpenAI Key；当前图片未提取到文字");
+  if (!googleAiApiKey) {
+    warnings.push("图片 OCR 需要配置商户 Google AI Studio Key；当前图片未提取到文字");
     return "";
   }
 
-  const client = new OpenAI({ apiKey: openaiApiKey });
   const mediaType = mimeType || guessImageMime(filename);
-  const dataUrl = `data:${mediaType};base64,${buffer.toString("base64")}`;
-  const response = await client.responses.create({
-    model: openaiModel,
-    input: [{
-      role: "user",
-      content: [
-        { type: "input_text", text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" },
-        { type: "input_image", image_url: dataUrl, detail: "auto" }
-      ]
-    }]
-  });
-  return response.output_text.trim();
+  const contents: Part[] = [
+    { inlineData: { mimeType: mediaType, data: buffer.toString("base64") } },
+    { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
+  ];
+  return generateGeminiText({ GOOGLE_AI_API_KEY: googleAiApiKey, GOOGLE_AI_MODEL: googleAiModel }, contents);
 }
 
 function guessImageMime(filename: string): string {

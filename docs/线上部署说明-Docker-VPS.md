@@ -37,8 +37,8 @@ A2C_BASE_URL=https://openapi.a2c.chat/api/openapi
 A2C_APP_ID=A2C开放平台App ID
 A2C_APP_SECRET=A2C开放平台App Secret
 
-OPENAI_API_KEY=OpenAI API Key
-OPENAI_MODEL=gpt-5-mini
+GOOGLE_AI_API_KEY=Google AI Studio API Key
+GOOGLE_AI_MODEL=gemini-2.5-flash
 
 TELEGRAM_BOT_TOKEN=Telegram机器人Token
 TELEGRAM_HANDOFF_CHAT_ID=人工接管群ID

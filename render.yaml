@@ -27,10 +27,10 @@ services:
         sync: false
       - key: A2C_APP_SECRET
         sync: false
-      - key: OPENAI_API_KEY
+      - key: GOOGLE_AI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5-mini
+      - key: GOOGLE_AI_MODEL
+        value: gemini-2.5-flash
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_HANDOFF_CHAT_ID

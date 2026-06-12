@@ -1,5 +1,5 @@
-import OpenAI from "openai";
 import type { AppConfig } from "../config.js";
+import { generateGeminiText, geminiApiKey } from "../clients/gemini.js";
 
 export interface TranslationResult {
   originalText: string;
@@ -37,40 +37,26 @@ export async function translateForOperator(config: AppConfig, text: string, sour
 async function translateText(config: AppConfig, text: string, targetLanguage: string, systemPrompt: string): Promise<TranslationResult> {
   const originalText = text.trim();
   const language = targetLanguage || "unknown";
-  const apiKey = config.OPENAI_API_KEY === "CHANGE_ME" ? "" : config.OPENAI_API_KEY;
+  const apiKey = geminiApiKey(config);
   if (!originalText || !apiKey || language === "unknown") {
     return {
       originalText,
       translatedText: originalText,
       targetLanguage: language,
       status: "skipped",
-      error: !apiKey ? "OpenAI Key 未配置，无法生成译文" : language === "unknown" ? "客户语言未知，无法确定翻译目标语言" : "内容为空"
+      error: !apiKey ? "Google AI Studio Key 未配置，无法生成译文" : language === "unknown" ? "客户语言未知，无法确定翻译目标语言" : "内容为空"
     };
   }
 
   try {
-    const client = new OpenAI({ apiKey });
-    const response = await client.responses.create({
-      model: config.OPENAI_MODEL,
-      input: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: JSON.stringify({ targetLanguage: language, text: originalText })
-        }
-      ]
-    });
-    const translatedText = response.output_text.trim() || originalText;
+    const translatedText = (await generateGeminiText(config, JSON.stringify({ targetLanguage: language, text: originalText }), { systemInstruction: systemPrompt })).trim() || originalText;
     const sameAsOriginal = normalizeForCompare(translatedText) === normalizeForCompare(originalText);
     return {
       originalText,
       translatedText,
       targetLanguage: language,
       status: sameAsOriginal ? "failed" : "translated",
-      error: sameAsOriginal ? "译文与原文相同，请检查 OpenAI Key、模型或翻译能力" : undefined
+      error: sameAsOriginal ? "译文与原文相同，请检查 Google AI Studio Key、Gemini 模型或翻译能力" : undefined
     };
   } catch (error) {
     return {

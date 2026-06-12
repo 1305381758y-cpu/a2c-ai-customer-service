@@ -62,7 +62,7 @@ describe("auth api", () => {
       method: "PATCH",
       url: `/api/admin/merchants/${merchantId}/config`,
       headers: { cookie },
-      payload: { a2cAppSecret: "real-secret-value", openaiApiKey: "sk-real-value" }
+      payload: { a2cAppSecret: "real-secret-value", googleAiApiKey: "gemini-real-value" }
     });
     const masked = await app.inject({
       method: "GET",
