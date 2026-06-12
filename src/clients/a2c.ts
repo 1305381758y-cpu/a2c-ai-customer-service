@@ -1,5 +1,7 @@
 import type { AppConfig } from "../config.js";
 
+const A2C_TIMEOUT_MS = 12_000;
+
 export interface A2CAccount {
   apiPhone: string;
   wabaId?: string;
@@ -32,6 +34,7 @@ export class A2CClient {
     const token = await this.getToken();
     const response = await fetch(`${this.config.A2C_BASE_URL}/v1/messages`, {
       method: "POST",
+      signal: AbortSignal.timeout(A2C_TIMEOUT_MS),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
@@ -57,6 +60,7 @@ export class A2CClient {
     const token = await this.getToken();
     const response = await fetch(`${this.config.A2C_BASE_URL}/v1/accounts`, {
       method: "GET",
+      signal: AbortSignal.timeout(A2C_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token}` }
     });
     const json = (await response.json()) as { code?: number; msg?: string; data?: A2CAccount[] };
@@ -72,6 +76,7 @@ export class A2CClient {
 
     const response = await fetch(`${this.config.A2C_BASE_URL}/open/auth/token`, {
       method: "POST",
+      signal: AbortSignal.timeout(A2C_TIMEOUT_MS),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ appId: this.config.A2C_APP_ID, appSecret: this.config.A2C_APP_SECRET })
     });

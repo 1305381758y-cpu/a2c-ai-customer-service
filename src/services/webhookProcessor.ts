@@ -125,6 +125,8 @@ export class WebhookProcessor {
     }
 
     let externalId = "";
+    let a2cSendStatus: "sent" | "failed" = "sent";
+    let a2cSendError = "";
     try {
       externalId = await a2c.sendMessage({
         to: data.from,
@@ -132,11 +134,14 @@ export class WebhookProcessor {
         type: "text",
         content: aiReply.reply
       });
+      if (!externalId) externalId = `a2c_sent:${data.messageId || payload.id}:${Date.now()}`;
     } catch (error) {
-      externalId = `send_failed:${error instanceof Error ? error.message : "unknown"}`;
+      a2cSendStatus = "failed";
+      a2cSendError = error instanceof Error ? error.message : "unknown";
+      externalId = `send_failed:${data.messageId || payload.id}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
     }
 
-    this.repos.insertMessage({
+    const outbound = this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
       externalId,
@@ -144,13 +149,20 @@ export class WebhookProcessor {
       msgType: "text",
       language: aiReply.language || conversation.language,
       intent: "unknown",
-      rawPayload: { samples: samples.map((sample) => sample.id), trainingMaterials: trainingMaterials.map((item) => item.id), aiFallback: Boolean(aiReply.fallback), aiError: aiReply.error || "" }
+      rawPayload: {
+        samples: samples.map((sample) => sample.id),
+        trainingMaterials: trainingMaterials.map((item) => item.id),
+        aiFallback: Boolean(aiReply.fallback),
+        aiError: aiReply.error || "",
+        a2cSendStatus,
+        a2cSendError
+      }
     });
     this.repos.updateConversation(conversation);
     this.repos.upsertCustomerFromConversation(conversation);
     this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
-    return { status: "replied", conversationId: conversation.id };
+    return { status: a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
   }
 
   private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string, telegram = this.telegram): Promise<void> {

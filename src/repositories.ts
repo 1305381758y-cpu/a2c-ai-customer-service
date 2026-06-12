@@ -426,7 +426,31 @@ export class Repositories {
       }
       return { inserted: true };
     } catch (error) {
-      if (error instanceof Error && error.message.includes("UNIQUE")) return { inserted: false };
+      if (error instanceof Error && error.message.includes("UNIQUE")) {
+        if (input.direction === "outbound") {
+          this.db.sqlite
+            .prepare(`
+              INSERT INTO messages
+                (merchant_id, conversation_id, direction, external_id, content, msg_type, language, intent, phone_detected, telegram_detected, raw_payload)
+              VALUES ((SELECT merchant_id FROM conversations WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `)
+            .run(
+              input.conversationId,
+              input.conversationId,
+              input.direction,
+              `local_outbound:${input.conversationId}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+              input.content,
+              input.msgType,
+              input.language,
+              input.intent,
+              input.phoneDetected ?? "",
+              input.telegramDetected ?? "",
+              JSON.stringify({ ...(typeof input.rawPayload === "object" && input.rawPayload !== null ? input.rawPayload as Record<string, unknown> : {}), externalIdConflict: input.externalId ?? "", whatsappDetected: input.whatsappDetected ?? "" })
+            );
+          return { inserted: true };
+        }
+        return { inserted: false };
+      }
       throw error;
     }
   }

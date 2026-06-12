@@ -205,7 +205,7 @@ describe("portal api", () => {
       }
     });
     expect(webhook.statusCode).toBe(200);
-    expect(webhook.json().status).toBe("replied");
+    expect(webhook.json().status).toBe("reply_send_failed");
 
     const conversations = await app.inject({
       method: "GET",
@@ -227,6 +227,9 @@ describe("portal api", () => {
     });
     const outbound = messages.json().rows.find((row: { direction: string }) => row.direction === "outbound");
     expect(outbound.content).toBe("请点击专属链接注册：https://merchant.example/register");
+    expect(outbound.rawPayload).toMatchObject({
+      a2cSendStatus: "failed"
+    });
 
     const memory = await app.inject({
       method: "GET",
@@ -641,7 +644,7 @@ describe("portal api", () => {
       }
     });
     expect(webhook.statusCode).toBe(200);
-    expect(webhook.json().status).toBe("replied");
+    expect(webhook.json().status).toBe("reply_send_failed");
 
     const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
     expect(conversations.json().rows).toHaveLength(1);
