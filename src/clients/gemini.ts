@@ -28,6 +28,8 @@ export interface AiReply {
 
 export type GeminiConfig = Pick<AppConfig, "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">;
 
+const GEMINI_TIMEOUT_MS = 15_000;
+
 const replySchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -68,10 +70,14 @@ export class GeminiReplyClient {
           country: input.country ?? null
         }),
         config: {
+          abortSignal: timeoutSignal(),
+          httpOptions: { timeout: GEMINI_TIMEOUT_MS },
           systemInstruction: buildSystemPrompt(this.config),
           responseMimeType: "application/json",
           responseSchema: replySchema,
-          temperature: 0.25
+          temperature: 0.25,
+          maxOutputTokens: 800,
+          thinkingConfig: { thinkingBudget: 0 }
         }
       });
 
@@ -97,8 +103,12 @@ export async function generateGeminiText(
     model: geminiModel(config),
     contents,
     config: {
+      abortSignal: timeoutSignal(),
+      httpOptions: { timeout: GEMINI_TIMEOUT_MS },
       systemInstruction: options.systemInstruction,
-      temperature: options.temperature ?? 0.2
+      temperature: options.temperature ?? 0.2,
+      maxOutputTokens: 1200,
+      thinkingConfig: { thinkingBudget: 0 }
     }
   });
   return response.text?.trim() || "";
@@ -111,6 +121,10 @@ export function geminiApiKey(config: GeminiConfig): string {
 
 export function geminiModel(config: GeminiConfig): string {
   return config.GOOGLE_AI_MODEL || "gemini-2.5-flash";
+}
+
+function timeoutSignal(): AbortSignal {
+  return AbortSignal.timeout(GEMINI_TIMEOUT_MS);
 }
 
 function buildSystemPrompt(config: AppConfig): string {
