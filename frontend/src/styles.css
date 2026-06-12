@@ -636,6 +636,122 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.conversation-tools {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.conversation-tools summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 9px 11px;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 850;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.conversation-tools summary::-webkit-details-marker { display: none; }
+.conversation-tools summary::after {
+  content: "+";
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 800;
+}
+.conversation-tools[open] summary {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+}
+.conversation-tools[open] summary::after { content: "-"; }
+.conversation-tools .filter-bar,
+.conversation-tools .proactive-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.proactive-panel.compact {
+  padding: 10px;
+  background: #fff;
+}
+.conversation-list {
+  gap: 6px;
+  padding-right: 3px;
+}
+.conversation-row {
+  width: 100%;
+  height: 68px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  display: grid;
+  grid-template-rows: 20px 18px 20px;
+  gap: 3px;
+  padding: 8px 10px;
+  text-align: left;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .03);
+}
+.conversation-row:hover {
+  border-color: #b7cdfb;
+  background: #f6f9ff;
+}
+.conversation-row.active {
+  border-color: var(--brand);
+  background: #edf4ff;
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.conversation-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.conversation-row-main strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+.conversation-row-phone {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-strong);
+  font-size: 12px;
+  line-height: 18px;
+}
+.conversation-row-meta {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.conversation-row-meta span {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 84px;
+  height: 19px;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 10px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .badge {
   display: inline-flex;
   min-width: 22px;

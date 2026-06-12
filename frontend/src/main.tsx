@@ -374,7 +374,61 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
   };
 
-  return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}><section className="account-list"><div className="panel-title"><h3>客服账号</h3><AsyncButton busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>同步账号</AsyncButton></div>{accounts.length ? accounts.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}><strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong><span title={account.apiPhone}>{account.apiPhone}</span><small>{countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</small></button>) : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}</section><section className="customer-list"><div className="panel-title"><h3>客户</h3>{!customerCollapsed && <span>{selectedAccount ? `${countryLabel(selectedAccount.countryName)} · ${selectedAccount.apiPhone}` : "未选择客服账号"}</span>}<button className="ghost icon-only" title={customerCollapsed ? "展开客户列表" : "收起客户列表"} onClick={() => setCustomerCollapsed(!customerCollapsed)}>{customerCollapsed ? <ChevronsRight size={16}/> : <ChevronsLeft size={16}/>}</button></div>{!customerCollapsed && <><FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} /><div className="proactive-panel"><strong>新客户</strong><input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(e) => setNewCustomer({ ...newCustomer, customerPhone: e.target.value })} /><input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(e) => setNewCustomer({ ...newCustomer, nickname: e.target.value })} /><button disabled={!selectedAccount} onClick={openNewCustomer}>打开对话框</button>{error && <div className="error">{error}</div>}</div><div className="stack-list">{rows.map((row) => <button key={row.id} className={`list-item conversation-card ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }}><strong title={row.nickname || row.customerPhone}>{row.nickname || row.customerPhone}{conversationUnread(row.id) > 0 && <span className="badge">{conversationUnread(row.id)}</span>}</strong><span title={row.customerPhone}>{row.customerPhone}</span><small className="conversation-tags"><span>{countryLabel(row.countryName)}</span><span>{languageName(row.language)}</span><span>{label(row.stage)}</span><span>{label(row.handoffStatus)}</span></small></button>)}{!rows.length && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}</div></>}</section><section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以填写新客户号码后主动发送第一条消息。</p></div>}</section></div>;
+  return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}>
+    <section className="account-list">
+      <div className="panel-title">
+        <h3>客服账号</h3>
+        <AsyncButton busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>同步账号</AsyncButton>
+      </div>
+      {accounts.length ? accounts.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}>
+        <strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong>
+        <span title={account.apiPhone}>{account.apiPhone}</span>
+        <small>{countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</small>
+      </button>) : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}
+    </section>
+    <section className="customer-list">
+      <div className="panel-title">
+        <h3>客户</h3>
+        {!customerCollapsed && <span>{selectedAccount ? `${countryLabel(selectedAccount.countryName)} · ${selectedAccount.apiPhone}` : "未选择客服账号"}</span>}
+        <button className="ghost icon-only" title={customerCollapsed ? "展开客户列表" : "收起客户列表"} onClick={() => setCustomerCollapsed(!customerCollapsed)}>{customerCollapsed ? <ChevronsRight size={16}/> : <ChevronsLeft size={16}/>}</button>
+      </div>
+      {!customerCollapsed && <>
+        <details className="conversation-tools">
+          <summary>筛选客户</summary>
+          <FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
+        </details>
+        <details className="conversation-tools">
+          <summary>主动新建对话</summary>
+          <div className="proactive-panel compact">
+            <input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(e) => setNewCustomer({ ...newCustomer, customerPhone: e.target.value })} />
+            <input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(e) => setNewCustomer({ ...newCustomer, nickname: e.target.value })} />
+            <button disabled={!selectedAccount} onClick={openNewCustomer}>打开对话框</button>
+            {error && <div className="error">{error}</div>}
+          </div>
+        </details>
+        <div className="stack-list conversation-list">
+          {rows.map((row) => {
+            const unreadCount = conversationUnread(row.id);
+            return <button key={row.id} className={`conversation-row ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }}>
+              <span className="conversation-row-main">
+                <strong title={row.nickname || row.customerPhone}>{row.nickname || row.customerPhone}</strong>
+                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+              </span>
+              <span className="conversation-row-phone" title={row.customerPhone}>{row.customerPhone || "未记录客户号"}</span>
+              <span className="conversation-row-meta">
+                <span>{countryLabel(row.countryName)}</span>
+                <span>{languageName(row.language)}</span>
+                <span>{label(row.stage)}</span>
+                <span>{label(row.handoffStatus)}</span>
+              </span>
+            </button>;
+          })}
+          {!rows.length && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}
+        </div>
+      </>}
+    </section>
+    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以填写新客户号码后主动发送第一条消息。</p></div>}</section>
+  </div>;
 }
 
 function ProactiveConversationDetail({ account, target, onCreated }: { account: A2CAccount; target: { customerPhone: string; nickname: string }; onCreated: (conversation: Conversation) => Promise<void> }) {
