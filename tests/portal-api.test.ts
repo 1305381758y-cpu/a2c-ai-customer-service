@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createHmac } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
+import { openDb } from "../src/db.js";
+import { Repositories } from "../src/repositories.js";
 
 function testConfig() {
   return loadConfig({
@@ -369,6 +371,28 @@ describe("portal api", () => {
     expect(customersAfterDelete.json().rows).toHaveLength(0);
 
     await app.close();
+  });
+
+  it("hard deletes legacy customer memories that still point to the removed conversation", async () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const conversation = repos.getOrCreateConversation("legacy-customer", "legacy-a2c", "历史客户", "default", "default:default");
+    repos.updateCustomerMemoryFromMessage(conversation, { intent: "greeting", content: "hello", direction: "inbound" });
+    db.sqlite
+      .prepare(`
+        INSERT INTO customer_memories
+          (merchant_id, country_id, customer_key, conversation_id, language, stage, last_intent, summary)
+        VALUES ('default', 'legacy-country', 'legacy-customer-key', ?, 'zh', 'need_platform_register', 'unknown', 'legacy stale memory')
+      `)
+      .run(conversation.id);
+
+    expect(repos.deleteConversation(conversation.id, "default")).toBe(true);
+    expect(repos.getConversation(conversation.id)).toBeUndefined();
+    const staleMemories = db.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM customer_memories WHERE conversation_id = ?")
+      .get(conversation.id) as { count: number };
+    expect(staleMemories.count).toBe(0);
+    db.sqlite.close();
   });
 
   it("imports merchant training materials into samples and knowledge with tenant isolation", async () => {

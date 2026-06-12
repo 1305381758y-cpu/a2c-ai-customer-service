@@ -669,6 +669,7 @@ export class Repositories {
           .prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND country_id = ? AND customer_key = ?")
           .run(mapped.merchantId, mapped.countryId, mapped.customerPhone);
       }
+      this.db.sqlite.prepare("DELETE FROM customer_memories WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
       const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
