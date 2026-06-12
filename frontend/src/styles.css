@@ -49,6 +49,7 @@ tbody tr.selected { background: #e8f1ff; box-shadow: inset 3px 0 0 #155eef; }
 .list-item.active { background: #e8f1ff; border-color: #155eef; box-shadow: inset 3px 0 0 #155eef; }
 .list-item strong, .list-item span, .list-item small { overflow-wrap: anywhere; }
 .list-item span, .list-item small { color: #667085; }
+.badge { display: inline-flex; min-width: 22px; height: 22px; padding: 0 7px; margin-left: 8px; border-radius: 999px; background: #d92d20; color: #fff; font-size: 12px; align-items: center; justify-content: center; vertical-align: middle; }
 .proactive-panel { display: grid; gap: 8px; padding: 10px; border: 1px solid #edf0f5; border-radius: 8px; background: #f8fafc; }
 .proactive-panel strong { color: #344054; }
 .chat-pane { display: grid; min-width: 0; }
@@ -86,6 +87,7 @@ tbody tr.selected { background: #e8f1ff; box-shadow: inset 3px 0 0 #155eef; }
 .account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .account-actions button { background: #344054; }
 .account-actions button:hover { background: #1d2939; }
+.account-bind { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px; border: 1px solid #edf0f5; border-radius: 8px; background: #f8fafc; }
 .config-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 12px 0 16px; }
 .config-checks article { border: 1px solid #e4e8f0; border-radius: 8px; padding: 12px; background: #f8fafc; display: grid; gap: 6px; }
 .config-checks article.ok { border-color: #abefc6; background: #f6fef9; }

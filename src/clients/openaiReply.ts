@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { AppConfig } from "../config.js";
-import type { Conversation, CustomerMemoryRecord, KnowledgeItemRecord, TrainingMaterialItemRecord } from "../repositories.js";
+import type { Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 
 export interface ReplyInput {
@@ -11,6 +11,7 @@ export interface ReplyInput {
   knowledge: KnowledgeItemRecord[];
   trainingMaterials?: TrainingMaterialItemRecord[];
   memory?: CustomerMemoryRecord;
+  country?: MerchantCountryRecord;
 }
 
 export interface AiReply {
@@ -19,6 +20,7 @@ export interface AiReply {
   stage: string;
   extractedPhone: string;
   extractedTelegram: string;
+  extractedWhatsApp: string;
   shouldHandoff: boolean;
   fallback?: boolean;
   error?: string;
@@ -52,7 +54,8 @@ export class OpenAIReplyClient {
               relevantTrainingSamples: input.samples,
               knowledgeItems: input.knowledge,
               trainingMaterials: input.trainingMaterials ?? [],
-              customerMemory: input.memory ?? null
+              customerMemory: input.memory ?? null,
+              country: input.country ?? null
             })
           }
         ],
@@ -69,9 +72,10 @@ export class OpenAIReplyClient {
                 stage: { type: "string" },
                 extractedPhone: { type: "string" },
                 extractedTelegram: { type: "string" },
+                extractedWhatsApp: { type: "string" },
                 shouldHandoff: { type: "boolean" }
               },
-              required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "shouldHandoff"]
+              required: ["reply", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "shouldHandoff"]
             }
           }
         }
@@ -93,8 +97,8 @@ function buildSystemPrompt(config: AppConfig): string {
 
 目标：
 1. 引导客户完成平台开户。
-2. 引导客户注册或提供 Telegram 账号。
-3. 当客户已提供手机号和 Telegram 账号后，停止继续引导，进入人工接管。
+2. 根据当前国家配置，引导客户提供所需联系方式：手机号、Telegram 或 WhatsApp。
+3. 当客户满足当前国家 completion targets 后，停止继续引导，进入人工接管。
 
 语言规则：
 - 必须使用客户最近消息的主要语言回复。
@@ -105,15 +109,16 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 knowledgeItems 中启用的 FAQ、话术、规则和禁用表达。
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
 - 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
+- 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。
 - 不要要求客户提供密码、验证码、支付信息或证件敏感信息。
 - 每次只给客户当前最需要的一步，简短自然，像真人客服。
-- 平台注册链接：${config.PLATFORM_REGISTER_URL || "未配置"}
-- Telegram 注册说明链接：${config.TG_REGISTER_GUIDE_URL || "未配置"}
+- 全局平台注册链接：${config.PLATFORM_REGISTER_URL || "未配置"}
+- 全局 Telegram 注册说明链接：${config.TG_REGISTER_GUIDE_URL || "未配置"}
 
-输出必须是 JSON，字段为 reply、language、stage、extractedPhone、extractedTelegram、shouldHandoff。
+输出必须是 JSON，字段为 reply、language、stage、extractedPhone、extractedTelegram、extractedWhatsApp、shouldHandoff。
 `;
 }
 
@@ -127,6 +132,7 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
     stage: input.conversation.stage,
     extractedPhone: input.conversation.extractedPhone,
     extractedTelegram: input.conversation.extractedTelegram,
+    extractedWhatsApp: input.conversation.extractedWhatsApp,
     shouldHandoff: false,
     fallback: true
   };

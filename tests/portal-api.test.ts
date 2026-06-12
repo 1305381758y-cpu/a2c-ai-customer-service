@@ -1045,4 +1045,108 @@ describe("portal api", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("isolates conversations, memories, and unread counts by A2C account country", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "country-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({
+          code: 200,
+          data: [
+            { apiPhone: "br-a2c", verifiedName: "Brasil" },
+            { apiPhone: "ph-a2c", verifiedName: "Philippines" }
+          ]
+        });
+      }
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: "country-message" });
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "多国家商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "countries@test.local", name: "多国家", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "countries@test.local", "Merchant123456");
+
+      const br = await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "br", name: "Brazil", defaultLanguage: "pt-BR", platformRegisterUrl: "https://br.example/register" }
+      });
+      const ph = await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "ph", name: "Philippines", defaultLanguage: "en", requireTelegram: false, requireWhatsApp: true }
+      });
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://a2c.test/api/openapi", a2cAppId: "app-id", a2cAppSecret: "app-secret" }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accounts = await app.inject({ method: "GET", url: "/api/merchant/a2c/accounts", headers: { cookie: merchantCookie } });
+      const brAccount = accounts.json().rows.find((row: { apiPhone: string }) => row.apiPhone === "br-a2c");
+      const phAccount = accounts.json().rows.find((row: { apiPhone: string }) => row.apiPhone === "ph-a2c");
+      await app.inject({ method: "PATCH", url: `/api/merchant/a2c/accounts/${brAccount.id}`, headers: { cookie: merchantCookie }, payload: { countryId: br.json().id } });
+      await app.inject({ method: "PATCH", url: `/api/merchant/a2c/accounts/${phAccount.id}`, headers: { cookie: merchantCookie }, payload: { countryId: ph.json().id } });
+
+      for (const [to, messageId] of [["br-a2c", "country-br-message"], ["ph-a2c", "country-ph-message"]] as const) {
+        await app.inject({
+          method: "POST",
+          url: "/webhooks/a2c",
+          payload: {
+            id: messageId,
+            timestamp: Math.floor(Date.now() / 1000),
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId,
+              content: "Hello, I need help",
+              from: "same-customer",
+              to,
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000)
+            }
+          }
+        });
+      }
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      expect(conversations.json().rows).toHaveLength(2);
+      expect(new Set(conversations.json().rows.map((row: { countryId: string }) => row.countryId))).toEqual(new Set([br.json().id, ph.json().id]));
+
+      for (const row of conversations.json().rows as Array<{ id: string; countryId: string }>) {
+        const memory = await app.inject({ method: "GET", url: `/api/merchant/conversations/${row.id}/memory`, headers: { cookie: merchantCookie } });
+        expect(memory.json().countryId).toBe(row.countryId);
+      }
+
+      const unread = await app.inject({ method: "GET", url: "/api/merchant/conversations/unread-summary", headers: { cookie: merchantCookie } });
+      expect(unread.json().rows.map((row: { a2cAccountPhone: string; unreadCount: number }) => [row.a2cAccountPhone, row.unreadCount]).sort()).toEqual([["br-a2c", 1], ["ph-a2c", 1]]);
+
+      const brConversation = conversations.json().rows.find((row: { a2cAccountPhone: string }) => row.a2cAccountPhone === "br-a2c");
+      await app.inject({ method: "POST", url: `/api/merchant/conversations/${brConversation.id}/read`, headers: { cookie: merchantCookie } });
+      const unreadAfterRead = await app.inject({ method: "GET", url: "/api/merchant/conversations/unread-summary", headers: { cookie: merchantCookie } });
+      expect(unreadAfterRead.json().rows.map((row: { a2cAccountPhone: string }) => row.a2cAccountPhone)).toEqual(["ph-a2c"]);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

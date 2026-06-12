@@ -5,6 +5,7 @@ export interface MessageAnalysis {
   intent: IntentLabel;
   phone: string;
   telegram: string;
+  whatsapp: string;
   stage: ConversationStage;
 }
 
@@ -31,6 +32,11 @@ export function extractTelegram(text: string): string {
   return "";
 }
 
+export function extractWhatsApp(text: string): string {
+  if (!/(whatsapp|what's app|\bwa\b|\bws\b|zap|wpp)/i.test(text)) return "";
+  return extractPhone(text);
+}
+
 export function detectLanguage(text: string, fallback = "unknown"): string {
   if (/[\u0E00-\u0E7F]/.test(text)) return "th";
   if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
@@ -47,10 +53,11 @@ export function analyzeMessage(text: string, previousLanguage = "unknown"): Mess
   const language = detectLanguage(text, previousLanguage);
   const phone = extractPhone(text);
   const telegram = extractTelegram(text);
+  const whatsapp = extractWhatsApp(text);
   const intent = detectIntent(text, Boolean(phone), Boolean(telegram));
   const stage = inferStage(intent, Boolean(phone), Boolean(telegram));
 
-  return { language, intent, phone, telegram, stage };
+  return { language, intent, phone, telegram, whatsapp, stage };
 }
 
 function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): IntentLabel {

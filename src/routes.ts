@@ -59,6 +59,19 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantCountries(request.params.id) }));
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries", { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      return deps.repos.createMerchantCountry(request.params.id, request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
+    }
+  });
+  app.patch<{ Params: { id: string; countryId: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries/:countryId", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.patchMerchantCountry(request.params.countryId, request.params.id, request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "country not found" });
+    return row;
+  });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: request.params.id }) }));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: adminOnly }, async (request, reply) => syncA2CAccounts(request, reply, deps, request.params.id));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id", { preHandler: adminOnly }, async (request, reply) => {
@@ -73,9 +86,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listUsers({ merchantId: request.query.merchantId }).map(maskUser)
   }));
-  app.get<{ Querystring: { merchantId?: string; type?: string; enabled?: string } }>("/api/admin/knowledge", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; type?: string; enabled?: string } }>("/api/admin/knowledge", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listKnowledgeItems({
       merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
       type: request.query.type,
       enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
     })
@@ -92,9 +106,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "knowledge item not found" });
     return row;
   });
-  app.get<{ Querystring: { merchantId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/admin/training-samples", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/admin/training-samples", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
       language: request.query.language,
       intent: request.query.intent,
       stage: request.query.stage,
@@ -106,9 +121,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "sample not found" });
     return row;
   });
-  app.get<{ Querystring: { merchantId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/admin/training-materials", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/admin/training-materials", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listTrainingMaterials({
       merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
       sourceType: request.query.sourceType,
       status: request.query.status,
       limit: request.query.limit ? Number(request.query.limit) : undefined
@@ -120,9 +136,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!material) return reply.code(404).send({ error: "material not found" });
     return { material, items: deps.repos.listTrainingMaterialItems(id) };
   });
-  app.get<{ Querystring: { merchantId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
       status: request.query.status,
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
@@ -130,9 +147,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
-  app.get<{ Querystring: { merchantId?: string; status?: string; language?: string; limit?: string } }>("/api/admin/customers", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; language?: string; limit?: string } }>("/api/admin/customers", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listCustomers({
       merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
       status: request.query.status,
       language: request.query.language,
       limit: request.query.limit ? Number(request.query.limit) : undefined
@@ -198,6 +216,19 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
   app.get("/api/merchant/config/check", { preHandler: merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
+  app.get("/api/merchant/countries", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
+  app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: merchantAdmins }, async (request, reply) => {
+    try {
+      return deps.repos.createMerchantCountry(scopedMerchantId(request), request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
+    }
+  });
+  app.patch<{ Params: { countryId: string }; Body: Record<string, unknown> }>("/api/merchant/countries/:countryId", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.patchMerchantCountry(request.params.countryId, scopedMerchantId(request), request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "country not found" });
+    return row;
+  });
   app.get("/api/merchant/a2c/accounts", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: scopedMerchantId(request) }) }));
   app.post("/api/merchant/a2c/accounts/sync", { preHandler: merchantAdmins }, async (request, reply) => syncA2CAccounts(request, reply, deps, scopedMerchantId(request)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/a2c/accounts/:id", { preHandler: merchantAdmins }, async (request, reply) => {
@@ -208,9 +239,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
   });
   app.post("/api/merchant/telegram/setup-webhook", { preHandler: merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
-  app.get<{ Querystring: { type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listKnowledgeItems({
       merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
       type: request.query.type,
       enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
     })
@@ -230,9 +262,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
 
   app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
   app.post("/api/merchant/training-materials/import", { preHandler: merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
-  app.get<{ Querystring: { sourceType?: string; status?: string; limit?: string } }>("/api/merchant/training-materials", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/merchant/training-materials", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listTrainingMaterials({
       merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
       sourceType: request.query.sourceType,
       status: request.query.status,
       limit: request.query.limit ? Number(request.query.limit) : undefined
@@ -245,9 +278,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!material) return reply.code(404).send({ error: "material not found" });
     return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
   });
-  app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
       language: request.query.language,
       intent: request.query.intent,
       stage: request.query.stage,
@@ -262,9 +296,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return row;
   });
 
-  app.get<{ Querystring: { status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
       status: request.query.status,
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
@@ -272,9 +307,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
-  app.get<{ Querystring: { status?: string; language?: string; limit?: string } }>("/api/merchant/customers", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; status?: string; language?: string; limit?: string } }>("/api/merchant/customers", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listCustomers({
       merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
       status: request.query.status,
       language: request.query.language,
       limit: request.query.limit ? Number(request.query.limit) : undefined
@@ -284,6 +320,14 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
+  });
+  app.get("/api/merchant/conversations/unread-summary", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.unreadSummary(scopedMerchantId(request))
+  }));
+  app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/read", { preHandler: merchantRoles }, async (request, reply) => {
+    const row = deps.repos.markConversationRead(request.params.id, scopedMerchantId(request));
+    if (!row || row.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
+    return row;
   });
   app.get<{ Params: { id: string } }>("/api/merchant/conversations/:id/memory", { preHandler: merchantRoles }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
@@ -307,7 +351,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
-    const runtimeConfig = appConfigForMerchant(deps.config, cfg);
+    const country = deps.repos.getMerchantCountry(conversation.countryId);
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
     const client = new A2CClient(runtimeConfig);
     const type = request.body?.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, request.body?.content || "", conversation.language) : undefined;
@@ -356,7 +401,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
 
     const conversation = deps.repos.getOrCreateConversation(body.customerPhone, apiPhone, body.nickname || "", merchantId);
     deps.repos.upsertCustomerFromConversation(conversation);
-    const runtimeConfig = appConfigForMerchant(deps.config, cfg);
+    const country = deps.repos.getMerchantCountry(conversation.countryId);
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
     const client = new A2CClient(runtimeConfig);
     const type = body.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, body.content || "", conversation.language) : undefined;
@@ -674,10 +720,11 @@ function verifySecret(actual: string, expected: string): boolean {
 async function importSamples(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, merchantId: string) {
   const file = await request.file();
   if (!file) return reply.code(400).send({ error: "file is required" });
+  const countryId = deps.repos.validCountryId(merchantId, readMultipartField(file.fields, "countryId")) || deps.repos.defaultCountryId(merchantId);
   const buffer = await file.toBuffer();
   try {
     const samples = await parseTrainingSamples(buffer, file.filename);
-    const imported = deps.repos.insertTrainingSamples(samples, merchantId);
+    const imported = deps.repos.insertTrainingSamples(samples, merchantId, countryId);
     return { imported, enabled: imported };
   } catch (error) {
     return reply.code(400).send({ error: "invalid training sample file", message: error instanceof Error ? error.message : "unknown parse error" });
@@ -687,6 +734,7 @@ async function importSamples(request: FastifyRequest, reply: FastifyReply, deps:
 async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
   const file = await request.file();
   if (!file) return reply.code(400).send({ error: "file is required" });
+  const countryId = deps.repos.validCountryId(merchantId, readMultipartField(file.fields, "countryId")) || deps.repos.defaultCountryId(merchantId);
   const buffer = await file.toBuffer();
   try {
     const merchantConfig = deps.repos.getMerchantConfig(merchantId);
@@ -699,6 +747,7 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
     });
     const material = deps.repos.createTrainingMaterial({
       merchantId,
+      countryId,
       sourceType: parsed.sourceType,
       filename: file.filename,
       mimeType: file.mimetype,
@@ -709,11 +758,12 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
     let sampleCount = 0;
     let knowledgeCount = 0;
     for (const sample of parsed.samples) {
-      const created = deps.repos.createTrainingSample(merchantId, sample);
+      const created = deps.repos.createTrainingSample(merchantId, sample, countryId);
       sampleCount += 1;
       deps.repos.addTrainingMaterialItem({
         materialId: material.id,
         merchantId,
+        countryId,
         kind: "sample",
         sampleId: created.id,
         title: sample.customerMessage.slice(0, 80),
@@ -725,11 +775,12 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
       });
     }
     for (const item of parsed.knowledge) {
-      const created = deps.repos.createKnowledgeItem(merchantId, item);
+      const created = deps.repos.createKnowledgeItem(merchantId, { ...item, countryId });
       knowledgeCount += 1;
       deps.repos.addTrainingMaterialItem({
         materialId: material.id,
         merchantId,
+        countryId,
         kind: "knowledge",
         knowledgeId: created.id,
         title: item.title,
@@ -782,12 +833,20 @@ function cleanConfigPatch(patch: Record<string, unknown>): Record<string, unknow
   return cleaned;
 }
 
+function readMultipartField(fields: unknown, key: string): string {
+  if (!fields || typeof fields !== "object") return "";
+  const field = (fields as Record<string, unknown>)[key];
+  if (!field || typeof field !== "object") return "";
+  const value = (field as { value?: unknown }).value;
+  return typeof value === "string" ? value : "";
+}
+
 function maskUser<T extends { passwordHash?: string }>(user: T): Omit<T, "passwordHash"> {
   const { passwordHash: _passwordHash, ...rest } = user;
   return rest;
 }
 
-function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord): AppConfig {
+function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord, country?: { platformRegisterUrl?: string; tgRegisterGuideUrl?: string }): AppConfig {
   return {
     ...config,
     A2C_BASE_URL: merchantConfig.a2cBaseUrl || config.A2C_BASE_URL,
@@ -797,8 +856,8 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
-    PLATFORM_REGISTER_URL: merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
-    TG_REGISTER_GUIDE_URL: merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
+    PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
+    TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
   };
 }
 

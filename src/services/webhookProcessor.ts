@@ -44,11 +44,13 @@ export class WebhookProcessor {
     const content = data.content || data.caption || data.url || "";
     const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
-    const runtimeConfig = appConfigForMerchant(this.config, merchantConfig);
+    const countryId = this.repos.countryIdForA2CAccount(merchant.id, data.to);
+    const country = this.repos.getMerchantCountry(countryId) ?? this.repos.ensureDefaultCountry(merchant.id);
+    const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
     const ai = new OpenAIReplyClient(runtimeConfig);
     const a2c = new A2CClient(runtimeConfig);
     const telegram = new TelegramClient(runtimeConfig);
-    const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id);
+    const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     const analysis = analyzeMessage(content, conversation.language);
     const inboundTranslation = await translateForOperator(runtimeConfig, content, analysis.language);
 
@@ -62,6 +64,7 @@ export class WebhookProcessor {
       intent: analysis.intent,
       phoneDetected: analysis.phone,
       telegramDetected: analysis.telegram,
+      whatsappDetected: analysis.whatsapp,
       rawPayload: {
         ...payload,
         originalContent: inboundTranslation.originalText,
@@ -77,10 +80,11 @@ export class WebhookProcessor {
     conversation.stage = analysis.stage;
     conversation.extractedPhone = conversation.extractedPhone || analysis.phone;
     conversation.extractedTelegram = conversation.extractedTelegram || analysis.telegram;
+    conversation.extractedWhatsApp = conversation.extractedWhatsApp || analysis.whatsapp;
     this.repos.upsertCustomerFromConversation(conversation);
     const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
 
-    if (conversation.extractedPhone && conversation.extractedTelegram) {
+    if (isCountryGoalComplete(conversation, country)) {
       conversation.stage = "ready_for_handoff";
       conversation.status = "human_handoff";
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString());
@@ -95,9 +99,9 @@ export class WebhookProcessor {
       return { status: "already_handoff", conversationId: conversation.id };
     }
 
-    const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, enabled: true });
-    const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, enabled: true });
-    const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20);
+    const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
+    const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
+    const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
     const samples = rankSamples(enabledSamples, {
       text: content,
       language: analysis.language,
@@ -105,12 +109,13 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
+    if (aiReply.extractedWhatsApp && !conversation.extractedWhatsApp) conversation.extractedWhatsApp = aiReply.extractedWhatsApp;
     if (aiReply.language) conversation.language = aiReply.language;
-    if (aiReply.stage === "ready_for_handoff" || (conversation.extractedPhone && conversation.extractedTelegram)) {
+    if (aiReply.stage === "ready_for_handoff" || isCountryGoalComplete(conversation, country)) {
       conversation.stage = "ready_for_handoff";
       conversation.status = "human_handoff";
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
@@ -165,7 +170,7 @@ export class WebhookProcessor {
   }
 }
 
-function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord): AppConfig {
+function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord, country?: { platformRegisterUrl?: string; tgRegisterGuideUrl?: string }): AppConfig {
   return {
     ...config,
     A2C_BASE_URL: merchantConfig.a2cBaseUrl || config.A2C_BASE_URL,
@@ -175,7 +180,17 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
-    PLATFORM_REGISTER_URL: merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
-    TG_REGISTER_GUIDE_URL: merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
+    PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
+    TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
   };
+}
+
+function isCountryGoalComplete(
+  conversation: { extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string },
+  country: { requirePhone: boolean; requireTelegram: boolean; requireWhatsApp: boolean }
+): boolean {
+  if (country.requirePhone && !conversation.extractedPhone) return false;
+  if (country.requireTelegram && !conversation.extractedTelegram) return false;
+  if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
+  return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
 }

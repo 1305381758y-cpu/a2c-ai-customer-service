@@ -12,8 +12,10 @@ export function buildHandoffMessage(input: {
 客户定位信息：
 - 客户手机号：${conversation.extractedPhone || conversation.customerPhone}
 - Telegram账号：${conversation.extractedTelegram}
+- WhatsApp账号：${conversation.extractedWhatsApp || "-"}
 - 客户昵称：${conversation.nickname || "-"}
 - 客户语言：${conversation.language}
+- 国家/市场：${conversation.countryName || conversation.countryCode}
 - A2C接收账号：${conversation.a2cAccountPhone}
 - A2C消息ID：${input.lastMessageId || "-"}
 - 会话ID：${conversation.id}
@@ -23,5 +25,5 @@ export function buildHandoffMessage(input: {
 ${input.summary}
 
 建议操作：
-请人工使用上方“客户手机号 + Telegram账号 + A2C接收账号”定位客户，并使用客户语言继续跟进。`;
+请人工使用上方“客户手机号 / Telegram / WhatsApp + 国家/市场 + A2C接收账号”定位客户，并使用客户语言继续跟进。`;
 }
