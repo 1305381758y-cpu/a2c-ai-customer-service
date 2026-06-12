@@ -671,7 +671,7 @@ export class Repositories {
     return this.db.sqlite
       .prepare(`
         SELECT id, country_id AS countryId, customer_message AS customerMessage, standard_reply AS standardReply,
-               stage, intent, language, keywords, priority
+               stage, intent, language, keywords, priority, enabled
         FROM training_samples
         ${where}
         ORDER BY priority DESC, id DESC
@@ -701,6 +701,13 @@ export class Repositories {
     }
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+  }
+
+  disableTrainingSample(id: number, merchantId?: string): boolean {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const result = this.db.sqlite.prepare(`UPDATE training_samples SET enabled = 0, updated_at = CURRENT_TIMESTAMP ${where}`).run(id, ...(merchantId ? [merchantId] : []));
+    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE sample_id = ?").run(id);
+    return result.changes > 0;
   }
 
   listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): KnowledgeItemRecord[] {
@@ -786,6 +793,13 @@ export class Repositories {
     return row ? mapKnowledgeItem(row) : undefined;
   }
 
+  disableKnowledgeItem(id: number, merchantId?: string): boolean {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const result = this.db.sqlite.prepare(`UPDATE knowledge_items SET enabled = 0, updated_at = CURRENT_TIMESTAMP ${where}`).run(id, ...(merchantId ? [merchantId] : []));
+    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE knowledge_id = ?").run(id);
+    return result.changes > 0;
+  }
+
   createTrainingMaterial(input: {
     merchantId: string;
     countryId?: string;
@@ -862,6 +876,17 @@ export class Repositories {
         merchantId
       );
     return this.getTrainingMaterial(id, merchantId)!;
+  }
+
+  disableTrainingMaterial(id: number, merchantId?: string): boolean {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const material = this.db.sqlite.prepare(`SELECT id FROM training_materials ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
+    if (!material) return false;
+    this.db.sqlite.prepare("UPDATE training_materials SET status = 'disabled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE material_id = ?").run(id);
+    this.db.sqlite.prepare("UPDATE training_samples SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (SELECT sample_id FROM training_material_items WHERE material_id = ? AND sample_id IS NOT NULL)").run(id);
+    this.db.sqlite.prepare("UPDATE knowledge_items SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (SELECT knowledge_id FROM training_material_items WHERE material_id = ? AND knowledge_id IS NOT NULL)").run(id);
+    return true;
   }
 
   listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {

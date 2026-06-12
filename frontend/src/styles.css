@@ -55,6 +55,8 @@ button:focus { outline: none; }
 button:focus-visible { outline: 3px solid rgba(37, 99, 235, .28); outline-offset: 2px; }
 button.ghost { background: #fff; color: var(--muted-strong); border-color: var(--line); }
 button.ghost:hover { background: var(--surface-soft); color: var(--text); box-shadow: none; }
+button.danger { background: #dc2626; border-color: #dc2626; }
+button.danger:hover { background: #b91c1c; box-shadow: 0 6px 14px rgba(220, 38, 38, .18); }
 button.primary, button.wide { width: 100%; }
 button.icon-only {
   width: 28px;

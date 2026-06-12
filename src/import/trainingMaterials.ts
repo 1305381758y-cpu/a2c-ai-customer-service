@@ -55,8 +55,10 @@ export async function parseTrainingMaterial(input: {
 }
 
 function buildTextMaterial(sourceType: TrainingMaterialSourceType, filename: string, rawText: string, warnings: string[]): ParsedTrainingMaterial {
+  const samples = parseTextSamples(rawText);
   const paragraphs = splitParagraphs(rawText);
   if (!paragraphs.length) warnings.push("未提取到可用文本，素材已记录但不会生成样本或知识");
+  if (samples.length) warnings.push(`已从文本中识别 ${samples.length} 组客户消息/标准回复样本`);
   const knowledge = paragraphs.map((content, index) => ({
     type: "script" as const,
     title: `${filename} #${index + 1}`,
@@ -68,10 +70,53 @@ function buildTextMaterial(sourceType: TrainingMaterialSourceType, filename: str
   return {
     sourceType,
     rawText: clipRawText(rawText),
-    samples: [],
+    samples,
     knowledge,
     warnings
   };
+}
+
+function parseTextSamples(text: string): ImportedTrainingSample[] {
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const blocks = normalized.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+  const samples: ImportedTrainingSample[] = [];
+
+  for (const block of blocks) {
+    const pair = extractReplyPair(block);
+    if (!pair) continue;
+    samples.push({
+      customerMessage: pair.customerMessage,
+      standardReply: pair.standardReply,
+      stage: "",
+      intent: "unknown",
+      language: detectLanguage(`${pair.customerMessage}\n${pair.standardReply}`),
+      keywords: "",
+      priority: 0,
+      enabled: true
+    });
+    if (samples.length >= 300) break;
+  }
+
+  return samples;
+}
+
+function extractReplyPair(block: string): { customerMessage: string; standardReply: string } | undefined {
+  const patterns = [
+    /(?:客户|用户|客人|customer|user|client|q|question|客户消息|问题)\s*[：:]\s*([\s\S]+?)(?:\n|;|；)\s*(?:客服|回复|标准回复|answer|reply|a)\s*[：:]\s*([\s\S]+)/i,
+    /(?:客服|回复|标准回复|answer|reply|a)\s*[：:]\s*([\s\S]+?)(?:\n|;|；)\s*(?:客户|用户|客人|customer|user|client|q|question|客户消息|问题)\s*[：:]\s*([\s\S]+)/i
+  ];
+  const first = block.match(patterns[0]);
+  if (first) return cleanPair(first[1], first[2]);
+  const second = block.match(patterns[1]);
+  if (second) return cleanPair(second[2], second[1]);
+  return undefined;
+}
+
+function cleanPair(customerMessage: string, standardReply: string): { customerMessage: string; standardReply: string } | undefined {
+  const customer = customerMessage.replace(/\s+/g, " ").trim();
+  const reply = standardReply.replace(/\s+/g, " ").trim();
+  if (customer.length < 2 || reply.length < 2) return undefined;
+  return { customerMessage: customer.slice(0, 2000), standardReply: reply.slice(0, 4000) };
 }
 
 function detectSourceType(filename: string, mimeType = ""): TrainingMaterialSourceType {

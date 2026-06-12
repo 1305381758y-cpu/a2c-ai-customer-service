@@ -107,6 +107,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "knowledge item not found" });
     return row;
   });
+  app.delete<{ Params: { id: string } }>("/api/admin/knowledge/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const ok = deps.repos.disableKnowledgeItem(Number(request.params.id));
+    if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
+    return { ok: true };
+  });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/admin/training-samples", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       merchantId: request.query.merchantId,
@@ -122,6 +127,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "sample not found" });
     return row;
   });
+  app.delete<{ Params: { id: string } }>("/api/admin/training-samples/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const ok = deps.repos.disableTrainingSample(Number(request.params.id));
+    if (!ok) return reply.code(404).send({ error: "sample not found" });
+    return { ok: true };
+  });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/admin/training-materials", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listTrainingMaterials({
       merchantId: request.query.merchantId,
@@ -136,6 +146,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const material = deps.repos.getTrainingMaterial(id);
     if (!material) return reply.code(404).send({ error: "material not found" });
     return { material, items: deps.repos.listTrainingMaterialItems(id) };
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/training-materials/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const ok = deps.repos.disableTrainingMaterial(Number(request.params.id));
+    if (!ok) return reply.code(404).send({ error: "material not found" });
+    return { ok: true };
   });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
@@ -260,6 +275,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "knowledge item not found" });
     return row;
   });
+  app.delete<{ Params: { id: string } }>("/api/merchant/knowledge/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const ok = deps.repos.disableKnowledgeItem(Number(request.params.id), scopedMerchantId(request));
+    if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
+    return { ok: true };
+  });
 
   app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
   app.post("/api/merchant/training-materials/import", { preHandler: merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
@@ -279,6 +299,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!material) return reply.code(404).send({ error: "material not found" });
     return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
   });
+  app.delete<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const ok = deps.repos.disableTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
+    if (!ok) return reply.code(404).send({ error: "material not found" });
+    return { ok: true };
+  });
   app.get<{ Querystring: { countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       merchantId: scopedMerchantId(request),
@@ -295,6 +320,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const row = deps.repos.patchTrainingSample(id, request.body ?? {}, scopedMerchantId(request));
     if (!row) return reply.code(404).send({ error: "sample not found" });
     return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/merchant/training-samples/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const ok = deps.repos.disableTrainingSample(id, scopedMerchantId(request));
+    if (!ok) return reply.code(404).send({ error: "sample not found" });
+    return { ok: true };
   });
 
   app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
