@@ -259,6 +259,118 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("hard deletes a merchant conversation and its orphaned customer data", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchant = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "会话删除测试" }
+    });
+    const merchantId = merchant.json().id as string;
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie: adminCookie },
+      payload: { a2cAccountPhone: "delete-test-a2c" }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: {
+        merchantId,
+        email: "delete-merchant@test.local",
+        name: "删除管理员",
+        password: "Merchant123456",
+        role: "merchant_admin"
+      }
+    });
+    const merchantCookie = await login(app, "delete-merchant@test.local", "Merchant123456");
+
+    const webhook = await app.inject({
+      method: "POST",
+      url: "/webhooks/a2c",
+      payload: {
+        id: "delete-event-1",
+        timestamp: Math.floor(Date.now() / 1000),
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId: "delete-message-1",
+          content: "hello",
+          from: "delete-customer-1",
+          to: "delete-test-a2c",
+          msgType: "text",
+          timestamp: Math.floor(Date.now() / 1000),
+          nickname: "删除客户"
+        }
+      }
+    });
+    expect(webhook.statusCode).toBe(200);
+
+    const conversations = await app.inject({
+      method: "GET",
+      url: "/api/merchant/conversations",
+      headers: { cookie: merchantCookie }
+    });
+    expect(conversations.json().rows).toHaveLength(1);
+    const conversationId = conversations.json().rows[0].id as string;
+
+    const memory = await app.inject({
+      method: "GET",
+      url: `/api/merchant/conversations/${conversationId}/memory`,
+      headers: { cookie: merchantCookie }
+    });
+    expect(memory.statusCode).toBe(200);
+
+    const customersBeforeDelete = await app.inject({
+      method: "GET",
+      url: "/api/merchant/customers",
+      headers: { cookie: merchantCookie }
+    });
+    expect(customersBeforeDelete.json().rows).toHaveLength(1);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/merchant/conversations/${conversationId}`,
+      headers: { cookie: merchantCookie }
+    });
+    expect(deleted.statusCode).toBe(200);
+
+    const conversationsAfterDelete = await app.inject({
+      method: "GET",
+      url: "/api/merchant/conversations",
+      headers: { cookie: merchantCookie }
+    });
+    expect(conversationsAfterDelete.json().rows).toHaveLength(0);
+
+    const messagesAfterDelete = await app.inject({
+      method: "GET",
+      url: `/api/merchant/conversations/${conversationId}/messages`,
+      headers: { cookie: merchantCookie }
+    });
+    expect(messagesAfterDelete.statusCode).toBe(404);
+
+    const memoryAfterDelete = await app.inject({
+      method: "GET",
+      url: `/api/merchant/conversations/${conversationId}/memory`,
+      headers: { cookie: merchantCookie }
+    });
+    expect(memoryAfterDelete.statusCode).toBe(404);
+
+    const customersAfterDelete = await app.inject({
+      method: "GET",
+      url: "/api/merchant/customers",
+      headers: { cookie: merchantCookie }
+    });
+    expect(customersAfterDelete.json().rows).toHaveLength(0);
+
+    await app.close();
+  });
+
   it("imports merchant training materials into samples and knowledge with tenant isolation", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");

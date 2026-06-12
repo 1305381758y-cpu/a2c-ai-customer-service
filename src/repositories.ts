@@ -645,14 +645,52 @@ export class Repositories {
     const conversation = this.db.sqlite.prepare(`SELECT * FROM conversations ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
     if (!conversation) return false;
     const mapped = mapConversation(conversation);
-    this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
-    this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
-    const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
-    this.refreshCustomerAfterConversationDelete(mapped.merchantId, mapped.customerPhone);
-    return result.changes > 0;
+    this.db.sqlite.exec("BEGIN");
+    try {
+      const replacementMemoryConversation = this.db.sqlite
+        .prepare(`
+          SELECT id
+          FROM conversations
+          WHERE merchant_id = ? AND country_id = ? AND customer_phone = ? AND id != ?
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `)
+        .get(mapped.merchantId, mapped.countryId, mapped.customerPhone, id) as { id: string } | undefined;
+      if (replacementMemoryConversation) {
+        this.db.sqlite
+          .prepare(`
+            UPDATE customer_memories
+            SET conversation_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE merchant_id = ? AND country_id = ? AND customer_key = ? AND conversation_id = ?
+          `)
+          .run(replacementMemoryConversation.id, mapped.merchantId, mapped.countryId, mapped.customerPhone, id);
+      } else {
+        this.db.sqlite
+          .prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND country_id = ? AND customer_key = ?")
+          .run(mapped.merchantId, mapped.countryId, mapped.customerPhone);
+      }
+      this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
+      const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
+      this.refreshCustomerAfterConversationDelete(mapped.merchantId, mapped.countryId, mapped.customerPhone);
+      this.db.sqlite.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
   }
 
-  refreshCustomerAfterConversationDelete(merchantId: string, customerKey: string): void {
+  refreshCustomerAfterConversationDelete(merchantId: string, countryId: string, customerKey: string): void {
+    const remainingInCountry = this.db.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM conversations WHERE merchant_id = ? AND country_id = ? AND customer_phone = ?")
+      .get(merchantId, countryId, customerKey) as { count: number } | undefined;
+    if ((remainingInCountry?.count ?? 0) === 0) {
+      this.db.sqlite
+        .prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND country_id = ? AND customer_key = ?")
+        .run(merchantId, countryId, customerKey);
+    }
+
     const latest = this.db.sqlite
       .prepare(`
         SELECT id, a2c_account_phone, status, updated_at
@@ -665,6 +703,12 @@ export class Repositories {
     const count = this.db.sqlite
       .prepare("SELECT COUNT(*) AS count FROM conversations WHERE merchant_id = ? AND customer_phone = ?")
       .get(merchantId, customerKey) as { count: number } | undefined;
+    if ((count?.count ?? 0) === 0) {
+      this.db.sqlite
+        .prepare("DELETE FROM customers WHERE merchant_id = ? AND customer_key = ?")
+        .run(merchantId, customerKey);
+      return;
+    }
     this.db.sqlite
       .prepare(`
         UPDATE customers
