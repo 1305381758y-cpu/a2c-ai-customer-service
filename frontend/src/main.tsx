@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, Contact, FileText, LogOut, MessageSquare, Send, Settings, Upload, Users, Workflow } from "lucide-react";
+import { Bot, Building2, CheckCircle2, Contact, Copy, FileText, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
@@ -18,6 +18,13 @@ type UnreadSummary = { a2cAccountPhone: string; unreadCount: number; conversatio
 type ChatMessage = { id: number; direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; translationStatus?: "translated" | "skipped" | "failed"; translationError?: string; manual?: boolean } };
 type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 type Filters = Record<string, string>;
+type Toast = { id: number; type: "success" | "error" | "info"; title: string; detail?: string };
+
+let emitToast: (toast: Omit<Toast, "id">) => void = () => undefined;
+
+function notify(type: Toast["type"], title: string, detail?: string) {
+  emitToast({ type, title, detail });
+}
 
 const MESSAGE_TYPE_OPTIONS = [
   { value: "text", label: "文本" },
@@ -37,15 +44,33 @@ async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState(() => window.location.hash.replace("#", "") || window.localStorage.getItem("a2c_view") || "dashboard");
 
   useEffect(() => {
     api<{ user: User }>("/api/auth/me").then((res) => setUser(res.user)).catch(() => null).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    if (!user) return;
+    window.localStorage.setItem("a2c_view", view);
+    if (window.location.hash.replace("#", "") !== view) window.history.replaceState(null, "", `#${view}`);
+  }, [user, view]);
 
-  if (loading) return <Shell><p>加载中...</p></Shell>;
-  if (!user) return <Login onLogin={setUser} />;
-  return <Portal user={user} view={view} setView={setView} onLogout={() => setUser(null)} />;
+  if (loading) return <Shell><ToastHost /><div className="boot-screen"><Loader2 size={22} className="spin" />正在进入后台...</div></Shell>;
+  if (!user) return <><ToastHost /><Login onLogin={setUser} /></>;
+  return <><ToastHost /><Portal user={user} view={view} setView={setView} onLogout={() => setUser(null)} /></>;
+}
+
+function ToastHost() {
+  const [items, setItems] = useState<Toast[]>([]);
+  useEffect(() => {
+    emitToast = (toast) => {
+      const id = Date.now() + Math.random();
+      setItems((current) => [...current, { ...toast, id }].slice(-4));
+      window.setTimeout(() => setItems((current) => current.filter((item) => item.id !== id)), 3600);
+    };
+    return () => { emitToast = () => undefined; };
+  }, []);
+  return <div className="toast-host">{items.map((item) => <article key={item.id} className={`toast ${item.type}`}><strong>{item.title}</strong>{item.detail && <p>{item.detail}</p>}<button className="ghost icon-only" onClick={() => setItems((current) => current.filter((row) => row.id !== item.id))}><X size={15}/></button></article>)}</div>;
 }
 
 function Login({ onLogin }: { onLogin: (user: User) => void }) {
@@ -56,12 +81,11 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <Shell>
       <main className="login">
         <section className="login-panel">
-          <h1>A2C AI 自动客服</h1>
-          <p>平台管理端 / 商户端</p>
+          <div className="brand-lockup"><span>AI</span><div><h1>A2C AI 自动客服</h1><p>平台管理端 / 商户端</p></div></div>
           <label>邮箱<input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           {error && <div className="error">{error}</div>}
-          <button onClick={async () => {
+          <button className="primary wide" onClick={async () => {
             try {
               const res = await api<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
               onLogin(res.user);
@@ -83,12 +107,13 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
   return (
     <div className="app">
       <aside>
-        <h2>A2C AI</h2>
-        {nav.map(([key, label, Icon]) => <button key={key as string} className={view === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}
-        <button className="logout" onClick={async () => { await api("/api/auth/logout", { method: "POST" }); onLogout(); }}><LogOut size={17}/>退出</button>
+        <div className="side-brand"><span>AI</span><div><h2>A2C AI</h2><small>智能客服工作台</small></div></div>
+        <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
+        <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={view === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
+        <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
       </aside>
       <main>
-        <header><div><h1>{nav.find((item) => item[0] === view)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div></header>
+        <header><div><h1>{nav.find((item) => item[0] === view)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
         {view === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
         {view === "merchants" && <Merchants />}
         {view === "users" && <UsersPage />}
@@ -107,7 +132,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
 function Dashboard({ platform }: { platform: boolean }) {
   const [data, setData] = useState<Record<string, number>>({});
   useEffect(() => { api<Record<string, number>>(platform ? "/api/admin/dashboard" : "/api/merchant/dashboard").then(setData); }, [platform]);
-  return <div className="grid metrics">{Object.entries(data).map(([k, v]) => <section key={k}><span>{label(k)}</span><strong>{v}</strong></section>)}</div>;
+  return <div className="grid metrics">{Object.entries(data).map(([k, v]) => { const Icon = metricIcon(k); return <section key={k} className="metric-card"><div className="metric-top"><span>{label(k)}</span><i><Icon size={19}/></i></div><strong>{v}</strong><small>{metricHint(k)}</small></section>; })}</div>;
 }
 
 function Merchants() {
@@ -220,7 +245,7 @@ function Config({ platform }: { platform: boolean }) {
       setError(err instanceof Error ? err.message : "TG 绑定失败");
     }
   };
-  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="memory"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label></div><div className="form-grid">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中...">同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中...">检测配置</AsyncButton></div>{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}{checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}<div className="memory"><h3>国家/市场</h3><div className="toolbar wrap">{["code","name","defaultLanguage","platformRegisterUrl","tgRegisterGuideUrl"].map((key) => <input key={key} placeholder={label(key)} value={(countryDraft as any)[key]} onChange={(e) => setCountryDraft({ ...countryDraft, [key]: e.target.value })} />)}<select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select><select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select><AsyncButton onClick={createCountry} busyText="新增中...">新增国家</AsyncButton></div><Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} /></div><div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；每个账号必须绑定国家，消息和记忆会跟随国家切换。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "countryName", "defaultLanguage", "status", "enabled", "syncedAt"]} rowKey={(row) => row.id} /><div className="account-actions">{a2cAccounts.map((row) => <div key={row.id} className="account-bind"><AsyncButton onClick={() => toggleA2CAccount(row)} busyText="处理中...">{row.apiPhone} · {row.enabled ? "停用" : "启用"}</AsyncButton><select value={row.countryId} onChange={(e) => setA2CAccountCountry(row, e.target.value)}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name} · {country.code}</option>)}</select></div>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{label(form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); }} busyText="刷新中...">刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div></section>;
+  return <section>{platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}<div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / Gemini / TG</small></div><div><span>2</span><strong>同步账号</strong><small>绑定国家市场</small></div><div><span>3</span><strong>检测配置</strong><small>确认可用状态</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div><div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div><div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div><div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}{checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}<div className="memory"><h3>国家/市场</h3><div className="toolbar wrap">{["code","name","defaultLanguage","platformRegisterUrl","tgRegisterGuideUrl"].map((key) => <input key={key} placeholder={label(key)} value={(countryDraft as any)[key]} onChange={(e) => setCountryDraft({ ...countryDraft, [key]: e.target.value })} />)}<select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select><select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select><AsyncButton onClick={createCountry} busyText="新增中..."><Plus size={16}/>新增国家</AsyncButton></div><Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} /></div><div className="memory"><h3>A2C客服账号</h3><p>填写 A2C App ID 和密钥并保存后，系统会自动拉取账号内可发送的客服账号；每个账号必须绑定国家，消息和记忆会跟随国家切换。</p><Table rows={a2cAccounts} columns={["apiPhone", "verifiedName", "countryName", "defaultLanguage", "status", "enabled", "syncedAt"]} rowKey={(row) => row.id} /><div className="account-actions">{a2cAccounts.map((row) => <div key={row.id} className="account-bind"><AsyncButton onClick={() => toggleA2CAccount(row)} busyText="处理中...">{row.apiPhone} · {row.enabled ? "停用" : "启用"}</AsyncButton><select value={row.countryId} onChange={(e) => setA2CAccountCountry(row, e.target.value)}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name} · {country.code}</option>)}</select></div>)}</div></div><div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div></section>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {
@@ -231,7 +256,7 @@ function Samples({ platform = false }: { platform?: boolean }) {
   const [rows, setRows] = useRows<Sample>(rowsUrl);
   const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Sample | null>(null);
-  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={async () => setRows(await loadRows(rowsUrl))} />{!platform && <div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows(rowsUrl)); }}>上传样本</button></div>}<Table rows={rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); setRows(await loadRows(rowsUrl)); }} /> : <p>{platform ? "平台端可查看和编辑全局样本；上传请在商户端完成。" : "选择样本后可编辑标准回复、意图、阶段和启用状态。"}</p>}</section></div>;
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={async () => setRows(await loadRows(rowsUrl))} />{!platform && <div className="toolbar upload-strip"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); await fetch("/api/merchant/training-samples/import", { method: "POST", body }); setRows(await loadRows(rowsUrl)); }}><Upload size={16}/>上传样本</AsyncButton></div>}<Table rows={rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); setRows(await loadRows(rowsUrl)); }} /> : <p>{platform ? "平台端可查看和编辑全局样本；上传请在商户端完成。" : "选择样本后可编辑标准回复、意图、阶段和启用状态。"}</p>}</section></div>;
 }
 
 function TrainingMaterials({ platform = false }: { platform?: boolean }) {
@@ -260,7 +285,7 @@ function TrainingMaterials({ platform = false }: { platform?: boolean }) {
     setMessage(`已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
     await reload();
   };
-  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg" onChange={(e) => setFile(e.target.files?.[0] || null)} /><button onClick={async () => { if (file) await uploadFile(file); }}>上传素材</button></div><textarea placeholder="粘贴聊天记录、话术、问答或业务规则" value={pasted} onChange={(e) => setPasted(e.target.value)} /><button onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}>导入粘贴文本</button>{message && <div className="notice">{message}</div>}</div>}<Table rows={rows} columns={platform ? ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"] : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]} onRow={loadDetail} /></section><section>{selected && detail ? <div><h3>{detail.material.filename}</h3><p>{detail.material.countryName} · {label(detail.material.sourceType)} · 生成 {detail.material.itemCount} 条 · 样本 {detail.material.sampleCount} · 知识 {detail.material.knowledgeCount}</p>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div> : <p>{platform ? "选择素材查看生成内容。平台端可查看所有商户素材。" : "上传表格、文档、文本或图片后会立即学习，并自动启用生成内容。"}</p>}</section></div>;
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>上传素材</AsyncButton></div><textarea placeholder="粘贴聊天记录、话术、问答或业务规则" value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="导入中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>导入粘贴文本</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={rows} columns={platform ? ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"] : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]} onRow={loadDetail} /></section><section>{selected && detail ? <div><h3>{detail.material.filename}</h3><p>{detail.material.countryName} · {label(detail.material.sourceType)} · 生成 {detail.material.itemCount} 条 · 样本 {detail.material.sampleCount} · 知识 {detail.material.knowledgeCount}</p>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div> : <p>{platform ? "选择素材查看生成内容。平台端可查看所有商户素材。" : "上传表格、文档、文本或图片后会立即学习，并自动启用生成内容。"}</p>}</section></div>;
 }
 
 function Customers({ platform = false }: { platform?: boolean }) {
@@ -285,7 +310,7 @@ function KnowledgePage({ platform }: { platform: boolean }) {
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
   const reload = async () => setRows(await loadRows(rowsUrl));
-  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "type", "enabled"] : ["countryId", "type", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], type: ["", "faq", "script", "rule", "forbidden"], enabled: ["", "true", "false"] }} onApply={reload} /><div className="toolbar wrap">{platform && <input placeholder={label("merchantId")} value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })} />}<select value={form.countryId || filters.countryId || countries[0]?.id || ""} onChange={(e) => setForm({ ...form, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="faq">{label("faq")}</option><option value="script">{label("script")}</option><option value="rule">{label("rule")}</option><option value="forbidden">{label("forbidden")}</option></select><input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /><input placeholder="内容" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /><button onClick={async () => { await api(base, { method: "POST", body: JSON.stringify(coercePatch({ ...form, countryId: form.countryId || filters.countryId || countries[0]?.id || "" })) }); setForm({ ...form, title: "", content: "" }); reload(); }}>新增知识</button></div><Table rows={rows} columns={["countryId", "type", "title", "content", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="知识库编辑" value={selected as any} fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]} selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); reload(); }} /> : <p>问答、话术、规则、禁用表达会在 AI 回复时被引用。</p>}</section></div>;
+  return <div className="split"><section><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "type", "enabled"] : ["countryId", "type", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], type: ["", "faq", "script", "rule", "forbidden"], enabled: ["", "true", "false"] }} onApply={reload} /><div className="toolbar wrap">{platform && <input placeholder={label("merchantId")} value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })} />}<select value={form.countryId || filters.countryId || countries[0]?.id || ""} onChange={(e) => setForm({ ...form, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}</select><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="faq">{label("faq")}</option><option value="script">{label("script")}</option><option value="rule">{label("rule")}</option><option value="forbidden">{label("forbidden")}</option></select><input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /><input placeholder="内容" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /><AsyncButton disabled={!form.title.trim() || !form.content.trim()} busyText="新增中..." onClick={async () => { await api(base, { method: "POST", body: JSON.stringify(coercePatch({ ...form, countryId: form.countryId || filters.countryId || countries[0]?.id || "" })) }); setForm({ ...form, title: "", content: "" }); reload(); }}><Plus size={16}/>新增知识</AsyncButton></div><Table rows={rows} columns={["countryId", "type", "title", "content", "language", "priority", "enabled"]} onRow={setSelected} /></section><section>{selected ? <Editor title="知识库编辑" value={selected as any} fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]} selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); reload(); }} /> : <p>问答、话术、规则、禁用表达会在 AI 回复时被引用。</p>}</section></div>;
 }
 
 function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
@@ -355,7 +380,7 @@ function ProactiveConversationDetail({ account, target, onCreated }: { account: 
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
   const [statusMessage, setStatusMessage] = useState("");
   const [error, setError] = useState("");
-  return <div className="conversation-detail proactive-chat"><div className="chat-header"><div><h3>{target.customerPhone}</h3><p>通过客服账号 {account.verifiedName || account.apiPhone} 主动发送</p></div></div>{error && <div className="error">{error}</div>}{statusMessage && <div className="notice">{statusMessage}</div>}<div className="empty-chat compact"><h3>新对话</h3><p>发送第一条消息后，系统会自动创建客户档案和会话记录。</p></div><div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { const res = await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(account.apiPhone)}/send`, { method: "POST", body: JSON.stringify({ ...send, customerPhone: target.customerPhone, nickname: target.nickname }) }); setStatusMessage("消息已发送，会话已创建。"); await onCreated(res.conversation); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div></div>;
+  return <div className="conversation-detail proactive-chat"><div className="chat-header"><div><h3>{target.customerPhone}</h3><p>通过客服账号 {account.verifiedName || account.apiPhone} 主动发送</p></div><span className="status-pill neutral">{account.countryName}</span></div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<div className="empty-chat compact"><h3>新对话</h3><p>发送第一条消息后，系统会自动创建客户档案和会话记录。</p></div><div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton disabled={!canSendMessage(send)} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { const res = await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(account.apiPhone)}/send`, { method: "POST", body: JSON.stringify({ ...send, customerPhone: target.customerPhone, nickname: target.nickname }) }); setStatusMessage("消息已发送，会话已创建。"); await onCreated(res.conversation); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div></div>;
 }
 
 function ConversationDetail({ platform = false, conversation, refresh }: { platform?: boolean; conversation: Conversation; refresh: () => void }) {
@@ -382,7 +407,7 @@ function ConversationDetail({ platform = false, conversation, refresh }: { platf
   }, [messages.length, conversation.id]);
   useEffect(() => { api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => { setMemory(item); setNotes(item.operatorNotes || ""); }).catch(() => { setMemory(null); setNotes(""); }); }, [conversation.id, platform]);
   const memoryUrl = `${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`;
-  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.customerPhone}</h3><p>{conversation.countryName} · TG: {conversation.extractedTelegram || "-"} · WS: {conversation.extractedWhatsApp || "-"} · 手机: {conversation.extractedPhone || "-"} · {languageName(conversation.language)}</p></div>{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}</div>{error && <div className="error">{error}</div>}{statusMessage && <div className="notice">{statusMessage}</div>}<div className="memory compact-memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></div><div className="chat-window" ref={messagesRef}>{messages.map((m, i) => <ChatBubble key={`${m.id || m.createdAt}-${i}`} message={m} />)}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
+  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.nickname || conversation.customerPhone}</h3><div className="header-meta"><span>{conversation.countryName}</span><span>{languageName(conversation.language)}</span><span>手机：{conversation.extractedPhone || "未识别"}</span><span>TG：{conversation.extractedTelegram || "未识别"}</span><span>WS：{conversation.extractedWhatsApp || "未识别"}</span></div></div>{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}</div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<div className="memory compact-memory"><h3>客户记忆文件</h3><p>{memory?.summary || "暂无记忆，收到客户消息后会自动生成。"}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></div><div className="chat-window" ref={messagesRef}>{messages.length ? messages.map((m, i) => <ChatBubble key={`${m.id || m.createdAt}-${i}`} message={m} />) : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton disabled={!canSendMessage(send)} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
 }
 
 function ChatBubble({ message }: { message: ChatMessage }) {
@@ -400,12 +425,13 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 function Table<T extends Record<string, any>>({ rows, columns, onRow, selectedKey, rowKey }: { rows: T[]; columns: string[]; onRow?: (row: T) => void; selectedKey?: string | number; rowKey?: (row: T, index: number) => string | number }) {
   const [internalSelected, setInternalSelected] = useState<string | number | undefined>();
   const activeKey = selectedKey ?? internalSelected;
-  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""} onClick={() => { setInternalSelected(key); onRow?.(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c])}</td>)}</tr>; })}</tbody></table></div>;
+  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c])}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}>暂无数据</td></tr>}</tbody></table></div>;
 }
 
-function AsyncButton({ children, busyText, onClick, className }: { children: React.ReactNode; busyText: string; onClick: () => Promise<void>; className?: string }) {
+function AsyncButton({ children, busyText, onClick, className, disabled = false }: { children: React.ReactNode; busyText: string; onClick: () => Promise<void>; className?: string; disabled?: boolean }) {
   const [busy, setBusy] = useState(false);
-  return <button className={className} disabled={busy} aria-busy={busy} onClick={async () => { if (busy) return; setBusy(true); try { await onClick(); } finally { setBusy(false); } }}>{busy ? busyText : children}</button>;
+  const [done, setDone] = useState(false);
+  return <button className={className} disabled={busy || disabled} aria-busy={busy} onClick={async () => { if (busy || disabled) return; setBusy(true); setDone(false); try { await onClick(); setDone(true); window.setTimeout(() => setDone(false), 900); } catch (err) { notify("error", "操作失败", translateSystemMessage(err instanceof Error ? err.message : "未知错误")); } finally { setBusy(false); } }}>{busy ? <><Loader2 size={16} className="spin"/>{busyText}</> : done ? <><CheckCircle2 size={16}/>已完成</> : children}</button>;
 }
 
 function Editor({ title, value, fields, selects, onSave }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void> }) {
@@ -415,7 +441,11 @@ function Editor({ title, value, fields, selects, onSave }: { title: string; valu
 }
 
 function FilterBar({ filters, setFilters, fields, selects = {}, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; onApply: () => Promise<void> }) {
-  return <div className="toolbar wrap filters">{fields.map((field) => selects[field] ? <select key={field} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? label(option) : label(field)}</option>)}</select> : <input key={field} placeholder={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} />)}<button onClick={onApply}>筛选</button><button onClick={async () => { const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""])); setFilters(reset); }}>重置</button></div>;
+  return <div className="toolbar wrap filters">{fields.map((field) => selects[field] ? <select key={field} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? label(option) : label(field)}</option>)}</select> : <input key={field} placeholder={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} />)}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button className="ghost" onClick={() => { const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""])); setFilters(reset); }}><X size={16}/>重置</button></div>;
+}
+
+function canSendMessage(input: { type: string; content: string; url: string }) {
+  return input.type === "text" ? Boolean(input.content.trim()) : Boolean(input.url.trim());
 }
 
 function coercePatch(input: Record<string, any>) {
@@ -473,9 +503,44 @@ function displayValue(column: string, value: unknown) {
   if (value === null || value === undefined || value === "") return "";
   if (["language", "defaultLanguage"].includes(column)) return languageName(String(value));
   if (["status", "enabled", "role", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind"].includes(column)) {
-    return label(String(value));
+    const text = label(String(value));
+    if (["status", "enabled", "handoffStatus", "stage", "intent"].includes(column)) return <span className={`status-pill ${statusTone(String(value))}`}>{text}</span>;
+    return text;
   }
   return String(value);
+}
+
+function statusTone(value: string) {
+  if (["active", "enabled", "ok", "bound", "done", "ready_for_handoff"].includes(value)) return "success";
+  if (["pending", "processing", "waiting", "need_platform_register", "need_phone_or_tg"].includes(value)) return "warning";
+  if (["disabled", "error", "invalid", "human_handoff", "irrelevant_or_spam"].includes(value)) return "danger";
+  return "neutral";
+}
+
+function metricIcon(key: string) {
+  return ({
+    merchants: Building2,
+    customers: Contact,
+    conversations: MessageSquare,
+    handoffs: Workflow,
+    samples: Upload,
+    users: Users,
+    aiReplies: Bot,
+    messages: MessageSquare
+  } as Record<string, typeof Bot>)[key] || Bot;
+}
+
+function metricHint(key: string) {
+  return ({
+    merchants: "当前平台商户总量",
+    customers: "已沉淀客户档案",
+    conversations: "累计会话记录",
+    handoffs: "需要人工跟进",
+    samples: "已启用训练样本",
+    users: "后台可登录账号",
+    aiReplies: "AI 自动回复次数",
+    messages: "今日消息处理量"
+  } as Record<string, string>)[key] || "实时运营指标";
 }
 
 function translateSystemMessage(message: unknown) {
