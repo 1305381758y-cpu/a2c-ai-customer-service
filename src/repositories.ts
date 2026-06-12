@@ -997,6 +997,20 @@ export class Repositories {
             WHERE merchant_id = ?
           `)
           .run(cacheKey, accessToken, expiresAt, merchantId);
+      },
+      clear: (cacheKey) => {
+        const config = this.getMerchantConfig(merchantId);
+        if (config.a2cTokenCacheKey && config.a2cTokenCacheKey !== cacheKey) return;
+        this.db.sqlite
+          .prepare(`
+            UPDATE merchant_configs
+            SET a2c_token_cache_key = '',
+                a2c_access_token = '',
+                a2c_token_expires_at = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE merchant_id = ?
+          `)
+          .run(merchantId);
       }
     };
   }

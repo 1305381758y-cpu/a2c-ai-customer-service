@@ -1,6 +1,7 @@
 import type { AppConfig } from "../config.js";
 
 const A2C_TIMEOUT_MS = 12_000;
+const A2C_TOKEN_TTL_MS = 7_200_000;
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
 type TokenCacheEntry = {
@@ -14,6 +15,7 @@ const tokenCache = new Map<string, TokenCacheEntry>();
 export interface A2CTokenStore {
   get(cacheKey: string): { accessToken: string; expiresAt: number } | undefined;
   set(cacheKey: string, accessToken: string, expiresAt: number): void;
+  clear?(cacheKey: string): void;
 }
 
 export interface A2CAccount {
@@ -45,8 +47,7 @@ export class A2CClient {
     caption?: string;
     fileName?: string;
   }): Promise<string> {
-    const token = await this.getToken();
-    const response = await fetch(`${this.config.A2C_BASE_URL}/v1/messages`, {
+    const request = (token: string) => fetch(`${this.config.A2C_BASE_URL}/v1/messages`, {
       method: "POST",
       signal: AbortSignal.timeout(A2C_TIMEOUT_MS),
       headers: {
@@ -63,7 +64,7 @@ export class A2CClient {
         fileName: input.fileName
       })
     });
-    const json = (await response.json()) as { code?: number; msg?: string; data?: string };
+    const { response, json } = await this.requestWithTokenRetry<{ code?: number; msg?: string; data?: string }>(request);
     if (!response.ok || json.code !== 200) {
       throw new Error(`A2C send failed: ${json.msg || response.statusText}`);
     }
@@ -71,24 +72,38 @@ export class A2CClient {
   }
 
   async listAccounts(): Promise<A2CAccount[]> {
-    const token = await this.getToken();
-    const response = await fetch(`${this.config.A2C_BASE_URL}/v1/accounts`, {
+    const request = (token: string) => fetch(`${this.config.A2C_BASE_URL}/v1/accounts`, {
       method: "GET",
       signal: AbortSignal.timeout(A2C_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${token}` }
     });
-    const json = (await response.json()) as { code?: number; msg?: string; data?: A2CAccount[] };
+    const { response, json } = await this.requestWithTokenRetry<{ code?: number; msg?: string; data?: A2CAccount[] }>(request);
     if (!response.ok || json.code !== 200) {
       throw new Error(`A2C accounts sync failed: ${json.msg || response.statusText}`);
     }
     return (json.data ?? []).filter((account) => Boolean(account.apiPhone));
   }
 
+  private async requestWithTokenRetry<T extends { code?: number; msg?: string }>(request: (token: string) => Promise<Response>): Promise<{ response: Response; json: T }> {
+    const cacheKey = this.cacheKey();
+    let token = await this.getToken();
+    let response = await request(token);
+    const json = (await response.json()) as T;
+    if (response.ok && json.code === 200) return { response, json };
+    if (!isLikelyTokenError(response, json.msg)) return { response, json };
+
+    this.clearToken(cacheKey);
+    token = await this.getToken();
+    response = await request(token);
+    const retryJson = (await response.json()) as T;
+    return { response, json: retryJson };
+  }
+
   private async getToken(): Promise<string> {
     if (!this.enabled) throw new Error("A2C credentials are not configured");
     if (this.accessToken && Date.now() < this.expiresAt - TOKEN_REFRESH_SKEW_MS) return this.accessToken;
 
-    const cacheKey = `${this.config.A2C_BASE_URL}\0${this.config.A2C_APP_ID}\0${this.config.A2C_APP_SECRET}`;
+    const cacheKey = this.cacheKey();
     const cached = tokenCache.get(cacheKey);
     if (cached?.accessToken && cached.expiresAt && Date.now() < cached.expiresAt - TOKEN_REFRESH_SKEW_MS) {
       this.accessToken = cached.accessToken;
@@ -123,12 +138,12 @@ export class A2CClient {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ appId: this.config.A2C_APP_ID, appSecret: this.config.A2C_APP_SECRET })
       });
-      const json = (await response.json()) as { code?: number; msg?: string; data?: { accessToken: string; expireIn: number } };
+      const json = (await response.json()) as { code?: number; msg?: string; data?: { accessToken: string; expireIn?: number } };
       if (!response.ok || json.code !== 200 || !json.data?.accessToken) {
         throw new Error(`A2C auth failed: ${json.msg || response.statusText}`);
       }
       this.accessToken = json.data.accessToken;
-      this.expiresAt = Date.now() + json.data.expireIn * 1000;
+      this.expiresAt = Date.now() + A2C_TOKEN_TTL_MS;
       tokenCache.set(cacheKey, { accessToken: this.accessToken, expiresAt: this.expiresAt });
       this.tokenStore?.set(cacheKey, this.accessToken, this.expiresAt);
       return this.accessToken;
@@ -138,6 +153,21 @@ export class A2CClient {
       throw error;
     }
   }
+
+  private cacheKey(): string {
+    return `${this.config.A2C_BASE_URL}\0${this.config.A2C_APP_ID}\0${this.config.A2C_APP_SECRET}`;
+  }
+
+  private clearToken(cacheKey = this.cacheKey()): void {
+    this.accessToken = "";
+    this.expiresAt = 0;
+    tokenCache.delete(cacheKey);
+    this.tokenStore?.clear?.(cacheKey);
+  }
+}
+
+function isLikelyTokenError(response: Response, message = ""): boolean {
+  return response.status === 401 || response.status === 403 || /(token|auth|unauthorized|forbidden|expired|invalid)/i.test(message);
 }
 
 function mapA2CMessageType(type: "text" | "image" | "video" | "audio" | "document"): number {
