@@ -108,7 +108,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return row;
   });
   app.delete<{ Params: { id: string } }>("/api/admin/knowledge/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const ok = deps.repos.disableKnowledgeItem(Number(request.params.id));
+    const ok = deps.repos.deleteKnowledgeItem(Number(request.params.id));
     if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
     return { ok: true };
   });
@@ -128,7 +128,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return row;
   });
   app.delete<{ Params: { id: string } }>("/api/admin/training-samples/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const ok = deps.repos.disableTrainingSample(Number(request.params.id));
+    const ok = deps.repos.deleteTrainingSample(Number(request.params.id));
     if (!ok) return reply.code(404).send({ error: "sample not found" });
     return { ok: true };
   });
@@ -148,7 +148,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { material, items: deps.repos.listTrainingMaterialItems(id) };
   });
   app.delete<{ Params: { id: string } }>("/api/admin/training-materials/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const ok = deps.repos.disableTrainingMaterial(Number(request.params.id));
+    const ok = deps.repos.deleteTrainingMaterial(Number(request.params.id));
     if (!ok) return reply.code(404).send({ error: "material not found" });
     return { ok: true };
   });
@@ -176,6 +176,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/conversations/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const ok = deps.repos.deleteConversation(request.params.id);
+    if (!ok) return reply.code(404).send({ error: "conversation not found" });
+    return { ok: true };
   });
   app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
     const memory = deps.repos.getCustomerMemoryByConversation(request.params.id);
@@ -276,7 +281,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return row;
   });
   app.delete<{ Params: { id: string } }>("/api/merchant/knowledge/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.disableKnowledgeItem(Number(request.params.id), scopedMerchantId(request));
+    const ok = deps.repos.deleteKnowledgeItem(Number(request.params.id), scopedMerchantId(request));
     if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
     return { ok: true };
   });
@@ -300,7 +305,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
   });
   app.delete<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.disableTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
+    const ok = deps.repos.deleteTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
     if (!ok) return reply.code(404).send({ error: "material not found" });
     return { ok: true };
   });
@@ -324,7 +329,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.delete<{ Params: { id: string } }>("/api/merchant/training-samples/:id", { preHandler: merchantAdmins }, async (request, reply) => {
     const id = Number(request.params.id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const ok = deps.repos.disableTrainingSample(id, scopedMerchantId(request));
+    const ok = deps.repos.deleteTrainingSample(id, scopedMerchantId(request));
     if (!ok) return reply.code(404).send({ error: "sample not found" });
     return { ok: true };
   });
@@ -353,6 +358,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
+  });
+  app.delete<{ Params: { id: string } }>("/api/merchant/conversations/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const ok = deps.repos.deleteConversation(request.params.id, scopedMerchantId(request));
+    if (!ok) return reply.code(404).send({ error: "conversation not found" });
+    return { ok: true };
   });
   app.get("/api/merchant/conversations/unread-summary", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.unreadSummary(scopedMerchantId(request))

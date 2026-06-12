@@ -640,6 +640,45 @@ export class Repositories {
       .map((row) => mapConversation(row as Record<string, unknown>));
   }
 
+  deleteConversation(id: string, merchantId?: string): boolean {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const conversation = this.db.sqlite.prepare(`SELECT * FROM conversations ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    if (!conversation) return false;
+    const mapped = mapConversation(conversation);
+    this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
+    this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
+    const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
+    this.refreshCustomerAfterConversationDelete(mapped.merchantId, mapped.customerPhone);
+    return result.changes > 0;
+  }
+
+  refreshCustomerAfterConversationDelete(merchantId: string, customerKey: string): void {
+    const latest = this.db.sqlite
+      .prepare(`
+        SELECT id, a2c_account_phone, status, updated_at
+        FROM conversations
+        WHERE merchant_id = ? AND customer_phone = ?
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `)
+      .get(merchantId, customerKey) as { id: string; a2c_account_phone: string; status: string; updated_at: string } | undefined;
+    const count = this.db.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM conversations WHERE merchant_id = ? AND customer_phone = ?")
+      .get(merchantId, customerKey) as { count: number } | undefined;
+    this.db.sqlite
+      .prepare(`
+        UPDATE customers
+        SET conversation_count = ?,
+            last_conversation_id = ?,
+            last_a2c_account_phone = COALESCE(?, last_a2c_account_phone),
+            status = COALESCE(?, status),
+            last_seen_at = COALESCE(?, last_seen_at),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE merchant_id = ? AND customer_key = ?
+      `)
+      .run(count?.count ?? 0, latest?.id ?? "", latest?.a2c_account_phone ?? null, latest?.status ?? null, latest?.updated_at ?? null, merchantId, customerKey);
+  }
+
   listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
@@ -703,10 +742,12 @@ export class Repositories {
     return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
   }
 
-  disableTrainingSample(id: number, merchantId?: string): boolean {
+  deleteTrainingSample(id: number, merchantId?: string): boolean {
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-    const result = this.db.sqlite.prepare(`UPDATE training_samples SET enabled = 0, updated_at = CURRENT_TIMESTAMP ${where}`).run(id, ...(merchantId ? [merchantId] : []));
-    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE sample_id = ?").run(id);
+    const row = this.db.sqlite.prepare(`SELECT id FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
+    if (!row) return false;
+    this.db.sqlite.prepare("DELETE FROM training_material_items WHERE sample_id = ?").run(id);
+    const result = this.db.sqlite.prepare(`DELETE FROM training_samples ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return result.changes > 0;
   }
 
@@ -793,10 +834,12 @@ export class Repositories {
     return row ? mapKnowledgeItem(row) : undefined;
   }
 
-  disableKnowledgeItem(id: number, merchantId?: string): boolean {
+  deleteKnowledgeItem(id: number, merchantId?: string): boolean {
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-    const result = this.db.sqlite.prepare(`UPDATE knowledge_items SET enabled = 0, updated_at = CURRENT_TIMESTAMP ${where}`).run(id, ...(merchantId ? [merchantId] : []));
-    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE knowledge_id = ?").run(id);
+    const row = this.db.sqlite.prepare(`SELECT id FROM knowledge_items ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
+    if (!row) return false;
+    this.db.sqlite.prepare("DELETE FROM training_material_items WHERE knowledge_id = ?").run(id);
+    const result = this.db.sqlite.prepare(`DELETE FROM knowledge_items ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return result.changes > 0;
   }
 
@@ -878,14 +921,26 @@ export class Repositories {
     return this.getTrainingMaterial(id, merchantId)!;
   }
 
-  disableTrainingMaterial(id: number, merchantId?: string): boolean {
+  deleteTrainingMaterial(id: number, merchantId?: string): boolean {
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     const material = this.db.sqlite.prepare(`SELECT id FROM training_materials ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
     if (!material) return false;
-    this.db.sqlite.prepare("UPDATE training_materials SET status = 'disabled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
-    this.db.sqlite.prepare("UPDATE training_material_items SET enabled = 0 WHERE material_id = ?").run(id);
-    this.db.sqlite.prepare("UPDATE training_samples SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (SELECT sample_id FROM training_material_items WHERE material_id = ? AND sample_id IS NOT NULL)").run(id);
-    this.db.sqlite.prepare("UPDATE knowledge_items SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (SELECT knowledge_id FROM training_material_items WHERE material_id = ? AND knowledge_id IS NOT NULL)").run(id);
+    const sampleIds = this.db.sqlite
+      .prepare("SELECT sample_id AS id FROM training_material_items WHERE material_id = ? AND sample_id IS NOT NULL")
+      .all(id)
+      .map((row) => Number((row as { id: number }).id));
+    const knowledgeIds = this.db.sqlite
+      .prepare("SELECT knowledge_id AS id FROM training_material_items WHERE material_id = ? AND knowledge_id IS NOT NULL")
+      .all(id)
+      .map((row) => Number((row as { id: number }).id));
+    this.db.sqlite.prepare("DELETE FROM training_material_items WHERE material_id = ?").run(id);
+    if (sampleIds.length) {
+      this.db.sqlite.prepare(`DELETE FROM training_samples WHERE id IN (${sampleIds.map(() => "?").join(",")})`).run(...sampleIds);
+    }
+    if (knowledgeIds.length) {
+      this.db.sqlite.prepare(`DELETE FROM knowledge_items WHERE id IN (${knowledgeIds.map(() => "?").join(",")})`).run(...knowledgeIds);
+    }
+    this.db.sqlite.prepare(`DELETE FROM training_materials ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return true;
   }
 
