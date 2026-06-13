@@ -57,4 +57,47 @@ describe("A2C client token cache", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("does not request a new token when A2C reports rate limiting", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const store = new Map<string, { accessToken: string; expiresAt: number }>();
+    const tokenStore: A2CTokenStore = {
+      get: (key) => store.get(key),
+      set: (key, accessToken, expiresAt) => store.set(key, { accessToken, expiresAt }),
+      clear: (key) => store.delete(key)
+    };
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const auth = String((init?.headers as Record<string, string> | undefined)?.Authorization || "");
+      calls.push(`${url}:${auth}`);
+      if (url.endsWith("/v1/messages")) {
+        return Response.json({ code: 429, msg: "Visit too frequently, please try again later" }, { status: 429 });
+      }
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 200, data: { accessToken: "new-token", expireIn: 7200 } });
+      }
+      return Response.json({ code: 500, msg: "unexpected request" }, { status: 500 });
+    }) as typeof fetch;
+
+    try {
+      const client = new A2CClient(config(), tokenStore);
+      const cacheKey = "https://a2c.test/api/openapi\u0000app-id-retry\u0000app-secret-retry";
+      tokenStore.set(cacheKey, "cached-token", Date.now() + 7_200_000);
+
+      await expect(client.sendMessage({
+        to: "customer",
+        senderPhoneNumber: "sender",
+        type: "text",
+        content: "hello"
+      })).rejects.toThrow("Visit too frequently");
+
+      expect(calls.filter((item) => item.includes("/open/auth/token"))).toHaveLength(0);
+      expect(calls.filter((item) => item.includes("/v1/messages"))).toHaveLength(1);
+      expect(tokenStore.get(cacheKey)?.accessToken).toBe("cached-token");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

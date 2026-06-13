@@ -670,13 +670,17 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 }
 .invite-action-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 120px auto;
+  grid-template-columns: minmax(110px, .75fr) minmax(180px, 1fr) 110px auto auto;
   gap: 8px;
   align-items: center;
   padding: 7px;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: #fff;
+}
+.invite-action-row input,
+.invite-action-row select {
+  min-width: 0;
 }
 .invite-action-row strong {
   overflow: hidden;

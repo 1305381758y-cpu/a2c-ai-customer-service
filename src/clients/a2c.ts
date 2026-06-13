@@ -2,12 +2,14 @@ import type { AppConfig } from "../config.js";
 
 const A2C_TIMEOUT_MS = 12_000;
 const A2C_TOKEN_TTL_MS = 7_200_000;
-const TOKEN_REFRESH_SKEW_MS = 60_000;
+const TOKEN_REFRESH_SKEW_MS = 0;
+const AUTH_RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 type TokenCacheEntry = {
   accessToken?: string;
   expiresAt?: number;
   pending?: Promise<string>;
+  authBlockedUntil?: number;
 };
 
 const tokenCache = new Map<string, TokenCacheEntry>();
@@ -124,6 +126,9 @@ export class A2CClient {
       this.expiresAt = updated?.expiresAt ?? 0;
       return token;
     }
+    if (cached?.authBlockedUntil && Date.now() < cached.authBlockedUntil) {
+      throw new Error("A2C auth failed: Visit too frequently, please try again later");
+    }
 
     const pending = this.fetchToken(cacheKey);
     tokenCache.set(cacheKey, { ...cached, pending });
@@ -140,6 +145,10 @@ export class A2CClient {
       });
       const json = (await response.json()) as { code?: number; msg?: string; data?: { accessToken: string; expireIn?: number } };
       if (!response.ok || json.code !== 200 || !json.data?.accessToken) {
+        if (isRateLimitedAuth(json.msg || response.statusText)) {
+          const cached = tokenCache.get(cacheKey);
+          tokenCache.set(cacheKey, { ...cached, pending: undefined, authBlockedUntil: Date.now() + AUTH_RATE_LIMIT_COOLDOWN_MS });
+        }
         throw new Error(`A2C auth failed: ${json.msg || response.statusText}`);
       }
       this.accessToken = json.data.accessToken;
@@ -149,7 +158,7 @@ export class A2CClient {
       return this.accessToken;
     } catch (error) {
       const cached = tokenCache.get(cacheKey);
-      tokenCache.set(cacheKey, cached?.accessToken ? { accessToken: cached.accessToken, expiresAt: cached.expiresAt } : {});
+      tokenCache.set(cacheKey, cached?.accessToken ? { accessToken: cached.accessToken, expiresAt: cached.expiresAt, authBlockedUntil: cached.authBlockedUntil } : { authBlockedUntil: cached?.authBlockedUntil });
       throw error;
     }
   }
@@ -167,7 +176,11 @@ export class A2CClient {
 }
 
 function isLikelyTokenError(response: Response, message = ""): boolean {
-  return response.status === 401 || response.status === 403 || /(token|auth|unauthorized|forbidden|expired|invalid)/i.test(message);
+  return response.status === 401 || response.status === 403 || /(token.*(expired|invalid)|access.?token|unauthorized|forbidden|expired token|invalid token)/i.test(message);
+}
+
+function isRateLimitedAuth(message = ""): boolean {
+  return /(visit too frequently|too frequent|rate limit|too many requests|请求.*频繁|频繁)/i.test(message);
 }
 
 function mapA2CMessageType(type: "text" | "image" | "video" | "audio" | "document"): number {

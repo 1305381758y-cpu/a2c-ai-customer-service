@@ -276,12 +276,24 @@ function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: {
       <div className="invite-import">
         <textarea placeholder="批量粘贴邀请码，一行一个；也支持逗号、空格分隔" value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })} />
         <input placeholder="注册链接模板，可选。可包含 {code}" value={draft.registerUrl} onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} />
-        <AsyncButton disabled={!draft.codes.trim()} busyText="导入中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码已导入", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>批量导入</AsyncButton>
+        <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>保存邀请码池</AsyncButton>
       </div>
       <Table rows={codes.map((item) => ({ ...item, inviteCode: item.code }))} columns={["inviteCode", "registerUrl", "status", "assignedCustomerKey", "platformAccount", "usedAt"]} rowKey={(row) => row.id} />
-      <div className="invite-actions">{codes.map((code) => <div key={code.id} className="invite-action-row"><strong>{code.code}</strong><select value={code.status} onChange={async (e) => { await api(`${codeEndpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); await reload(); }}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select><AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${codeEndpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>删除</AsyncButton></div>)}</div>
+      <div className="invite-actions">{codes.map((code) => <InviteCodeEditor key={code.id} code={code} endpoint={codeEndpoint} reload={reload} />)}</div>
     </details>
   </article>;
+}
+
+function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoint: string; reload: () => Promise<void> }) {
+  const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
+  useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status }), [code.id, code.code, code.registerUrl, code.status]);
+  return <div className="invite-action-row">
+    <input aria-label="邀请码" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
+    <input aria-label="注册链接" value={draft.registerUrl} placeholder="注册链接模板，可包含 {code}" onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} />
+    <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select>
+    <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存</AsyncButton>
+    <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>删除</AsyncButton>
+  </div>;
 }
 
 function Samples({ platform = false }: { platform?: boolean }) {

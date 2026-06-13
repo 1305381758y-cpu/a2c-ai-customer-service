@@ -799,15 +799,15 @@ describe("portal api", () => {
         method: "PATCH",
         url: `/api/merchant/invite-codes/${target.id}`,
         headers: { cookie: merchantCookie },
-        payload: { status: "disabled", platformAccount: "user-1001" }
+        payload: { code: "INV-1-EDITED", registerUrl: "https://example.com/signup?invite={code}", status: "disabled", platformAccount: "user-1001" }
       });
       expect(patched.statusCode).toBe(200);
-      expect(patched.json()).toMatchObject({ status: "disabled", platformAccount: "user-1001" });
+      expect(patched.json()).toMatchObject({ code: "INV-1-EDITED", registerUrl: "https://example.com/signup?invite={code}", status: "disabled", platformAccount: "user-1001" });
 
       const deleted = await app.inject({ method: "DELETE", url: `/api/merchant/invite-codes/${target.id}`, headers: { cookie: merchantCookie } });
       expect(deleted.statusCode).toBe(200);
       const afterDelete = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
-      expect(afterDelete.json().rows.map((row: { code: string }) => row.code)).not.toContain("INV-1");
+      expect(afterDelete.json().rows.map((row: { code: string }) => row.code)).not.toContain("INV-1-EDITED");
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;
