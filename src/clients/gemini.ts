@@ -72,6 +72,7 @@ export class GeminiReplyClient {
           assignedInviteCode: input.inviteCode ? {
             code: input.inviteCode.code,
             registerUrl: inviteRegisterUrl(input.inviteCode),
+            displayText: inviteDisplayText(input.inviteCode, input.conversation.language),
             status: input.inviteCode.status
           } : null
         }),
@@ -152,7 +153,8 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
 - 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
 - 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
-- 如果 assignedInviteCode 存在，开户注册引导必须优先使用它的 registerUrl 或 code；不要自己编造邀请码。
+- 如果 assignedInviteCode 存在，开户注册引导必须同时包含它的 registerUrl 和邀请码 code；如果 registerUrl 已经包含邀请码，也仍要清楚表达这是专属开户链接。
+- 开户开户链接和邀请码是开户注册必需信息，不能漏掉其中任何一个，不能自己编造邀请码。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。
@@ -168,8 +170,9 @@ function buildSystemPrompt(config: AppConfig): string {
 function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: AppConfig): AiReply {
   if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
   const expectedLanguage = input.conversation.language && input.conversation.language !== "unknown" ? input.conversation.language : "";
+  const reply = ensureInviteInReply(value.reply.trim(), input, config);
   return {
-    reply: value.reply.trim(),
+    reply,
     language: expectedLanguage || (typeof value.language === "string" && value.language ? value.language : input.conversation.language),
     stage: typeof value.stage === "string" && value.stage ? value.stage : input.conversation.stage,
     extractedPhone: typeof value.extractedPhone === "string" ? value.extractedPhone : input.conversation.extractedPhone,
@@ -182,7 +185,7 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   const sample = input.samples[0];
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
-  const reply = sample?.standardReply || defaultReply(language, config, input.inviteCode);
+  const reply = ensureInviteInReply(sample?.standardReply || defaultReply(language, config, input.inviteCode), input, config);
   return {
     reply,
     language,
@@ -196,8 +199,8 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
 }
 
 function defaultReply(language: string, config: AppConfig, inviteCode?: A2CInviteCodeRecord): string {
-  const inviteUrl = inviteCode ? inviteRegisterUrl(inviteCode) : "";
-  const link = inviteUrl || config.PLATFORM_REGISTER_URL ? ` ${inviteUrl || config.PLATFORM_REGISTER_URL}` : "";
+  const registration = inviteCode ? inviteDisplayText(inviteCode, language) : config.PLATFORM_REGISTER_URL;
+  const link = registration ? ` ${registration}` : "";
   if (language === "en") return `Please complete the platform registration first, then send us your phone number and Telegram account.${link}`;
   if (language === "ms") return `Sila lengkapkan pendaftaran platform dahulu, kemudian hantar nombor telefon dan akaun Telegram anda.${link}`;
   if (language === "id") return `Silakan selesaikan pendaftaran platform terlebih dahulu, lalu kirim nomor telepon dan akun Telegram Anda.${link}`;
@@ -211,4 +214,29 @@ function defaultReply(language: string, config: AppConfig, inviteCode?: A2CInvit
 function inviteRegisterUrl(inviteCode: A2CInviteCodeRecord): string {
   if (!inviteCode.registerUrl) return inviteCode.code;
   return inviteCode.registerUrl.includes("{code}") ? inviteCode.registerUrl.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : inviteCode.registerUrl;
+}
+
+function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string): string {
+  const url = inviteRegisterUrl(inviteCode);
+  if (!inviteCode.registerUrl || inviteCode.registerUrl.includes("{code}")) return url;
+  if (language === "en") return `${url} Invitation code: ${inviteCode.code}`;
+  if (language === "pt-BR") return `${url} Código de convite: ${inviteCode.code}`;
+  if (language === "ja") return `${url} 招待コード：${inviteCode.code}`;
+  if (language === "th") return `${url} รหัสเชิญ: ${inviteCode.code}`;
+  if (language === "vi") return `${url} Mã mời: ${inviteCode.code}`;
+  if (language === "ms" || language === "id") return `${url} Kode undangan: ${inviteCode.code}`;
+  return `${url} 邀请码：${inviteCode.code}`;
+}
+
+function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig): string {
+  if (!input.country?.requirePlatformAccount || !input.inviteCode) return reply;
+  const display = inviteDisplayText(input.inviteCode, input.conversation.language);
+  const hasCode = reply.includes(input.inviteCode.code);
+  const hasUrl = input.inviteCode.registerUrl ? reply.includes(inviteRegisterUrl(input.inviteCode)) || reply.includes(input.inviteCode.registerUrl) : true;
+  if (hasCode && hasUrl) return reply;
+  const separator = /[。.!?！？]\s*$/.test(reply) ? "\n" : "\n";
+  if (input.conversation.language === "en") return `${reply}${separator}Registration link and invitation code: ${display}`;
+  if (input.conversation.language === "pt-BR") return `${reply}${separator}Link de cadastro e código de convite: ${display}`;
+  if (input.conversation.language === "ja") return `${reply}${separator}登録リンクと招待コード：${display}`;
+  return `${reply}${separator}开户链接和邀请码：${display || config.PLATFORM_REGISTER_URL}`;
 }

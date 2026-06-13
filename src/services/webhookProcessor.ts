@@ -87,19 +87,21 @@ export class WebhookProcessor {
     this.repos.upsertCustomerFromConversation(conversation);
     const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
 
-    if (isCountryGoalComplete(conversation, country)) {
-      conversation.stage = "ready_for_handoff";
-      conversation.status = "human_handoff";
-      await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString());
-      this.repos.updateConversation(conversation);
-      this.repos.upsertCustomerFromConversation(conversation);
-      return { status: "handoff", conversationId: conversation.id };
-    }
-
     if (conversation.status === "human_handoff") {
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
       return { status: "already_handoff", conversationId: conversation.id };
+    }
+
+    if (isCountryGoalComplete(conversation, country)) {
+      conversation.stage = "ready_for_handoff";
+      conversation.status = "human_handoff";
+      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
+      await this.sendVerificationReply(conversation, data, analysis.language, a2c);
+      await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
+      this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
+      return { status: "handoff", conversationId: conversation.id };
     }
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
@@ -124,6 +126,8 @@ export class WebhookProcessor {
     if (aiReply.stage === "ready_for_handoff" || isCountryGoalComplete(conversation, country)) {
       conversation.stage = "ready_for_handoff";
       conversation.status = "human_handoff";
+      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
+      await this.sendVerificationReply(conversation, data, aiReply.language || analysis.language, a2c);
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
@@ -162,6 +166,8 @@ export class WebhookProcessor {
         aiError: aiReply.error || "",
         a2cSendStatus,
         a2cSendError,
+        inviteCodeRequired: Boolean(country.requirePlatformAccount),
+        inviteCodeMissing: Boolean(country.requirePlatformAccount && !inviteCode),
         assignedInviteCode: inviteCode ? {
           id: inviteCode.id,
           code: inviteCode.code,
@@ -175,6 +181,47 @@ export class WebhookProcessor {
     this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
     return { status: a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
+  }
+
+  private async sendVerificationReply(
+    conversation: Parameters<Repositories["updateConversation"]>[0],
+    data: A2CWebhookPayload["data"],
+    language: string,
+    a2c: A2CClient
+  ): Promise<void> {
+    const content = verificationReply(language);
+    let externalId = "";
+    let a2cSendStatus: "sent" | "failed" = "sent";
+    let a2cSendError = "";
+    try {
+      externalId = await a2c.sendMessage({
+        to: data.from,
+        senderPhoneNumber: data.to,
+        type: "text",
+        content
+      });
+      if (!externalId) externalId = `a2c_verify:${data.messageId}:${Date.now()}`;
+    } catch (error) {
+      a2cSendStatus = "failed";
+      a2cSendError = error instanceof Error ? error.message : "unknown";
+      externalId = `verify_failed:${data.messageId}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
+    }
+
+    this.repos.insertMessage({
+      conversationId: conversation.id,
+      direction: "outbound",
+      externalId,
+      content,
+      msgType: "text",
+      language,
+      intent: "human_request",
+      rawPayload: {
+        systemFinalReply: true,
+        a2cSendStatus,
+        a2cSendError
+      }
+    });
+    this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "human_request", content, direction: "outbound" });
   }
 
   private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string, telegram = this.telegram): Promise<void> {
@@ -219,4 +266,15 @@ function isCountryGoalComplete(
   if (country.requireTelegram && !conversation.extractedTelegram) return false;
   if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
   return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
+}
+
+function verificationReply(language: string): string {
+  if (language === "en") return "We are verifying your information. Please wait a moment.";
+  if (language === "pt-BR") return "Estamos verificando suas informações. Aguarde um momento.";
+  if (language === "ja") return "情報を確認しています。少々お待ちください。";
+  if (language === "th") return "เรากำลังตรวจสอบข้อมูลของคุณ กรุณารอสักครู่";
+  if (language === "vi") return "Chúng tôi đang xác minh thông tin của bạn. Vui lòng chờ một chút.";
+  if (language === "ms") return "Kami sedang menyemak maklumat anda. Sila tunggu sebentar.";
+  if (language === "id") return "Kami sedang memverifikasi informasi Anda. Mohon tunggu sebentar.";
+  return "我们正在核实，请稍后。";
 }

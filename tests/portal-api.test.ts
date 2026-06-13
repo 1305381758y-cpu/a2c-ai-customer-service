@@ -883,6 +883,7 @@ describe("portal api", () => {
       expect(firstWebhook.statusCode).toBe(200);
       expect(firstWebhook.json().status).toBe("replied");
       expect(String(sentMessages[0].content)).toContain("FLOW-1");
+      expect(String(sentMessages[0].content)).toContain("https://example.com/register?code=FLOW-1");
 
       const reserved = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
       expect(reserved.json().rows.find((row: { code: string }) => row.code === "FLOW-1")).toMatchObject({
@@ -909,9 +910,99 @@ describe("portal api", () => {
       });
       expect(doneWebhook.statusCode).toBe(200);
 
+      const completeWebhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "invite-flow-event-3",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "invite-flow-message-3",
+            content: "My phone is 123456789 and Telegram is @flowuser",
+            from: "invite-flow-customer",
+            to: "invite-flow-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(completeWebhook.statusCode).toBe(200);
+      expect(completeWebhook.json().status).toBe("handoff");
+      expect(String(sentMessages.at(-1)?.content)).toBe("We are verifying your information. Please wait a moment.");
+
       const used = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
       expect(used.json().rows.find((row: { code: string }) => row.code === "FLOW-1")).toMatchObject({ status: "used" });
       expect(used.json().rows.find((row: { code: string }) => row.code === "FLOW-2")).toMatchObject({ status: "available" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends both register url and invite code when url has no placeholder", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "plain-invite-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "plain-invite-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "普通链接客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "普通邀请码链接商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "plain-invite@test.local", name: "普通邀请码", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "plain-invite@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://plain-a2c.test/api/openapi", a2cAppId: "plain-app", a2cAppSecret: "plain-secret" }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "PLAIN-1", registerUrl: "https://example.com/register" }
+      });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "plain-invite-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "plain-invite-message-1",
+            content: "link please",
+            from: "plain-invite-customer",
+            to: "plain-invite-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(String(sentMessages[0].content)).toContain("https://example.com/register");
+      expect(String(sentMessages[0].content)).toContain("PLAIN-1");
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;
@@ -1221,6 +1312,12 @@ describe("portal api", () => {
         }
       });
       expect(webhook.json().status).toBe("handoff");
+      expect(sentBodies[0]).toMatchObject({
+        to: "manual-customer-phone",
+        senderPhoneNumber: "manual-a2c-account",
+        type: 1
+      });
+      expect(String(sentBodies[0].content)).toContain("We are verifying your information");
 
       const conversations = await app.inject({
         method: "GET",
@@ -1237,8 +1334,8 @@ describe("portal api", () => {
       });
 
       expect(sent.statusCode).toBe(200);
-      expect(sent.json().externalId).toBe("manual-1");
-      expect(sentBodies[0]).toMatchObject({
+      expect(sent.json().externalId).toBe("manual-2");
+      expect(sentBodies[1]).toMatchObject({
         to: "manual-customer-phone",
         senderPhoneNumber: "manual-a2c-account",
         type: 2,
@@ -1254,7 +1351,7 @@ describe("portal api", () => {
         payload: { type: "text", content: "请把手机号和 Telegram 发给我" }
       });
       expect(textSent.statusCode).toBe(200);
-      expect(sentBodies[1]).toMatchObject({
+      expect(sentBodies[2]).toMatchObject({
         to: "manual-customer-phone",
         senderPhoneNumber: "manual-a2c-account",
         type: 1,
