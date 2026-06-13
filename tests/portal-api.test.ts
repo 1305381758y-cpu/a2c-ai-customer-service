@@ -947,7 +947,7 @@ describe("portal api", () => {
       const url = String(input);
       if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "plain-invite-token", expireIn: 3600 } });
       if (url.endsWith("/v1/accounts")) {
-        return Response.json({ code: 200, data: [{ apiPhone: "plain-invite-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "普通链接客服" }] });
+        return Response.json({ code: 200, data: [{ apiPhone: "18507251675", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "普通链接客服" }] });
       }
       if (url.endsWith("/v1/messages")) {
         sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
@@ -1006,7 +1006,7 @@ describe("portal api", () => {
             messageId: "plain-invite-message-1",
             content: "link please",
             from: "plain-invite-customer",
-            to: "plain-invite-a2c",
+            to: "+1 (850) 725-1675",
             msgType: "text",
             timestamp: Math.floor(Date.now() / 1000)
           }

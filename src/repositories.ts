@@ -1496,32 +1496,21 @@ export class Repositories {
       .get(conversation.merchantId, conversation.id) as Record<string, unknown> | undefined;
     if (existing) return mapA2CInviteCode(existing);
 
-    const available = (this.db.sqlite
+    const availableRows = this.db.sqlite
       .prepare(`
         SELECT ic.*, co.code AS country_code, co.name AS country_name
         FROM a2c_invite_codes ic
         LEFT JOIN merchant_countries co ON co.id = ic.country_id
         WHERE ic.merchant_id = ?
-          AND ic.country_id = ?
-          AND ic.a2c_account_phone = ?
-          AND ic.status = 'available'
-        ORDER BY ic.id ASC
-        LIMIT 1
-      `)
-      .get(conversation.merchantId, conversation.countryId, conversation.a2cAccountPhone) as Record<string, unknown> | undefined) ?? (this.db.sqlite
-      .prepare(`
-        SELECT ic.*, co.code AS country_code, co.name AS country_name
-        FROM a2c_invite_codes ic
-        LEFT JOIN merchant_countries co ON co.id = ic.country_id
-        WHERE ic.merchant_id = ?
-          AND ic.a2c_account_phone = ?
           AND ic.status = 'available'
         ORDER BY
-          CASE WHEN ic.country_id = '' THEN 0 ELSE 1 END,
+          CASE WHEN ic.country_id = ? THEN 0 WHEN ic.country_id = '' THEN 1 ELSE 2 END,
           ic.id ASC
-        LIMIT 1
+        LIMIT 200
       `)
-      .get(conversation.merchantId, conversation.a2cAccountPhone) as Record<string, unknown> | undefined);
+      .all(conversation.merchantId, conversation.countryId) as Array<Record<string, unknown>>;
+    const normalizedAccountPhone = phoneDigits(conversation.a2cAccountPhone);
+    const available = availableRows.find((row) => phoneDigits(String(row.a2c_account_phone ?? "")) === normalizedAccountPhone);
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);
@@ -1942,6 +1931,10 @@ function normalizeTelegramBindingStatus(value: unknown): MerchantConfigRecord["t
 
 function normalizeInviteCodeStatus(value: unknown, fallback: A2CInviteCodeRecord["status"]): A2CInviteCodeRecord["status"] {
   return value === "available" || value === "reserved" || value === "used" || value === "disabled" ? value : fallback;
+}
+
+function phoneDigits(value: string): string {
+  return value.replace(/\D/g, "");
 }
 
 function parseJsonObject(value: unknown): Record<string, unknown> {
