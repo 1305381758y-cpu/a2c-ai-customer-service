@@ -137,6 +137,27 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS a2c_invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT DEFAULT '',
+      a2c_account_id INTEGER NOT NULL,
+      a2c_account_phone TEXT NOT NULL,
+      code TEXT NOT NULL,
+      register_url TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'available',
+      assigned_customer_key TEXT DEFAULT '',
+      assigned_conversation_id TEXT DEFAULT '',
+      platform_account TEXT DEFAULT '',
+      assigned_at TEXT DEFAULT '',
+      used_at TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, a2c_account_phone, code),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY(a2c_account_id) REFERENCES merchant_a2c_accounts(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT DEFAULT 'default',
@@ -280,6 +301,16 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "unread_count", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "merchant_a2c_accounts", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "a2c_invite_codes", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "a2c_account_phone", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "register_url", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "status", "TEXT DEFAULT 'available'");
+  ensureColumn(db, "a2c_invite_codes", "assigned_customer_key", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "assigned_conversation_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "platform_account", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "assigned_at", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "used_at", "TEXT DEFAULT ''");
   ensureColumn(db, "customers", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customers", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "customers", "extracted_whatsapp", "TEXT DEFAULT ''");
@@ -311,6 +342,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_samples SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE conversations SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE merchant_a2c_accounts SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE a2c_invite_codes SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE customers SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE messages SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE handoff_events SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
@@ -320,6 +352,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_samples SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE conversations SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE merchant_a2c_accounts SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
+  db.prepare("UPDATE a2c_invite_codes SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE customers SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE knowledge_items SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE training_materials SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();

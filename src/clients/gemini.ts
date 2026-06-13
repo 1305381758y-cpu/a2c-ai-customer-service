@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import type { AppConfig } from "../config.js";
-import type { Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
+import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 
 export interface ReplyInput {
@@ -12,6 +12,7 @@ export interface ReplyInput {
   trainingMaterials?: TrainingMaterialItemRecord[];
   memory?: CustomerMemoryRecord;
   country?: MerchantCountryRecord;
+  inviteCode?: A2CInviteCodeRecord;
 }
 
 export interface AiReply {
@@ -67,7 +68,12 @@ export class GeminiReplyClient {
           knowledgeItems: input.knowledge,
           trainingMaterials: input.trainingMaterials ?? [],
           customerMemory: input.memory ?? null,
-          country: input.country ?? null
+          country: input.country ?? null,
+          assignedInviteCode: input.inviteCode ? {
+            code: input.inviteCode.code,
+            registerUrl: inviteRegisterUrl(input.inviteCode),
+            status: input.inviteCode.status
+          } : null
         }),
         config: {
           abortSignal: timeoutSignal(),
@@ -146,6 +152,7 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
 - 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
 - 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
+- 如果 assignedInviteCode 存在，开户注册引导必须优先使用它的 registerUrl 或 code；不要自己编造邀请码。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。
@@ -175,7 +182,7 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   const sample = input.samples[0];
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
-  const reply = sample?.standardReply || defaultReply(language, config);
+  const reply = sample?.standardReply || defaultReply(language, config, input.inviteCode);
   return {
     reply,
     language,
@@ -188,8 +195,9 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   };
 }
 
-function defaultReply(language: string, config: AppConfig): string {
-  const link = config.PLATFORM_REGISTER_URL ? ` ${config.PLATFORM_REGISTER_URL}` : "";
+function defaultReply(language: string, config: AppConfig, inviteCode?: A2CInviteCodeRecord): string {
+  const inviteUrl = inviteCode ? inviteRegisterUrl(inviteCode) : "";
+  const link = inviteUrl || config.PLATFORM_REGISTER_URL ? ` ${inviteUrl || config.PLATFORM_REGISTER_URL}` : "";
   if (language === "en") return `Please complete the platform registration first, then send us your phone number and Telegram account.${link}`;
   if (language === "ms") return `Sila lengkapkan pendaftaran platform dahulu, kemudian hantar nombor telefon dan akaun Telegram anda.${link}`;
   if (language === "id") return `Silakan selesaikan pendaftaran platform terlebih dahulu, lalu kirim nomor telepon dan akun Telegram Anda.${link}`;
@@ -198,4 +206,9 @@ function defaultReply(language: string, config: AppConfig): string {
   if (language === "pt-BR") return `Conclua primeiro o cadastro na plataforma. Depois, envie seu número de telefone e sua conta do Telegram.${link}`;
   if (language === "ja") return `まずプラットフォーム登録を完了してください。完了後、電話番号とTelegramアカウントを送ってください。${link}`;
   return `请先完成平台开户，完成后把您的手机号和 Telegram 账号发给我。${link}`;
+}
+
+function inviteRegisterUrl(inviteCode: A2CInviteCodeRecord): string {
+  if (!inviteCode.registerUrl) return inviteCode.code;
+  return inviteCode.registerUrl.includes("{code}") ? inviteCode.registerUrl.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : inviteCode.registerUrl;
 }

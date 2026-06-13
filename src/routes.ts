@@ -82,6 +82,43 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!row) return reply.code(404).send({ error: "a2c account not found" });
     return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
   });
+  app.get<{ Params: { id: string } }>("/api/admin/a2c/accounts/:id/invite-codes", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    return { rows: deps.repos.listInviteCodesForA2CAccount(id) };
+  });
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id/invite-codes", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    try {
+      return deps.repos.createInviteCodeForA2CAccount(id, request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid invite code" });
+    }
+  });
+  app.post<{ Params: { id: string }; Body: { codes?: string; registerUrl?: string } }>("/api/admin/a2c/accounts/:id/invite-codes/import", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    try {
+      return deps.repos.importInviteCodesForA2CAccount(id, request.body ?? {});
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid invite codes" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/invite-codes/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchInviteCode(id, request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "invite code not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/invite-codes/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const ok = deps.repos.deleteInviteCode(id);
+    if (!ok) return reply.code(404).send({ error: "invite code not found" });
+    return { ok: true };
+  });
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 
   app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
@@ -258,6 +295,43 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const row = deps.repos.patchMerchantA2CAccount(id, request.body ?? {}, scopedMerchantId(request));
     if (!row) return reply.code(404).send({ error: "a2c account not found" });
     return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
+  });
+  app.get<{ Params: { id: string } }>("/api/merchant/a2c/accounts/:id/invite-codes", { preHandler: merchantRoles }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    return { rows: deps.repos.listInviteCodesForA2CAccount(id, scopedMerchantId(request)) };
+  });
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/a2c/accounts/:id/invite-codes", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    try {
+      return deps.repos.createInviteCodeForA2CAccount(id, request.body ?? {}, scopedMerchantId(request));
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid invite code" });
+    }
+  });
+  app.post<{ Params: { id: string }; Body: { codes?: string; registerUrl?: string } }>("/api/merchant/a2c/accounts/:id/invite-codes/import", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    try {
+      return deps.repos.importInviteCodesForA2CAccount(id, request.body ?? {}, scopedMerchantId(request));
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid invite codes" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/invite-codes/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchInviteCode(id, request.body ?? {}, scopedMerchantId(request));
+    if (!row) return reply.code(404).send({ error: "invite code not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/merchant/invite-codes/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const ok = deps.repos.deleteInviteCode(id, scopedMerchantId(request));
+    if (!ok) return reply.code(404).send({ error: "invite code not found" });
+    return { ok: true };
   });
   app.post("/api/merchant/telegram/setup-webhook", { preHandler: merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
   app.get<{ Querystring: { countryId?: string; type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({

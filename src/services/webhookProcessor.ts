@@ -81,6 +81,9 @@ export class WebhookProcessor {
     conversation.extractedPhone = conversation.extractedPhone || analysis.phone;
     conversation.extractedTelegram = conversation.extractedTelegram || analysis.telegram;
     conversation.extractedWhatsApp = conversation.extractedWhatsApp || analysis.whatsapp;
+    if (analysis.intent === "platform_register_done") {
+      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
+    }
     this.repos.upsertCustomerFromConversation(conversation);
     const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
 
@@ -102,6 +105,9 @@ export class WebhookProcessor {
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
+    const inviteCode = country.requirePlatformAccount && analysis.intent !== "platform_register_done"
+      ? this.repos.reserveInviteCodeForConversation(conversation)
+      : undefined;
     const samples = rankSamples(enabledSamples, {
       text: content,
       language: analysis.language,
@@ -109,7 +115,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country });
+    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -155,7 +161,13 @@ export class WebhookProcessor {
         aiFallback: Boolean(aiReply.fallback),
         aiError: aiReply.error || "",
         a2cSendStatus,
-        a2cSendError
+        a2cSendError,
+        assignedInviteCode: inviteCode ? {
+          id: inviteCode.id,
+          code: inviteCode.code,
+          registerUrl: inviteCode.registerUrl,
+          status: inviteCode.status
+        } : null
       }
     });
     this.repos.updateConversation(conversation);

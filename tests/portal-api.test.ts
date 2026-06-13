@@ -743,6 +743,181 @@ describe("portal api", () => {
     }
   });
 
+  it("lets merchants manage invite codes under each A2C account", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "invite-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "invite-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "邀请码客服" }] });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "邀请码商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "invite@test.local", name: "邀请码管理员", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "invite@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://a2c.test/api/openapi", a2cAppId: "app-id", a2cAppSecret: "app-secret" }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+
+      const imported = await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "INV-1\nINV-2, INV-3", registerUrl: "https://example.com/register?code={code}" }
+      });
+      expect(imported.statusCode).toBe(200);
+      expect(imported.json().rows).toHaveLength(3);
+      expect(imported.json().rows[0]).toMatchObject({ merchantId, a2cAccountPhone: "invite-a2c" });
+
+      const list = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
+      expect(list.json().rows.map((row: { code: string }) => row.code).sort()).toEqual(["INV-1", "INV-2", "INV-3"]);
+
+      const target = list.json().rows.find((row: { code: string }) => row.code === "INV-1") as { id: number };
+      const patched = await app.inject({
+        method: "PATCH",
+        url: `/api/merchant/invite-codes/${target.id}`,
+        headers: { cookie: merchantCookie },
+        payload: { status: "disabled", platformAccount: "user-1001" }
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({ status: "disabled", platformAccount: "user-1001" });
+
+      const deleted = await app.inject({ method: "DELETE", url: `/api/merchant/invite-codes/${target.id}`, headers: { cookie: merchantCookie } });
+      expect(deleted.statusCode).toBe(200);
+      const afterDelete = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
+      expect(afterDelete.json().rows.map((row: { code: string }) => row.code)).not.toContain("INV-1");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reserves an invite code for auto replies and marks it used after registration", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "invite-flow-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "invite-flow-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "引导客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "邀请码自动分配商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "invite-flow@test.local", name: "邀请码流程", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "invite-flow@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://a2c-flow.test/api/openapi", a2cAppId: "invite-flow-app", a2cAppSecret: "invite-flow-secret" }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "FLOW-1\nFLOW-2", registerUrl: "https://example.com/register?code={code}" }
+      });
+
+      const firstWebhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "invite-flow-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "invite-flow-message-1",
+            content: "Hello",
+            from: "invite-flow-customer",
+            to: "invite-flow-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(firstWebhook.statusCode).toBe(200);
+      expect(firstWebhook.json().status).toBe("replied");
+      expect(String(sentMessages[0].content)).toContain("FLOW-1");
+
+      const reserved = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
+      expect(reserved.json().rows.find((row: { code: string }) => row.code === "FLOW-1")).toMatchObject({
+        status: "reserved",
+        assignedCustomerKey: "invite-flow-customer"
+      });
+
+      const doneWebhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "invite-flow-event-2",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "invite-flow-message-2",
+            content: "registered",
+            from: "invite-flow-customer",
+            to: "invite-flow-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(doneWebhook.statusCode).toBe(200);
+
+      const used = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
+      expect(used.json().rows.find((row: { code: string }) => row.code === "FLOW-1")).toMatchObject({ status: "used" });
+      expect(used.json().rows.find((row: { code: string }) => row.code === "FLOW-2")).toMatchObject({ status: "available" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("routes merchant-specific A2C webhook urls directly to the merchant", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");
