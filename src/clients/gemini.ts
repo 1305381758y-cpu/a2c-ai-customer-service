@@ -82,7 +82,7 @@ export class GeminiReplyClient {
           systemInstruction: buildSystemPrompt(this.config),
           responseMimeType: "application/json",
           responseSchema: replySchema,
-          temperature: 0.25,
+          temperature: 0.45,
           maxOutputTokens: 800,
           thinkingConfig: { thinkingBudget: 0 }
         }
@@ -155,6 +155,9 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
 - 如果 assignedInviteCode 存在，开户注册引导必须同时包含它的 registerUrl 和邀请码 code；如果 registerUrl 已经包含邀请码，也仍要清楚表达这是专属开户链接。
 - 开户开户链接和邀请码是开户注册必需信息，不能漏掉其中任何一个，不能自己编造邀请码。
+- 如果客户追问邀请码、质疑是否需要邀请码，必须直接回答：注册需要邀请码，并给出 assignedInviteCode；禁止说“不需要邀请码”。
+- 如果没有 assignedInviteCode，不能说“不需要邀请码”，只能说明“我这边正在确认专属邀请码，请稍等”。
+- 不要连续重复同一句开户链接话术；客户追问时先回答问题，再轻轻推进下一步。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。
@@ -185,7 +188,8 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   const sample = input.samples[0];
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
-  const reply = ensureInviteInReply(sample?.standardReply || defaultReply(language, config, input.inviteCode), input, config);
+  const baseReply = fallbackByCustomerText(input, config) || sample?.standardReply || defaultReply(language, config, input.inviteCode);
+  const reply = ensureInviteInReply(baseReply, input, config);
   return {
     reply,
     language,
@@ -229,7 +233,8 @@ function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string): s
 }
 
 function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig): string {
-  if (!input.country?.requirePlatformAccount || !input.inviteCode) return reply;
+  if (!input.country?.requirePlatformAccount) return reply;
+  if (!input.inviteCode) return sanitizeNoInviteReply(reply, input.conversation.language, config);
   const display = inviteDisplayText(input.inviteCode, input.conversation.language);
   const hasCode = reply.includes(input.inviteCode.code);
   const hasUrl = input.inviteCode.registerUrl ? reply.includes(inviteRegisterUrl(input.inviteCode)) || reply.includes(input.inviteCode.registerUrl) : true;
@@ -239,4 +244,39 @@ function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig
   if (input.conversation.language === "pt-BR") return `${reply}${separator}Link de cadastro e código de convite: ${display}`;
   if (input.conversation.language === "ja") return `${reply}${separator}登録リンクと招待コード：${display}`;
   return `${reply}${separator}开户链接和邀请码：${display || config.PLATFORM_REGISTER_URL}`;
+}
+
+function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
+  const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
+  if (/(邀请码|invite code|invitation code|código|codigo|招待コード)/i.test(input.customerText)) {
+    if (input.inviteCode) {
+      const display = inviteDisplayText(input.inviteCode, language);
+      if (language === "en") return `Yes, registration requires an invitation code. Please use this registration link and invitation code: ${display}`;
+      if (language === "pt-BR") return `Sim, o cadastro precisa de código de convite. Use este link de cadastro e código: ${display}`;
+      if (language === "ja") return `はい、登録には招待コードが必要です。こちらの登録リンクと招待コードを使ってください：${display}`;
+      return `需要邀请码才能注册。请使用这个开户链接和邀请码：${display}`;
+    }
+    return missingInviteReply(language, config);
+  }
+  if (/(今天|几号|日期|what date|what day|today|data de hoje)/i.test(input.customerText)) {
+    if (language === "en") return "Today is June 13, 2026. I can continue helping you with the registration after this.";
+    if (language === "pt-BR") return "Hoje é 13 de junho de 2026. Depois disso, posso continuar ajudando você com o cadastro.";
+    return "今天是 2026年6月13日。您这边如果继续注册，我可以接着协助。";
+  }
+  return "";
+}
+
+function sanitizeNoInviteReply(reply: string, language: string, config: AppConfig): string {
+  if (/(不需要邀请码|无需邀请码|不需要.*邀请码|no invite|no invitation code|does not need.*invite)/i.test(reply)) {
+    return missingInviteReply(language, config);
+  }
+  return reply;
+}
+
+function missingInviteReply(language: string, config: AppConfig): string {
+  const suffix = config.PLATFORM_REGISTER_URL ? ` ${config.PLATFORM_REGISTER_URL}` : "";
+  if (language === "en") return `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${suffix}`;
+  if (language === "pt-BR") return `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${suffix}`;
+  if (language === "ja") return `登録には招待コードが必要です。専用の招待コードを確認していますので、少々お待ちください。${suffix}`;
+  return `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${suffix}`;
 }

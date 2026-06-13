@@ -1496,7 +1496,7 @@ export class Repositories {
       .get(conversation.merchantId, conversation.id) as Record<string, unknown> | undefined;
     if (existing) return mapA2CInviteCode(existing);
 
-    const available = this.db.sqlite
+    const available = (this.db.sqlite
       .prepare(`
         SELECT ic.*, co.code AS country_code, co.name AS country_name
         FROM a2c_invite_codes ic
@@ -1508,7 +1508,20 @@ export class Repositories {
         ORDER BY ic.id ASC
         LIMIT 1
       `)
-      .get(conversation.merchantId, conversation.countryId, conversation.a2cAccountPhone) as Record<string, unknown> | undefined;
+      .get(conversation.merchantId, conversation.countryId, conversation.a2cAccountPhone) as Record<string, unknown> | undefined) ?? (this.db.sqlite
+      .prepare(`
+        SELECT ic.*, co.code AS country_code, co.name AS country_name
+        FROM a2c_invite_codes ic
+        LEFT JOIN merchant_countries co ON co.id = ic.country_id
+        WHERE ic.merchant_id = ?
+          AND ic.a2c_account_phone = ?
+          AND ic.status = 'available'
+        ORDER BY
+          CASE WHEN ic.country_id = '' THEN 0 ELSE 1 END,
+          ic.id ASC
+        LIMIT 1
+      `)
+      .get(conversation.merchantId, conversation.a2cAccountPhone) as Record<string, unknown> | undefined);
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);
@@ -1516,13 +1529,14 @@ export class Repositories {
       .prepare(`
         UPDATE a2c_invite_codes
         SET status = 'reserved',
+            country_id = ?,
             assigned_customer_key = ?,
             assigned_conversation_id = ?,
             assigned_at = COALESCE(NULLIF(assigned_at, ''), CURRENT_TIMESTAMP),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND merchant_id = ? AND status = 'available'
       `)
-      .run(conversation.customerPhone, conversation.id, code.id, conversation.merchantId);
+      .run(conversation.countryId, conversation.customerPhone, conversation.id, code.id, conversation.merchantId);
     return this.getInviteCode(code.id, conversation.merchantId);
   }
 
