@@ -555,7 +555,24 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查 Google AI Studio 配置") : "";
   const isOutbound = message.direction === "outbound";
   const sendIssue = isOutbound && payload.a2cSendStatus === "failed" ? `A2C发送失败：${translateSystemMessage(payload.a2cSendError || "未知错误")}` : "";
-  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{original ? <div className="translation-block"><strong>{isOutbound ? "客服原文" : "客户原文"}</strong><p>{original}</p>{canShowTranslation ? <><strong>{isOutbound ? "发送译文" : "中文译文"}{payload.targetLanguage ? ` · ${languageName(payload.targetLanguage)}` : ""}</strong><p>{translated}</p></> : <div className="translation-warning">{translateSystemMessage(translationIssue)}</div>}</div> : <p>{message.content}</p>}{sendIssue && <div className="translation-warning">{sendIssue}</div>}<small>{label(message.intent)} · {languageName(message.language)}</small></article>;
+  const mediaUrl = mediaUrlFromMessage(message);
+  return <article className={`chat-bubble ${message.direction}`}><div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{formatTime(message.createdAt)}</time></div>{mediaUrl ? <MediaPreview type={message.msgType} url={mediaUrl} caption={message.content} /> : original ? <div className="translation-block"><strong>{isOutbound ? "客服原文" : "客户原文"}</strong><p>{original}</p>{canShowTranslation ? <><strong>{isOutbound ? "发送译文" : "中文译文"}{payload.targetLanguage ? ` · ${languageName(payload.targetLanguage)}` : ""}</strong><p>{translated}</p></> : <div className="translation-warning">{translateSystemMessage(translationIssue)}</div>}</div> : <p>{message.content}</p>}{sendIssue && <div className="translation-warning">{sendIssue}</div>}<small>{label(message.intent)} · {languageName(message.language)}</small></article>;
+}
+
+function MediaPreview({ type, url, caption }: { type: string; url: string; caption: string }) {
+  if (type === "image") return <div className="media-preview"><a href={url} target="_blank" rel="noreferrer"><img src={url} alt={caption && caption !== "[图片]" ? caption : "客户发送的图片"} loading="lazy" /></a>{caption && caption !== "[图片]" && <p>{caption}</p>}</div>;
+  if (type === "video") return <div className="media-preview"><video src={url} controls preload="metadata" />{caption && caption !== "[视频]" && <p>{caption}</p>}</div>;
+  if (type === "audio") return <div className="media-preview"><audio src={url} controls />{caption && caption !== "[音频]" && <p>{caption}</p>}</div>;
+  return <div className="media-preview file-preview"><a href={url} target="_blank" rel="noreferrer">{caption && caption !== "[文件]" ? caption : "打开文件"}</a></div>;
+}
+
+function mediaUrlFromMessage(message: ChatMessage) {
+  const payload = message.rawPayload || {};
+  const nested = payload.data && typeof payload.data === "object" ? payload.data as Record<string, unknown> : {};
+  const url = String(payload.mediaUrl || payload.url || nested.url || "");
+  if (url) return url;
+  if (message.msgType !== "text" && /^https?:\/\//i.test(message.content)) return message.content;
+  return "";
 }
 
 function useClientPagination<T>(rows: T[], defaultPageSize = 20) {

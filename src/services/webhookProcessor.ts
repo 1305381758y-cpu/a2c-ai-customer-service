@@ -41,7 +41,10 @@ export class WebhookProcessor {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };
 
     const data = payload.data;
-    const content = data.content || data.caption || data.url || "";
+    const msgType = normalizeMessageType(data.msgType, data.url);
+    const mediaUrl = data.url || (isUrl(data.content) ? data.content : "");
+    const analysisText = msgType === "text" ? data.content || data.caption || "" : data.caption || "";
+    const content = msgType === "text" ? analysisText : data.caption || mediaLabel(msgType);
     const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
     const country = this.repos.ensurePrimaryCountry(merchant.id);
@@ -50,15 +53,17 @@ export class WebhookProcessor {
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
-    const analysis = analyzeMessage(content, conversation.language);
-    const inboundTranslation = await translateForOperator(runtimeConfig, content, analysis.language);
+    const analysis = analyzeMessage(analysisText, conversation.language);
+    const inboundTranslation = analysisText
+      ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
+      : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
 
     const inserted = this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "inbound",
       externalId: data.messageId || payload.id,
       content,
-      msgType: data.msgType || "text",
+      msgType,
       language: analysis.language,
       intent: analysis.intent,
       phoneDetected: analysis.phone,
@@ -70,7 +75,9 @@ export class WebhookProcessor {
         translatedContent: inboundTranslation.translatedText,
         targetLanguage: inboundTranslation.targetLanguage,
         translationStatus: inboundTranslation.status,
-        translationError: inboundTranslation.error || ""
+        translationError: inboundTranslation.error || "",
+        mediaUrl,
+        fileName: data.fileName || ""
       }
     });
     if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };
@@ -84,7 +91,7 @@ export class WebhookProcessor {
       this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
     }
     this.repos.upsertCustomerFromConversation(conversation);
-    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content, direction: "inbound" });
+    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content: analysisText || content, direction: "inbound" });
 
     if (conversation.status === "human_handoff") {
       this.repos.updateConversation(conversation);
@@ -110,13 +117,13 @@ export class WebhookProcessor {
       ? this.repos.reserveInviteCodeForConversation(conversation)
       : undefined;
     const samples = rankSamples(enabledSamples, {
-      text: content,
+      text: analysisText || content,
       language: analysis.language,
       intent: analysis.intent,
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
+    const aiReply = await ai.generateReply({ customerText: analysisText || content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -265,6 +272,33 @@ function isCountryGoalComplete(
   if (country.requireTelegram && !conversation.extractedTelegram) return false;
   if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
   return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
+}
+
+function normalizeMessageType(msgType = "", url = ""): "text" | "image" | "video" | "audio" | "document" {
+  const value = String(msgType || "").toLowerCase();
+  if (value === "text" || value === "image" || value === "video" || value === "audio" || value === "document") return value;
+  if (value === "1") return "text";
+  if (value === "2") return "image";
+  if (value === "3") return "video";
+  if (value === "4") return "audio";
+  if (value === "5") return "document";
+  if (/\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url)) return "image";
+  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) return "video";
+  if (/\.(mp3|wav|m4a|ogg)(\?|$)/i.test(url)) return "audio";
+  if (url) return "document";
+  return "text";
+}
+
+function mediaLabel(type: string): string {
+  if (type === "image") return "[图片]";
+  if (type === "video") return "[视频]";
+  if (type === "audio") return "[音频]";
+  if (type === "document") return "[文件]";
+  return "";
+}
+
+function isUrl(value = ""): boolean {
+  return /^https?:\/\//i.test(value.trim());
 }
 
 function verificationReply(language: string): string {

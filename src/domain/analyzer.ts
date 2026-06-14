@@ -16,7 +16,7 @@ const telegramRegexes = [
 ];
 
 export function extractPhone(text: string): string {
-  const matches = text.match(/(?:\+?\d[\s-]?){8,16}\d/g);
+  const matches = stripUrls(text).match(/(?:\+?\d[\s-]?){8,16}\d/g);
   if (!matches) return "";
   const normalized = matches
     .map((match) => match.replace(/[^\d+]/g, ""))
@@ -38,6 +38,7 @@ export function extractWhatsApp(text: string): string {
 }
 
 export function detectLanguage(text: string, fallback = "unknown"): string {
+  text = stripUrls(text);
   if (/[\u0E00-\u0E7F]/.test(text)) return "th";
   if (/[\u3040-\u30FF]/.test(text)) return "ja";
   if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) return "ja";
@@ -52,6 +53,7 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
 }
 
 export function analyzeMessage(text: string, previousLanguage = "unknown"): MessageAnalysis {
+  text = stripUrls(text);
   const language = detectLanguage(text, previousLanguage);
   const phone = extractPhone(text);
   const telegram = extractTelegram(text);
@@ -60,6 +62,10 @@ export function analyzeMessage(text: string, previousLanguage = "unknown"): Mess
   const stage = inferStage(intent, Boolean(phone), Boolean(telegram));
 
   return { language, intent, phone, telegram, whatsapp, stage };
+}
+
+function stripUrls(text: string): string {
+  return text.replace(/https?:\/\/\S+/gi, " ");
 }
 
 function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): IntentLabel {

@@ -1089,6 +1089,72 @@ describe("portal api", () => {
     }
   });
 
+  it("stores inbound images as media without extracting phone numbers from image urls", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "image-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "image-a2c", verifiedName: "图片客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: "image-reply" });
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "图片消息商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "image@test.local", name: "图片消息", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "image@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://image-a2c.test/api/openapi", a2cAppId: "image-app", a2cAppSecret: "image-secret" }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const imageUrl = "https://bucket-chatapp-file-internal.oss-ap-southeast-1.aliyuncs.com/1226109357673717760.jpg?Expires=1782043661";
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "image-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "image-message-1",
+            content: imageUrl,
+            url: imageUrl,
+            from: "image-customer",
+            to: "image-a2c",
+            msgType: "image",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      const conversation = conversations.json().rows[0] as { id: string; extractedPhone: string };
+      expect(conversation.extractedPhone).toBe("");
+      const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversation.id}/messages`, headers: { cookie: merchantCookie } });
+      const inbound = messages.json().rows.find((row: { direction: string }) => row.direction === "inbound");
+      expect(inbound).toMatchObject({ msgType: "image", content: "[图片]", intent: "unknown" });
+      expect(inbound.rawPayload.mediaUrl).toBe(imageUrl);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("routes merchant-specific A2C webhook urls directly to the merchant", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");

@@ -7,6 +7,12 @@ describe("message analyzer", () => {
     expect(extractTelegram("tg: @customer_123")).toBe("@customer_123");
   });
 
+  it("does not extract phone numbers from media urls", () => {
+    const url = "https://bucket-chatapp-file-internal.oss-ap-southeast-1.aliyuncs.com/1226109357673717760.jpg?Expires=1782043661";
+    expect(extractPhone(url)).toBe("");
+    expect(analyzeMessage(url).phone).toBe("");
+  });
+
   it("detects languages", () => {
     expect(detectLanguage("你好")).toBe("zh");
     expect(detectLanguage("hello")).toBe("en");
