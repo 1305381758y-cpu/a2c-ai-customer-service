@@ -1537,7 +1537,7 @@ describe("portal api", () => {
     }
   });
 
-  it("isolates conversations, memories, and unread counts by A2C account country", async () => {
+  it("uses one merchant country for all A2C accounts and learns samples from replies", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
@@ -1562,18 +1562,18 @@ describe("portal api", () => {
         method: "POST",
         url: "/api/admin/merchants",
         headers: { cookie: adminCookie },
-        payload: { name: "多国家商户" }
+        payload: { name: "单国家商户" }
       });
       const merchantId = merchant.json().id as string;
       await app.inject({
         method: "POST",
         url: "/api/admin/users",
         headers: { cookie: adminCookie },
-        payload: { merchantId, email: "countries@test.local", name: "多国家", password: "Merchant123456", role: "merchant_admin" }
+        payload: { merchantId, email: "countries@test.local", name: "单国家", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "countries@test.local", "Merchant123456");
 
-      const br = await app.inject({
+      await app.inject({
         method: "POST",
         url: "/api/merchant/countries",
         headers: { cookie: merchantCookie },
@@ -1585,6 +1585,9 @@ describe("portal api", () => {
         headers: { cookie: merchantCookie },
         payload: { code: "ph", name: "Philippines", defaultLanguage: "en", requireTelegram: false, requireWhatsApp: true }
       });
+      const countries = await app.inject({ method: "GET", url: "/api/merchant/countries", headers: { cookie: merchantCookie } });
+      expect(countries.json().rows).toHaveLength(1);
+      expect(countries.json().rows[0]).toMatchObject({ code: "ph", name: "Philippines" });
 
       await app.inject({
         method: "PATCH",
@@ -1594,10 +1597,7 @@ describe("portal api", () => {
       });
       await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
       const accounts = await app.inject({ method: "GET", url: "/api/merchant/a2c/accounts", headers: { cookie: merchantCookie } });
-      const brAccount = accounts.json().rows.find((row: { apiPhone: string }) => row.apiPhone === "br-a2c");
-      const phAccount = accounts.json().rows.find((row: { apiPhone: string }) => row.apiPhone === "ph-a2c");
-      await app.inject({ method: "PATCH", url: `/api/merchant/a2c/accounts/${brAccount.id}`, headers: { cookie: merchantCookie }, payload: { countryId: br.json().id } });
-      await app.inject({ method: "PATCH", url: `/api/merchant/a2c/accounts/${phAccount.id}`, headers: { cookie: merchantCookie }, payload: { countryId: ph.json().id } });
+      expect(new Set(accounts.json().rows.map((row: { countryId: string }) => row.countryId))).toEqual(new Set([ph.json().id]));
 
       for (const [to, messageId] of [["br-a2c", "country-br-message"], ["ph-a2c", "country-ph-message"]] as const) {
         await app.inject({
@@ -1621,12 +1621,18 @@ describe("portal api", () => {
 
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       expect(conversations.json().rows).toHaveLength(2);
-      expect(new Set(conversations.json().rows.map((row: { countryId: string }) => row.countryId))).toEqual(new Set([br.json().id, ph.json().id]));
+      expect(new Set(conversations.json().rows.map((row: { countryId: string }) => row.countryId))).toEqual(new Set([ph.json().id]));
 
       for (const row of conversations.json().rows as Array<{ id: string; countryId: string }>) {
         const memory = await app.inject({ method: "GET", url: `/api/merchant/conversations/${row.id}/memory`, headers: { cookie: merchantCookie } });
         expect(memory.json().countryId).toBe(row.countryId);
       }
+      const learned = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: merchantCookie } });
+      const learnedRows = learned.json().rows as Array<{ keywords: string; customerMessage: string; standardReply: string; intent: string }>;
+      expect(learnedRows.filter((row) => row.keywords.includes("conversation_sample"))).toHaveLength(2);
+      expect(learnedRows[0].customerMessage).toContain("Hello, I need help");
+      expect(learnedRows[0].standardReply.length).toBeGreaterThan(0);
+      expect(learnedRows[0].intent).toBe("need_help");
 
       const unread = await app.inject({ method: "GET", url: "/api/merchant/conversations/unread-summary", headers: { cookie: merchantCookie } });
       expect(unread.json().rows.map((row: { a2cAccountPhone: string; unreadCount: number }) => [row.a2cAccountPhone, row.unreadCount]).sort()).toEqual([["br-a2c", 1], ["ph-a2c", 1]]);

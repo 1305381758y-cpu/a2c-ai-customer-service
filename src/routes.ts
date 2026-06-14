@@ -274,7 +274,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
   app.get("/api/merchant/config/check", { preHandler: merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
-  app.get("/api/merchant/countries", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
+	  app.get("/api/merchant/countries", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
   app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: merchantAdmins }, async (request, reply) => {
     try {
       return deps.repos.createMerchantCountry(scopedMerchantId(request), request.body ?? {});
@@ -516,7 +516,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       return reply.code(404).send({ error: "a2c account not found or disabled" });
     }
 
-    const conversation = deps.repos.getOrCreateConversation(body.customerPhone, apiPhone, body.nickname || "", merchantId);
+    const conversation = deps.repos.getOrCreateConversation(body.customerPhone, apiPhone, body.nickname || "", merchantId, deps.repos.defaultCountryId(merchantId));
     deps.repos.upsertCustomerFromConversation(conversation);
     const country = deps.repos.getMerchantCountry(conversation.countryId);
     const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
@@ -825,7 +825,7 @@ function verifySecret(actual: string, expected: string): boolean {
 async function importSamples(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, merchantId: string) {
   const file = await request.file();
   if (!file) return reply.code(400).send({ error: "file is required" });
-  const countryId = deps.repos.validCountryId(merchantId, readMultipartField(file.fields, "countryId")) || deps.repos.defaultCountryId(merchantId);
+  const countryId = deps.repos.defaultCountryId(merchantId);
   const buffer = await file.toBuffer();
   try {
     const samples = await parseTrainingSamples(buffer, file.filename);
@@ -839,7 +839,7 @@ async function importSamples(request: FastifyRequest, reply: FastifyReply, deps:
 async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
   const file = await request.file();
   if (!file) return reply.code(400).send({ error: "file is required" });
-  const countryId = deps.repos.validCountryId(merchantId, readMultipartField(file.fields, "countryId")) || deps.repos.defaultCountryId(merchantId);
+  const countryId = deps.repos.defaultCountryId(merchantId);
   const buffer = await file.toBuffer();
   try {
     const merchantConfig = deps.repos.getMerchantConfig(merchantId);

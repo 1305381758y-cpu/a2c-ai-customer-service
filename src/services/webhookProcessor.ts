@@ -44,8 +44,7 @@ export class WebhookProcessor {
     const content = data.content || data.caption || data.url || "";
     const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
-    const countryId = this.repos.countryIdForA2CAccount(merchant.id, data.to);
-    const country = this.repos.getMerchantCountry(countryId) ?? this.repos.ensureDefaultCountry(merchant.id);
+    const country = this.repos.ensurePrimaryCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
     const ai = new GeminiReplyClient(runtimeConfig);
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));

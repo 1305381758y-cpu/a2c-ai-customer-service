@@ -425,7 +425,7 @@ export class Repositories {
 
   insertMessage(input: MessageInput): { inserted: boolean } {
     try {
-      this.db.sqlite
+      const result = this.db.sqlite
         .prepare(`
           INSERT INTO messages
             (merchant_id, conversation_id, direction, external_id, content, msg_type, language, intent, phone_detected, telegram_detected, raw_payload)
@@ -446,12 +446,14 @@ export class Repositories {
         );
       if (input.direction === "inbound") {
         this.db.sqlite.prepare("UPDATE conversations SET unread_count = unread_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(input.conversationId);
+      } else {
+        this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
       }
       return { inserted: true };
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE")) {
         if (input.direction === "outbound") {
-          this.db.sqlite
+          const result = this.db.sqlite
             .prepare(`
               INSERT INTO messages
                 (merchant_id, conversation_id, direction, external_id, content, msg_type, language, intent, phone_detected, telegram_detected, raw_payload)
@@ -470,12 +472,64 @@ export class Repositories {
               input.telegramDetected ?? "",
               JSON.stringify({ ...(typeof input.rawPayload === "object" && input.rawPayload !== null ? input.rawPayload as Record<string, unknown> : {}), externalIdConflict: input.externalId ?? "", whatsappDetected: input.whatsappDetected ?? "" })
             );
+          this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
           return { inserted: true };
         }
         return { inserted: false };
       }
       throw error;
     }
+  }
+
+  private learnFromConversationReply(conversationId: string, outboundMessageId: number, input: MessageInput): void {
+    const reply = String(input.content || "").trim();
+    if (input.direction !== "outbound" || input.msgType !== "text" || !reply || reply.length < 2) return;
+    const conversation = this.getConversation(conversationId);
+    if (!conversation) return;
+    const inbound = this.db.sqlite
+      .prepare(`
+        SELECT id, content, language, intent
+        FROM messages
+        WHERE conversation_id = ? AND direction = 'inbound' AND id < ?
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .get(conversationId, outboundMessageId || Number.MAX_SAFE_INTEGER) as { id: number; content: string; language: string; intent: string } | undefined;
+    const customerMessage = String(inbound?.content || "").trim();
+    if (!inbound || !customerMessage || customerMessage.length < 2) return;
+    const marker = `conversation_sample:${conversationId}:${inbound.id}`;
+    const existing = this.db.sqlite
+      .prepare("SELECT id FROM training_samples WHERE merchant_id = ? AND keywords LIKE ? LIMIT 1")
+      .get(conversation.merchantId, `%${marker}%`) as { id: number } | undefined;
+    const language = String(inbound.language || input.language || conversation.language || "unknown");
+    const intent = String(inbound.intent || input.intent || "unknown");
+    const keywords = `${marker},真实对话,自动沉淀,${conversation.a2cAccountPhone},${conversation.customerPhone}`;
+    if (existing) {
+      this.db.sqlite
+        .prepare(`
+          UPDATE training_samples
+          SET standard_reply = ?, language = ?, intent = ?, stage = ?, enabled = 1, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND merchant_id = ?
+        `)
+        .run(clipText(reply, 1200), language, intent, conversation.stage, existing.id, conversation.merchantId);
+      return;
+    }
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO training_samples
+          (merchant_id, country_id, customer_message, standard_reply, stage, intent, language, keywords, priority, enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+      `)
+      .run(
+        conversation.merchantId,
+        conversation.countryId,
+        clipText(customerMessage, 1200),
+        clipText(reply, 1200),
+        conversation.stage,
+        intent,
+        language,
+        keywords
+      );
   }
 
   markConversationRead(conversationId: string, merchantId: string): Conversation | undefined {
@@ -1171,7 +1225,21 @@ export class Repositories {
   }
 
   defaultCountryId(merchantId: string): string {
-    return this.ensureDefaultCountry(merchantId).id;
+    return this.ensurePrimaryCountry(merchantId).id;
+  }
+
+  ensurePrimaryCountry(merchantId: string): MerchantCountryRecord {
+    this.ensureDefaultCountry(merchantId);
+    const row = this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM merchant_countries
+        WHERE merchant_id = ? AND status = 'active'
+        ORDER BY CASE WHEN code = 'default' THEN 1 ELSE 0 END, updated_at DESC, created_at DESC
+        LIMIT 1
+      `)
+      .get(merchantId) as Record<string, unknown> | undefined;
+    return row ? mapMerchantCountry(row) : this.ensureDefaultCountry(merchantId);
   }
 
   validCountryId(merchantId: string, countryId: string): string {
@@ -1186,33 +1254,42 @@ export class Repositories {
   }
 
   listMerchantCountries(merchantId: string): MerchantCountryRecord[] {
-    this.ensureDefaultCountry(merchantId);
-    return this.db.sqlite
-      .prepare("SELECT * FROM merchant_countries WHERE merchant_id = ? ORDER BY status ASC, code ASC")
-      .all(merchantId)
-      .map((row) => mapMerchantCountry(row as Record<string, unknown>));
+    return [this.ensurePrimaryCountry(merchantId)];
   }
 
   createMerchantCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
-    const code = String(input.code || "").trim() || "default";
-    const id = `${merchantId}:${code}`;
+    const current = this.ensurePrimaryCountry(merchantId);
+    const code = String(input.code || current.code || "default").trim() || "default";
+    const id = current.id;
+    this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, code, id);
     this.db.sqlite.prepare(`
-      INSERT INTO merchant_countries
-        (id, merchant_id, code, name, default_language, platform_register_url, tg_register_guide_url, require_platform_account, require_phone, require_telegram, require_whatsapp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      UPDATE merchant_countries
+      SET code = ?,
+          name = ?,
+          default_language = ?,
+          platform_register_url = ?,
+          tg_register_guide_url = ?,
+          require_platform_account = ?,
+          require_phone = ?,
+          require_telegram = ?,
+          require_whatsapp = ?,
+          status = 'active',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND merchant_id = ?
     `).run(
-      id,
-      merchantId,
       code,
-      String(input.name || code),
-      String(input.defaultLanguage || "unknown"),
-      String(input.platformRegisterUrl || ""),
-      String(input.tgRegisterGuideUrl || ""),
-      input.requirePlatformAccount === false ? 0 : 1,
-      input.requirePhone === false ? 0 : 1,
-      input.requireTelegram === false ? 0 : 1,
-      input.requireWhatsApp === true ? 1 : 0
+      String(input.name || current.name || code),
+      String(input.defaultLanguage || current.defaultLanguage || "unknown"),
+      String(input.platformRegisterUrl ?? current.platformRegisterUrl ?? ""),
+      String(input.tgRegisterGuideUrl ?? current.tgRegisterGuideUrl ?? ""),
+      booleanPatchValue(input.requirePlatformAccount, current.requirePlatformAccount),
+      booleanPatchValue(input.requirePhone, current.requirePhone),
+      booleanPatchValue(input.requireTelegram, current.requireTelegram),
+      booleanPatchValue(input.requireWhatsApp, current.requireWhatsApp),
+      id,
+      merchantId
     );
+    this.reassignMerchantToSingleCountry(merchantId, id);
     return this.getMerchantCountry(id)!;
   }
 
@@ -1231,22 +1308,24 @@ export class Repositories {
     };
     const entries = Object.entries(patch).filter(([key]) => key in allowed);
     if (entries.length) {
+      if (typeof patch.code === "string" && patch.code.trim()) {
+        this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, patch.code.trim(), id);
+      }
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
       const values = entries.map(([key, value]) => {
         if (key.startsWith("require")) return value ? 1 : 0;
         return String(value ?? "");
       }) as Array<string | number>;
       this.db.sqlite.prepare(`UPDATE merchant_countries SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?`).run(...values, id, merchantId);
+      this.reassignMerchantToSingleCountry(merchantId, id);
     }
     const row = this.db.sqlite.prepare("SELECT * FROM merchant_countries WHERE id = ? AND merchant_id = ?").get(id, merchantId) as Record<string, unknown> | undefined;
     return row ? mapMerchantCountry(row) : undefined;
   }
 
   countryIdForA2CAccount(merchantId: string, apiPhone: string): string {
-    const row = this.db.sqlite
-      .prepare("SELECT country_id FROM merchant_a2c_accounts WHERE merchant_id = ? AND api_phone = ?")
-      .get(merchantId, apiPhone) as { country_id?: string } | undefined;
-    return this.validCountryId(merchantId, String(row?.country_id || "")) || this.defaultCountryId(merchantId);
+    void apiPhone;
+    return this.defaultCountryId(merchantId);
   }
 
   patchMerchantConfig(merchantId: string, patch: Record<string, unknown>): MerchantConfigRecord {
@@ -1308,7 +1387,7 @@ export class Repositories {
         (merchant_id, country_id, api_phone, waba_id, status, number_status, quality_rating, messaging_limit, verified_name, enabled, synced_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
       ON CONFLICT(merchant_id, api_phone) DO UPDATE SET
-        country_id = COALESCE(NULLIF(merchant_a2c_accounts.country_id, ''), excluded.country_id),
+        country_id = excluded.country_id,
         waba_id = excluded.waba_id,
         status = excluded.status,
         number_status = excluded.number_status,
@@ -1357,11 +1436,8 @@ export class Repositories {
       values.push(patch.enabled ? 1 : 0);
     }
     if (typeof patch.countryId === "string") {
-      const countryId = this.validCountryId(account.merchantId, patch.countryId);
-      if (countryId) {
-        updates.push("country_id = ?");
-        values.push(countryId);
-      }
+      updates.push("country_id = ?");
+      values.push(this.defaultCountryId(account.merchantId));
     }
     if (updates.length) {
       this.db.sqlite
@@ -1370,6 +1446,32 @@ export class Repositories {
       this.refreshMerchantA2CAccountPhones(account.merchantId);
     }
     return this.listMerchantA2CAccounts({ merchantId: account.merchantId }).find((item) => item.id === id);
+  }
+
+  private reassignMerchantToSingleCountry(merchantId: string, countryId: string): void {
+    if (!this.validCountryId(merchantId, countryId)) return;
+    this.db.sqlite
+      .prepare(`
+        DELETE FROM customer_memories
+        WHERE merchant_id = ?
+          AND id NOT IN (
+            SELECT MAX(id)
+            FROM customer_memories
+            WHERE merchant_id = ?
+            GROUP BY customer_key
+          )
+      `)
+      .run(merchantId, merchantId);
+    this.db.sqlite.prepare("UPDATE merchant_countries SET status = CASE WHEN id = ? THEN 'active' ELSE 'disabled' END, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE merchant_a2c_accounts SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE conversations SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE customers SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE customer_memories SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE training_samples SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE knowledge_items SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE training_materials SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE training_material_items SET country_id = ? WHERE merchant_id = ?").run(countryId, merchantId);
+    this.db.sqlite.prepare("UPDATE a2c_invite_codes SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
   }
 
   listInviteCodesForA2CAccount(accountId: number, merchantId?: string): A2CInviteCodeRecord[] {
@@ -1931,6 +2033,16 @@ function normalizeTelegramBindingStatus(value: unknown): MerchantConfigRecord["t
 
 function normalizeInviteCodeStatus(value: unknown, fallback: A2CInviteCodeRecord["status"]): A2CInviteCodeRecord["status"] {
   return value === "available" || value === "reserved" || value === "used" || value === "disabled" ? value : fallback;
+}
+
+function booleanPatchValue(value: unknown, fallback: boolean): number {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase();
+    if (normalized === "true" || normalized === "1") return 1;
+    if (normalized === "false" || normalized === "0") return 0;
+  }
+  return fallback ? 1 : 0;
 }
 
 function phoneDigits(value: string): string {
