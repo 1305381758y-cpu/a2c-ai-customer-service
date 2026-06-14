@@ -1021,6 +1021,162 @@ describe("portal api", () => {
     }
   });
 
+  it("falls back to the country register link when an invite code has no link template", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "country-link-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "country-link-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "国家链接客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "国家开户链接兜底商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "country-link@test.local", name: "国家链接", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "country-link@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://country-link-a2c.test/api/openapi", a2cAppId: "country-link-app", a2cAppSecret: "country-link-secret" }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "br", name: "巴西", defaultLanguage: "zh", platformRegisterUrl: "https://country.example/register?invite={code}" }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "BR-ONLY-LINK" }
+      });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "country-link-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "country-link-message-1",
+            content: "你好",
+            from: "country-link-customer",
+            to: "country-link-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(String(sentMessages[0].content)).toContain("BR-ONLY-LINK");
+      expect(String(sentMessages[0].content)).toContain("https://country.example/register?invite=BR-ONLY-LINK");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("guides customers to register Telegram instead of asking WhatsApp when WhatsApp is not required", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "tg-guide-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "tg-guide-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "TG引导客服" }] });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+          reply: "没关系，如果您没有Telegram，请提供您的WhatsApp联系方式。",
+          language: "zh",
+          stage: "need_phone_or_tg",
+          extractedPhone: "",
+          extractedTelegram: "",
+          extractedWhatsApp: "",
+          shouldHandoff: false
+        }) }] } }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "TG目标商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "tg-guide@test.local", name: "TG引导", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "tg-guide@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://tg-guide-a2c.test/api/openapi", a2cAppId: "tg-guide-app", a2cAppSecret: "tg-guide-secret", googleAiApiKey: "gemini-test" }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "br", name: "巴西", defaultLanguage: "zh", requirePlatformAccount: false, requirePhone: true, requireTelegram: true, requireWhatsApp: false, tgRegisterGuideUrl: "https://telegram.org/" }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "tg-guide-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "tg-guide-message-1",
+            content: "我没有",
+            from: "tg-guide-customer",
+            to: "tg-guide-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(String(sentMessages[0].content)).toContain("Telegram");
+      expect(String(sentMessages[0].content)).toContain("@");
+      expect(String(sentMessages[0].content)).toContain("https://telegram.org/");
+      expect(String(sentMessages[0].content)).not.toContain("WhatsApp");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

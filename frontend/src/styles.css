@@ -650,53 +650,158 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   background: #fff;
 }
 .invite-panel summary::-webkit-details-marker { display: none; }
-.invite-import {
+.invite-console {
   display: grid;
-  grid-template-columns: minmax(180px, .9fr) minmax(170px, .8fr) auto;
-  gap: 8px;
+  gap: 10px;
   padding: 10px;
 }
-.invite-import textarea {
-  min-height: 48px;
-  max-height: 72px;
-  resize: vertical;
-}
-.invite-panel .table {
-  max-height: 180px;
-  margin: 0 10px 10px;
-}
-.invite-actions {
+.invite-import {
   display: grid;
-  gap: 6px;
-  padding: 0 10px 10px;
-}
-.invite-action-row {
-  display: grid;
-  grid-template-columns: minmax(72px, .55fr) minmax(150px, 1fr) 92px 72px 72px;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 86px;
   gap: 8px;
-  align-items: center;
-  padding: 6px;
+  align-items: end;
+  padding: 10px;
   border: 1px solid var(--line-soft);
-  border-radius: 7px;
+  border-radius: 8px;
   background: #fff;
 }
-.invite-action-row input,
-.invite-action-row select {
-  min-width: 0;
-  min-height: 38px;
-  padding: 7px 9px;
-  font-size: 13px;
+.invite-import label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 850;
 }
-.invite-action-row button,
-.invite-import button {
-  min-height: 38px;
-  padding: 7px 10px;
-  white-space: nowrap;
+.invite-import textarea {
+  min-height: 42px;
+  height: 42px;
+  max-height: 78px;
+  resize: vertical;
 }
-.invite-action-row strong {
+.invite-manager {
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.15fr);
+  gap: 10px;
+  min-height: 260px;
+}
+.invite-list {
+  display: grid;
+  align-content: start;
+  max-height: 330px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+}
+.invite-list-head,
+.invite-list button {
+  display: grid;
+  grid-template-columns: minmax(82px, .7fr) 84px minmax(90px, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  text-align: left;
+  color: var(--ink);
+}
+.invite-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+.invite-list button { cursor: pointer; }
+.invite-list button:hover,
+.invite-list button.active {
+  background: #eef5ff;
+}
+.invite-list strong,
+.invite-list small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.invite-list small {
+  color: var(--muted);
+  font-weight: 800;
+}
+.invite-detail {
+  min-width: 0;
+}
+.invite-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+}
+.invite-editor-title,
+.invite-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.invite-editor-title div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.invite-editor-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-editor-title small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.invite-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, .75fr) 118px;
+  gap: 8px;
+}
+.invite-editor-grid .wide {
+  grid-column: 1 / -1;
+}
+.invite-editor-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+.invite-editor input,
+.invite-editor select,
+.invite-import input,
+.invite-import textarea {
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+.invite-editor button,
+.invite-import button {
+  min-height: 36px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.invite-meta {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .conversation-workspace {
@@ -1149,7 +1254,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   .app { grid-template-columns: 1fr; }
   aside { position: static; height: auto; }
   aside nav { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-  .split, .send, .copy-row, .setup-strip, .account-settings-row, .invite-import, .invite-action-row { grid-template-columns: 1fr; }
+  .split, .send, .copy-row, .setup-strip, .account-settings-row, .invite-import, .invite-manager, .invite-editor-grid { grid-template-columns: 1fr; }
   .chat-bubble { width: 94%; }
   header { align-items: flex-start; flex-direction: column; }
   main { padding: 16px; }

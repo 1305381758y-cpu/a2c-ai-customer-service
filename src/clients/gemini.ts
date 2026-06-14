@@ -71,8 +71,8 @@ export class GeminiReplyClient {
           country: input.country ?? null,
           assignedInviteCode: input.inviteCode ? {
             code: input.inviteCode.code,
-            registerUrl: inviteRegisterUrl(input.inviteCode),
-            displayText: inviteDisplayText(input.inviteCode, input.conversation.language),
+            registerUrl: inviteRegisterUrl(input.inviteCode, fallbackRegisterUrl(input, this.config)),
+            displayText: inviteDisplayText(input.inviteCode, input.conversation.language, fallbackRegisterUrl(input, this.config)),
             status: input.inviteCode.status
           } : null
         }),
@@ -153,6 +153,9 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
 - 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
 - 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
+- 只收集 country 当前要求的联系方式。country.requireWhatsApp=false 时，禁止要求客户提供 WhatsApp，因为客户本身通常已经通过 WhatsApp 联系我们。
+- country.requireTelegram=true 且客户说没有 Telegram 时，必须引导客户注册/下载 Telegram，然后发送 @ 开头的 Telegram 用户名；不能改为要求 WhatsApp。
+- country.requireTelegram=false 时，禁止要求 Telegram。
 - 如果 assignedInviteCode 存在，开户注册引导必须同时包含它的 registerUrl 和邀请码 code；如果 registerUrl 已经包含邀请码，也仍要清楚表达这是专属开户链接。
 - 开户开户链接和邀请码是开户注册必需信息，不能漏掉其中任何一个，不能自己编造邀请码。
 - 如果客户追问邀请码、质疑是否需要邀请码，必须直接回答：注册需要邀请码，并给出 assignedInviteCode；禁止说“不需要邀请码”。
@@ -173,7 +176,8 @@ function buildSystemPrompt(config: AppConfig): string {
 function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: AppConfig): AiReply {
   if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
   const expectedLanguage = input.conversation.language && input.conversation.language !== "unknown" ? input.conversation.language : "";
-  const reply = ensureInviteInReply(value.reply.trim(), input, config);
+  const policyReply = enforceContactPolicy(value.reply.trim(), input, config);
+  const reply = ensureInviteInReply(policyReply, input, config);
   return {
     reply,
     language: expectedLanguage || (typeof value.language === "string" && value.language ? value.language : input.conversation.language),
@@ -203,7 +207,7 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
 }
 
 function defaultReply(language: string, config: AppConfig, inviteCode?: A2CInviteCodeRecord): string {
-  const registration = inviteCode ? inviteDisplayText(inviteCode, language) : config.PLATFORM_REGISTER_URL;
+  const registration = inviteCode ? inviteDisplayText(inviteCode, language, config.PLATFORM_REGISTER_URL) : config.PLATFORM_REGISTER_URL;
   const link = registration ? ` ${registration}` : "";
   if (language === "en") return `Please complete the platform registration first, then send us your phone number and Telegram account.${link}`;
   if (language === "ms") return `Sila lengkapkan pendaftaran platform dahulu, kemudian hantar nombor telefon dan akaun Telegram anda.${link}`;
@@ -215,14 +219,16 @@ function defaultReply(language: string, config: AppConfig, inviteCode?: A2CInvit
   return `请先完成平台开户，完成后把您的手机号和 Telegram 账号发给我。${link}`;
 }
 
-function inviteRegisterUrl(inviteCode: A2CInviteCodeRecord): string {
-  if (!inviteCode.registerUrl) return inviteCode.code;
-  return inviteCode.registerUrl.includes("{code}") ? inviteCode.registerUrl.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : inviteCode.registerUrl;
+function inviteRegisterUrl(inviteCode: A2CInviteCodeRecord, fallbackUrl = ""): string {
+  const template = inviteCode.registerUrl || fallbackUrl;
+  if (!template) return inviteCode.code;
+  return template.includes("{code}") ? template.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : template;
 }
 
-function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string): string {
-  const url = inviteRegisterUrl(inviteCode);
-  if (!inviteCode.registerUrl || inviteCode.registerUrl.includes("{code}")) return url;
+function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string, fallbackUrl = ""): string {
+  const template = inviteCode.registerUrl || fallbackUrl;
+  const url = inviteRegisterUrl(inviteCode, fallbackUrl);
+  if (template.includes("{code}")) return url;
   if (language === "en") return `${url} Invitation code: ${inviteCode.code}`;
   if (language === "pt-BR") return `${url} Código de convite: ${inviteCode.code}`;
   if (language === "ja") return `${url} 招待コード：${inviteCode.code}`;
@@ -235,9 +241,11 @@ function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string): s
 function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig): string {
   if (!input.country?.requirePlatformAccount) return reply;
   if (!input.inviteCode) return sanitizeNoInviteReply(reply, input.conversation.language, config);
-  const display = inviteDisplayText(input.inviteCode, input.conversation.language);
+  const fallbackUrl = fallbackRegisterUrl(input, config);
+  const display = inviteDisplayText(input.inviteCode, input.conversation.language, fallbackUrl);
   const hasCode = reply.includes(input.inviteCode.code);
-  const hasUrl = input.inviteCode.registerUrl ? reply.includes(inviteRegisterUrl(input.inviteCode)) || reply.includes(input.inviteCode.registerUrl) : true;
+  const registerUrl = inviteRegisterUrl(input.inviteCode, fallbackUrl);
+  const hasUrl = registerUrl ? reply.includes(registerUrl) || Boolean(input.inviteCode.registerUrl && reply.includes(input.inviteCode.registerUrl)) || Boolean(fallbackUrl && reply.includes(fallbackUrl)) : true;
   if (hasCode && hasUrl) return reply;
   const separator = /[。.!?！？]\s*$/.test(reply) ? "\n" : "\n";
   if (input.conversation.language === "en") return `${reply}${separator}Registration link and invitation code: ${display}`;
@@ -250,7 +258,7 @@ function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
   if (/(邀请码|invite code|invitation code|código|codigo|招待コード)/i.test(input.customerText)) {
     if (input.inviteCode) {
-      const display = inviteDisplayText(input.inviteCode, language);
+      const display = inviteDisplayText(input.inviteCode, language, fallbackRegisterUrl(input, config));
       if (language === "en") return `Yes, registration requires an invitation code. Please use this registration link and invitation code: ${display}`;
       if (language === "pt-BR") return `Sim, o cadastro precisa de código de convite. Use este link de cadastro e código: ${display}`;
       if (language === "ja") return `はい、登録には招待コードが必要です。こちらの登録リンクと招待コードを使ってください：${display}`;
@@ -264,6 +272,58 @@ function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
     return "今天是 2026年6月13日。您这边如果继续注册，我可以接着协助。";
   }
   return "";
+}
+
+function enforceContactPolicy(reply: string, input: ReplyInput, config: AppConfig): string {
+  const country = input.country;
+  if (!country) return reply;
+  const language = input.conversation.language === "unknown" ? country.defaultLanguage || "zh" : input.conversation.language;
+  if (country.requireTelegram && !input.conversation.extractedTelegram && customerSaysNoTelegram(input)) {
+    return telegramGuideReply(language, config, country);
+  }
+  let normalized = reply;
+  if (!country.requireWhatsApp) {
+    normalized = removeForbiddenContactAsk(normalized, /WhatsApp|Whatsapp|\bWS\b|\bWA\b|WPP|whats app/i);
+  }
+  if (!country.requireTelegram) {
+    normalized = removeForbiddenContactAsk(normalized, /Telegram|\bTG\b|电报|飞机|เทเลแกรม/i);
+  }
+  if (!normalized.trim()) return defaultReply(language, config, input.inviteCode);
+  return normalized.trim();
+}
+
+function customerSaysNoTelegram(input: ReplyInput): boolean {
+  const text = input.customerText.trim();
+  const recentBotAskedTelegram = input.history
+    .slice(-4)
+    .some((item) => item.direction === "outbound" && /Telegram|\bTG\b|电报|飞机|@用户名|username/i.test(item.content));
+  if (/(没有|沒有|不会|不想|没有tg|没有 telegram|no telegram|don't have telegram|dont have telegram|sem telegram|não tenho telegram|nao tenho telegram)/i.test(text)) {
+    return /Telegram|\bTG\b|电报|飞机/i.test(text) || recentBotAskedTelegram || text.length <= 12;
+  }
+  return false;
+}
+
+function telegramGuideReply(language: string, config: AppConfig, country?: MerchantCountryRecord): string {
+  const guide = country?.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL;
+  const suffix = guide ? ` ${guide}` : "";
+  if (language === "en") return `No problem. Please register or download Telegram first, then send us your Telegram username starting with @.${suffix}`;
+  if (language === "pt-BR") return `Sem problema. Cadastre ou baixe o Telegram primeiro e depois envie seu nome de usuário do Telegram começando com @.${suffix}`;
+  if (language === "ja") return `大丈夫です。先にTelegramを登録またはダウンロードしてから、@で始まるユーザー名を送ってください。${suffix}`;
+  if (language === "th") return `ไม่เป็นไร กรุณาสมัครหรือดาวน์โหลด Telegram ก่อน จากนั้นส่งชื่อผู้ใช้ Telegram ที่ขึ้นต้นด้วย @ มาให้เรา${suffix}`;
+  if (language === "vi") return `Không sao. Vui lòng đăng ký hoặc tải Telegram trước, rồi gửi tên người dùng Telegram bắt đầu bằng @ cho chúng tôi.${suffix}`;
+  if (language === "ms" || language === "id") return `Tidak apa-apa. Sila daftar atau muat turun Telegram dahulu, kemudian hantar username Telegram yang bermula dengan @ kepada kami.${suffix}`;
+  return `没关系，请先注册或下载 Telegram，然后把 @ 开头的 Telegram 用户名发给我们。${suffix}`;
+}
+
+function removeForbiddenContactAsk(reply: string, contactPattern: RegExp): string {
+  return reply
+    .split(/(?<=[。.!?！？])\s+|\n+/)
+    .filter((sentence) => !(contactPattern.test(sentence) && /(提供|发送|发给|send|provide|hantar|envie|enviar|送って|ส่ง)/i.test(sentence)))
+    .join("\n");
+}
+
+function fallbackRegisterUrl(input: ReplyInput, config: AppConfig): string {
+  return input.country?.platformRegisterUrl || config.PLATFORM_REGISTER_URL || "";
 }
 
 function sanitizeNoInviteReply(reply: string, language: string, config: AppConfig): string {

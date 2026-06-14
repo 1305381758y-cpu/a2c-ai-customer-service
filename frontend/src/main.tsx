@@ -275,10 +275,19 @@ function Config({ platform }: { platform: boolean }) {
 function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [draft, setDraft] = useState({ codes: "", registerUrl: "" });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const endpoint = platform ? `/api/admin/a2c/accounts/${account.id}/invite-codes` : `/api/merchant/a2c/accounts/${account.id}/invite-codes`;
   const codeEndpoint = platform ? "/api/admin/invite-codes" : "/api/merchant/invite-codes";
   const reload = async () => setCodes(await loadRows<InviteCode>(endpoint));
   useEffect(() => { reload().catch(() => setCodes([])); }, [endpoint]);
+  const selectedCode = codes.find((item) => item.id === selectedId) || codes[0] || null;
+  useEffect(() => {
+    if (!codes.length) {
+      setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !codes.some((item) => item.id === selectedId)) setSelectedId(codes[0].id);
+  }, [codes, selectedId]);
   const stats = {
     available: codes.filter((item) => item.status === "available").length,
     reserved: codes.filter((item) => item.status === "reserved").length,
@@ -296,13 +305,27 @@ function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: {
     </div>
     <details className="invite-panel">
       <summary>管理邀请码池</summary>
-      <div className="invite-import">
-        <textarea placeholder="批量粘贴邀请码，一行一个；也支持逗号、空格分隔" value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })} />
-        <input placeholder="注册链接模板，可选。可包含 {code}" value={draft.registerUrl} onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} />
-        <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>保存邀请码池</AsyncButton>
+      <div className="invite-console">
+        <div className="invite-import">
+          <label>批量导入<textarea placeholder="一行一个邀请码；也支持逗号、空格分隔" value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })} /></label>
+          <label>注册链接模板<input placeholder="例如 https://example.com/register?code={code}" value={draft.registerUrl} onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} /></label>
+          <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>导入</AsyncButton>
+        </div>
+        <div className="invite-manager">
+          <div className="invite-list">
+            <div className="invite-list-head"><span>邀请码</span><span>状态</span><span>客户</span></div>
+            {codes.map((code) => <button key={code.id} className={selectedCode?.id === code.id ? "active" : ""} onClick={() => setSelectedId(code.id)}>
+              <strong>{code.code}</strong>
+              {displayValue("status", code.status)}
+              <small>{code.assignedCustomerKey || "未绑定"}</small>
+            </button>)}
+            {!codes.length && <div className="empty-state compact">暂无邀请码，先在上方批量导入。</div>}
+          </div>
+          <div className="invite-detail">
+            {selectedCode ? <InviteCodeEditor code={selectedCode} endpoint={codeEndpoint} reload={reload} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
+          </div>
+        </div>
       </div>
-      <Table rows={codes.map((item) => ({ ...item, inviteCode: item.code }))} columns={["inviteCode", "registerUrl", "status", "assignedCustomerKey", "platformAccount", "usedAt"]} rowKey={(row) => row.id} />
-      <div className="invite-actions">{codes.map((code) => <InviteCodeEditor key={code.id} code={code} endpoint={codeEndpoint} reload={reload} />)}</div>
     </details>
   </article>;
 }
@@ -310,12 +333,22 @@ function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: {
 function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoint: string; reload: () => Promise<void> }) {
   const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
   useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status }), [code.id, code.code, code.registerUrl, code.status]);
-  return <div className="invite-action-row">
-    <input aria-label="邀请码" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
-    <input aria-label="注册链接" value={draft.registerUrl} placeholder="注册链接模板，可包含 {code}" onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} />
-    <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select>
-    <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存</AsyncButton>
-    <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>删除</AsyncButton>
+  return <div className="invite-editor">
+    <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt)}` : ""}</small></div>
+    <div className="invite-editor-grid">
+      <label>邀请码<input aria-label="邀请码" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></label>
+      <label>状态<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select></label>
+      <label className="wide">注册链接<input aria-label="注册链接" value={draft.registerUrl} placeholder="不填时使用国家/商户开户链接；可包含 {code}" onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} /></label>
+    </div>
+    <div className="invite-meta">
+      <span>绑定客户：{code.assignedCustomerKey || "未绑定"}</span>
+      <span>注册账号：{code.platformAccount || "未填写"}</span>
+      <span>使用时间：{code.usedAt ? formatDateTime(code.usedAt) : "未使用"}</span>
+    </div>
+    <div className="invite-editor-actions">
+      <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
+      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</AsyncButton>
+    </div>
   </div>;
 }
 
@@ -680,6 +713,13 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function normalizeText(value: string) {
