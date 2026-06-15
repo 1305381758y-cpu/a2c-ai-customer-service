@@ -1,6 +1,7 @@
 import type { Part } from "@google/genai";
 import mammoth from "mammoth";
 import { generateGeminiText } from "../clients/gemini.js";
+import { looksLikeConversationPackage, parseConversationPackage } from "./conversationPackage.js";
 import { parseTrainingSamples, type ImportedTrainingSample } from "./trainingSamples.js";
 
 export type TrainingMaterialSourceType = "csv" | "xlsx" | "docx" | "txt" | "image";
@@ -29,6 +30,17 @@ export async function parseTrainingMaterial(input: {
 }): Promise<ParsedTrainingMaterial> {
   const sourceType = detectSourceType(input.filename, input.mimeType);
   const warnings: string[] = [];
+
+  if ((sourceType === "txt" || sourceType === "csv") && looksLikeConversationPackage(input.buffer)) {
+    const parsed = parseConversationPackage(input.buffer, input.filename);
+    return {
+      sourceType,
+      rawText: parsed.rawSummary,
+      samples: parsed.samples,
+      knowledge: parsed.knowledge,
+      warnings: parsed.warnings
+    };
+  }
 
   if (sourceType === "csv" || sourceType === "xlsx") {
     const samples = await parseTrainingSamples(input.buffer, input.filename);
