@@ -199,7 +199,8 @@ export class WebhookProcessor {
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
-    const inviteCode = shouldUseInviteForReply(country, conversation, analysis.intent, analysisText || content)
+    const shouldIncludeRegistrationDetails = shouldUseInviteForReply(country, conversation, analysis.intent, analysisText || content);
+    const inviteCode = shouldIncludeRegistrationDetails
       ? this.repos.reserveInviteCodeForConversation(conversation)
       : undefined;
     const samples = rankSamples(enabledSamples, {
@@ -210,6 +211,9 @@ export class WebhookProcessor {
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
     const aiReply = await ai.generateReply({ customerText: analysisText || content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
+    if (!shouldIncludeRegistrationDetails) {
+      aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
+    }
 
     if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
     if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
@@ -390,6 +394,83 @@ function shouldUseInviteForReply(
 
 function asksForRegistrationLink(customerText: string, intent: string): boolean {
   return intent === "ask_link" || intent === "ask_platform_register" || /(邀请码|邀請碼|开户链接|注册链接|注册入口|link|invite code|invitation code|código|codigo|convite|cadastro)/i.test(customerText);
+}
+
+export function suppressRegistrationDetailsForNonLinkStep(
+  reply: string,
+  config: Pick<AppConfig, "PLATFORM_REGISTER_URL">,
+  country: { platformRegisterUrl?: string; requireTelegram?: boolean },
+  conversation: { extractedPhone?: string; extractedTelegram?: string },
+  language: string
+): string {
+  const cleaned = reply
+    .split(/(?<=[。！？])\s*|\n+/)
+    .map((part) => stripKnownRegistrationUrls(part, config, country).trim())
+    .filter((part) => part && !isRegistrationInviteSentence(part))
+    .join(language === "zh" || /[\u4E00-\u9FFF]/.test(reply) ? "" : " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/([。.!?！？]){2,}/g, "$1")
+    .trim();
+  if (country.requireTelegram && conversation.extractedPhone && !conversation.extractedTelegram) {
+    if (cleaned && !asksForAlreadyCollectedPhone(cleaned) && !isLowSignalReply(cleaned)) return cleaned;
+    if (language === "en") return "Please send me your Telegram username starting with @.";
+    if (language === "pt-BR") return "Por favor, envie seu nome de usuário do Telegram começando com @.";
+    return "请把 @ 开头的 Telegram 用户名发给我。";
+  }
+  if (cleaned && !isLowSignalReply(cleaned)) return cleaned;
+  if (language === "en") return "Okay, I will continue helping you with the next step.";
+  if (language === "pt-BR") return "Certo, vou continuar ajudando você no próximo passo.";
+  return "好的，我继续协助您。";
+}
+
+function stripKnownRegistrationUrls(
+  value: string,
+  config: Pick<AppConfig, "PLATFORM_REGISTER_URL">,
+  country: { platformRegisterUrl?: string }
+): string {
+  let result = value;
+  for (const template of [country.platformRegisterUrl || "", config.PLATFORM_REGISTER_URL || ""]) {
+    if (!template) continue;
+    for (const candidate of registrationUrlCandidates(template)) {
+      result = result.split(candidate).join("");
+    }
+    const escaped = escapeRegExp(template);
+    const pattern = new RegExp(
+      escaped.replace("\\{code\\}", "[^\\s。.!?！？，,；;]+"),
+      "gi"
+    );
+    result = result.replace(pattern, "");
+  }
+  return result
+    .replace(/(?:开户链接和邀请码|开户链接|注册链接|注册入口|开户链接和邀請碼|registration link and invitation code|registration link|register link|link de cadastro e código de convite|link de cadastro)\s*[:：]?\s*/gi, "")
+    .replace(/(?:邀请码|邀請碼|invitation code|invite code|código de convite|codigo de convite)\s*[:：]?\s*[A-Za-z0-9_-]+/gi, "")
+    .trim();
+}
+
+function registrationUrlCandidates(template: string): string[] {
+  const withoutCode = template.replace(/\{code\}/g, "");
+  const withoutTrailingSlash = withoutCode.replace(/\/+$/, "");
+  const withTrailingSlash = `${withoutTrailingSlash}/`;
+  return Array.from(new Set([template, withoutCode, withoutTrailingSlash, withTrailingSlash].filter(Boolean)));
+}
+
+function isRegistrationInviteSentence(value: string): boolean {
+  const hasInvite = /(邀请码|邀請碼|invite code|invitation code|código de convite|codigo de convite|convite)/i.test(value);
+  const hasRegister = /(开户链接|注册链接|注册入口|点击.*注册|开户注册|register|registration link|cadastro)/i.test(value);
+  const hasUrl = /https?:\/\//i.test(value);
+  return (hasInvite || hasUrl) && hasRegister || hasInvite;
+}
+
+function asksForAlreadyCollectedPhone(value: string): boolean {
+  return /(手机号|手機號|电话号码|電話號碼|phone number|telefone|número de telefone|numero de telefone)/i.test(value);
+}
+
+function isLowSignalReply(value: string): boolean {
+  return /^(您好|你好|嗨|hello|hi|ol[aá]|oi)[!！.。]*$/i.test(value.trim());
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeMessageType(msgType = "", url = ""): "text" | "image" | "video" | "audio" | "document" {

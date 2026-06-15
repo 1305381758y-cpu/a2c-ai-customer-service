@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildStrictFlowReply, strictFlowNeedsInviteCode } from "../src/domain/strictFlow.js";
+import { suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
@@ -144,5 +145,34 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("collect_telegram");
     expect(result.stage).toBe("need_phone_or_tg");
     expect(result.reply).toContain("telefone");
+  });
+
+  it("strips registration links and invite codes from non-link replies", () => {
+    const cleaned = suppressRegistrationDetailsForNonLinkStep(
+      "您好！请点击此链接完成开户注册：https://www.google.com。注册完成后，请把您的手机号和 Telegram 账号发给我。邀请码：4。",
+      { PLATFORM_REGISTER_URL: "https://www.google.com" } as AppConfig,
+      { platformRegisterUrl: "https://www.google.com", requireTelegram: true },
+      { extractedPhone: "99228822881", extractedTelegram: "" },
+      "zh"
+    );
+
+    expect(cleaned).toContain("Telegram");
+    expect(cleaned).not.toContain("google");
+    expect(cleaned).not.toContain("邀请码");
+    expect(cleaned).not.toContain("手机号");
+  });
+
+  it("keeps non-registration helper links while stripping registration details", () => {
+    const cleaned = suppressRegistrationDetailsForNonLinkStep(
+      "您可以从 https://telegram.org 下载 Telegram。开户链接和邀请码：https://www.google.com 邀请码：4",
+      { PLATFORM_REGISTER_URL: "https://www.google.com" } as AppConfig,
+      { platformRegisterUrl: "https://www.google.com", requireTelegram: true },
+      { extractedPhone: "99228822881", extractedTelegram: "" },
+      "zh"
+    );
+
+    expect(cleaned).toContain("telegram.org");
+    expect(cleaned).not.toContain("google");
+    expect(cleaned).not.toContain("邀请码");
   });
 });
