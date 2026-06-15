@@ -406,7 +406,7 @@ export function suppressRegistrationDetailsForNonLinkStep(
   const cleaned = reply
     .split(/(?<=[。！？])\s*|\n+/)
     .map((part) => stripKnownRegistrationUrls(part, config, country).trim())
-    .filter((part) => part && !isRegistrationInviteSentence(part))
+    .filter((part) => part && !isRegistrationInviteSentence(part) && !isEmptyRegistrationInstruction(part))
     .join(language === "zh" || /[\u4E00-\u9FFF]/.test(reply) ? "" : " ")
     .replace(/\s{2,}/g, " ")
     .replace(/([。.!?！？]){2,}/g, "$1")
@@ -459,6 +459,14 @@ function isRegistrationInviteSentence(value: string): boolean {
   const hasRegister = /(开户链接|注册链接|注册入口|点击.*注册|开户注册|register|registration link|cadastro)/i.test(value);
   const hasUrl = /https?:\/\//i.test(value);
   return (hasInvite || hasUrl) && hasRegister || hasInvite;
+}
+
+function isEmptyRegistrationInstruction(value: string): boolean {
+  const normalized = value.replace(/\s+/g, "");
+  const asksToClickMissingLink = /(点击|打開|打开|open|acesse|clique).*(链接|連結|link)/i.test(value) && !/https?:\/\//i.test(value);
+  const mentionsRegistration = /(开户注册|注册|註冊|register|registration|cadastro)/i.test(value);
+  const onlyRegisterShell = /[:：]\s*[。.!！?？]?$/.test(value) || /链接[：:]?[。.!！?？]?$/i.test(normalized);
+  return mentionsRegistration && (asksToClickMissingLink || onlyRegisterShell);
 }
 
 function asksForAlreadyCollectedPhone(value: string): boolean {

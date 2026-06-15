@@ -175,4 +175,18 @@ describe("strict Aston Brazil flow", () => {
     expect(cleaned).not.toContain("google");
     expect(cleaned).not.toContain("邀请码");
   });
+
+  it("removes empty registration link shells after url stripping", () => {
+    const cleaned = suppressRegistrationDetailsForNonLinkStep(
+      "好的，请点击这个链接完成开户注册：https://www.google.com。注册完成后，请把您的手机号和 Telegram 账号发给我。",
+      { PLATFORM_REGISTER_URL: "https://www.google.com" } as AppConfig,
+      { platformRegisterUrl: "https://www.google.com", requireTelegram: true },
+      { extractedPhone: "", extractedTelegram: "" },
+      "zh"
+    );
+
+    expect(cleaned).not.toContain("点击这个链接");
+    expect(cleaned).not.toContain("google");
+    expect(cleaned).not.toContain("：。");
+  });
 });
