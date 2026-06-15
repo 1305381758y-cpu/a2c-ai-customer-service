@@ -176,6 +176,7 @@ export class A2CClient {
 }
 
 function isLikelyTokenError(response: Response, message = ""): boolean {
+  if (isRateLimitedAuth(message)) return false;
   return response.status === 401 || response.status === 403 || /(token.*(expired|invalid)|access.?token|unauthorized|forbidden|expired token|invalid token)/i.test(message);
 }
 
