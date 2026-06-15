@@ -199,7 +199,7 @@ export class WebhookProcessor {
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
-    const inviteCode = country.requirePlatformAccount && analysis.intent !== "platform_register_done"
+    const inviteCode = shouldUseInviteForReply(country, conversation, analysis.intent, analysisText || content)
       ? this.repos.reserveInviteCodeForConversation(conversation)
       : undefined;
     const samples = rankSamples(enabledSamples, {
@@ -376,6 +376,20 @@ function isCountryGoalComplete(
   if (country.requireTelegram && !conversation.extractedTelegram) return false;
   if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
   return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
+}
+
+function shouldUseInviteForReply(
+  country: { requirePlatformAccount: boolean },
+  conversation: { stage: string; extractedPhone: string; extractedTelegram: string; status: string },
+  intent: string,
+  customerText: string
+): boolean {
+  if (!country.requirePlatformAccount || conversation.status === "human_handoff") return false;
+  return asksForRegistrationLink(customerText, intent);
+}
+
+function asksForRegistrationLink(customerText: string, intent: string): boolean {
+  return intent === "ask_link" || intent === "ask_platform_register" || /(邀请码|邀請碼|开户链接|注册链接|注册入口|link|invite code|invitation code|código|codigo|convite|cadastro)/i.test(customerText);
 }
 
 function normalizeMessageType(msgType = "", url = ""): "text" | "image" | "video" | "audio" | "document" {

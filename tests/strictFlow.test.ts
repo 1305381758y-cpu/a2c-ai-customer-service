@@ -115,6 +115,28 @@ describe("strict Aston Brazil flow", () => {
     expect(result.stage).toBe("need_tg_register");
     expect(result.reply).toContain("Telegram");
     expect(result.reply).not.toContain("WhatsApp");
+    expect(result.reply).not.toContain("register.example");
+    expect(result.needsInviteCode).toBe(false);
+  });
+
+  it("does not reserve or repeat invite codes after the registration link step", () => {
+    const analysis = analyzeMessage("99228822881");
+    const conv = conversation({ language: "zh", flowStep: "wait_registration" });
+    expect(strictFlowNeedsInviteCode({ merchant, country, conversation: conv, analysis, customerText: "99228822881" })).toBe(false);
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: "99228822881",
+      config
+    });
+
+    expect(result.nextFlowStep).toBe("telegram_confirm");
+    expect(result.reply).toContain("Telegram");
+    expect(result.reply).not.toContain("register.example");
+    expect(result.reply).not.toContain("邀请码");
   });
 
   it("asks for the registered phone if Telegram is provided before phone", () => {

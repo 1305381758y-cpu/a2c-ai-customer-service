@@ -875,7 +875,7 @@ describe("portal api", () => {
           type: "CUSTOMER_MESSAGE",
           data: {
             messageId: "invite-flow-message-1",
-            content: "Hello",
+            content: "link please",
             from: "invite-flow-customer",
             to: "invite-flow-a2c",
             msgType: "text",
@@ -1082,7 +1082,7 @@ describe("portal api", () => {
           type: "CUSTOMER_MESSAGE",
           data: {
             messageId: "country-link-message-1",
-            content: "你好",
+            content: "注册链接",
             from: "country-link-customer",
             to: "country-link-a2c",
             msgType: "text",

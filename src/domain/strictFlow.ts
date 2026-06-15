@@ -54,7 +54,7 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
   if (!isStrictFlowEnabled(input.merchant, input.country) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
   const step = normalizeFlowStep(input.conversation.flowStep);
-  return step === "registration_intent" || step === "send_register_link" || step === "wait_registration" || asksForInviteOrLink(input.customerText, input.analysis.intent);
+  return step === "registration_intent" || step === "send_register_link" || asksForInviteOrLink(input.customerText, input.analysis.intent);
 }
 
 export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
