@@ -155,7 +155,7 @@ function UsersPage() {
 function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>("/api/admin/merchants");
   const [merchantId, setMerchantId] = useState("default");
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
@@ -166,9 +166,9 @@ function Config({ platform }: { platform: boolean }) {
   const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
   const a2cSyncUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts/sync` : "/api/merchant/a2c/accounts/sync";
   const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
-  const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : form.merchantId || "default"}`;
+  const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
-  const reloadConfig = async () => setForm(await api<Record<string, string>>(url));
+  const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
   useEffect(() => { reloadConfig().catch(() => null); }, [url]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
@@ -207,7 +207,7 @@ function Config({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<Record<string, string>>(url, { method: "PATCH", body: JSON.stringify(form) });
+      const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       if (!saved.a2cAppId || !saved.a2cAppSecret) {
         setMessage("配置已保存。填写 A2C App ID 和密钥后会自动同步客服账号。");
@@ -223,7 +223,7 @@ function Config({ platform }: { platform: boolean }) {
     setError("");
     try {
       if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string> }>(a2cSyncUrl, { method: "POST" });
+      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean> }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
       setForm(result.config);
       setMessage(`已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
@@ -233,7 +233,7 @@ function Config({ platform }: { platform: boolean }) {
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
     const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
-    const result = await api<{ config: Record<string, string> }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
+    const result = await api<{ config: Record<string, string | boolean> }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
     setForm(result.config);
     await reloadA2CAccounts();
   };
@@ -250,7 +250,7 @@ function Config({ platform }: { platform: boolean }) {
     try {
       await api(url, { method: "PATCH", body: JSON.stringify(form) });
       const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
-      const result = await api<{ config: Record<string, string>; webhookUrl?: string }>(endpoint, { method: "POST" });
+      const result = await api<{ config: Record<string, string | boolean>; webhookUrl?: string }>(endpoint, { method: "POST" });
       setForm(result.config);
       setMessage(`TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`);
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);
@@ -262,6 +262,10 @@ function Config({ platform }: { platform: boolean }) {
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
     <div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / Gemini / TG</small></div><div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div><div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div>
     <div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div>
+    <div className={`smart-reply-card ${form.smartReplyEnabled === false ? "off" : "on"}`}>
+      <div><h3>智能自动回复</h3><p>{form.smartReplyEnabled === false ? "已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。" : "已开启：客户消息会自动调用 AI，并通过当前 A2C 客服账号回复。"}</p></div>
+      <button className={form.smartReplyEnabled === false ? "" : "ghost"} onClick={() => setForm({ ...form, smartReplyEnabled: form.smartReplyEnabled === false })}>{form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"}</button>
+    </div>
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div>
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
@@ -862,7 +866,7 @@ function label(key: string) {
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
-    googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
+    googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", smartReplyEnabled: "智能回复", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
     limit: "数量", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",

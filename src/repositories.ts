@@ -51,6 +51,7 @@ export interface MerchantConfigRecord {
   a2cTokenCacheKey: string;
   a2cAccessToken: string;
   a2cTokenExpiresAt: number;
+  smartReplyEnabled: boolean;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
 }
@@ -1343,14 +1344,15 @@ export class Repositories {
       telegramHandoffChatTitle: "telegram_handoff_chat_title",
       telegramHandoffChatStatus: "telegram_handoff_chat_status",
       telegramHandoffChatError: "telegram_handoff_chat_error",
+      smartReplyEnabled: "smart_reply_enabled",
       platformRegisterUrl: "platform_register_url",
       tgRegisterGuideUrl: "tg_register_guide_url"
     };
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && typeof value === "string");
+    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean"));
     if (entries.length) {
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([, value]) => value as string), merchantId);
+      this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([key, value]) => key === "smartReplyEnabled" ? booleanPatchValue(value, true) : value as string), merchantId);
     }
     return this.getMerchantConfig(merchantId);
   }
@@ -1843,6 +1845,7 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     a2cTokenCacheKey: String(row.a2c_token_cache_key ?? ""),
     a2cAccessToken: String(row.a2c_access_token ?? ""),
     a2cTokenExpiresAt: Number(row.a2c_token_expires_at ?? 0),
+    smartReplyEnabled: Boolean(Number(row.smart_reply_enabled ?? 1)),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
   };

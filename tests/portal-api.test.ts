@@ -1376,6 +1376,74 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("stores inbound messages without auto reply when smart reply is disabled", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "disabled-reply-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "disabled-reply-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "关闭自动回复客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "关闭智能回复商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "disabled-reply@test.local", name: "关闭智能回复", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "disabled-reply@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://disabled-reply-a2c.test/api/openapi", a2cAppId: "disabled-app", a2cAppSecret: "disabled-secret", smartReplyEnabled: false }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "disabled-reply-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "disabled-reply-message-1",
+            content: "Hello",
+            from: "disabled-reply-customer",
+            to: "disabled-reply-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(webhook.json().status).toBe("auto_reply_disabled");
+      expect(sentMessages).toHaveLength(0);
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      const conversationId = conversations.json().rows[0].id as string;
+      const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
+      expect(messages.json().rows).toHaveLength(1);
+      expect(messages.json().rows[0]).toMatchObject({ direction: "inbound", content: "Hello" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("auto-binds telegram handoff chat from bot group updates", async () => {
     const originalFetch = globalThis.fetch;
     const telegramCalls: Array<Record<string, unknown>> = [];

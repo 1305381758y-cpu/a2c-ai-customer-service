@@ -103,11 +103,19 @@ export class WebhookProcessor {
       conversation.stage = "ready_for_handoff";
       conversation.status = "human_handoff";
       this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
-      await this.sendVerificationReply(conversation, data, analysis.language, a2c);
+      if (merchantConfig.smartReplyEnabled) {
+        await this.sendVerificationReply(conversation, data, analysis.language, a2c);
+      }
       await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
       return { status: "handoff", conversationId: conversation.id };
+    }
+
+    if (!merchantConfig.smartReplyEnabled) {
+      this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
+      return { status: "auto_reply_disabled", conversationId: conversation.id };
     }
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });

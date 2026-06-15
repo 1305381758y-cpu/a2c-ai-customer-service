@@ -57,6 +57,7 @@ export function migrate(db: DatabaseSync): void {
       a2c_token_cache_key TEXT DEFAULT '',
       a2c_access_token TEXT DEFAULT '',
       a2c_token_expires_at INTEGER DEFAULT 0,
+      smart_reply_enabled INTEGER DEFAULT 1,
       platform_register_url TEXT DEFAULT '',
       tg_register_guide_url TEXT DEFAULT '',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -322,6 +323,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "a2c_token_expires_at", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_configs", "google_ai_api_key", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "google_ai_model", "TEXT DEFAULT 'gemini-2.5-flash'");
+  ensureColumn(db, "merchant_configs", "smart_reply_enabled", "INTEGER DEFAULT 1");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");
