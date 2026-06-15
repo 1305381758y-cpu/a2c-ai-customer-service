@@ -732,6 +732,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 }
 .invite-detail {
   min-width: 0;
+  overflow: visible;
 }
 .invite-editor {
   display: grid;
@@ -1528,7 +1529,7 @@ tbody tr:hover td {
 }
 
 .account-grid {
-  grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 12px;
 }
 .account-panel {
@@ -1557,15 +1558,18 @@ tbody tr:hover td {
   padding: 9px 11px;
 }
 .invite-import {
-  grid-template-columns: minmax(220px, 1fr) minmax(240px, 1.15fr) 88px;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto;
   border-radius: 10px;
 }
 .invite-manager {
-  grid-template-columns: minmax(280px, .85fr) minmax(360px, 1.15fr);
+  grid-template-columns: minmax(240px, .95fr) minmax(280px, 1.05fr);
+  align-items: start;
+  overflow: visible;
 }
 .invite-list,
 .invite-editor {
   border-radius: 10px;
+  min-width: 0;
 }
 .invite-list-head,
 .invite-list button {
@@ -1580,7 +1584,7 @@ tbody tr:hover td {
   padding-bottom: 2px;
 }
 .invite-editor-grid {
-  grid-template-columns: minmax(130px, .8fr) 124px;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, 124px);
 }
 .invite-meta {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1704,6 +1708,11 @@ tbody tr:hover td {
   .conversation-workspace.customers-collapsed {
     grid-template-columns: 220px 280px minmax(520px, 1fr);
   }
+}
+
+@media (max-width: 1520px) {
+  .account-grid { grid-template-columns: 1fr; }
+  .invite-manager { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
