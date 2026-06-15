@@ -165,6 +165,7 @@ export class WebhookProcessor {
       externalId = `send_failed:${data.messageId || payload.id}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
     }
 
+    const outboundTranslation = await translateForOperator(runtimeConfig, aiReply.reply, aiReply.language || conversation.language);
     const outbound = this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
@@ -178,6 +179,11 @@ export class WebhookProcessor {
         trainingMaterials: trainingMaterials.map((item) => item.id),
         aiFallback: Boolean(aiReply.fallback),
         aiError: aiReply.error || "",
+        originalContent: outboundTranslation.originalText,
+        operatorTranslatedContent: outboundTranslation.translatedText,
+        operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
+        operatorTranslationStatus: outboundTranslation.status,
+        operatorTranslationError: outboundTranslation.error || "",
         a2cSendStatus,
         a2cSendError,
         inviteCodeRequired: Boolean(country.requirePlatformAccount),
@@ -221,6 +227,7 @@ export class WebhookProcessor {
       externalId = `verify_failed:${data.messageId}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
     }
 
+    const operatorTranslation = await translateForOperator(appConfigForConversation(this.config, this.repos, conversation), content, language);
     this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
@@ -231,6 +238,11 @@ export class WebhookProcessor {
       intent: "human_request",
       rawPayload: {
         systemFinalReply: true,
+        originalContent: operatorTranslation.originalText,
+        operatorTranslatedContent: operatorTranslation.translatedText,
+        operatorTranslationTargetLanguage: operatorTranslation.targetLanguage,
+        operatorTranslationStatus: operatorTranslation.status,
+        operatorTranslationError: operatorTranslation.error || "",
         a2cSendStatus,
         a2cSendError
       }
@@ -270,6 +282,12 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
     TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
   };
+}
+
+function appConfigForConversation(config: AppConfig, repos: Repositories, conversation: Parameters<Repositories["updateConversation"]>[0]): AppConfig {
+  const merchantConfig = repos.getMerchantConfig(conversation.merchantId);
+  const country = repos.getMerchantCountry(conversation.countryId);
+  return appConfigForMerchant(config, merchantConfig, country);
 }
 
 function isCountryGoalComplete(

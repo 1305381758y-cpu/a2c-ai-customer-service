@@ -12,7 +12,7 @@ import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
-import { translateForCustomer } from "./services/translation.js";
+import { translateForCustomer, translateForOperator } from "./services/translation.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: WebhookProcessor }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -474,6 +474,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const type = request.body?.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, request.body?.content || "", conversation.language) : undefined;
     const outgoingContent = translation?.translatedText || request.body?.content;
+    const operatorTranslation = type === "text" && outgoingContent ? await translateForOperator(runtimeConfig, outgoingContent, conversation.language) : undefined;
     try {
       const externalId = await client.sendMessage({
         to: conversation.customerPhone,
@@ -498,7 +499,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
           translatedContent: translation?.translatedText,
           targetLanguage: translation?.targetLanguage,
           translationStatus: translation?.status,
-          translationError: translation?.error || ""
+          translationError: translation?.error || "",
+          operatorTranslatedContent: operatorTranslation?.translatedText,
+          operatorTranslationTargetLanguage: operatorTranslation?.targetLanguage,
+          operatorTranslationStatus: operatorTranslation?.status,
+          operatorTranslationError: operatorTranslation?.error || ""
         }
       });
       return { externalId, translation };
@@ -524,6 +529,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const type = body.type ?? "text";
     const translation = type === "text" ? await translateForCustomer(runtimeConfig, body.content || "", conversation.language) : undefined;
     const outgoingContent = translation?.translatedText || body.content;
+    const operatorTranslation = type === "text" && outgoingContent ? await translateForOperator(runtimeConfig, outgoingContent, conversation.language) : undefined;
     try {
       const externalId = await client.sendMessage({
         to: conversation.customerPhone,
@@ -549,7 +555,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
           translatedContent: translation?.translatedText,
           targetLanguage: translation?.targetLanguage,
           translationStatus: translation?.status,
-          translationError: translation?.error || ""
+          translationError: translation?.error || "",
+          operatorTranslatedContent: operatorTranslation?.translatedText,
+          operatorTranslationTargetLanguage: operatorTranslation?.targetLanguage,
+          operatorTranslationStatus: operatorTranslation?.status,
+          operatorTranslationError: operatorTranslation?.error || ""
         }
       });
       deps.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: outgoingContent || body.caption || body.url || "", direction: "outbound" });

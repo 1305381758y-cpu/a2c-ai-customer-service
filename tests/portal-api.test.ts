@@ -230,6 +230,9 @@ describe("portal api", () => {
     const outbound = messages.json().rows.find((row: { direction: string }) => row.direction === "outbound");
     expect(outbound.content).toBe("请点击专属链接注册：https://merchant.example/register");
     expect(outbound.rawPayload).toMatchObject({
+      originalContent: "请点击专属链接注册：https://merchant.example/register",
+      operatorTranslatedContent: "请点击专属链接注册：https://merchant.example/register",
+      operatorTranslationTargetLanguage: "zh-CN",
       a2cSendStatus: "failed"
     });
 
@@ -1738,7 +1741,9 @@ describe("portal api", () => {
       const translated = messages.json().rows.find((row: { rawPayload?: { originalContent?: string } }) => row.rawPayload?.originalContent === "请把手机号和 Telegram 发给我");
       expect(translated.rawPayload).toMatchObject({
         originalContent: "请把手机号和 Telegram 发给我",
-        translatedContent: "请把手机号和 Telegram 发给我"
+        translatedContent: "请把手机号和 Telegram 发给我",
+        operatorTranslatedContent: "请把手机号和 Telegram 发给我",
+        operatorTranslationTargetLanguage: "zh-CN"
       });
     } finally {
       await app.close();
