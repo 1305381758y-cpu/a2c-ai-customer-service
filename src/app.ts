@@ -13,8 +13,10 @@ import { registerRoutes } from "./routes.js";
 import { WebhookProcessor } from "./services/webhookProcessor.js";
 import { hashPassword } from "./auth.js";
 
+const UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
+
 export function buildApp(config: AppConfig) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: UPLOAD_LIMIT_BYTES });
   const db = openDb(config.DATABASE_URL);
   const repos = new Repositories(db);
   repos.ensureBootstrapAdmin({
@@ -30,7 +32,11 @@ export function buildApp(config: AppConfig) {
   );
 
   app.register(multipart, {
-    limits: { fileSize: 10 * 1024 * 1024 }
+    limits: {
+      fileSize: UPLOAD_LIMIT_BYTES,
+      fieldSize: 2 * 1024 * 1024,
+      files: 1
+    }
   });
   const publicDir = join(process.cwd(), "dist", "public");
   const assetsDir = join(publicDir, "assets");
