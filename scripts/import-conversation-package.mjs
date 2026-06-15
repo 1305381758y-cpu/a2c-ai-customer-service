@@ -11,8 +11,6 @@ if (!inputPathArg) {
 
 const inputPath = resolve(inputPathArg);
 const dbPath = resolve(dbPathArg);
-const merchantId = "default";
-const countryId = "default:default";
 const filename = basename(inputPath);
 const sourceTag = `conversation_package:${filename}`;
 const maxSamples = Number(process.env.MAX_SAMPLES || 25000);
@@ -20,6 +18,7 @@ const maxKnowledge = Number(process.env.MAX_KNOWLEDGE || 350);
 
 const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA foreign_keys = ON;");
+const { merchantId, countryId, merchantName, countryName } = resolveTargetMerchantAndCountry(db);
 
 const backupPath = `${dbPath}.backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 copyFileSync(dbPath, backupPath);
@@ -207,6 +206,10 @@ try {
     ok: true,
     backupPath,
     materialId,
+    merchantId,
+    merchantName,
+    countryId,
+    countryName,
     rowCount,
     parsedRows,
     agentAccounts: agentAccounts.size,
@@ -226,6 +229,35 @@ function insertMaterial({ filename, rawText }) {
     VALUES (?, ?, 'txt', ?, 'text/tab-separated-values; charset=utf-8', 'enabled', ?, '[]')
   `).run(merchantId, countryId, filename, rawText);
   return Number(result.lastInsertRowid);
+}
+
+function resolveTargetMerchantAndCountry(db) {
+  const merchantQuery = process.env.MERCHANT_ID || process.env.MERCHANT_NAME || "default";
+  const countryQuery = process.env.COUNTRY_ID || process.env.COUNTRY_NAME || "default";
+  const merchant = process.env.MERCHANT_ID
+    ? db.prepare("SELECT id, name FROM merchants WHERE id = ?").get(process.env.MERCHANT_ID)
+    : db.prepare("SELECT id, name FROM merchants WHERE name = ? OR id = ? ORDER BY id LIMIT 1").get(merchantQuery, merchantQuery);
+  if (!merchant) {
+    throw new Error(`未找到目标商户：${merchantQuery}。请先在后台创建商户，或设置 MERCHANT_ID / MERCHANT_NAME。`);
+  }
+  const country = process.env.COUNTRY_ID
+    ? db.prepare("SELECT id, name FROM merchant_countries WHERE id = ? AND merchant_id = ?").get(process.env.COUNTRY_ID, merchant.id)
+    : db.prepare(`
+        SELECT id, name
+        FROM merchant_countries
+        WHERE merchant_id = ? AND (name = ? OR code = ? OR id = ?)
+        ORDER BY id
+        LIMIT 1
+      `).get(merchant.id, countryQuery, countryQuery, countryQuery);
+  if (!country) {
+    throw new Error(`商户 ${merchant.name} 下未找到国家/市场：${countryQuery}。请先创建国家，或设置 COUNTRY_ID / COUNTRY_NAME。`);
+  }
+  return {
+    merchantId: merchant.id,
+    merchantName: merchant.name,
+    countryId: country.id,
+    countryName: country.name
+  };
 }
 
 async function* readRows(path) {
@@ -312,8 +344,8 @@ function classifyIntent(text) {
 }
 
 function stageForIntent(intent) {
-  if (intent === "ask_tg_register") return "need_telegram";
-  if (intent === "provide_phone") return "need_telegram";
+  if (intent === "ask_tg_register") return "need_tg_register";
+  if (intent === "provide_phone") return "need_tg_register";
   if (intent === "need_help") return "need_platform_register";
   if (intent === "trust_concern") return "need_platform_register";
   return "need_platform_register";
