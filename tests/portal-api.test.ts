@@ -56,6 +56,57 @@ function csvUploadPayload(csv: string) {
 }
 
 describe("portal api", () => {
+  it("clears all training samples through the internal maintenance endpoint", async () => {
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "清空样本商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "clear-samples@test.local", name: "清空样本", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "clear-samples@test.local", "Merchant123456");
+
+      const defaultUpload = csvUploadPayload("客户消息,标准回复\n默认客户,默认回复");
+      const merchantUpload = csvUploadPayload("客户消息,标准回复\n商户客户,商户回复");
+      await app.inject({
+        method: "POST",
+        url: "/internal/training-samples/import",
+        headers: { "x-api-key": "test-key", ...defaultUpload.headers },
+        payload: defaultUpload.payload
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/training-samples/import",
+        headers: { cookie: merchantCookie, ...merchantUpload.headers },
+        payload: merchantUpload.payload
+      });
+
+      const before = await app.inject({ method: "GET", url: "/internal/training-samples", headers: { "x-api-key": "test-key" } });
+      expect(before.json().rows).toHaveLength(2);
+
+      const unauthorized = await app.inject({ method: "DELETE", url: "/internal/training-samples", headers: { "x-api-key": "wrong-key" } });
+      expect(unauthorized.statusCode).toBe(401);
+
+      const cleared = await app.inject({ method: "DELETE", url: "/internal/training-samples", headers: { "x-api-key": "test-key" } });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json()).toMatchObject({ ok: true, samplesDeleted: 2 });
+
+      const after = await app.inject({ method: "GET", url: "/internal/training-samples", headers: { "x-api-key": "test-key" } });
+      expect(after.json().rows).toHaveLength(0);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("lets merchants manage knowledge items without crossing tenant boundaries", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");

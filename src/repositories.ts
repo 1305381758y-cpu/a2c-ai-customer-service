@@ -247,6 +247,22 @@ export class Repositories {
     return insertTrainingSamples(this.db, samples, merchantId, countryId);
   }
 
+  deleteAllTrainingSamples(): { samplesDeleted: number; materialItemsDeleted: number } {
+    this.db.sqlite.exec("BEGIN");
+    try {
+      const materialItems = this.db.sqlite.prepare("DELETE FROM training_material_items WHERE sample_id IS NOT NULL OR kind = 'sample'").run();
+      const samples = this.db.sqlite.prepare("DELETE FROM training_samples").run();
+      this.db.sqlite.exec("COMMIT");
+      return {
+        samplesDeleted: Number(samples.changes ?? 0),
+        materialItemsDeleted: Number(materialItems.changes ?? 0)
+      };
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   createTrainingSample(merchantId: string, sample: ImportedTrainingSample, countryId = this.defaultCountryId(merchantId)): { id: number } {
     this.db.sqlite
       .prepare(`

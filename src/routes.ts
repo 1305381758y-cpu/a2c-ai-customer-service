@@ -578,6 +578,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
     })
   }));
+  app.delete("/internal/training-samples", { preHandler: auth(deps.config) }, async () => ({
+    ok: true,
+    ...deps.repos.deleteAllTrainingSamples()
+  }));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/internal/training-samples/:id", { preHandler: auth(deps.config) }, async (request, reply) => {
     const id = Number(request.params.id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
