@@ -18,6 +18,7 @@ export interface Conversation {
   nickname: string;
   language: string;
   stage: ConversationStage;
+  flowStep: string;
   extractedPhone: string;
   extractedTelegram: string;
   extractedWhatsApp: string;
@@ -314,7 +315,7 @@ export class Repositories {
     this.db.sqlite
       .prepare(`
         UPDATE conversations
-        SET country_id = ?, language = ?, stage = ?, extracted_phone = ?, extracted_telegram = ?, extracted_whatsapp = ?,
+        SET country_id = ?, language = ?, stage = ?, flow_step = ?, extracted_phone = ?, extracted_telegram = ?, extracted_whatsapp = ?,
             status = ?, handoff_status = ?, handoff_notified = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `)
@@ -322,6 +323,7 @@ export class Repositories {
         conversation.countryId,
         conversation.language,
         conversation.stage,
+        conversation.flowStep,
         conversation.extractedPhone,
         conversation.extractedTelegram,
         conversation.extractedWhatsApp,
@@ -1799,6 +1801,7 @@ function mapConversation(row: Record<string, unknown>): Conversation {
     nickname: String(row.nickname ?? ""),
     language: String(row.language ?? "unknown"),
     stage: String(row.stage ?? "need_platform_register") as ConversationStage,
+    flowStep: String(row.flow_step ?? ""),
     extractedPhone: String(row.extracted_phone ?? ""),
     extractedTelegram: String(row.extracted_telegram ?? ""),
     extractedWhatsApp: String(row.extracted_whatsapp ?? ""),

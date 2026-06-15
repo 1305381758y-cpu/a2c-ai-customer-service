@@ -47,7 +47,7 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   if (/\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih)\b/.test(lower)) return "ms";
   if (/\b(saya|kamu|daftar|akun|nomor|terima kasih|bisa)\b/.test(lower)) return "id";
   if (/\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại)\b/.test(lower)) return "vi";
-  if (/\b(olá|ola|oi|cadastro|cadastrar|conta|telefone|obrigado|obrigada|pix|brasil)\b/.test(lower)) return "pt-BR";
+  if (/(^|\s)(olá|ola|oi|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
   if (/[A-Za-z]/.test(text)) return "en";
   return fallback;
 }

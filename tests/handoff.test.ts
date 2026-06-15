@@ -14,6 +14,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     nickname: "张三",
     language: "zh",
     stage: "ready_for_handoff",
+    flowStep: "human_handoff",
     extractedPhone: "123456789",
     extractedTelegram: "@qwea",
     extractedWhatsApp: "",

@@ -108,6 +108,7 @@ export function migrate(db: DatabaseSync): void {
       nickname TEXT DEFAULT '',
       language TEXT DEFAULT 'unknown',
       stage TEXT DEFAULT 'need_platform_register',
+      flow_step TEXT DEFAULT '',
       extracted_phone TEXT DEFAULT '',
       extracted_telegram TEXT DEFAULT '',
       extracted_whatsapp TEXT DEFAULT '',
@@ -298,6 +299,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "conversations", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "handoff_status", "TEXT DEFAULT 'pending'");
+  ensureColumn(db, "conversations", "flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "extracted_whatsapp", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "unread_count", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");

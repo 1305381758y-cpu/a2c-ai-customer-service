@@ -1,5 +1,6 @@
 import { analyzeMessage } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
+import { buildStrictFlowReply, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
 import { GeminiReplyClient } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
@@ -116,6 +117,83 @@ export class WebhookProcessor {
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
       return { status: "auto_reply_disabled", conversationId: conversation.id };
+    }
+
+    const strictNeedsInviteCode = strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation,
+      analysis,
+      customerText: analysisText || content
+    });
+    const strictInviteCode = strictNeedsInviteCode
+      ? this.repos.reserveInviteCodeForConversation(conversation)
+      : undefined;
+    const strictReply = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation,
+      analysis,
+      customerText: analysisText || content,
+      inviteCode: strictInviteCode,
+      config: runtimeConfig
+    });
+    if (strictReply.enabled) {
+      conversation.language = strictReply.language;
+      conversation.stage = strictReply.stage;
+      conversation.flowStep = strictReply.nextFlowStep;
+
+      let externalId = "";
+      let a2cSendStatus: "sent" | "failed" = "sent";
+      let a2cSendError = "";
+      try {
+        externalId = await a2c.sendMessage({
+          to: data.from,
+          senderPhoneNumber: data.to,
+          type: "text",
+          content: strictReply.reply
+        });
+        if (!externalId) externalId = `a2c_strict:${data.messageId || payload.id}:${Date.now()}`;
+      } catch (error) {
+        a2cSendStatus = "failed";
+        a2cSendError = error instanceof Error ? error.message : "unknown";
+        externalId = `strict_send_failed:${data.messageId || payload.id}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
+      }
+
+      const outboundTranslation = await translateForOperator(runtimeConfig, strictReply.reply, strictReply.language);
+      const outbound = this.repos.insertMessage({
+        conversationId: conversation.id,
+        direction: "outbound",
+        externalId,
+        content: strictReply.reply,
+        msgType: "text",
+        language: strictReply.language,
+        intent: "unknown",
+        rawPayload: {
+          strictFlow: true,
+          strictFlowStep: strictReply.nextFlowStep,
+          aiFallback: Boolean(strictReply.fallback),
+          originalContent: outboundTranslation.originalText,
+          operatorTranslatedContent: outboundTranslation.translatedText,
+          operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
+          operatorTranslationStatus: outboundTranslation.status,
+          operatorTranslationError: outboundTranslation.error || "",
+          a2cSendStatus,
+          a2cSendError,
+          inviteCodeRequired: Boolean(country.requirePlatformAccount),
+          inviteCodeMissing: Boolean(strictReply.needsInviteCode && !strictInviteCode),
+          assignedInviteCode: strictInviteCode ? {
+            id: strictInviteCode.id,
+            code: strictInviteCode.code,
+            registerUrl: strictInviteCode.registerUrl,
+            status: strictInviteCode.status
+          } : null
+        }
+      });
+      this.repos.updateConversation(conversation);
+      this.repos.upsertCustomerFromConversation(conversation);
+      this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: strictReply.reply, direction: "outbound" });
+      return { status: a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
     }
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
