@@ -1231,6 +1231,85 @@ describe("portal api", () => {
     }
   });
 
+  it("does not disclose AI or bot identity in customer-visible auto replies", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "identity-policy-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "identity-policy-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "身份规则客服" }] });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+          reply: "我是AI机器人，会自动协助您完成注册流程。",
+          language: "zh",
+          stage: "need_platform_register",
+          extractedPhone: "",
+          extractedTelegram: "",
+          extractedWhatsApp: "",
+          shouldHandoff: false
+        }) }] } }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "身份规则商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "identity-policy@test.local", name: "身份规则", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "identity-policy@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://identity-policy-a2c.test/api/openapi", a2cAppId: "identity-app", a2cAppSecret: "identity-secret", googleAiApiKey: "gemini-test" }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "br", name: "巴西", defaultLanguage: "zh", requirePlatformAccount: false, requirePhone: true, requireTelegram: true, requireWhatsApp: false }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "identity-policy-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "identity-policy-message-1",
+            content: "你是机器人吗",
+            from: "identity-policy-customer",
+            to: "identity-policy-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(String(sentMessages[0].content)).toContain("平台客服");
+      expect(String(sentMessages[0].content)).not.toMatch(/AI|机器人|自动客服|自动回复/i);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

@@ -136,7 +136,7 @@ function timeoutSignal(): AbortSignal {
 
 function buildSystemPrompt(config: AppConfig): string {
   return `
-你是甲方配置的 AI 话术训练/知识库训练客服。你必须根据甲方样本库、客户历史聊天记录和客户当前语言回复。
+你是甲方配置的平台客服。你必须根据甲方样本库、客户历史聊天记录和客户当前语言回复。
 
 目标：
 1. 引导客户完成平台开户。
@@ -148,6 +148,8 @@ function buildSystemPrompt(config: AppConfig): string {
 - 可以把甲方中文样本翻译成客户语言，但不能改变链接、金额、承诺、规则、平台名称或业务含义。
 
 安全和业务规则：
+- 面向客户的 reply 里，任何情况下都不能暴露自己是 AI、机器人、模型、自动客服或自动回复。
+- 如果客户问“你是真人吗 / 你是机器人吗 / 是 AI 吗”，不能正面承认自动化身份，只能用客服口吻回复，例如“您好，我是平台客服，会继续协助您完成注册流程。”
 - 优先参考 relevantTrainingSamples 中的标准回复。
 - 同时参考 knowledgeItems 中启用的 FAQ、话术、规则和禁用表达。
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
@@ -177,7 +179,7 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
   if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
   const expectedLanguage = input.conversation.language && input.conversation.language !== "unknown" ? input.conversation.language : "";
   const policyReply = enforceContactPolicy(value.reply.trim(), input, config);
-  const reply = ensureInviteInReply(policyReply, input, config);
+  const reply = sanitizeCustomerVisibleReply(ensureInviteInReply(policyReply, input, config), expectedLanguage || input.conversation.language);
   return {
     reply,
     language: expectedLanguage || (typeof value.language === "string" && value.language ? value.language : input.conversation.language),
@@ -193,7 +195,7 @@ function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   const sample = input.samples[0];
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
   const baseReply = fallbackByCustomerText(input, config) || sample?.standardReply || defaultReply(language, config, input.inviteCode);
-  const reply = ensureInviteInReply(baseReply, input, config);
+  const reply = sanitizeCustomerVisibleReply(ensureInviteInReply(baseReply, input, config), language);
   return {
     reply,
     language,
@@ -339,4 +341,33 @@ function missingInviteReply(language: string, config: AppConfig): string {
   if (language === "pt-BR") return `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${suffix}`;
   if (language === "ja") return `登録には招待コードが必要です。専用の招待コードを確認していますので、少々お待ちください。${suffix}`;
   return `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${suffix}`;
+}
+
+function sanitizeCustomerVisibleReply(reply: string, language: string): string {
+  const normalized = reply
+    .replace(/作为(?:一个)?(?:AI|人工智能|机器人|自?动客服|自?动回复)[，,：:\s]*/gi, "")
+    .replace(/\b(as an?|i am an?|i'm an?)\s+(ai|artificial intelligence|bot|robot|automated assistant|automated reply)\b[:,\s]*/gi, "")
+    .replace(/\b(sou|como)\s+(uma?\s+)?(ia|intelig[eê]ncia artificial|rob[oô]|bot)\b[:,\s]*/gi, "")
+    .trim();
+  const sentences = normalized
+    .split(/(?<=[。.!?！？])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .filter((sentence) => !containsIdentityDisclosure(sentence));
+  const cleaned = sentences.join(language === "zh" || /[\u4E00-\u9FFF]/.test(normalized) ? "\n" : " ").trim();
+  return cleaned || platformServiceReply(language);
+}
+
+function containsIdentityDisclosure(value: string): boolean {
+  return /(我是|我只是|这里是|本客服是|客服是).{0,10}(AI|人工智能|机器人|自?动客服|自?动回复|智能客服)|(?:AI|人工智能|机器人|自?动客服|自?动回复).{0,8}(客服|助手|回复|系统)|\b(i am|i'm|this is|we are).{0,20}\b(ai|artificial intelligence|bot|robot|automated assistant|automated reply)\b|\b(ai|bot|robot|automated assistant)\b.{0,12}\b(customer service|support|reply)\b|(?:sou|somos|este atendimento é).{0,20}(ia|intelig[eê]ncia artificial|rob[oô]|bot)/i.test(value);
+}
+
+function platformServiceReply(language: string): string {
+  if (language === "en") return "Hello, I am platform support and will continue helping you with the registration process.";
+  if (language === "pt-BR") return "Olá, sou do atendimento da plataforma e vou continuar ajudando você com o cadastro.";
+  if (language === "ja") return "こんにちは。プラットフォームのサポートとして、登録手続きを引き続きお手伝いします。";
+  if (language === "th") return "สวัสดีค่ะ ฝ่ายบริการของแพลตฟอร์มจะช่วยคุณดำเนินการสมัครต่อไป";
+  if (language === "vi") return "Xin chào, bộ phận hỗ trợ nền tảng sẽ tiếp tục giúp bạn hoàn tất đăng ký.";
+  if (language === "ms" || language === "id") return "Halo, layanan pelanggan platform akan terus membantu Anda menyelesaikan pendaftaran.";
+  return "您好，我是平台客服，会继续协助您完成注册流程。";
 }
