@@ -216,30 +216,32 @@ describe("strict Aston Brazil flow", () => {
     expect(cleaned).not.toContain("：。");
   });
 
-  it("lets natural replies handle complaints and repeated greetings instead of hard scripting", () => {
-    expect(shouldBypassStrictFlowForNaturalReply("你只会这一句话吗", conversation({ flowStep: "interest_screening" }))).toBe(true);
-    expect(shouldBypassStrictFlowForNaturalReply("你好", conversation({ flowStep: "wait_registration" }))).toBe(true);
-    expect(shouldBypassStrictFlowForNaturalReply("Good morning", conversation({ flowStep: "wait_registration" }))).toBe(true);
-    expect(shouldBypassStrictFlowForNaturalReply("你好，我想找一份工作", conversation({ flowStep: "interest_screening" }))).toBe(true);
+  it("keeps natural customer questions inside the strict flow", () => {
+    expect(shouldBypassStrictFlowForNaturalReply("你只会这一句话吗", conversation({ flowStep: "interest_screening" }))).toBe(false);
+    expect(shouldBypassStrictFlowForNaturalReply("你好", conversation({ flowStep: "wait_registration" }))).toBe(false);
+    expect(shouldBypassStrictFlowForNaturalReply("Good morning", conversation({ flowStep: "wait_registration" }))).toBe(false);
+    expect(shouldBypassStrictFlowForNaturalReply("你好，我想找一份工作", conversation({ flowStep: "interest_screening" }))).toBe(false);
     expect(shouldBypassStrictFlowForNaturalReply("你好", conversation())).toBe(false);
   });
 
-  it("does not repeat registration reminders when the customer is chatting or complaining", () => {
+  it("answers naturally before gently returning to the current step", () => {
     const chat = reply("可以聊天吗", { language: "zh", flowStep: "wait_registration" });
     expect(chat.reply).toContain("可以");
     expect(chat.reply).not.toContain("完成平台开户");
-    expect(chat.reply).not.toContain("手机号和 Telegram");
+    expect(chat.reply).toContain("已经注册完成");
     expect(chat.nextFlowStep).toBe("wait_registration");
 
     const complaint = reply("为什么会这样？", { language: "zh", flowStep: "wait_registration" });
     expect(complaint.reply).toContain("抱歉");
     expect(complaint.reply).not.toContain("完成平台开户");
+    expect(complaint.reply).toContain("准备继续时告诉我");
     expect(complaint.nextFlowStep).toBe("wait_registration");
 
     const platform = reply("什么平台", { language: "zh", flowStep: "wait_registration" });
     expect(platform.reply).toContain("兼职在线工作");
     expect(platform.reply).not.toContain("邀请码");
-    expect(platform.nextFlowStep).toBe("interest_screening");
+    expect(platform.reply).toContain("已经注册完成");
+    expect(platform.nextFlowStep).toBe("wait_registration");
   });
 
   it("reintroduces the job instead of pushing registration when the customer asks about the job again", () => {
@@ -247,6 +249,16 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).toContain("简单介绍");
     expect(result.reply).toContain("兼职在线工作");
     expect(result.reply).not.toContain("完成平台开户");
-    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("准备继续时告诉我");
+    expect(result.nextFlowStep).toBe("wait_registration");
+  });
+
+  it("does not repeat the registration link for a greeting after the link step", () => {
+    const result = reply("你好", { language: "zh", flowStep: "wait_registration" });
+    expect(result.reply).toContain("您好，我在的");
+    expect(result.reply).toContain("如果已经注册完成");
+    expect(result.reply).not.toContain("register.example");
+    expect(result.reply).not.toContain("邀请码");
+    expect(result.nextFlowStep).toBe("wait_registration");
   });
 });

@@ -399,18 +399,8 @@ export function shouldBypassStrictFlowForNaturalReply(
   customerText: string,
   conversation: { flowStep?: string; stage?: string }
 ): boolean {
-  const text = customerText.trim();
-  if (!text) return false;
-  if (/(介绍一下自己|你是谁|你是做什么|什么平台|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|不用|不需要|别发|烦|打扰|who are you|introduce yourself|what are you|robotic|repeat|same thing|not this|wrong|não é|nao e|mecânico|mecanico|repetindo|quem é você|quem e voce)/i.test(text)) {
-    return true;
-  }
-  const hasStartedFlow = Boolean(conversation.flowStep || (conversation.stage && conversation.stage !== "need_platform_register"));
-  if (hasStartedFlow && /^(你好|您好|在吗|在不在|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text)) {
-    return true;
-  }
-  if (hasStartedFlow && /(找工作|找一份工作|兼职|线上工作|在线工作|工作机会|赚钱|收入|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text)) {
-    return true;
-  }
+  void customerText;
+  void conversation;
   return false;
 }
 
