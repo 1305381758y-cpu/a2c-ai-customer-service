@@ -593,6 +593,19 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
 
   app.post("/internal/training-samples/import", { preHandler: auth(deps.config) }, async (request, reply) => importSamples(request, reply, deps, "default"));
+  app.post<{ Body: { email?: string; password?: string; name?: string } }>("/internal/admin/reset-password", { preHandler: auth(deps.config) }, async (request, reply) => {
+    const body = z.object({
+      email: z.string().email().default(deps.config.DEFAULT_ADMIN_EMAIL),
+      password: z.string().min(8).default(deps.config.DEFAULT_ADMIN_PASSWORD),
+      name: z.string().min(1).optional()
+    }).parse(request.body ?? {});
+    const user = deps.repos.resetPlatformAdmin({
+      email: body.email,
+      passwordHash: hashPassword(body.password),
+      name: body.name
+    });
+    return maskUser(user);
+  });
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/internal/training-samples", { preHandler: auth(deps.config) }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       language: request.query.language,

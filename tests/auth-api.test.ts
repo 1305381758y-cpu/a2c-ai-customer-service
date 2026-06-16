@@ -135,4 +135,40 @@ describe("auth api", () => {
 
     await app.close();
   });
+
+  it("resets or creates a platform admin through the internal maintenance endpoint", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "OldAdmin123"
+    }));
+
+    const reset = await app.inject({
+      method: "POST",
+      url: "/internal/admin/reset-password",
+      headers: { "x-api-key": "test-key" },
+      payload: { email: "admin@test.local", password: "NewAdmin123", name: "重置管理员" }
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json()).toMatchObject({ email: "admin@test.local", role: "platform_admin", merchantId: null, status: "active" });
+    expect(reset.json()).not.toHaveProperty("passwordHash");
+
+    const oldLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "OldAdmin123" }
+    });
+    expect(oldLogin.statusCode).toBe(401);
+
+    const newLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "NewAdmin123" }
+    });
+    expect(newLogin.statusCode).toBe(200);
+
+    await app.close();
+  });
 });

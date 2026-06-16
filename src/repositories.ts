@@ -2188,6 +2188,26 @@ export class Repositories {
     return this.getUserById(id)!;
   }
 
+  resetPlatformAdmin(input: { email: string; passwordHash: string; name?: string }): UserRecord {
+    const existing = this.getUserByEmail(input.email);
+    if (existing) {
+      return this.patchUser(existing.id, {
+        name: input.name ?? existing.name,
+        status: "active",
+        passwordHash: input.passwordHash,
+        role: "platform_admin",
+        merchantId: null
+      })!;
+    }
+    return this.createUser({
+      merchantId: null,
+      email: input.email,
+      name: input.name ?? "平台管理员",
+      passwordHash: input.passwordHash,
+      role: "platform_admin"
+    });
+  }
+
   patchUser(id: string, patch: { name?: string; status?: string; passwordHash?: string; role?: UserRole; merchantId?: string | null }): UserRecord | undefined {
     const assignments = ["updated_at = CURRENT_TIMESTAMP"];
     const values: Array<string | null> = [];
