@@ -491,6 +491,63 @@ export class Repositories {
       .map((row) => mapCustomer(row as Record<string, unknown>));
   }
 
+  deleteCustomer(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {
+    const customer = this.getCustomer(merchantId, customerKey);
+    if (!customer) return { deleted: false, conversationsDeleted: 0, messagesDeleted: 0 };
+    const conversations = this.db.sqlite
+      .prepare("SELECT id FROM conversations WHERE merchant_id = ? AND customer_phone = ?")
+      .all(merchantId, customerKey)
+      .map((row) => String((row as { id: string }).id));
+
+    this.db.sqlite.exec("BEGIN");
+    try {
+      let messagesDeleted = 0;
+      if (conversations.length) {
+        const placeholders = conversations.map(() => "?").join(",");
+        const conversationSampleMarkers = conversations.map((id) => `conversation_sample:${id}:%`);
+        messagesDeleted = Number(this.db.sqlite.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...conversations).changes ?? 0);
+        this.db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE conversation_id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE source_type = 'sample' AND source_id IN (
+          SELECT CAST(id AS TEXT)
+          FROM training_samples
+          WHERE merchant_id = ? AND (${conversationSampleMarkers.map(() => "keywords LIKE ?").join(" OR ")})
+        )`).run(merchantId, ...conversationSampleMarkers);
+        this.db.sqlite.prepare(`DELETE FROM training_samples WHERE merchant_id = ? AND (${conversationSampleMarkers.map(() => "keywords LIKE ?").join(" OR ")})`).run(merchantId, ...conversationSampleMarkers);
+        this.db.sqlite.prepare(`UPDATE a2c_invite_codes
+          SET status = CASE WHEN status = 'reserved' THEN 'available' ELSE status END,
+              assigned_customer_key = '',
+              assigned_conversation_id = '',
+              platform_account = '',
+              assigned_at = CASE WHEN status = 'reserved' THEN '' ELSE assigned_at END,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE merchant_id = ? AND (assigned_customer_key = ? OR assigned_conversation_id IN (${placeholders}))
+        `).run(merchantId, customerKey, ...conversations);
+      } else {
+        this.db.sqlite.prepare(`
+          UPDATE a2c_invite_codes
+          SET status = CASE WHEN status = 'reserved' THEN 'available' ELSE status END,
+              assigned_customer_key = '',
+              assigned_conversation_id = '',
+              platform_account = '',
+              assigned_at = CASE WHEN status = 'reserved' THEN '' ELSE assigned_at END,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE merchant_id = ? AND assigned_customer_key = ?
+        `).run(merchantId, customerKey);
+      }
+      this.db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
+      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
+      const deleted = this.db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
+      this.db.sqlite.exec("COMMIT");
+      return { deleted: deleted.changes > 0, conversationsDeleted: conversations.length, messagesDeleted };
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   insertMessage(input: MessageInput): { inserted: boolean; id?: number } {
     try {
       const result = this.db.sqlite

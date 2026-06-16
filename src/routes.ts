@@ -247,6 +247,12 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.delete<{ Params: { customerKey: string }; Querystring: { merchantId?: string } }>("/api/admin/customers/:customerKey", { preHandler: adminOnly }, async (request, reply) => {
+    const merchantId = request.query.merchantId || "default";
+    const result = deps.repos.deleteCustomer(merchantId, decodeURIComponent(request.params.customerKey));
+    if (!result.deleted) return reply.code(404).send({ error: "customer not found" });
+    return { ok: true, ...result };
+  });
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/admin/conversations/:id/messages", { preHandler: adminOnly }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
@@ -473,6 +479,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.delete<{ Params: { customerKey: string } }>("/api/merchant/customers/:customerKey", { preHandler: merchantAdmins }, async (request, reply) => {
+    const result = deps.repos.deleteCustomer(scopedMerchantId(request), decodeURIComponent(request.params.customerKey));
+    if (!result.deleted) return reply.code(404).send({ error: "customer not found" });
+    return { ok: true, ...result };
+  });
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/merchant/conversations/:id/messages", { preHandler: merchantRoles }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });

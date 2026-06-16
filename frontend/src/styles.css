@@ -416,6 +416,19 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 .detail-panel {
   overflow: auto;
 }
+.detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.detail-title-row > div {
+  min-width: 0;
+}
+.detail-title-row h3 {
+  word-break: break-word;
+}
 .work-panel .table {
   flex: 1;
   min-height: 260px;
