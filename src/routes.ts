@@ -734,7 +734,7 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   const runtimeConfig = appConfigForMerchant(deps.config, cfg);
   const checks: ConfigCheckItem[] = [];
 
-  checks.push(await checkA2C(runtimeConfig, deps.repos.a2cTokenStore(merchantId)));
+  checks.push(checkA2C(runtimeConfig, deps.repos, merchantId));
   checks.push(await checkGemini(runtimeConfig));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push({
@@ -752,16 +752,15 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   };
 }
 
-async function checkA2C(config: AppConfig, tokenStore?: ConstructorParameters<typeof A2CClient>[1]): Promise<ConfigCheckItem> {
+function checkA2C(config: AppConfig, repos: Repositories, merchantId: string): ConfigCheckItem {
   if (!config.A2C_APP_ID || !config.A2C_APP_SECRET) {
     return { key: "a2c", label: "A2C", ok: false, status: "missing", detail: "缺少 A2C App ID 或密钥" };
   }
-  try {
-    const accounts = await new A2CClient(config, tokenStore).listAccounts();
-    return { key: "a2c", label: "A2C", ok: true, status: "ok", detail: `连接正常，拉取到 ${accounts.length} 个客服账号` };
-  } catch (error) {
-    return { key: "a2c", label: "A2C", ok: false, status: "error", detail: error instanceof Error ? error.message : "A2C 检测失败" };
-  }
+  const accounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
+  const detail = accounts.length
+    ? `密钥已填写，当前已保存 ${accounts.length} 个启用客服账号。需要刷新账号时请手动点击“同步A2C客服账号”。`
+    : "密钥已填写，但还没有同步客服账号。请手动点击“同步A2C客服账号”，避免配置检测频繁请求 A2C 认证。";
+  return { key: "a2c", label: "A2C", ok: true, status: "ok", detail };
 }
 
 async function checkGemini(config: AppConfig): Promise<ConfigCheckItem> {

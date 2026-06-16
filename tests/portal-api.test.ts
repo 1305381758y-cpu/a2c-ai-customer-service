@@ -1743,8 +1743,10 @@ describe("portal api", () => {
 
   it("checks merchant integration config status", async () => {
     const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
+      calls.push(url);
       if (url.endsWith("/open/auth/token")) {
         return Response.json({ code: 200, data: { accessToken: "token-for-check", expireIn: 3600 } });
       }
@@ -1816,6 +1818,8 @@ describe("portal api", () => {
         ["telegram", true],
         ["platformRegisterUrl", true]
       ]);
+      expect(calls.some((url) => url.endsWith("/open/auth/token"))).toBe(false);
+      expect(calls.some((url) => url.endsWith("/v1/accounts"))).toBe(false);
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

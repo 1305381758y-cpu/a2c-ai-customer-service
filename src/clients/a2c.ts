@@ -3,7 +3,7 @@ import type { AppConfig } from "../config.js";
 const A2C_TIMEOUT_MS = 12_000;
 const A2C_TOKEN_TTL_MS = 7_200_000;
 const TOKEN_REFRESH_SKEW_MS = 0;
-const AUTH_RATE_LIMIT_COOLDOWN_MS = 60_000;
+const AUTH_RATE_LIMIT_COOLDOWN_MS = 10 * 60_000;
 
 type TokenCacheEntry = {
   accessToken?: string;

@@ -214,10 +214,10 @@ function Config({ platform }: { platform: boolean }) {
       const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       if (!saved.a2cAppId || !saved.a2cAppSecret) {
-        setMessage("配置已保存。填写 A2C App ID 和密钥后会自动同步客服账号。");
+        setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
         return;
       }
-      await syncA2CAccounts(true);
+      setMessage("配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。");
     } catch (error) {
       setError(error instanceof Error ? error.message : "保存配置失败");
     }
