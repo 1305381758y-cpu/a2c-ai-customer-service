@@ -490,9 +490,9 @@ export function suppressRegistrationDetailsForNonLinkStep(
     return "请把 @ 开头的 Telegram 用户名发给我。";
   }
   if (cleaned && !isLowSignalReply(cleaned)) return cleaned;
-  if (language === "en") return "Okay, I will continue helping you with the next step.";
-  if (language === "pt-BR") return "Certo, vou continuar ajudando você no próximo passo.";
-  return "好的，我继续协助您。";
+  if (language === "en") return "I am here. Please tell me whether you want to continue registration, check Telegram, or verify your phone number, and I will handle that step.";
+  if (language === "pt-BR") return "Estou aqui. Me diga se você quer continuar o cadastro, resolver o Telegram ou confirmar o telefone, e eu sigo por essa etapa.";
+  return "我在的。您可以直接告诉我：继续注册、处理 Telegram，还是核对手机号，我会按当前这一步处理。";
 }
 
 function stripKnownRegistrationUrls(

@@ -1659,6 +1659,92 @@ describe("portal api", () => {
     }
   });
 
+  it("continues Aston strict flow across short confirmations in real webhooks", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "aston-short-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "aston-short-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "短确认客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `aston-short-sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "阿斯顿短确认" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "aston-short@test.local", name: "阿斯顿短确认", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "aston-short@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://aston-short-a2c.test/api/openapi", a2cAppId: "aston-short-app", a2cAppSecret: "aston-short-secret", googleAiApiKey: "gemini-test" }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "ASTON-SHORT-1", registerUrl: "https://register.example/?code={code}" }
+      });
+
+      for (const [index, content] of ["你好", "是的", "好的"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `aston-short-event-${index + 1}`,
+            timestamp: Math.floor(Date.now() / 1000) + index,
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `aston-short-message-${index + 1}`,
+              content,
+              from: "aston-short-customer",
+              to: "aston-short-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000) + index
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+        expect(webhook.json().status).toBe("strict_flow_replied");
+      }
+
+      expect(sentMessages).toHaveLength(3);
+      expect(String(sentMessages[0].content)).toContain("兼职在线工作");
+      expect(String(sentMessages[0].content)).not.toContain("register.example");
+      expect(String(sentMessages[1].content)).toContain("简单介绍");
+      expect(String(sentMessages[1].content)).toContain("如果您觉得可以继续");
+      expect(String(sentMessages[1].content)).not.toContain("register.example");
+      expect(String(sentMessages[2].content)).toContain("https://register.example/?code=ASTON-SHORT-1");
+      expect(String(sentMessages[2].content)).toContain("ASTON-SHORT-1");
+      for (const message of sentMessages) {
+        expect(String(message.content)).not.toBe("好的，我继续协助您。");
+        expect(String(message.content)).not.toMatch(/AI|机器人|自动客服/i);
+      }
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      expect(conversations.json().rows[0]).toMatchObject({ flowStep: "wait_registration", stage: "need_platform_register" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];
