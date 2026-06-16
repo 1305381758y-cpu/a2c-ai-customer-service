@@ -121,26 +121,28 @@ export class WebhookProcessor {
       return { status: "auto_reply_disabled", conversationId: conversation.id };
     }
 
-    const strictNeedsInviteCode = strictFlowNeedsInviteCode({
-      merchant,
-      country,
-      conversation,
-      analysis,
-      customerText: analysisText || content
-    });
-    const strictInviteCode = strictNeedsInviteCode
-      ? this.repos.reserveInviteCodeForConversation(conversation)
-      : undefined;
-    const strictReply = buildStrictFlowReply({
-      merchant,
-      country,
-      conversation,
-      analysis,
-      customerText: analysisText || content,
-      inviteCode: strictInviteCode,
-      config: runtimeConfig
-    });
-    if (strictReply.enabled) {
+    const useNaturalReply = shouldBypassStrictFlowForNaturalReply(analysisText || content, conversation);
+    if (!useNaturalReply) {
+      const strictNeedsInviteCode = strictFlowNeedsInviteCode({
+        merchant,
+        country,
+        conversation,
+        analysis,
+        customerText: analysisText || content
+      });
+      const strictInviteCode = strictNeedsInviteCode
+        ? this.repos.reserveInviteCodeForConversation(conversation)
+        : undefined;
+      const strictReply = buildStrictFlowReply({
+        merchant,
+        country,
+        conversation,
+        analysis,
+        customerText: analysisText || content,
+        inviteCode: strictInviteCode,
+        config: runtimeConfig
+      });
+      if (strictReply.enabled) {
       conversation.language = strictReply.language;
       conversation.stage = strictReply.stage;
       conversation.flowStep = strictReply.nextFlowStep;
@@ -196,6 +198,7 @@ export class WebhookProcessor {
       this.repos.upsertCustomerFromConversation(conversation);
       this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: strictReply.reply, direction: "outbound" });
       return { status: a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
+      }
     }
 
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
@@ -405,6 +408,22 @@ function shouldUseInviteForReply(
 ): boolean {
   if (!country.requirePlatformAccount || conversation.status === "human_handoff") return false;
   return asksForRegistrationLink(customerText, intent);
+}
+
+export function shouldBypassStrictFlowForNaturalReply(
+  customerText: string,
+  conversation: { flowStep?: string; stage?: string }
+): boolean {
+  const text = customerText.trim();
+  if (!text) return false;
+  if (/(介绍一下自己|你是谁|你是做什么|什么平台|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|不用|不需要|别发|烦|打扰|who are you|introduce yourself|what are you|robotic|repeat|same thing|not this|wrong|não é|nao e|mecânico|mecanico|repetindo|quem é você|quem e voce)/i.test(text)) {
+    return true;
+  }
+  const hasStartedFlow = Boolean(conversation.flowStep || (conversation.stage && conversation.stage !== "need_platform_register"));
+  if (hasStartedFlow && /^(你好|您好|在吗|在不在|hi|hello|hey|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text)) {
+    return true;
+  }
+  return false;
 }
 
 function asksForRegistrationLink(customerText: string, intent: string): boolean {

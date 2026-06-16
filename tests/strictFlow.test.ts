@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildStrictFlowReply, strictFlowNeedsInviteCode } from "../src/domain/strictFlow.js";
-import { suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
+import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
@@ -214,5 +214,11 @@ describe("strict Aston Brazil flow", () => {
     expect(cleaned).not.toContain("点击这个链接");
     expect(cleaned).not.toContain("google");
     expect(cleaned).not.toContain("：。");
+  });
+
+  it("lets natural replies handle complaints and repeated greetings instead of hard scripting", () => {
+    expect(shouldBypassStrictFlowForNaturalReply("你只会这一句话吗", conversation({ flowStep: "interest_screening" }))).toBe(true);
+    expect(shouldBypassStrictFlowForNaturalReply("你好", conversation({ flowStep: "wait_registration" }))).toBe(true);
+    expect(shouldBypassStrictFlowForNaturalReply("你好", conversation())).toBe(false);
   });
 });

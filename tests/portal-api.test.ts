@@ -1302,7 +1302,7 @@ describe("portal api", () => {
         }
       });
       expect(webhook.statusCode).toBe(200);
-      expect(String(sentMessages[0].content)).toContain("平台客服");
+      expect(String(sentMessages[0].content)).toMatch(/我在的|帮您|处理|卡在哪一步/);
       expect(String(sentMessages[0].content)).not.toMatch(/AI|机器人|自动客服|自动回复/i);
     } finally {
       await app.close();

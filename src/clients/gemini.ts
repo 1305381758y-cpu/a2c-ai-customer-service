@@ -165,7 +165,7 @@ function timeoutSignal(): AbortSignal {
 
 function buildSystemPrompt(config: AppConfig): string {
   return `
-你是甲方配置的平台客服。你必须根据甲方样本库、客户历史聊天记录和客户当前语言回复。
+你是甲方配置的真人客服口吻助手。你必须根据甲方上传的对话资料、话本、客户历史聊天记录和客户当前语言回复。
 
 目标：
 1. 引导客户完成平台开户。
@@ -178,7 +178,7 @@ function buildSystemPrompt(config: AppConfig): string {
 
 安全和业务规则：
 - 面向客户的 reply 里，任何情况下都不能暴露自己是 AI、机器人、模型、自动客服或自动回复。
-- 如果客户问“你是真人吗 / 你是机器人吗 / 是 AI 吗”，不能正面承认自动化身份，只能用客服口吻回复，例如“您好，我是平台客服，会继续协助您完成注册流程。”
+- 如果客户问“你是真人吗 / 你是机器人吗 / 是 AI 吗”，不能正面承认自动化身份，只能用客服口吻自然回复，例如“我这边会继续帮您处理，您现在卡在哪一步？”
 - 优先参考 relevantTrainingSamples 中的标准回复。
 - 同时参考 knowledgeItems 中启用的 FAQ、话术、规则和禁用表达。
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
@@ -193,6 +193,8 @@ function buildSystemPrompt(config: AppConfig): string {
 - 如果客户追问邀请码、质疑是否需要邀请码，必须直接回答：注册需要邀请码，并给出 assignedInviteCode；禁止说“不需要邀请码”。
 - 如果没有 assignedInviteCode，不能说“不需要邀请码”，只能说明“我这边正在确认专属邀请码，请稍等”。
 - 不要连续重复同一句开户链接话术；客户追问时先回答问题，再轻轻推进下一步。
+- 不要连续重复同一句开场白；如果客户只是再次打招呼，要结合历史判断是继续当前步骤还是询问遇到的问题。
+- 如果客户说“介绍一下自己、你只会这一句话吗、太机械了、不是、不需要”等表达，必须先回应客户当前情绪或问题，再用一句话轻轻拉回当前业务步骤。
 - type=forbidden 的内容表示不能说或不能做的事，必须遵守。
 - type=rule 的内容优先级高于普通样本。
 - 不要编造样本中没有的信息。
@@ -288,6 +290,10 @@ function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig
 
 function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
+  const text = input.customerText.trim();
+  if (isMechanicalComplaint(text)) return naturalComplaintReply(language);
+  if (asksAboutServiceIdentity(text)) return naturalServiceIntroReply(language);
+  if (isGreetingOnly(text) && hasRecentOutbound(input)) return naturalGreetingReply(language, input);
   if (/(邀请码|invite code|invitation code|código|codigo|招待コード)/i.test(input.customerText)) {
     if (input.inviteCode) {
       const display = inviteDisplayText(input.inviteCode, language, fallbackRegisterUrl(input, config));
@@ -393,11 +399,53 @@ function containsIdentityDisclosure(value: string): boolean {
 }
 
 function platformServiceReply(language: string): string {
-  if (language === "en") return "Hello, I am platform support and will continue helping you with the registration process.";
-  if (language === "pt-BR") return "Olá, sou do atendimento da plataforma e vou continuar ajudando você com o cadastro.";
-  if (language === "ja") return "こんにちは。プラットフォームのサポートとして、登録手続きを引き続きお手伝いします。";
-  if (language === "th") return "สวัสดีค่ะ ฝ่ายบริการของแพลตฟอร์มจะช่วยคุณดำเนินการสมัครต่อไป";
-  if (language === "vi") return "Xin chào, bộ phận hỗ trợ nền tảng sẽ tiếp tục giúp bạn hoàn tất đăng ký.";
-  if (language === "ms" || language === "id") return "Halo, layanan pelanggan platform akan terus membantu Anda menyelesaikan pendaftaran.";
-  return "您好，我是平台客服，会继续协助您完成注册流程。";
+  if (language === "en") return "I am here. Tell me where you are stuck, and I will help you with the next step.";
+  if (language === "pt-BR") return "Estou aqui. Me diga em qual etapa você parou e eu ajudo você a continuar.";
+  if (language === "ja") return "こちらで対応します。どの手順で止まっているか教えてください。";
+  if (language === "th") return "ฉันอยู่ตรงนี้ แจ้งได้เลยว่าติดขั้นตอนไหน แล้วจะช่วยต่อให้";
+  if (language === "vi") return "Tôi vẫn ở đây. Bạn đang vướng ở bước nào thì gửi tôi biết, tôi sẽ hỗ trợ tiếp.";
+  if (language === "ms" || language === "id") return "Saya masih di sini. Beri tahu Anda tersangkut di langkah mana, saya akan bantu lanjutkan.";
+  return "我在的。您现在卡在哪一步，直接告诉我，我继续帮您处理。";
+}
+
+function isMechanicalComplaint(text: string): boolean {
+  return /(机械|僵硬|重复|只会|一句话|听不懂|不是|不对|不用|不需要|别发|烦|打扰|robotic|repeat|same thing|not this|wrong|não é|nao e|mecânico|mecanico|repetindo)/i.test(text);
+}
+
+function asksAboutServiceIdentity(text: string): boolean {
+  return /(介绍一下自己|你是谁|你是做什么|什么平台|who are you|what are you|introduce yourself|quem é você|quem e voce|o que você faz|o que voce faz)/i.test(text);
+}
+
+function isGreetingOnly(text: string): boolean {
+  return /^(你好|您好|在吗|在不在|hi|hello|hey|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
+}
+
+function hasRecentOutbound(input: ReplyInput): boolean {
+  return input.history.slice(-6).some((item) => item.direction === "outbound" && item.content.trim());
+}
+
+function naturalComplaintReply(language: string): string {
+  if (language === "en") return "Sorry, I did not understand you well just now. You can tell me directly whether you want to register, check Telegram, or verify your phone number, and I will handle that step.";
+  if (language === "pt-BR") return "Desculpe, não entendi bem agora. Você pode me dizer direto se quer se cadastrar, resolver o Telegram ou confirmar o telefone, e eu sigo por essa etapa.";
+  if (language === "ja") return "すみません、先ほどはうまく理解できていませんでした。登録、Telegram、電話番号確認のどれを進めたいか教えてください。";
+  return "抱歉，刚才没有理解准确。您可以直接告诉我：是想注册、处理 Telegram，还是核对手机号？我按您当前这一步来处理。";
+}
+
+function naturalServiceIntroReply(language: string): string {
+  if (language === "en") return "I mainly help you complete the platform registration and contact verification. If you want to continue, I can guide you step by step.";
+  if (language === "pt-BR") return "Eu ajudo principalmente com o cadastro na plataforma e a verificação do contato. Se quiser continuar, posso orientar você passo a passo.";
+  if (language === "ja") return "主にプラットフォーム登録と連絡先確認をお手伝いします。続ける場合は、順番に案内します。";
+  return "我这边主要协助您完成开户注册和联系方式核对。您如果要继续，我可以按步骤带您处理。";
+}
+
+function naturalGreetingReply(language: string, input: ReplyInput): string {
+  if (input.country?.requireTelegram && input.conversation.extractedPhone && !input.conversation.extractedTelegram) {
+    if (language === "en") return "I am here. Please send me your Telegram username starting with @ when it is ready.";
+    if (language === "pt-BR") return "Estou aqui. Quando estiver pronto, envie seu nome de usuário do Telegram começando com @.";
+    return "我在的。您准备好后，把 @ 开头的 Telegram 用户名发给我就可以。";
+  }
+  if (language === "en") return "I am here. Do you want to continue with the registration, or did you run into a problem?";
+  if (language === "pt-BR") return "Estou aqui. Você quer continuar o cadastro ou encontrou algum problema?";
+  if (language === "ja") return "対応しています。登録を続けますか、それとも問題がありましたか？";
+  return "我在的。您是想继续注册，还是刚才哪一步遇到问题了？";
 }

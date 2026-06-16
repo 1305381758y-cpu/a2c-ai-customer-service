@@ -105,30 +105,36 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 }
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
+  const merchantTrainingViews = ["materials", "knowledge", "samples", "vector-index"];
   const nav = user.role === "platform_admin"
     ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["customers", "客户", Contact], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["vector-index", "语义记忆", Workflow], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+  const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
+  useEffect(() => {
+    if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
+  }, [user.role, view, setView]);
   return (
     <div className="app">
       <aside>
         <div className="side-brand"><span>AI</span><div><h2>A2C AI</h2><small>智能客服工作台</small></div></div>
         <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
-        <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={view === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
+        <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={activeView === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
         <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
       </aside>
       <main>
-        <header><div><h1>{nav.find((item) => item[0] === view)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
-        {view === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
-        {view === "merchants" && <Merchants />}
-        {view === "users" && <UsersPage />}
-        {view === "config" && <Config platform={user.role === "platform_admin"} />}
-        {view === "customers" && <Customers platform={user.role === "platform_admin"} />}
-        {view === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
-        {view === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
-        {view === "samples" && <Samples platform={user.role === "platform_admin"} />}
-        {view === "vector-index" && <VectorIndexPage />}
-        {view === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
-        {view === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs />}
+        <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
+        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
+        {activeView === "merchants" && <Merchants />}
+        {activeView === "users" && <UsersPage />}
+        {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
+        {activeView === "customers" && <Customers platform={user.role === "platform_admin"} />}
+        {activeView === "training" && <TrainingMaterials platform={false} simple />}
+        {activeView === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
+        {activeView === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
+        {activeView === "samples" && <Samples platform={user.role === "platform_admin"} />}
+        {activeView === "vector-index" && <VectorIndexPage />}
+        {activeView === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
+        {activeView === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs />}
       </main>
     </div>
   );
@@ -137,7 +143,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
 function Dashboard({ platform }: { platform: boolean }) {
   const [data, setData] = useState<Record<string, number>>({});
   useEffect(() => { api<Record<string, number>>(platform ? "/api/admin/dashboard" : "/api/merchant/dashboard").then(setData); }, [platform]);
-  return <div className="grid metrics">{Object.entries(data).map(([k, v]) => { const Icon = metricIcon(k); return <section key={k} className="metric-card"><div className="metric-top"><span>{label(k)}</span><i><Icon size={19}/></i></div><strong>{v}</strong><small>{metricHint(k)}</small></section>; })}</div>;
+  return <div className="grid metrics">{Object.entries(data).map(([k, v]) => { const Icon = metricIcon(k); return <section key={k} className="metric-card"><div className="metric-top"><span>{merchantDashboardLabel(k, platform)}</span><i><Icon size={19}/></i></div><strong>{v}</strong><small>{merchantDashboardHint(k, platform)}</small></section>; })}</div>;
 }
 
 function Merchants() {
@@ -564,7 +570,7 @@ function Samples({ platform = false }: { platform?: boolean }) {
   return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel">{!platform && <VectorIndexStatusStrip />}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败"); const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] }; notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`); setFile(null); await reload(); }}><Upload size={16}/>上传训练文件</AsyncButton></div><small>支持 CSV、Excel、Word、TXT、截图/图片。表格直接生成样本；文本、Word、截图会自动提取话术。</small></div>}<Table rows={pager.rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); await reload(); }} onDelete={async () => { if (!window.confirm("确认彻底删除这个样本？删除后 AI 不会再引用它。")) return; await api(`${base}/${selected.id}`, { method: "DELETE" }); setSelected(null); await reload(); notify("success", "样本已彻底删除"); }} /></section>}</div>;
 }
 
-function TrainingMaterials({ platform = false }: { platform?: boolean }) {
+function TrainingMaterials({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
@@ -588,10 +594,15 @@ function TrainingMaterials({ platform = false }: { platform?: boolean }) {
     const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
     const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
-    setMessage(`已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
+    setMessage(simple ? `已学习 ${result.imported} 条内容，后续回复会自动参考${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}` : `已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
     await reload();
   };
-  return <div className={selected && detail ? "split work-split" : "single-column work-split"}><section className="work-panel">{!platform && <VectorIndexStatusStrip />}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>上传素材</AsyncButton></div><textarea placeholder="粘贴聊天记录、话术、问答或业务规则" value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="导入中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>导入粘贴文本</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={pager.rows} columns={platform ? ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"] : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]} onRow={loadDetail} /><Pagination pager={pager} /></section>{selected && detail && <section className="detail-panel"><div><h3>{detail.material.filename}</h3><p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · 生成 {detail.material.itemCount} 条 · 样本 {detail.material.sampleCount} · 知识 {detail.material.knowledgeCount}</p><div className="toolbar"><AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个素材？它生成的样本和知识会一起删除。")) return; await api(`${base}/${detail.material.id}`, { method: "DELETE" }); setSelected(null); setDetail(null); await reload(); notify("success", "素材已彻底删除"); }}>彻底删除素材</AsyncButton></div>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div></section>}</div>;
+  const columns = platform
+    ? ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]
+    : simple
+      ? ["countryName", "filename", "sourceType", "itemCount", "status", "createdAt"]
+      : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"];
+  return <div className={selected && detail ? "split work-split" : "single-column work-split"}><section className="work-panel">{!platform && !simple && <VectorIndexStatusStrip />}{simple && <div className="training-center-hero"><div><h3>上传资料，系统自动学习</h3><p>把聊天记录、话本、FAQ、业务规则、Word、TXT、Excel 或截图上传到这里。系统会自动拆解、打标签、整理成后续回复可参考的内容。</p></div><div className="training-steps"><span>1 选择国家</span><span>2 上传或粘贴资料</span><span>3 自动学习并生效</span></div></div>}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader training-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="学习中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>{simple ? "上传并学习" : "上传素材"}</AsyncButton></div><textarea placeholder={simple ? "也可以直接粘贴真实聊天记录、话本、问答或业务规则，系统会自动学习" : "粘贴聊天记录、话术、问答或业务规则"} value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="学习中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>{simple ? "学习粘贴内容" : "导入粘贴文本"}</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={pager.rows} columns={columns} onRow={loadDetail} /><Pagination pager={pager} /></section>{selected && detail && <section className="detail-panel"><div><h3>{detail.material.filename}</h3><p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p><div className="toolbar"><AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm(simple ? "确认彻底删除这份学习资料？删除后系统不会再参考它。" : "确认彻底删除这个素材？它生成的样本和知识会一起删除。")) return; await api(`${base}/${detail.material.id}`, { method: "DELETE" }); setSelected(null); setDetail(null); await reload(); notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除"); }}>{simple ? "彻底删除资料" : "彻底删除素材"}</AsyncButton></div>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div></section>}</div>;
 }
 
 function Customers({ platform = false }: { platform?: boolean }) {
@@ -1039,6 +1050,18 @@ function metricHint(key: string) {
   } as Record<string, string>)[key] || "实时运营指标";
 }
 
+function merchantDashboardLabel(key: string, platform: boolean) {
+  if (!platform && key === "samples") return "学习内容";
+  if (!platform && key === "aiReplies") return "智能回复";
+  return label(key);
+}
+
+function merchantDashboardHint(key: string, platform: boolean) {
+  if (!platform && key === "samples") return "已学习并可参考的内容";
+  if (!platform && key === "aiReplies") return "自动处理客户消息次数";
+  return metricHint(key);
+}
+
 function translateSystemMessage(message: unknown) {
   const value = String(message || "");
   if (!value) return "";
@@ -1072,7 +1095,7 @@ function languageName(code: unknown) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", training: "训练中心", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
@@ -1080,7 +1103,7 @@ function label(key: string) {
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
     limit: "数量", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
-    pending: "待处理", processing: "处理中", done: "已完成", embedded: "已向量化", failed: "失败", sourceType: "来源类型", count: "数量", filename: "文件名", itemCount: "生成数", sampleCount: "样本数",
+    pending: "待处理", processing: "处理中", done: "已完成", embedded: "已向量化", failed: "失败", sourceType: "资料类型", count: "数量", filename: "文件名", itemCount: "学习数", sampleCount: "样本数",
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "表格", xlsx: "表格", docx: "文档", txt: "文本", image: "图片",
     lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
     extractedWhatsApp: "WhatsApp", countryId: "国家", countryName: "国家", countryCode: "国家代码", code: "国家代码", defaultLanguage: "默认语言",
