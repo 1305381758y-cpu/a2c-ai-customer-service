@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
-import { buildStrictFlowReply, strictFlowNeedsInviteCode } from "../src/domain/strictFlow.js";
+import { buildStrictFlowReply, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
@@ -86,6 +86,49 @@ function reply(text: string, overrides: Partial<Conversation> = {}) {
     inviteCode,
     config
   });
+}
+
+function simulateStrictFlow(inputs: string[]) {
+  const conv = conversation({ language: "unknown" });
+  const turns: Array<{ input: string; analysis: ReturnType<typeof analyzeMessage>; result: StrictFlowReply | { reply: string; final: true }; flowStep: string; stage: string }> = [];
+
+  for (const inputText of inputs) {
+    const analysis = analyzeMessage(inputText, conv.language);
+    if (analysis.phone) conv.extractedPhone = analysis.phone;
+    if (analysis.telegram) conv.extractedTelegram = analysis.telegram;
+    if (analysis.whatsapp) conv.extractedWhatsApp = analysis.whatsapp;
+    conv.language = analysis.language && analysis.language !== "unknown" ? analysis.language : conv.language;
+
+    if (conv.extractedPhone && conv.extractedTelegram) {
+      conv.stage = "ready_for_handoff";
+      conv.flowStep = "human_handoff";
+      conv.status = "human_handoff";
+      turns.push({
+        input: inputText,
+        analysis,
+        result: { reply: "我们正在核实，请稍后。", final: true },
+        flowStep: conv.flowStep,
+        stage: conv.stage
+      });
+      break;
+    }
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: inputText,
+      inviteCode,
+      config
+    });
+    conv.language = result.language;
+    conv.stage = result.stage;
+    conv.flowStep = result.nextFlowStep;
+    turns.push({ input: inputText, analysis, result, flowStep: conv.flowStep, stage: conv.stage });
+  }
+
+  return turns;
 }
 
 describe("strict Aston Brazil flow", () => {
@@ -260,5 +303,69 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("register.example");
     expect(result.reply).not.toContain("邀请码");
     expect(result.nextFlowStep).toBe("wait_registration");
+  });
+
+  it("simulates a complete natural conversation from greeting to handoff", () => {
+    const turns = simulateStrictFlow([
+      "你好",
+      "什么平台",
+      "我想了解这份工作",
+      "可以，发我注册链接和邀请码",
+      "注册好了，手机号 99228822881",
+      "我没有 Telegram",
+      "怎么注册 Telegram",
+      "我的 Telegram 是 @flowuser_123"
+    ]);
+
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns.at(0)?.analysis.intent).toBe("greeting");
+    expect(replies[0]).toContain("兼职在线工作");
+    expect(replies[0]).not.toContain("register.example");
+
+    expect(replies[1]).toContain("开户注册平台");
+    expect(replies[1]).not.toContain("邀请码");
+
+    expect(replies[2]).toContain("每天可以赚取");
+    expect(replies[2]).toContain("如果您觉得可以继续");
+
+    const linkReplies = replies.filter((item) => item.includes("register.example"));
+    expect(linkReplies).toHaveLength(1);
+    expect(linkReplies[0]).toContain("ABC123");
+    expect(linkReplies[0]).toContain("https://register.example/?code=ABC123");
+
+    expect(replies[4]).toContain("Telegram");
+    expect(replies[4]).not.toContain("register.example");
+    expect(replies[5]).toContain("Telegram");
+    expect(replies[5]).not.toContain("WhatsApp");
+    expect(replies[5]).not.toContain("register.example");
+    expect(replies[6]).toContain("协助");
+    expect(replies[6]).toContain("@");
+    expect(replies[6]).not.toContain("register.example");
+
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+    expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
+
+    for (let index = 1; index < replies.length; index += 1) {
+      expect(replies[index]).not.toBe(replies[index - 1]);
+    }
+  });
+
+  it("continues proactively after help requests but pauses on explicit refusal", () => {
+    const help = reply("我不会操作，你帮我", { language: "zh", flowStep: "wait_registration" });
+    expect(help.reply).toContain("带您处理注册步骤");
+    expect(help.reply).toContain("如果已经注册完成");
+    expect(help.reply).not.toContain("register.example");
+    expect(help.nextFlowStep).toBe("wait_registration");
+
+    const telegramHelp = reply("怎么下载", { language: "zh", flowStep: "telegram_download", extractedPhone: "99228822881" });
+    expect(telegramHelp.reply).toContain("协助您处理 Telegram");
+    expect(telegramHelp.reply).toContain("@");
+    expect(telegramHelp.reply).not.toContain("WhatsApp");
+
+    const refusal = reply("不需要了，别发了", { language: "zh", flowStep: "wait_registration" });
+    expect(refusal.reply).toContain("先不继续打扰");
+    expect(refusal.reply).not.toContain("注册完成");
+    expect(refusal.reply).not.toContain("register.example");
+    expect(refusal.nextFlowStep).toBe("wait_registration");
   });
 });

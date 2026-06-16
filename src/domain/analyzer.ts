@@ -41,13 +41,18 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   text = stripUrls(text);
   if (/[\u0E00-\u0E7F]/.test(text)) return "th";
   if (/[\u3040-\u30FF]/.test(text)) return "ja";
+  if (/[\u0600-\u06FF]/.test(text)) return "ar";
+  if (/[А-Яа-яЁё]/.test(text)) return "ru";
+  if (/[가-힣]/.test(text)) return "ko";
   if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) return "ja";
   if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
   const lower = text.toLowerCase();
+  if (/\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo)\b/.test(lower)) return "es";
+  if (/\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail)\b/.test(lower)) return "fr";
   if (/\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih)\b/.test(lower)) return "ms";
   if (/\b(saya|kamu|daftar|akun|nomor|terima kasih|bisa)\b/.test(lower)) return "id";
   if (/\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại)\b/.test(lower)) return "vi";
-  if (/(^|\s)(olá|ola|oi|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
+  if (/(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
   if (/[A-Za-z]/.test(text)) return "en";
   return fallback;
 }
@@ -74,17 +79,42 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (hasPhone && hasTelegram) return "provide_phone_and_telegram";
   if (hasTelegram) return "provide_telegram";
   if (hasPhone) return "provide_phone";
+  if (isGreeting(lower)) return "greeting";
   if (/(人工|真人|客服|human|agent|operator|manual|atendente|humano|suporte)/i.test(text)) return "human_request";
   if (/(完成|注册好了|已注册|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado)/i.test(text)) return "platform_register_done";
+  if (isPlatformQuestion(text)) return "ask_platform_register";
   if (/(注册|开户|sign up|signup|register|daftar|สมัคร|cadastro|cadastrar|registrar|abrir conta)/i.test(text)) return "ask_platform_register";
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";
   if (/(链接|link|url|入口|网址|endereço|acesso)/i.test(text)) return "ask_link";
   if (/(优惠|活动|奖励|promotion|bonus|reward|promo|promoção|promocao|bônus|bonus|recompensa)/i.test(text)) return "ask_promotion";
   if (/(安全|真的假的|可信|靠谱吗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
   if (/(不会|帮我|怎么|如何|help|how|cannot|can't|tak tahu|tidak tahu|bantuan|ajuda|como faço|não consigo|nao consigo)/i.test(text)) return "need_help";
-  if (/^(こんにちは|こんばんは|おはよう)/i.test(lower) || /^(hi|hello|hey|你好|您好|哈喽|hai|halo|สวัสดี|olá|ola|oi)\b/i.test(lower)) return "greeting";
+  if (isInitialConsultation(text)) return "greeting";
   if (lower.length <= 2 || /(.)\1{6,}/.test(lower)) return "irrelevant_or_spam";
   return "unknown";
+}
+
+function isGreeting(lower: string): boolean {
+  const normalized = lower.replace(/[。.!?！？,，;；:：]+$/g, "").trim();
+  return /^(你好|您好|哈喽|嗨|在吗|在不在|早上好|下午好|晚上好)$/i.test(normalized) ||
+    /^(hi|hello|hey|good morning|good afternoon|good evening|gm|hai|halo)$/i.test(normalized) ||
+    /^(olá|ola|oi|bom dia|boa tarde|boa noite)$/i.test(normalized) ||
+    /^(hola|buenos dias|buenos días|buenas tardes|buenas noches)$/i.test(normalized) ||
+    /^(bonjour|bonsoir|salut|coucou)$/i.test(normalized) ||
+    /^(こんにちは|こんばんは|おはよう|おはようございます)$/i.test(normalized) ||
+    /^(안녕하세요|안녕)$/i.test(normalized) ||
+    /^(สวัสดี|สวัสดีครับ|สวัสดีค่ะ)$/i.test(normalized) ||
+    /^(مرحبا|السلام عليكم|اهلا|أهلا)$/i.test(normalized) ||
+    /^(привет|здравствуйте|доброе утро|добрый день|добрый вечер)$/i.test(normalized) ||
+    /^(xin chào|chào bạn)$/i.test(normalized);
+}
+
+function isPlatformQuestion(text: string): boolean {
+  return /(什么平台|什麼平台|哪个平台|哪個平台|平台是做什么|平台做什么|什么项目|什麼項目|在哪里注册|在哪注册|where.*register|what platform|which platform|what project|que plataforma|qual plataforma|onde.*cadastro|onde.*cadastrar)/i.test(text);
+}
+
+function isInitialConsultation(text: string): boolean {
+  return /(找工作|想找.*工作|想.*工作|需要工作|了解.*工作|介绍.*工作|介绍一下|这份工作|這份工作|兼职|线上工作|在线工作|可以聊|聊聊|咨询|job|work|part[-\s]?time|online work|extra income|tell me more|emprego|trabalho|renda extra|vaga|quero trabalhar|preciso trabalhar)/i.test(text);
 }
 
 function inferStage(intent: IntentLabel, hasPhone: boolean, hasTelegram: boolean): ConversationStage {

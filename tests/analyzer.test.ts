@@ -35,4 +35,42 @@ describe("message analyzer", () => {
     expect(analyzeMessage("isso é seguro?").intent).toBe("trust_concern");
     expect(analyzeMessage("こんにちは").intent).toBe("greeting");
   });
+
+  it("classifies natural first-contact consultation messages", () => {
+    expect(analyzeMessage("你好，我想找一份工作").intent).toBe("greeting");
+    expect(analyzeMessage("我想了解这份工作").intent).toBe("greeting");
+    expect(analyzeMessage("介绍一下").intent).toBe("greeting");
+    expect(analyzeMessage("可以聊聊吗").intent).toBe("greeting");
+    expect(analyzeMessage("什么平台").intent).toBe("ask_platform_register");
+    expect(analyzeMessage("哪个平台开户").intent).toBe("ask_platform_register");
+    expect(analyzeMessage("我不会操作，你帮我").intent).toBe("need_help");
+  });
+
+  it("classifies common global greetings as greetings instead of spam", () => {
+    const cases = [
+      ["你好", "zh"],
+      ["您好", "zh"],
+      ["在吗", "zh"],
+      ["hello", "en"],
+      ["good morning", "en"],
+      ["olá", "pt-BR"],
+      ["oi", "pt-BR"],
+      ["bom dia", "pt-BR"],
+      ["hola", "es"],
+      ["bonjour", "fr"],
+      ["こんにちは", "ja"],
+      ["안녕하세요", "ko"],
+      ["สวัสดี", "th"],
+      ["مرحبا", "ar"],
+      ["привет", "ru"],
+      ["xin chào", "vi"]
+    ] as const;
+
+    for (const [text, language] of cases) {
+      const result = analyzeMessage(text);
+      expect(result.intent, text).toBe("greeting");
+      expect(result.intent, text).not.toBe("irrelevant_or_spam");
+      expect(result.language, text).toBe(language);
+    }
+  });
 });

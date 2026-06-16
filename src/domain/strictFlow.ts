@@ -93,23 +93,26 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "interest_screening") {
     if (positive || input.analysis.intent === "ask_platform_register") {
-      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent"));
+      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent", input.analysis.intent));
     }
     if (asksLink) {
-      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent"));
+      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
     }
-    return reply(input, language, "interest_screening", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("interest_screening_retry", language), "interest_screening"));
+    return reply(input, language, "interest_screening", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("interest_screening_retry", language), "interest_screening", input.analysis.intent));
   }
 
   if (step === "project_intro") {
-    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent"));
+    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent", input.analysis.intent));
   }
 
   if (step === "registration_intent") {
+    if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
+      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
+    }
     if (positive || asksLink || input.analysis.intent === "ask_platform_register") {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
-    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent"));
+    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
   }
 
   if (step === "send_register_link") {
@@ -123,7 +126,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (asksLink) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
-    return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("wait_registration", language), "wait_registration"));
+    return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("wait_registration", language), "wait_registration", input.analysis.intent));
   }
 
   if (step === "telegram_confirm") {
@@ -133,53 +136,60 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (positive || input.analysis.intent === "ask_tg_register") {
       return reply(input, language, "collect_telegram", "need_tg_register", scriptLine("collect_telegram", language));
     }
-    return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("telegram_confirm_question", language), "telegram_confirm"));
+    return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("telegram_confirm_question", language), "telegram_confirm", input.analysis.intent));
   }
 
   if (step === "telegram_download") {
-    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram", language), "collect_telegram"));
+    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram", language), "collect_telegram", input.analysis.intent));
   }
 
   if (step === "collect_telegram") {
     if (negativeTelegram) {
       return reply(input, language, "telegram_download", "need_tg_register", scriptLine("telegram_download", language));
     }
-    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram_retry", language), "collect_telegram"));
+    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
   }
 
   return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
 }
 
-function naturalizeStrictReply(step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep): string {
-  const prefix = naturalStrictFlowPrefix(step, text, language);
+function naturalizeStrictReply(step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = ""): string {
+  const prefix = naturalStrictFlowPrefix(step, text, language, intent);
   if (!prefix) return flowGoal;
+  if (prefix.pauseFlow) return prefix.content;
   const bridge = flowBridgeLine(nextStep, language);
-  return joinReplyParts(prefix, bridge || flowGoal, language);
+  return joinReplyParts(prefix.content, bridge || flowGoal, language);
 }
 
-function naturalStrictFlowPrefix(step: StrictFlowStep | "", text: string, language: string): string {
-  if (!step) return "";
+function naturalStrictFlowPrefix(step: StrictFlowStep | "", text: string, language: string, intent = ""): { content: string; pauseFlow?: boolean } | null {
+  if (!step) return null;
   const normalized = text.trim();
-  if (!normalized) return "";
+  if (!normalized) return null;
+  if (isExplicitRefusal(normalized)) {
+    return { content: scriptLine("refusal_ack", language), pauseFlow: true };
+  }
   if (asksAboutPlatform(normalized)) {
-    return scriptLine("platform_explain", language);
+    return { content: scriptLine("platform_explain", language) };
   }
   if (asksToChat(normalized)) {
-    return scriptLine("chat_ack", language);
+    return { content: scriptLine("chat_ack", language) };
   }
   if (complainsAboutReply(normalized)) {
-    return scriptLine("complaint_ack", language);
+    return { content: scriptLine("complaint_ack", language) };
+  }
+  if (intent === "need_help" || asksForOperationHelp(normalized)) {
+    return { content: helpLineForStep(step, language) };
   }
   if (asksAboutJob(normalized)) {
-    return scriptLine("project_intro", language);
+    return { content: scriptLine("project_intro", language) };
   }
   if (isRepeatGreeting(normalized) && step !== "interest_screening") {
-    return scriptLine("repeat_greeting", language);
+    return { content: scriptLine("repeat_greeting", language) };
   }
-  if (isHesitantOrNegative(normalized)) {
-    return scriptLine("hesitation_ack", language);
+  if (isHesitant(normalized)) {
+    return { content: scriptLine("hesitation_ack", language) };
   }
-  return "";
+  return null;
 }
 
 function flowBridgeLine(step: StrictFlowStep, language: string): string {
@@ -260,8 +270,26 @@ function complainsAboutReply(text: string): boolean {
   return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
 }
 
-function isHesitantOrNegative(text: string): boolean {
-  return /(先不用|不用了|不需要|不了|算了|再看看|考虑一下|没兴趣|不想|不要|maybe later|not now|no thanks|não quero|nao quero|agora não|agora nao|vou pensar|sem interesse)/i.test(text);
+function isExplicitRefusal(text: string): boolean {
+  return /(不用了|不需要|不了|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|stop|não quero|nao quero|sem interesse|pare)/i.test(text);
+}
+
+function isHesitant(text: string): boolean {
+  return /(先不用|再看看|考虑一下|想想|晚点|maybe later|not now|agora não|agora nao|vou pensar)/i.test(text);
+}
+
+function asksForOperationHelp(text: string): boolean {
+  return /(不会|不會|不懂|怎么弄|怎麼弄|怎么操作|如何操作|怎么注册|怎么下载|怎么用|帮我|教我|一步一步|help|how do i|how to|cannot|can't|ajuda|me ajuda|como faço|como fazer|não consigo|nao consigo)/i.test(text);
+}
+
+function helpLineForStep(step: StrictFlowStep | "", language: string): string {
+  if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") {
+    return scriptLine("telegram_help_ack", language);
+  }
+  if (step === "wait_registration" || step === "send_register_link" || step === "registration_intent") {
+    return scriptLine("registration_help_ack", language);
+  }
+  return scriptLine("general_help_ack", language);
 }
 
 function asksAboutJob(text: string): boolean {
@@ -312,6 +340,10 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "您好，我在的。您可以直接问我这份工作的内容，或告诉我您现在卡在哪一步。",
     chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
     complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
+    general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
+    registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
+    telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
+    refusal_ack: "好的，我先不继续打扰您。如果您之后还想了解或继续注册，随时联系我就可以。",
     platform_explain: "这是用于开始兼职在线工作的开户注册平台。您可以先了解工作内容，确认愿意继续后，我再给您开户链接。",
     interest_screening_retry: "您好，您是想了解这份兼职在线工作吗？如果您感兴趣，我可以先简单介绍。",
     hesitation_ack: "没关系，您可以先了解清楚再决定。",
@@ -336,6 +368,10 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
     chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
     complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
+    general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
+    registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
+    telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
+    refusal_ack: "Okay, I will not disturb you further for now. If you want to learn more or continue registration later, you can contact me anytime.",
     platform_explain: "This is the registration platform used to start the part-time online job. You can learn about the job first. If you decide to continue, I will send the registration entry.",
     interest_screening_retry: "Hello, would you like to learn about this part-time online job? If you are interested, I can briefly introduce it.",
     hesitation_ack: "No problem. You can understand it first and decide later.",
@@ -360,6 +396,10 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
     chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
     complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
+    general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
+    registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
+    telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
+    refusal_ack: "Tudo bem, não vou incomodar você agora. Se quiser saber mais ou continuar o cadastro depois, pode me chamar a qualquer momento.",
     platform_explain: "Esta é a plataforma de cadastro usada para iniciar o trabalho online de meio período. Você pode conhecer o trabalho primeiro. Se decidir continuar, eu envio a entrada de cadastro.",
     interest_screening_retry: "Olá, você gostaria de conhecer este trabalho online de meio período? Se tiver interesse, posso explicar rapidamente.",
     hesitation_ack: "Sem problema. Você pode entender primeiro e decidir depois.",
