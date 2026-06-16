@@ -222,6 +222,16 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("邀请码");
   });
 
+  it("goes directly to Telegram download when phone and no Telegram are sent together", () => {
+    const result = reply("手机号 99228822881，我没有 Telegram", { language: "zh", flowStep: "wait_registration" });
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).toContain("下载 Telegram");
+    expect(result.reply).toContain("@");
+    expect(result.reply).not.toContain("WhatsApp");
+    expect(result.reply).not.toContain("register.example");
+  });
+
   it("asks for the registered phone if Telegram is provided before phone", () => {
     const result = reply("meu telegram @cliente_123", { language: "pt-BR", flowStep: "collect_telegram" });
     expect(result.nextFlowStep).toBe("collect_telegram");
@@ -298,6 +308,12 @@ describe("strict Aston Brazil flow", () => {
     expect(platform.reply).not.toContain("邀请码");
     expect(platform.reply).toContain("已经注册完成");
     expect(platform.nextFlowStep).toBe("wait_registration");
+
+    const trust = reply("这个安全吗", { language: "zh", flowStep: "registration_intent" });
+    expect(trust.reply).toContain("理解您的顾虑");
+    expect(trust.reply).toContain("如果您觉得可以继续");
+    expect(trust.reply).not.toContain("register.example");
+    expect(trust.nextFlowStep).toBe("registration_intent");
   });
 
   it("reintroduces the job instead of pushing registration when the customer asks about the job again", () => {
@@ -520,6 +536,7 @@ describe("strict Aston Brazil flow", () => {
       { step: "interest_screening", text: "是的" },
       { step: "interest_screening", text: "什么平台" },
       { step: "registration_intent", text: "好的" },
+      { step: "registration_intent", text: "安全吗" },
       { step: "registration_intent", text: "怎么弄" },
       { step: "wait_registration", text: "你好" },
       { step: "wait_registration", text: "好了" },

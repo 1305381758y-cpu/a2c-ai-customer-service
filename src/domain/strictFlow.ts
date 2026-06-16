@@ -147,6 +147,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "wait_registration") {
     if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
+      if (negativeTelegram) {
+        return reply(input, language, "telegram_download", "need_tg_register", scriptLine("telegram_download", language));
+      }
       return reply(input, language, "telegram_confirm", "need_tg_register", scriptLine(input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
     }
     if (asksLink || inferredIntent === "ask_link") {
@@ -208,6 +211,9 @@ function naturalStrictFlowPrefix(step: StrictFlowStep | "", text: string, langua
   }
   if (complainsAboutReply(normalized)) {
     return { content: scriptLine("complaint_ack", language) };
+  }
+  if (intent === "trust_concern" || asksTrustConcern(normalized)) {
+    return { content: scriptLine("trust_ack", language) };
   }
   if (intent === "need_help" || asksForOperationHelp(normalized)) {
     return { content: helpLineForStep(step, language) };
@@ -370,6 +376,10 @@ function asksToChat(text: string): boolean {
   return /(可以聊|能聊|聊天|聊聊|说话|真人|人工|can we chat|talk to me|posso falar|conversar)/i.test(text);
 }
 
+function asksTrustConcern(text: string): boolean {
+  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|诈骗|safe|trust|real|scam|seguro|confiável|confiavel|golpe|verdade)/i.test(text);
+}
+
 function complainsAboutReply(text: string): boolean {
   return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
 }
@@ -444,6 +454,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "您好，我在的。您可以直接问我这份工作的内容，或告诉我您现在卡在哪一步。",
     chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
     complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
+    trust_ack: "我理解您的顾虑。您可以先按步骤开户注册，后续资料核实会由人工继续确认，过程中有不清楚的地方可以直接问我。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
@@ -472,6 +483,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
     chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
     complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
+    trust_ack: "I understand your concern. You can complete the registration step first, and the follow-up verification will be handled by a person. If anything is unclear, ask me directly.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
@@ -500,6 +512,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
     chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
     complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
+    trust_ack: "Entendo sua preocupação. Você pode concluir primeiro o cadastro, e a verificação seguinte será acompanhada por uma pessoa. Se algo não ficar claro, pode me perguntar diretamente.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
