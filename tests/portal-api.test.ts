@@ -1310,6 +1310,83 @@ describe("portal api", () => {
     }
   });
 
+  it("keeps Aston default-market webhooks on the strict greeting instead of generic free replies", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "aston-default-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "18507251675", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "Numidia" }] });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+          reply: "您好，我可以协助您完成注册、排查问题、确认手机号和 Telegram，或帮您转人工。",
+          language: "zh",
+          stage: "need_platform_register",
+          extractedPhone: "",
+          extractedTelegram: "",
+          extractedWhatsApp: "",
+          shouldHandoff: false
+        }) }] } }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `aston-default-sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "阿斯顿" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "aston-default@test.local", name: "阿斯顿默认国家", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "aston-default@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://aston-default-a2c.test/api/openapi", a2cAppId: "aston-default-app", a2cAppSecret: "aston-default-secret", googleAiApiKey: "gemini-test" }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "aston-default-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "aston-default-message-1",
+            content: "你好",
+            from: "5511913586749",
+            to: "18507251675",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+
+      expect(webhook.statusCode).toBe(200);
+      expect(webhook.json().status).toBe("strict_flow_replied");
+      expect(String(sentMessages[0].content)).toContain("兼职在线工作");
+      expect(String(sentMessages[0].content)).not.toContain("协助您完成注册、排查问题");
+      expect(String(sentMessages[0].content)).not.toContain("google");
+      expect(String(sentMessages[0].content)).not.toContain("邀请码");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

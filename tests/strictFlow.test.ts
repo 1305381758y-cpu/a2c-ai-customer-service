@@ -20,6 +20,13 @@ const country: MerchantCountryRecord = {
   requireWhatsApp: false,
   status: "active"
 };
+const defaultCountry: MerchantCountryRecord = {
+  ...country,
+  id: "aston:default",
+  code: "default",
+  name: "默认国家",
+  defaultLanguage: "zh"
+};
 const config = {
   PLATFORM_REGISTER_URL: "https://fallback.example",
   TG_REGISTER_GUIDE_URL: ""
@@ -87,6 +94,25 @@ describe("strict Aston Brazil flow", () => {
     expect(result.enabled).toBe(true);
     expect(result.nextFlowStep).toBe("interest_screening");
     expect(result.reply).toContain("trabalho online de meio período");
+    expect(result.reply).not.toContain("register.example");
+  });
+
+  it("keeps Aston on the strict script when the market is still the default country", () => {
+    const analysis = analyzeMessage("你好");
+    const result = buildStrictFlowReply({
+      merchant,
+      country: defaultCountry,
+      conversation: conversation({ countryId: defaultCountry.id, countryCode: defaultCountry.code, countryName: defaultCountry.name }),
+      analysis,
+      customerText: "你好",
+      inviteCode,
+      config
+    });
+
+    expect(result.enabled).toBe(true);
+    expect(result.nextFlowStep).toBe("interest_screening");
+    expect(result.reply).toContain("兼职在线工作");
+    expect(result.reply).not.toContain("注册、排查问题");
     expect(result.reply).not.toContain("register.example");
   });
 
