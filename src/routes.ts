@@ -661,6 +661,16 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     });
     return maskUser(user);
   });
+  app.post<{ Body: { confirm?: string } }>("/internal/admin/clear-learning-data", { preHandler: auth(deps.config) }, async (request, reply) => {
+    const body = z.object({ confirm: z.string() }).parse(request.body ?? {});
+    if (body.confirm !== "CLEAR_LEARNING_AND_CUSTOMERS") {
+      return reply.code(400).send({ error: "invalid confirmation" });
+    }
+    return {
+      ok: true,
+      ...deps.repos.clearLearningAndCustomerData()
+    };
+  });
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/internal/training-samples", { preHandler: auth(deps.config) }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       language: request.query.language,

@@ -107,6 +107,121 @@ describe("portal api", () => {
     }
   });
 
+  it("clears learning, memory, training, and customer records without removing setup data", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "token", expiresIn: 7200 } });
+      if (url.endsWith("/v1/accounts")) return Response.json({ code: 200, data: [{ apiPhone: "18507251675", verifiedName: "测试客服账号" }] });
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: "sent-message" });
+      if (url.includes("generativelanguage.googleapis.com")) return Response.json({ candidates: [{ content: { parts: [{ text: "好的" }] } }] });
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: {
+          name: "清库商户",
+          country: { code: "BR", name: "巴西", defaultLanguage: "pt", platformRegisterUrl: "https://merchant.example/register" },
+          adminUser: { email: "clear-all@test.local", name: "清库管理员", password: "Merchant123456" }
+        }
+      });
+      const merchantId = merchant.json().merchant.id as string;
+      const merchantCookie = await login(app, "clear-all@test.local", "Merchant123456");
+
+      await app.inject({
+        method: "PATCH",
+        url: `/api/admin/merchants/${merchantId}/config`,
+        headers: { cookie: adminCookie },
+        payload: { a2cBaseUrl: "https://a2c-clear.test/api/openapi", a2cAppId: "app", a2cAppSecret: "secret", a2cAccountPhone: "18507251675" }
+      });
+      const synced = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      expect(synced.statusCode).toBe(200);
+      const accounts = await app.inject({ method: "GET", url: "/api/merchant/a2c/accounts", headers: { cookie: merchantCookie } });
+      const accountId = accounts.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "code-1", registerUrl: "https://merchant.example/register?code={code}" }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/knowledge",
+        headers: { cookie: merchantCookie },
+        payload: { title: "FAQ", content: "开户注册说明", type: "faq" }
+      });
+      const upload = csvUploadPayload("客户消息,标准回复\n你好,您好");
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/training-samples/import",
+        headers: { cookie: merchantCookie, ...upload.headers },
+        payload: upload.payload
+      });
+      await app.inject({
+        method: "POST",
+        url: "/webhooks/a2c",
+        payload: {
+          id: "clear-learning-event",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "clear-learning-message",
+            content: "你好",
+            from: "5511913586749",
+            to: "18507251675",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000),
+            nickname: "测试客户"
+          }
+        }
+      });
+
+      const wrongConfirm = await app.inject({
+        method: "POST",
+        url: "/internal/admin/clear-learning-data",
+        headers: { "x-api-key": "test-key" },
+        payload: { confirm: "WRONG" }
+      });
+      expect(wrongConfirm.statusCode).toBe(400);
+
+      const cleared = await app.inject({
+        method: "POST",
+        url: "/internal/admin/clear-learning-data",
+        headers: { "x-api-key": "test-key" },
+        payload: { confirm: "CLEAR_LEARNING_AND_CUSTOMERS" }
+      });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json().ok).toBe(true);
+      expect(cleared.json().messagesDeleted).toBeGreaterThan(0);
+      expect(cleared.json().conversationsDeleted).toBeGreaterThan(0);
+      expect(cleared.json().customersDeleted).toBeGreaterThan(0);
+      expect(cleared.json().trainingSamplesDeleted).toBeGreaterThan(0);
+      expect(cleared.json().knowledgeItemsDeleted).toBeGreaterThan(0);
+
+      const customers = await app.inject({ method: "GET", url: `/api/admin/customers?merchantId=${merchantId}`, headers: { cookie: adminCookie } });
+      expect(customers.json().rows).toHaveLength(0);
+      const conversations = await app.inject({ method: "GET", url: `/api/admin/conversations?merchantId=${merchantId}`, headers: { cookie: adminCookie } });
+      expect(conversations.json().rows).toHaveLength(0);
+      const samples = await app.inject({ method: "GET", url: `/api/admin/training-samples?merchantId=${merchantId}`, headers: { cookie: adminCookie } });
+      expect(samples.json().rows).toHaveLength(0);
+      const knowledge = await app.inject({ method: "GET", url: `/api/admin/knowledge?merchantId=${merchantId}`, headers: { cookie: adminCookie } });
+      expect(knowledge.json().rows).toHaveLength(0);
+      const inviteCodes = await app.inject({ method: "GET", url: `/api/merchant/a2c/accounts/${accountId}/invite-codes`, headers: { cookie: merchantCookie } });
+      expect(inviteCodes.json().rows).toHaveLength(1);
+      expect(inviteCodes.json().rows[0]).toMatchObject({ status: "available", assignedCustomerKey: "", assignedConversationId: "" });
+      const merchants = await app.inject({ method: "GET", url: "/api/admin/merchants", headers: { cookie: adminCookie } });
+      expect(merchants.json().rows.some((row: { id: string }) => row.id === merchantId)).toBe(true);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("lets merchants manage knowledge items without crossing tenant boundaries", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");

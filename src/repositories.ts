@@ -311,6 +311,63 @@ export class Repositories {
     }
   }
 
+  clearLearningAndCustomerData(): {
+    vectorDocumentsDeleted: number;
+    customerMemoriesDeleted: number;
+    trainingMaterialItemsDeleted: number;
+    trainingMaterialsDeleted: number;
+    trainingSamplesDeleted: number;
+    knowledgeItemsDeleted: number;
+    messagesDeleted: number;
+    handoffEventsDeleted: number;
+    conversationsDeleted: number;
+    customersDeleted: number;
+    inviteCodesReset: number;
+  } {
+    this.db.sqlite.exec("BEGIN");
+    try {
+      const vectorDocuments = this.db.sqlite.prepare("DELETE FROM vector_documents").run();
+      const customerMemories = this.db.sqlite.prepare("DELETE FROM customer_memories").run();
+      const trainingMaterialItems = this.db.sqlite.prepare("DELETE FROM training_material_items").run();
+      const trainingMaterials = this.db.sqlite.prepare("DELETE FROM training_materials").run();
+      const trainingSamples = this.db.sqlite.prepare("DELETE FROM training_samples").run();
+      const knowledgeItems = this.db.sqlite.prepare("DELETE FROM knowledge_items").run();
+      const messages = this.db.sqlite.prepare("DELETE FROM messages").run();
+      const handoffEvents = this.db.sqlite.prepare("DELETE FROM handoff_events").run();
+      const conversations = this.db.sqlite.prepare("DELETE FROM conversations").run();
+      const customers = this.db.sqlite.prepare("DELETE FROM customers").run();
+      const inviteCodes = this.db.sqlite
+        .prepare(`
+          UPDATE a2c_invite_codes
+          SET status = 'available',
+              assigned_customer_key = '',
+              assigned_conversation_id = '',
+              platform_account = '',
+              assigned_at = '',
+              used_at = '',
+              updated_at = CURRENT_TIMESTAMP
+        `)
+        .run();
+      this.db.sqlite.exec("COMMIT");
+      return {
+        vectorDocumentsDeleted: Number(vectorDocuments.changes ?? 0),
+        customerMemoriesDeleted: Number(customerMemories.changes ?? 0),
+        trainingMaterialItemsDeleted: Number(trainingMaterialItems.changes ?? 0),
+        trainingMaterialsDeleted: Number(trainingMaterials.changes ?? 0),
+        trainingSamplesDeleted: Number(trainingSamples.changes ?? 0),
+        knowledgeItemsDeleted: Number(knowledgeItems.changes ?? 0),
+        messagesDeleted: Number(messages.changes ?? 0),
+        handoffEventsDeleted: Number(handoffEvents.changes ?? 0),
+        conversationsDeleted: Number(conversations.changes ?? 0),
+        customersDeleted: Number(customers.changes ?? 0),
+        inviteCodesReset: Number(inviteCodes.changes ?? 0)
+      };
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   createTrainingSample(merchantId: string, sample: ImportedTrainingSample, countryId = this.defaultCountryId(merchantId)): { id: number } {
     this.db.sqlite
       .prepare(`
