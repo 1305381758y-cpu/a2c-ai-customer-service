@@ -350,6 +350,70 @@ describe("strict Aston Brazil flow", () => {
     }
   });
 
+  it("does not stall after a short positive confirmation", () => {
+    const turns = simulateStrictFlow(["你好", "是的"]);
+    expect(turns).toHaveLength(2);
+    expect(turns[0].flowStep).toBe("interest_screening");
+    expect(turns[1].analysis.intent).not.toBe("irrelevant_or_spam");
+    expect(turns[1].flowStep).toBe("registration_intent");
+    expect(turns[1].result.reply).toContain("简单介绍");
+    expect(turns[1].result.reply).toContain("如果您觉得可以继续");
+    expect(turns[1].result.reply).not.toBe("好的，我继续协助您。");
+  });
+
+  it("runs the requested short-confirmation path through registration and Telegram", () => {
+    const turns = simulateStrictFlow([
+      "你好",
+      "是的",
+      "可以注册",
+      "注册好了，手机号 99228822881",
+      "没有 Telegram",
+      "怎么注册",
+      "@customer_123"
+    ]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[1].flowStep).toBe("registration_intent");
+    expect(turns[2].flowStep).toBe("wait_registration");
+    expect(replies[2]).toContain("https://register.example/?code=ABC123");
+    expect(replies[2]).toContain("ABC123");
+    expect(turns[3].flowStep).toBe("telegram_confirm");
+    expect(turns[4].flowStep).toBe("telegram_download");
+    expect(replies[4]).toContain("Telegram");
+    expect(replies[4]).not.toContain("WhatsApp");
+    expect(turns[5].flowStep).toBe("collect_telegram");
+    expect(replies[5]).toContain("@");
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+    expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
+  });
+
+  it("uses inferred strict-flow intent when rule-based intent is ambiguous", () => {
+    const ambiguous = analyzeMessage("mn");
+    expect(ambiguous.intent).toBe("irrelevant_or_spam");
+
+    const positive = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "interest_screening" }),
+      analysis: ambiguous,
+      customerText: "mn",
+      inviteCode,
+      config,
+      inferredIntent: "positive_confirmation"
+    });
+    expect(positive.nextFlowStep).toBe("registration_intent");
+    expect(positive.reply).toContain("briefly introduce");
+
+    const linkConversation = conversation({ language: "zh", flowStep: "wait_registration" });
+    expect(strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation: linkConversation,
+      analysis: ambiguous,
+      customerText: "mn",
+      inferredIntent: "ask_link"
+    })).toBe(true);
+  });
+
   it("continues proactively after help requests but pauses on explicit refusal", () => {
     const help = reply("我不会操作，你帮我", { language: "zh", flowStep: "wait_registration" });
     expect(help.reply).toContain("带您处理注册步骤");

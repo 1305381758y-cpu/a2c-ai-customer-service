@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import type { AppConfig } from "../config.js";
 import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
+import { isInternalIntentLabel, type InternalIntentLabel } from "../domain/analyzer.js";
 
 export interface ReplyInput {
   customerText: string;
@@ -119,6 +120,51 @@ export async function generateGeminiText(
     }
   });
   return response.text?.trim() || "";
+}
+
+export async function classifyGeminiIntent(
+  config: GeminiConfig,
+  input: {
+    customerText: string;
+    language: string;
+    flowStep: string;
+    recentHistory: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+  }
+): Promise<InternalIntentLabel> {
+  const prompt = JSON.stringify({
+    customerText: input.customerText,
+    language: input.language,
+    flowStep: input.flowStep,
+    recentHistory: input.recentHistory.slice(-6).map((item) => ({
+      direction: item.direction,
+      content: item.content,
+      intent: item.intent
+    }))
+  });
+  try {
+    const text = await generateGeminiText(config, prompt, {
+      temperature: 0,
+      systemInstruction: `
+你只负责把客户当前消息归类为一个固定标签，不要解释，不要输出 JSON。
+可选标签只有：
+positive_confirmation, negative_refusal, need_help, ask_platform_register, ask_link, ask_tg_register, platform_register_done, unknown
+
+判断规则：
+- 客户表示“是、可以、继续、好的、同意、愿意、yes、ok、sim、claro”等，输出 positive_confirmation。
+- 客户明确拒绝、不要、不感兴趣、停止，输出 negative_refusal。
+- 客户说不会、帮我、怎么弄、需要协助，输出 need_help。
+- 客户询问开户链接、邀请码、入口、URL，输出 ask_link。
+- 客户询问注册、开户、平台是什么、在哪里注册，输出 ask_platform_register。
+- 客户询问 Telegram/TG 下载、注册、账号，输出 ask_tg_register。
+- 客户表示已经注册完成，输出 platform_register_done。
+- 无法判断才输出 unknown。
+`
+    });
+    const label = text.trim().replace(/[`"'。.!?！？\s]/g, "");
+    return isInternalIntentLabel(label) ? label : "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 export function geminiApiKey(config: GeminiConfig): string {

@@ -9,6 +9,19 @@ export interface MessageAnalysis {
   stage: ConversationStage;
 }
 
+export const INTERNAL_INTENT_LABELS = [
+  "positive_confirmation",
+  "negative_refusal",
+  "need_help",
+  "ask_platform_register",
+  "ask_link",
+  "ask_tg_register",
+  "platform_register_done",
+  "unknown"
+] as const;
+
+export type InternalIntentLabel = (typeof INTERNAL_INTENT_LABELS)[number];
+
 const telegramRegexes = [
   /(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{5,32})/i,
   /(?:telegram|tg|电报|飞机|텔레그램|เทเลแกรม|telegram saya|telegram aku)\s*(?:账号|號|account|id|user|username|是|:|：)?\s*@?([A-Za-z0-9_]{5,32})/i,
@@ -90,8 +103,21 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (/(安全|真的假的|可信|靠谱吗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
   if (/(不会|帮我|怎么|如何|help|how|cannot|can't|tak tahu|tidak tahu|bantuan|ajuda|como faço|não consigo|nao consigo)/i.test(text)) return "need_help";
   if (isInitialConsultation(text)) return "greeting";
+  if (isPositiveConfirmation(text)) return "greeting";
   if (lower.length <= 2 || /(.)\1{6,}/.test(lower)) return "irrelevant_or_spam";
   return "unknown";
+}
+
+export function isPositiveConfirmation(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .trim();
+  return /^(是|是的|对|對|对的|可以|好|好的|嗯|嗯嗯|行|没问题|沒問題|继续|yes|yep|yeah|ok|okay|sure|correct|right|sim|claro|pode|isso|sí|si|vale|dale)$/i.test(normalized);
+}
+
+export function isInternalIntentLabel(value: string): value is InternalIntentLabel {
+  return INTERNAL_INTENT_LABELS.includes(value as InternalIntentLabel);
 }
 
 function isGreeting(lower: string): boolean {

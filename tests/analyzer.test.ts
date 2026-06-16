@@ -73,4 +73,12 @@ describe("message analyzer", () => {
       expect(result.language, text).toBe(language);
     }
   });
+
+  it("does not classify short positive confirmations as spam", () => {
+    for (const text of ["是的", "对", "可以", "好的", "嗯", "ok", "yes", "sure", "sim", "claro", "sí"]) {
+      const result = analyzeMessage(text);
+      expect(result.intent, text).not.toBe("irrelevant_or_spam");
+      expect(result.intent, text).not.toBe("unknown");
+    }
+  });
 });

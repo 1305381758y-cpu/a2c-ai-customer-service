@@ -1,8 +1,8 @@
-import { analyzeMessage } from "../domain/analyzer.js";
+import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import { buildStrictFlowReply, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
+import { buildStrictFlowReply, isStrictFlowEnabled, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { GeminiReplyClient } from "../clients/gemini.js";
+import { classifyGeminiIntent, GeminiReplyClient } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord } from "../repositories.js";
@@ -54,7 +54,20 @@ export class WebhookProcessor {
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
-    const analysis = analyzeMessage(analysisText, conversation.language);
+    let analysis = analyzeMessage(analysisText, conversation.language);
+    const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
+    const inferredIntent = await this.inferStrictFlowIntent({
+      runtimeConfig,
+      merchant,
+      country,
+      conversation,
+      analysis,
+      customerText: analysisText || content,
+      history: historyForIntent
+    });
+    if (inferredIntent !== "unknown") {
+      analysis = applyInternalIntent(analysis, inferredIntent);
+    }
     const inboundTranslation = analysisText
       ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
       : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
@@ -72,6 +85,7 @@ export class WebhookProcessor {
       whatsappDetected: analysis.whatsapp,
       rawPayload: {
         ...payload,
+        inferredIntent,
         originalContent: inboundTranslation.originalText,
         translatedContent: inboundTranslation.translatedText,
         targetLanguage: inboundTranslation.targetLanguage,
@@ -126,7 +140,8 @@ export class WebhookProcessor {
         country,
         conversation,
         analysis,
-        customerText: analysisText || content
+        customerText: analysisText || content,
+        inferredIntent
       });
       const strictInviteCode = strictNeedsInviteCode
         ? this.repos.reserveInviteCodeForConversation(conversation)
@@ -138,7 +153,8 @@ export class WebhookProcessor {
         analysis,
         customerText: analysisText || content,
         inviteCode: strictInviteCode,
-        config: runtimeConfig
+        config: runtimeConfig,
+        inferredIntent
       });
       if (strictReply.enabled) {
       conversation.language = strictReply.language;
@@ -350,6 +366,44 @@ export class WebhookProcessor {
       this.repos.insertHandoffEvent(conversation.id, message, false, errorMessage);
     }
   }
+
+  private async inferStrictFlowIntent(input: {
+    runtimeConfig: AppConfig;
+    merchant: Parameters<typeof isStrictFlowEnabled>[0];
+    country: Parameters<typeof isStrictFlowEnabled>[1];
+    conversation: Parameters<Repositories["updateConversation"]>[0];
+    analysis: MessageAnalysis;
+    customerText: string;
+    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+  }): Promise<InternalIntentLabel> {
+    if (!input.customerText.trim()) return "unknown";
+    if (!isStrictFlowEnabled(input.merchant, input.country)) return "unknown";
+    if (!input.conversation.flowStep) return "unknown";
+    if (input.analysis.intent !== "unknown" && input.analysis.intent !== "irrelevant_or_spam") return "unknown";
+    return classifyGeminiIntent(input.runtimeConfig, {
+      customerText: input.customerText,
+      language: input.analysis.language || input.conversation.language,
+      flowStep: input.conversation.flowStep,
+      recentHistory: input.history
+    });
+  }
+}
+
+function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: InternalIntentLabel): MessageAnalysis {
+  const intentMap: Partial<Record<InternalIntentLabel, MessageAnalysis["intent"]>> = {
+    positive_confirmation: "greeting",
+    negative_refusal: "unknown",
+    need_help: "need_help",
+    ask_platform_register: "ask_platform_register",
+    ask_link: "ask_link",
+    ask_tg_register: "ask_tg_register",
+    platform_register_done: "platform_register_done"
+  };
+  const intent = intentMap[inferredIntent] ?? analysis.intent;
+  const stage = intent === "ask_tg_register" || intent === "platform_register_done"
+    ? "need_phone_or_tg"
+    : analysis.stage;
+  return { ...analysis, intent, stage };
 }
 
 function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord, country?: { platformRegisterUrl?: string; tgRegisterGuideUrl?: string }): AppConfig {
