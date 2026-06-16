@@ -223,4 +223,30 @@ describe("strict Aston Brazil flow", () => {
     expect(shouldBypassStrictFlowForNaturalReply("你好，我想找一份工作", conversation({ flowStep: "interest_screening" }))).toBe(true);
     expect(shouldBypassStrictFlowForNaturalReply("你好", conversation())).toBe(false);
   });
+
+  it("does not repeat registration reminders when the customer is chatting or complaining", () => {
+    const chat = reply("可以聊天吗", { language: "zh", flowStep: "wait_registration" });
+    expect(chat.reply).toContain("可以");
+    expect(chat.reply).not.toContain("完成平台开户");
+    expect(chat.reply).not.toContain("手机号和 Telegram");
+    expect(chat.nextFlowStep).toBe("wait_registration");
+
+    const complaint = reply("为什么会这样？", { language: "zh", flowStep: "wait_registration" });
+    expect(complaint.reply).toContain("抱歉");
+    expect(complaint.reply).not.toContain("完成平台开户");
+    expect(complaint.nextFlowStep).toBe("wait_registration");
+
+    const platform = reply("什么平台", { language: "zh", flowStep: "wait_registration" });
+    expect(platform.reply).toContain("兼职在线工作");
+    expect(platform.reply).not.toContain("邀请码");
+    expect(platform.nextFlowStep).toBe("interest_screening");
+  });
+
+  it("reintroduces the job instead of pushing registration when the customer asks about the job again", () => {
+    const result = reply("我想了解这份工作", { language: "zh", flowStep: "wait_registration" });
+    expect(result.reply).toContain("简单介绍");
+    expect(result.reply).toContain("兼职在线工作");
+    expect(result.reply).not.toContain("完成平台开户");
+    expect(result.nextFlowStep).toBe("registration_intent");
+  });
 });

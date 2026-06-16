@@ -82,9 +82,15 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const positive = isPositive(text, input.analysis.intent);
   const negativeTelegram = saysNoTelegram(text);
   const asksLink = asksForInviteOrLink(text, input.analysis.intent);
+  const naturalLine = naturalStrictFlowLine(step, text, language);
 
   if (!step || step === "first_greeting") {
     return reply(input, language, "interest_screening", "need_platform_register", scriptLine("first_greeting", language));
+  }
+
+  if (naturalLine) {
+    const nextStep = naturalLine.nextFlowStep ?? step;
+    return reply(input, language, nextStep, stageForFlowStep(nextStep, input.conversation.stage), naturalLine.content);
   }
 
   if ((input.analysis.telegram || input.conversation.extractedTelegram) && !(input.analysis.phone || input.conversation.extractedPhone)) {
@@ -150,6 +156,35 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
 }
 
+function naturalStrictFlowLine(step: StrictFlowStep | "", text: string, language: string): { content: string; nextFlowStep?: StrictFlowStep } | null {
+  if (!step) return null;
+  const normalized = text.trim();
+  if (!normalized) return null;
+  if (asksAboutPlatform(normalized)) {
+    return { content: scriptLine("platform_explain", language), nextFlowStep: "interest_screening" };
+  }
+  if (asksToChat(normalized)) {
+    return { content: scriptLine("chat_ack", language) };
+  }
+  if (complainsAboutReply(normalized)) {
+    return { content: scriptLine("complaint_ack", language) };
+  }
+  if (asksAboutJob(normalized)) {
+    return { content: scriptLine("project_intro", language), nextFlowStep: "registration_intent" };
+  }
+  if (isRepeatGreeting(normalized) && step !== "interest_screening") {
+    return { content: scriptLine("repeat_greeting", language) };
+  }
+  return null;
+}
+
+function stageForFlowStep(step: StrictFlowStep, fallback: Conversation["stage"]): Conversation["stage"] {
+  if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") return "need_tg_register";
+  if (step === "human_handoff" || step === "ended") return "ready_for_handoff";
+  if (step === "wait_registration" || step === "send_register_link" || step === "registration_intent" || step === "project_intro" || step === "interest_screening") return "need_platform_register";
+  return fallback;
+}
+
 function reply(
   input: StrictFlowInput,
   language: string,
@@ -191,6 +226,26 @@ function asksForInviteOrLink(text: string, intent: string): boolean {
   return intent === "ask_link" || /(邀请码|邀請碼|链接|开户链接|link|invite code|invitation code|código|codigo|convite|cadastro)/i.test(text);
 }
 
+function asksAboutPlatform(text: string): boolean {
+  return /(什么平台|什麼平台|哪个平台|哪個平台|平台是做什么|平台做什么|什么项目|什麼項目|what platform|which platform|what project|que plataforma|qual plataforma)/i.test(text);
+}
+
+function asksToChat(text: string): boolean {
+  return /(可以聊|能聊|聊天|聊聊|说话|真人|人工|can we chat|talk to me|posso falar|conversar)/i.test(text);
+}
+
+function complainsAboutReply(text: string): boolean {
+  return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
+}
+
+function asksAboutJob(text: string): boolean {
+  return /(了解.*工作|这份工作|這份工作|介绍.*工作|找工作|兼职|线上工作|在线工作|工作内容|怎么赚钱|如何赚钱|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text);
+}
+
+function isRepeatGreeting(text: string): boolean {
+  return /^(你好|您好|在吗|在不在|嗨|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
+}
+
 function registerInstruction(input: StrictFlowInput, language: string): string {
   const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
   if (!input.inviteCode) {
@@ -228,6 +283,10 @@ function verificationLine(language: string): string {
 function scriptLine(key: string, language: string, fallback = ""): string {
   const zh: Record<string, string> = {
     first_greeting: "您好，您是想找一份兼职在线工作来赚取额外收入吗？",
+    repeat_greeting: "您好，我在的。您可以直接问我这份工作的内容，或告诉我您现在卡在哪一步。",
+    chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
+    complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
+    platform_explain: "这是用于开始兼职在线工作的开户注册平台。您可以先了解工作内容，确认愿意继续后，我再给您开户链接。",
     interest_screening_retry: "您好，您是想了解这份兼职在线工作吗？如果您感兴趣，我可以先简单介绍。",
     project_intro: "好的，我先简单介绍一下，您可以自行决定是否接受这份工作。我们的目标是通过兼职在线工作，帮助商家提升产品销量和排名。您每天可以赚取 300 至 800 雷亚尔。您现在在家有空闲时间吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
@@ -242,6 +301,10 @@ function scriptLine(key: string, language: string, fallback = ""): string {
   };
   const en: Record<string, string> = {
     first_greeting: "Hello, are you looking for a part-time online job to earn extra income?",
+    repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
+    chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
+    complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
+    platform_explain: "This is the registration platform used to start the part-time online job. You can learn about the job first. If you decide to continue, I will send the registration entry.",
     interest_screening_retry: "Hello, would you like to learn about this part-time online job? If you are interested, I can briefly introduce it.",
     project_intro: "Okay, let me briefly introduce it first. You can decide whether to accept this job. Our goal is to help merchants improve product sales and rankings through part-time online work. You can earn 300 to 800 reais per day. Do you have free time at home now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
@@ -256,6 +319,10 @@ function scriptLine(key: string, language: string, fallback = ""): string {
   };
   const pt: Record<string, string> = {
     first_greeting: "Olá, você está procurando um trabalho online de meio período para ganhar uma renda extra?",
+    repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
+    chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
+    complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
+    platform_explain: "Esta é a plataforma de cadastro usada para iniciar o trabalho online de meio período. Você pode conhecer o trabalho primeiro. Se decidir continuar, eu envio a entrada de cadastro.",
     interest_screening_retry: "Olá, você gostaria de conhecer este trabalho online de meio período? Se tiver interesse, posso explicar rapidamente.",
     project_intro: "Certo, vou explicar rapidamente primeiro. Você pode decidir se quer aceitar este trabalho. Nosso objetivo é ajudar comerciantes a aumentar as vendas e o ranqueamento dos produtos por meio de trabalho online de meio período. Você pode ganhar de 300 a 800 reais por dia. Você tem tempo livre em casa agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
