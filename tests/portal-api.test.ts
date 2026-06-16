@@ -1975,8 +1975,77 @@ describe("portal api", () => {
         ["telegram", true],
         ["platformRegisterUrl", true]
       ]);
-      expect(calls.some((url) => url.endsWith("/open/auth/token"))).toBe(false);
-      expect(calls.some((url) => url.endsWith("/v1/accounts"))).toBe(false);
+      expect(calls.some((url) => url.endsWith("/v1/accounts"))).toBe(true);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reports A2C config check errors from a real A2C request", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 401, msg: "访问过于频繁，请稍后再试" }, { status: 401 });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: "OK" }] } }] });
+      }
+      return Response.json({ ok: true });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "A2C实时检测商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "PATCH",
+        url: `/api/admin/merchants/${merchantId}/config`,
+        headers: { cookie: adminCookie },
+        payload: {
+          a2cBaseUrl: "https://a2c-check-error.test/api/openapi",
+          a2cAppId: "check-error-app",
+          a2cAppSecret: "check-error-secret",
+          a2cAccountPhone: "saved-a2c-real-check",
+          googleAiApiKey: "gemini-test",
+          platformRegisterUrl: "https://merchant.example/register"
+        }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: {
+          merchantId,
+          email: "a2c-real-check@test.local",
+          name: "A2C实时检测",
+          password: "Merchant123456",
+          role: "merchant_admin"
+        }
+      });
+      const merchantCookie = await login(app, "a2c-real-check@test.local", "Merchant123456");
+
+      const checked = await app.inject({
+        method: "GET",
+        url: "/api/merchant/config/check",
+        headers: { cookie: merchantCookie }
+      });
+
+      expect(checked.statusCode).toBe(200);
+      expect(checked.json().ok).toBe(false);
+      const a2c = checked.json().rows.find((row: { key: string }) => row.key === "a2c");
+      expect(a2c).toMatchObject({ ok: false, status: "error" });
+      expect(a2c.detail).toContain("访问过于频繁");
+      expect(calls.some((url) => url.endsWith("/open/auth/token"))).toBe(true);
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

@@ -825,7 +825,7 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   const runtimeConfig = appConfigForMerchant(deps.config, cfg);
   const checks: ConfigCheckItem[] = [];
 
-  checks.push(checkA2C(runtimeConfig, deps.repos, merchantId));
+  checks.push(await checkA2C(runtimeConfig, deps.repos, merchantId));
   checks.push(await checkGemini(runtimeConfig));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push({
@@ -843,15 +843,33 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   };
 }
 
-function checkA2C(config: AppConfig, repos: Repositories, merchantId: string): ConfigCheckItem {
+async function checkA2C(config: AppConfig, repos: Repositories, merchantId: string): Promise<ConfigCheckItem> {
   if (!config.A2C_APP_ID || !config.A2C_APP_SECRET) {
     return { key: "a2c", label: "A2C", ok: false, status: "missing", detail: "缺少 A2C App ID 或密钥" };
   }
-  const accounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
-  const detail = accounts.length
-    ? `密钥已填写，当前本地已保存 ${accounts.length} 个启用客服账号，收发消息会继续使用这些账号。此检测不会实时请求 A2C，避免触发认证限频；需要拉取最新账号时再手动同步。`
-    : "密钥已填写，但本地还没有客服账号。请手动点击“同步A2C客服账号”；配置检测不会实时请求 A2C，避免触发认证限频。";
-  return { key: "a2c", label: "A2C", ok: true, status: "ok", detail };
+  const client = new A2CClient(config, repos.a2cTokenStore(merchantId));
+  try {
+    const accounts = await client.listAccounts();
+    const rows = repos.syncMerchantA2CAccounts(merchantId, accounts);
+    const enabledCount = rows.filter((account) => account.enabled).length;
+    return {
+      key: "a2c",
+      label: "A2C",
+      ok: true,
+      status: "ok",
+      detail: `已实时请求 A2C，认证正常；拉取到 ${rows.length} 个客服账号，其中 ${enabledCount} 个启用。`
+    };
+  } catch (error) {
+    const localAccounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
+    const suffix = localAccounts.length ? ` 本地仍保存 ${localAccounts.length} 个启用客服账号，可继续用于已有收发；但实时检测未通过。` : "";
+    return {
+      key: "a2c",
+      label: "A2C",
+      ok: false,
+      status: "error",
+      detail: `${error instanceof Error ? error.message : "A2C 实时检测失败"}${suffix}`
+    };
+  }
 }
 
 function isA2CRateLimitMessage(message: string): boolean {
