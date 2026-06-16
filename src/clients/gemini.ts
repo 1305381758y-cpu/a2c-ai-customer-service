@@ -211,7 +211,10 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
   if (!value || typeof value.reply !== "string" || !value.reply.trim()) return fallbackReply(input, config);
   const expectedLanguage = input.conversation.language && input.conversation.language !== "unknown" ? input.conversation.language : "";
   const policyReply = enforceContactPolicy(value.reply.trim(), input, config);
-  const reply = sanitizeCustomerVisibleReply(ensureInviteInReply(policyReply, input, config), expectedLanguage || input.conversation.language);
+  const sanitizedReply = sanitizeCustomerVisibleReply(ensureInviteInReply(policyReply, input, config), expectedLanguage || input.conversation.language);
+  const reply = isMechanicalTemplateReply(sanitizedReply)
+    ? sanitizeCustomerVisibleReply(ensureInviteInReply(contextualFallbackReply(input, config), input, config), expectedLanguage || input.conversation.language)
+    : sanitizedReply;
   return {
     reply,
     language: expectedLanguage || (typeof value.language === "string" && value.language ? value.language : input.conversation.language),
@@ -226,7 +229,8 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {
   const sample = input.samples[0];
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
-  const baseReply = fallbackByCustomerText(input, config) || sample?.standardReply || defaultReply(language, config, input.inviteCode);
+  const sampleReply = sample?.standardReply && !isMechanicalTemplateReply(sample.standardReply) ? sample.standardReply : "";
+  const baseReply = contextualFallbackReply(input, config) || sampleReply || defaultReply(language, config, input.inviteCode);
   const reply = sanitizeCustomerVisibleReply(ensureInviteInReply(baseReply, input, config), language);
   return {
     reply,
@@ -288,11 +292,12 @@ function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig
   return `${reply}${separator}开户链接和邀请码：${display || config.PLATFORM_REGISTER_URL}`;
 }
 
-function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
+function contextualFallbackReply(input: ReplyInput, config: AppConfig): string {
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
   const text = input.customerText.trim();
   if (isMechanicalComplaint(text)) return naturalComplaintReply(language);
   if (asksAboutServiceIdentity(text)) return naturalServiceIntroReply(language);
+  if (isJobIntent(text)) return naturalJobIntentReply(language);
   if (isGreetingOnly(text) && hasRecentOutbound(input)) return naturalGreetingReply(language, input);
   if (/(邀请码|invite code|invitation code|código|codigo|招待コード)/i.test(input.customerText)) {
     if (input.inviteCode) {
@@ -310,6 +315,12 @@ function fallbackByCustomerText(input: ReplyInput, config: AppConfig): string {
     return "今天是 2026年6月13日。您这边如果继续注册，我可以接着协助。";
   }
   return "";
+}
+
+function isMechanicalTemplateReply(reply: string): boolean {
+  const text = reply.replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  return /(我是平台客服|平台客服，会继续协助您完成注册流程|想了解如何开户(?:注册)?|协助您完成注册、排查问题、确认手机号|Não entendi sua mensagem|Nao entendi sua mensagem|Pode escrever sua dúvida em uma frase curta|Posso ajudar com cadastro, link, telefone, Telegram|I can help with registration, link, phone, Telegram|Please write your question in one short sentence)/i.test(text);
 }
 
 function enforceContactPolicy(reply: string, input: ReplyInput, config: AppConfig): string {
@@ -417,7 +428,11 @@ function asksAboutServiceIdentity(text: string): boolean {
 }
 
 function isGreetingOnly(text: string): boolean {
-  return /^(你好|您好|在吗|在不在|hi|hello|hey|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
+  return /^(你好|您好|在吗|在不在|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
+}
+
+function isJobIntent(text: string): boolean {
+  return /(找工作|找一份工作|兼职|线上工作|在线工作|工作机会|赚钱|收入|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text);
 }
 
 function hasRecentOutbound(input: ReplyInput): boolean {
@@ -436,6 +451,13 @@ function naturalServiceIntroReply(language: string): string {
   if (language === "pt-BR") return "Eu ajudo principalmente com o cadastro na plataforma e a verificação do contato. Se quiser continuar, posso orientar você passo a passo.";
   if (language === "ja") return "主にプラットフォーム登録と連絡先確認をお手伝いします。続ける場合は、順番に案内します。";
   return "我这边主要协助您完成开户注册和联系方式核对。您如果要继续，我可以按步骤带您处理。";
+}
+
+function naturalJobIntentReply(language: string): string {
+  if (language === "en") return "Yes, I can help you understand this online work opportunity. If you are interested, I will guide you step by step, starting with the registration.";
+  if (language === "pt-BR") return "Sim, posso explicar esta oportunidade de trabalho online. Se você tiver interesse, eu oriento passo a passo, começando pelo cadastro.";
+  if (language === "ja") return "はい、このオンラインの仕事について案内できます。興味があれば、登録から順番にサポートします。";
+  return "可以的，我先帮您了解这份线上工作。如果您有兴趣，我会从注册开始一步一步带您处理。";
 }
 
 function naturalGreetingReply(language: string, input: ReplyInput): string {

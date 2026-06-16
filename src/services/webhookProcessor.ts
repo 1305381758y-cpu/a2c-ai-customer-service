@@ -420,7 +420,10 @@ export function shouldBypassStrictFlowForNaturalReply(
     return true;
   }
   const hasStartedFlow = Boolean(conversation.flowStep || (conversation.stage && conversation.stage !== "need_platform_register"));
-  if (hasStartedFlow && /^(你好|您好|在吗|在不在|hi|hello|hey|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text)) {
+  if (hasStartedFlow && /^(你好|您好|在吗|在不在|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text)) {
+    return true;
+  }
+  if (hasStartedFlow && /(找工作|找一份工作|兼职|线上工作|在线工作|工作机会|赚钱|收入|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text)) {
     return true;
   }
   return false;

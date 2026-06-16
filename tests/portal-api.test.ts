@@ -1310,6 +1310,87 @@ describe("portal api", () => {
     }
   });
 
+  it("filters stale mechanical templates from Gemini replies", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "mechanical-template-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "mechanical-template-a2c", wabaId: "waba", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "模板过滤客服" }] });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+          reply: "您好，我是平台客服，会继续协助您完成注册流程。请问您是想了解如何开户注册吗？",
+          language: "zh",
+          stage: "need_platform_register",
+          extractedPhone: "",
+          extractedTelegram: "",
+          extractedWhatsApp: "",
+          shouldHandoff: false
+        }) }] } }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "模板过滤商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "mechanical-template@test.local", name: "模板过滤", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "mechanical-template@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: { a2cBaseUrl: "https://mechanical-template-a2c.test/api/openapi", a2cAppId: "mechanical-app", a2cAppSecret: "mechanical-secret", googleAiApiKey: "gemini-test" }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/merchant/countries",
+        headers: { cookie: merchantCookie },
+        payload: { code: "br", name: "巴西", defaultLanguage: "zh", requirePlatformAccount: false, requirePhone: true, requireTelegram: true, requireWhatsApp: false }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      const webhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "mechanical-template-event-1",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "mechanical-template-message-1",
+            content: "你好，我想要找一份工作",
+            from: "mechanical-template-customer",
+            to: "mechanical-template-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+
+      expect(webhook.statusCode).toBe(200);
+      expect(String(sentMessages[0].content)).toContain("线上工作");
+      expect(String(sentMessages[0].content)).not.toContain("我是平台客服");
+      expect(String(sentMessages[0].content)).not.toContain("开户注册");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("keeps Aston default-market webhooks on the strict greeting instead of generic free replies", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

@@ -219,6 +219,8 @@ describe("strict Aston Brazil flow", () => {
   it("lets natural replies handle complaints and repeated greetings instead of hard scripting", () => {
     expect(shouldBypassStrictFlowForNaturalReply("你只会这一句话吗", conversation({ flowStep: "interest_screening" }))).toBe(true);
     expect(shouldBypassStrictFlowForNaturalReply("你好", conversation({ flowStep: "wait_registration" }))).toBe(true);
+    expect(shouldBypassStrictFlowForNaturalReply("Good morning", conversation({ flowStep: "wait_registration" }))).toBe(true);
+    expect(shouldBypassStrictFlowForNaturalReply("你好，我想找一份工作", conversation({ flowStep: "interest_screening" }))).toBe(true);
     expect(shouldBypassStrictFlowForNaturalReply("你好", conversation())).toBe(false);
   });
 });
