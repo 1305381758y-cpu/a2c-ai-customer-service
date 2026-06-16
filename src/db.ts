@@ -286,6 +286,33 @@ export function migrate(db: DatabaseSync): void {
       UNIQUE(merchant_id, country_id, customer_key),
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS vector_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT DEFAULT '',
+      customer_key TEXT DEFAULT '',
+      conversation_id TEXT DEFAULT '',
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_sub_id TEXT DEFAULT '',
+      title TEXT DEFAULT '',
+      content TEXT NOT NULL,
+      language TEXT DEFAULT 'unknown',
+      intent TEXT DEFAULT 'unknown',
+      stage TEXT DEFAULT '',
+      embedding_model TEXT DEFAULT '',
+      embedding_json TEXT DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending',
+      error TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(source_type, source_id, source_sub_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_vector_documents_scope ON vector_documents(merchant_id, country_id, status);
+    CREATE INDEX IF NOT EXISTS idx_vector_documents_conversation ON vector_documents(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_vector_documents_source ON vector_documents(source_type, source_id);
   `);
 
   ensureColumn(db, "merchant_countries", "platform_register_url", "TEXT DEFAULT ''");
@@ -337,6 +364,13 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "customer_memories", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customer_memories", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "customer_memories", "extracted_whatsapp", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "merchant_id", "TEXT DEFAULT 'default'");
+  ensureColumn(db, "vector_documents", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "customer_key", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "conversation_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "source_sub_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "embedding_model", "TEXT DEFAULT ''");
+  ensureColumn(db, "vector_documents", "error", "TEXT DEFAULT ''");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
@@ -353,6 +387,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_materials SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_material_items SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE customer_memories SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE vector_documents SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_samples SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE conversations SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE merchant_a2c_accounts SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
@@ -362,6 +397,7 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_materials SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE training_material_items SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE customer_memories SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
+  db.prepare("UPDATE vector_documents SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
 }
 
 function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {

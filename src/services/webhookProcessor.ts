@@ -9,6 +9,7 @@ import type { MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { translateForOperator } from "./translation.js";
+import { VectorIndexService } from "./vectorIndex.js";
 
 export interface A2CWebhookPayload {
   id: string;
@@ -35,6 +36,7 @@ export class WebhookProcessor {
     private readonly ai: GeminiReplyClient,
     private readonly a2c: A2CClient,
     private readonly telegram: TelegramClient,
+    private readonly vectorIndex: VectorIndexService,
     private readonly config: AppConfig
   ) {}
 
@@ -210,7 +212,16 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: analysisText || content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
+    const retrievedContext = await this.vectorIndex.retrieve({
+      config: runtimeConfig,
+      merchantId: merchant.id,
+      countryId: country.id,
+      customerKey: conversation.customerPhone,
+      conversationId: conversation.id,
+      query: analysisText || content,
+      limit: 8
+    });
+    const aiReply = await ai.generateReply({ customerText: analysisText || content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, retrievedContext, country, inviteCode });
     if (!shouldIncludeRegistrationDetails) {
       aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
     }
@@ -259,6 +270,10 @@ export class WebhookProcessor {
       rawPayload: {
         samples: samples.map((sample) => sample.id),
         trainingMaterials: trainingMaterials.map((item) => item.id),
+        retrievedContext: retrievedContext.map((item) => ({
+          ...item,
+          score: Number(item.score.toFixed(4))
+        })),
         aiFallback: Boolean(aiReply.fallback),
         aiError: aiReply.error || "",
         originalContent: outboundTranslation.originalText,
