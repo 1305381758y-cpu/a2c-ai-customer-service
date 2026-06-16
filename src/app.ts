@@ -11,7 +11,6 @@ import { openDb } from "./db.js";
 import { Repositories } from "./repositories.js";
 import { registerRoutes } from "./routes.js";
 import { WebhookProcessor } from "./services/webhookProcessor.js";
-import { VectorIndexService } from "./services/vectorIndex.js";
 import { hashPassword } from "./auth.js";
 
 const UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
@@ -29,7 +28,6 @@ export function buildApp(config: AppConfig) {
     new GeminiReplyClient(config),
     new A2CClient(config),
     new TelegramClient(config),
-    new VectorIndexService(repos),
     config
   );
 

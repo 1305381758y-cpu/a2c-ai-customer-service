@@ -13,7 +13,6 @@ import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
-import { VectorIndexService } from "./services/vectorIndex.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: WebhookProcessor }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -513,28 +512,6 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!memory) return reply.code(404).send({ error: "memory not found" });
     return memory;
   });
-  app.get<{ Params: { id: string } }>("/api/merchant/conversations/:id/retrievals", { preHandler: merchantRoles }, async (request, reply) => {
-    const merchantId = scopedMerchantId(request);
-    const conversation = deps.repos.getConversation(request.params.id);
-    if (!conversation || conversation.merchantId !== merchantId) return reply.code(404).send({ error: "conversation not found" });
-    return { rows: deps.repos.listConversationRetrievals(request.params.id, merchantId) };
-  });
-  app.get<{ Querystring: { countryId?: string } }>("/api/merchant/vector-index/status", { preHandler: merchantRoles }, async (request) => ({
-    rows: deps.repos.vectorIndexStatus({ merchantId: scopedMerchantId(request), countryId: request.query.countryId })
-  }));
-  app.post<{ Body: { countryId?: string; embedNow?: boolean } }>("/api/merchant/vector-index/rebuild", { preHandler: merchantAdmins }, async (request) => {
-    const merchantId = scopedMerchantId(request);
-    const cfg = deps.repos.getMerchantConfig(merchantId);
-    const country = deps.repos.getMerchantCountry(request.body?.countryId || deps.repos.defaultCountryId(merchantId));
-    const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
-    const result = await new VectorIndexService(deps.repos).rebuild({
-      config: runtimeConfig,
-      merchantId,
-      countryId: request.body?.countryId,
-      embedNow: request.body?.embedNow !== false
-    });
-    return { ok: true, ...result, rows: deps.repos.vectorIndexStatus({ merchantId, countryId: request.body?.countryId }) };
-  });
   app.patch<{ Params: { conversationId: string }; Body: { handoffStatus?: "pending" | "processing" | "done" } }>("/api/merchant/handoffs/:conversationId", { preHandler: merchantRoles }, async (request, reply) => {
     const status = request.body?.handoffStatus;
     if (status !== "pending" && status !== "processing" && status !== "done") return reply.code(400).send({ error: "invalid handoffStatus" });
@@ -701,25 +678,6 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
-  });
-  app.get<{ Querystring: { merchantId?: string; countryId?: string } }>("/internal/vector-index/status", { preHandler: auth(deps.config) }, async (request) => ({
-    rows: deps.repos.vectorIndexStatus({
-      merchantId: request.query.merchantId,
-      countryId: request.query.countryId
-    })
-  }));
-  app.post<{ Body: { merchantId?: string; countryId?: string; embedNow?: boolean } }>("/internal/vector-index/rebuild", { preHandler: auth(deps.config) }, async (request) => {
-    const merchantId = request.body?.merchantId || "default";
-    const cfg = deps.repos.getMerchantConfig(merchantId);
-    const country = deps.repos.getMerchantCountry(request.body?.countryId || deps.repos.defaultCountryId(merchantId));
-    const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
-    const result = await new VectorIndexService(deps.repos).rebuild({
-      config: runtimeConfig,
-      merchantId,
-      countryId: request.body?.countryId,
-      embedNow: request.body?.embedNow !== false
-    });
-    return { ok: true, ...result, rows: deps.repos.vectorIndexStatus({ merchantId, countryId: request.body?.countryId }) };
   });
 
   app.post("/webhooks/a2c", async (request, reply) => {

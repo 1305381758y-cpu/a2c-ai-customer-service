@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import type { AppConfig } from "../config.js";
-import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord, VectorSearchHit } from "../repositories.js";
+import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 
 export interface ReplyInput {
@@ -11,7 +11,6 @@ export interface ReplyInput {
   knowledge: KnowledgeItemRecord[];
   trainingMaterials?: TrainingMaterialItemRecord[];
   memory?: CustomerMemoryRecord;
-  retrievedContext?: VectorSearchHit[];
   country?: MerchantCountryRecord;
   inviteCode?: A2CInviteCodeRecord;
 }
@@ -31,7 +30,6 @@ export interface AiReply {
 export type GeminiConfig = Pick<AppConfig, "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">;
 
 const GEMINI_TIMEOUT_MS = 15_000;
-export const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-2";
 
 const replySchema: Schema = {
   type: Type.OBJECT,
@@ -70,7 +68,6 @@ export class GeminiReplyClient {
           knowledgeItems: input.knowledge,
           trainingMaterials: input.trainingMaterials ?? [],
           customerMemory: input.memory ?? null,
-          retrievedContext: input.retrievedContext ?? [],
           country: input.country ?? null,
           assignedInviteCode: input.inviteCode ? {
             code: input.inviteCode.code,
@@ -124,32 +121,6 @@ export async function generateGeminiText(
   return response.text?.trim() || "";
 }
 
-export async function generateGeminiEmbedding(
-  config: GeminiConfig,
-  text: string,
-  model = DEFAULT_GEMINI_EMBEDDING_MODEL
-): Promise<{ embedding: number[]; model: string }> {
-  const apiKey = geminiApiKey(config);
-  if (!apiKey) throw new Error("Google AI Studio Key 未配置");
-  const client = new GoogleGenAI({ apiKey });
-  const safeText = text.length > 12_000 ? text.slice(0, 12_000) : text;
-  try {
-    const response = await client.models.embedContent({
-      model,
-      contents: safeText,
-      config: { taskType: "RETRIEVAL_DOCUMENT" }
-    });
-    const embedding = (response.embeddings?.[0]?.values ?? [])
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item));
-    if (!embedding.length) throw new Error("Gemini embedding 返回为空");
-    return { embedding, model };
-  } catch (error) {
-    if (model !== "gemini-embedding-001") return generateGeminiEmbedding(config, text, "gemini-embedding-001");
-    throw error;
-  }
-}
-
 export function geminiApiKey(config: GeminiConfig): string {
   const value = config.GOOGLE_AI_API_KEY || "";
   return value === "CHANGE_ME" ? "" : value;
@@ -183,7 +154,6 @@ function buildSystemPrompt(config: AppConfig): string {
 - 同时参考 knowledgeItems 中启用的 FAQ、话术、规则和禁用表达。
 - 同时参考 trainingMaterials，它来自商户上传的聊天记录、文档、文本和图片 OCR 文字。
 - 同时参考 customerMemory，它是该客户自己的长期记忆文件，包括历史阶段、已提供资料、最近意图和人工备注。
-- 同时参考 retrievedContext，它是系统语义检索出的真实历史对话、优秀样本和知识库内容；只当作内部参考，禁止向客户说“我引用了历史记录/知识库/语义搜索”。
 - 同时参考 country，它是当前 A2C 客服账号绑定的国家配置；不同国家的链接、语言、目标可能不同。
 - 只收集 country 当前要求的联系方式。country.requireWhatsApp=false 时，禁止要求客户提供 WhatsApp，因为客户本身通常已经通过 WhatsApp 联系我们。
 - country.requireTelegram=true 且客户说没有 Telegram 时，必须引导客户注册/下载 Telegram，然后发送 @ 开头的 Telegram 用户名；不能改为要求 WhatsApp。

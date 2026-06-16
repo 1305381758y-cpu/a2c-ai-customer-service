@@ -240,58 +240,11 @@ export interface ConversationMessageRecord {
   createdAt: string;
 }
 
-export type VectorSourceType = "message" | "sample" | "knowledge";
-export type VectorDocumentStatus = "pending" | "embedded" | "failed";
-
-export interface VectorDocumentRecord {
-  id: number;
-  merchantId: string;
-  countryId: string;
-  customerKey: string;
-  conversationId: string;
-  sourceType: VectorSourceType;
-  sourceId: string;
-  sourceSubId: string;
-  title: string;
-  content: string;
-  language: string;
-  intent: string;
-  stage: string;
-  embeddingModel: string;
-  embedding: number[];
-  status: VectorDocumentStatus;
-  error: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface VectorSearchHit {
-  id: number;
-  sourceType: VectorSourceType;
-  sourceId: string;
-  title: string;
-  content: string;
-  language: string;
-  intent: string;
-  stage: string;
-  customerKey: string;
-  conversationId: string;
-  score: number;
-}
-
-export interface VectorIndexStatusRecord {
-  status: VectorDocumentStatus;
-  sourceType: VectorSourceType;
-  count: number;
-}
-
 export class Repositories {
   constructor(private readonly db: Db) {}
 
   insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default", countryId = this.defaultCountryId(merchantId)): number {
-    const imported = insertTrainingSamples(this.db, samples, merchantId, countryId);
-    this.queueTrainingSamplesForVectorIndex(merchantId, countryId);
-    return imported;
+    return insertTrainingSamples(this.db, samples, merchantId, countryId);
   }
 
   deleteAllTrainingSamples(): { samplesDeleted: number; materialItemsDeleted: number } {
@@ -299,7 +252,6 @@ export class Repositories {
     try {
       const materialItems = this.db.sqlite.prepare("DELETE FROM training_material_items WHERE sample_id IS NOT NULL OR kind = 'sample'").run();
       const samples = this.db.sqlite.prepare("DELETE FROM training_samples").run();
-      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE source_type = 'sample'").run();
       this.db.sqlite.exec("COMMIT");
       return {
         samplesDeleted: Number(samples.changes ?? 0),
@@ -312,7 +264,6 @@ export class Repositories {
   }
 
   clearLearningAndCustomerData(): {
-    vectorDocumentsDeleted: number;
     customerMemoriesDeleted: number;
     trainingMaterialItemsDeleted: number;
     trainingMaterialsDeleted: number;
@@ -326,7 +277,6 @@ export class Repositories {
   } {
     this.db.sqlite.exec("BEGIN");
     try {
-      const vectorDocuments = this.db.sqlite.prepare("DELETE FROM vector_documents").run();
       const customerMemories = this.db.sqlite.prepare("DELETE FROM customer_memories").run();
       const trainingMaterialItems = this.db.sqlite.prepare("DELETE FROM training_material_items").run();
       const trainingMaterials = this.db.sqlite.prepare("DELETE FROM training_materials").run();
@@ -350,7 +300,6 @@ export class Repositories {
         .run();
       this.db.sqlite.exec("COMMIT");
       return {
-        vectorDocumentsDeleted: Number(vectorDocuments.changes ?? 0),
         customerMemoriesDeleted: Number(customerMemories.changes ?? 0),
         trainingMaterialItemsDeleted: Number(trainingMaterialItems.changes ?? 0),
         trainingMaterialsDeleted: Number(trainingMaterials.changes ?? 0),
@@ -388,7 +337,6 @@ export class Repositories {
         sample.enabled ? 1 : 0
       );
     const row = this.db.sqlite.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
-    this.queueTrainingSampleForVectorIndex(Number(row.id));
     return { id: Number(row.id) };
   }
 
@@ -564,14 +512,8 @@ export class Repositories {
         const conversationSampleMarkers = conversations.map((id) => `conversation_sample:${id}:%`);
         messagesDeleted = Number(this.db.sqlite.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...conversations).changes ?? 0);
         this.db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
-        this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...conversations);
-        this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE source_type = 'sample' AND source_id IN (
-          SELECT CAST(id AS TEXT)
-          FROM training_samples
-          WHERE merchant_id = ? AND (${conversationSampleMarkers.map(() => "keywords LIKE ?").join(" OR ")})
-        )`).run(merchantId, ...conversationSampleMarkers);
         this.db.sqlite.prepare(`DELETE FROM training_samples WHERE merchant_id = ? AND (${conversationSampleMarkers.map(() => "keywords LIKE ?").join(" OR ")})`).run(merchantId, ...conversationSampleMarkers);
         this.db.sqlite.prepare(`UPDATE a2c_invite_codes
           SET status = CASE WHEN status = 'reserved' THEN 'available' ELSE status END,
@@ -595,7 +537,6 @@ export class Repositories {
         `).run(merchantId, customerKey);
       }
       this.db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
-      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
       const deleted = this.db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
       this.db.sqlite.exec("COMMIT");
       return { deleted: deleted.changes > 0, conversationsDeleted: conversations.length, messagesDeleted };
@@ -626,14 +567,12 @@ export class Repositories {
           input.telegramDetected ?? "",
           JSON.stringify({ ...(typeof input.rawPayload === "object" && input.rawPayload !== null ? input.rawPayload as Record<string, unknown> : {}), whatsappDetected: input.whatsappDetected ?? "" })
         );
-      const messageId = Number(result.lastInsertRowid ?? 0);
-      this.queueMessageForVectorIndex(messageId, input);
       if (input.direction === "inbound") {
         this.db.sqlite.prepare("UPDATE conversations SET unread_count = unread_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(input.conversationId);
       } else {
-        this.learnFromConversationReply(input.conversationId, messageId, input);
+        this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
       }
-      return { inserted: true, id: messageId };
+      return { inserted: true };
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE")) {
         if (input.direction === "outbound") {
@@ -656,10 +595,8 @@ export class Repositories {
               input.telegramDetected ?? "",
               JSON.stringify({ ...(typeof input.rawPayload === "object" && input.rawPayload !== null ? input.rawPayload as Record<string, unknown> : {}), externalIdConflict: input.externalId ?? "", whatsappDetected: input.whatsappDetected ?? "" })
             );
-          const messageId = Number(result.lastInsertRowid ?? 0);
-          this.queueMessageForVectorIndex(messageId, input);
-          this.learnFromConversationReply(input.conversationId, messageId, input);
-          return { inserted: true, id: messageId };
+          this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
+          return { inserted: true };
         }
         return { inserted: false };
       }
@@ -698,7 +635,6 @@ export class Repositories {
           WHERE id = ? AND merchant_id = ?
         `)
         .run(clipText(reply, 1200), language, intent, conversation.stage, existing.id, conversation.merchantId);
-      this.queueTrainingSampleForVectorIndex(existing.id);
       return;
     }
     this.db.sqlite
@@ -717,69 +653,6 @@ export class Repositories {
         language,
         keywords
       );
-    const sampleId = Number((this.db.sqlite.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id);
-    this.queueTrainingSampleForVectorIndex(sampleId);
-  }
-
-  private queueMessageForVectorIndex(messageId: number, input: MessageInput): VectorDocumentRecord | undefined {
-    const conversation = this.getConversation(input.conversationId);
-    if (!conversation || !messageId) return undefined;
-    const title = input.direction === "inbound" ? `客户消息 #${messageId}` : `客服回复 #${messageId}`;
-    return this.upsertVectorDocument({
-      merchantId: conversation.merchantId,
-      countryId: conversation.countryId,
-      customerKey: conversation.customerPhone,
-      conversationId: conversation.id,
-      sourceType: "message",
-      sourceId: messageId,
-      title,
-      content: input.content,
-      language: input.language,
-      intent: input.intent,
-      stage: conversation.stage
-    });
-  }
-
-  private queueMessagesForVectorIndex(filters: { merchantId?: string; countryId?: string } = {}): number {
-    const clauses: string[] = [];
-    const params: string[] = [];
-    if (filters.merchantId) {
-      clauses.push("c.merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("c.country_id = ?");
-      params.push(filters.countryId);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const rows = this.db.sqlite
-      .prepare(`
-        SELECT m.id, m.direction, m.content, m.msg_type, m.language, m.intent, c.id AS conversation_id, c.merchant_id, c.country_id,
-               c.customer_phone, c.stage
-        FROM messages m
-        JOIN conversations c ON c.id = m.conversation_id
-        ${where}
-        ORDER BY m.id ASC
-      `)
-      .all(...params) as Array<Record<string, unknown>>;
-    let queued = 0;
-    for (const row of rows) {
-      const title = String(row.direction) === "inbound" ? `客户消息 #${row.id}` : `客服回复 #${row.id}`;
-      if (this.upsertVectorDocument({
-        merchantId: String(row.merchant_id ?? "default"),
-        countryId: String(row.country_id ?? ""),
-        customerKey: String(row.customer_phone ?? ""),
-        conversationId: String(row.conversation_id ?? ""),
-        sourceType: "message",
-        sourceId: Number(row.id),
-        title,
-        content: String(row.content ?? ""),
-        language: String(row.language ?? "unknown"),
-        intent: String(row.intent ?? "unknown"),
-        stage: String(row.stage ?? "")
-      })) queued += 1;
-    }
-    return queued;
   }
 
   markConversationRead(conversationId: string, merchantId: string): Conversation | undefined {
@@ -821,298 +694,6 @@ export class Repositories {
       .all(conversationId, limit)
       .reverse()
       .map((row) => mapConversationMessage(row as Record<string, unknown>));
-  }
-
-  upsertVectorDocument(input: {
-    merchantId: string;
-    countryId: string;
-    customerKey?: string;
-    conversationId?: string;
-    sourceType: VectorSourceType;
-    sourceId: string | number;
-    sourceSubId?: string | number;
-    title?: string;
-    content: string;
-    language?: string;
-    intent?: string;
-    stage?: string;
-  }): VectorDocumentRecord | undefined {
-    const content = normalizeVectorText(input.content);
-    if (!isVectorizableText(content)) return undefined;
-    this.db.sqlite
-      .prepare(`
-        INSERT INTO vector_documents
-          (merchant_id, country_id, customer_key, conversation_id, source_type, source_id, source_sub_id,
-           title, content, language, intent, stage, status, error, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', CURRENT_TIMESTAMP)
-        ON CONFLICT(source_type, source_id, source_sub_id) DO UPDATE SET
-          merchant_id = excluded.merchant_id,
-          country_id = excluded.country_id,
-          customer_key = excluded.customer_key,
-          conversation_id = excluded.conversation_id,
-          title = excluded.title,
-          content = excluded.content,
-          language = excluded.language,
-          intent = excluded.intent,
-          stage = excluded.stage,
-          status = CASE
-            WHEN vector_documents.content != excluded.content THEN 'pending'
-            WHEN vector_documents.status = 'failed' THEN 'pending'
-            ELSE vector_documents.status
-          END,
-          error = CASE WHEN vector_documents.content != excluded.content THEN '' ELSE vector_documents.error END,
-          updated_at = CURRENT_TIMESTAMP
-      `)
-      .run(
-        input.merchantId,
-        input.countryId || this.defaultCountryId(input.merchantId),
-        input.customerKey ?? "",
-        input.conversationId ?? "",
-        input.sourceType,
-        String(input.sourceId),
-        String(input.sourceSubId ?? ""),
-        clipText(input.title ?? "", 160),
-        content,
-        input.language ?? "unknown",
-        input.intent ?? "unknown",
-        input.stage ?? ""
-      );
-    const row = this.db.sqlite
-      .prepare("SELECT * FROM vector_documents WHERE source_type = ? AND source_id = ? AND source_sub_id = ?")
-      .get(input.sourceType, String(input.sourceId), String(input.sourceSubId ?? "")) as Record<string, unknown> | undefined;
-    return row ? mapVectorDocument(row) : undefined;
-  }
-
-  queueTrainingSampleForVectorIndex(sampleId: number): VectorDocumentRecord | undefined {
-    const row = this.db.sqlite.prepare("SELECT * FROM training_samples WHERE id = ?").get(sampleId) as Record<string, unknown> | undefined;
-    if (!row) return undefined;
-    const merchantId = String(row.merchant_id ?? "default");
-    return this.upsertVectorDocument({
-      merchantId,
-      countryId: String(row.country_id ?? this.defaultCountryId(merchantId)),
-      sourceType: "sample",
-      sourceId: sampleId,
-      title: clipText(String(row.customer_message ?? ""), 100),
-      content: `客户：${String(row.customer_message ?? "")}\n客服：${String(row.standard_reply ?? "")}`,
-      language: String(row.language ?? "unknown"),
-      intent: String(row.intent ?? "unknown"),
-      stage: String(row.stage ?? "")
-    });
-  }
-
-  queueTrainingSamplesForVectorIndex(merchantId: string, countryId?: string): number {
-    const rows = this.db.sqlite
-      .prepare(`
-        SELECT id
-        FROM training_samples
-        WHERE merchant_id = ? ${countryId ? "AND country_id = ?" : ""}
-      `)
-      .all(...(countryId ? [merchantId, countryId] : [merchantId])) as Array<{ id: number }>;
-    let queued = 0;
-    for (const row of rows) {
-      if (this.queueTrainingSampleForVectorIndex(Number(row.id))) queued += 1;
-    }
-    return queued;
-  }
-
-  queueKnowledgeItemForVectorIndex(knowledgeId: number): VectorDocumentRecord | undefined {
-    const row = this.db.sqlite.prepare("SELECT * FROM knowledge_items WHERE id = ?").get(knowledgeId) as Record<string, unknown> | undefined;
-    if (!row) return undefined;
-    const merchantId = String(row.merchant_id ?? "default");
-    return this.upsertVectorDocument({
-      merchantId,
-      countryId: String(row.country_id ?? this.defaultCountryId(merchantId)),
-      sourceType: "knowledge",
-      sourceId: knowledgeId,
-      title: String(row.title ?? ""),
-      content: `${String(row.title ?? "")}\n${String(row.content ?? "")}`,
-      language: String(row.language ?? "unknown"),
-      intent: String(row.type ?? "unknown"),
-      stage: ""
-    });
-  }
-
-  queueKnowledgeItemsForVectorIndex(merchantId: string, countryId?: string): number {
-    const rows = this.db.sqlite
-      .prepare(`
-        SELECT id
-        FROM knowledge_items
-        WHERE merchant_id = ? ${countryId ? "AND country_id = ?" : ""}
-      `)
-      .all(...(countryId ? [merchantId, countryId] : [merchantId])) as Array<{ id: number }>;
-    let queued = 0;
-    for (const row of rows) {
-      if (this.queueKnowledgeItemForVectorIndex(Number(row.id))) queued += 1;
-    }
-    return queued;
-  }
-
-  rebuildVectorIndex(filters: { merchantId?: string; countryId?: string } = {}): { deleted: number; queued: number } {
-    const clauses: string[] = [];
-    const params: string[] = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const deleted = this.db.sqlite.prepare(`DELETE FROM vector_documents ${where}`).run(...params);
-    let queued = 0;
-    queued += this.queueMessagesForVectorIndex(filters);
-    if (filters.merchantId) {
-      queued += this.queueTrainingSamplesForVectorIndex(filters.merchantId, filters.countryId);
-      queued += this.queueKnowledgeItemsForVectorIndex(filters.merchantId, filters.countryId);
-    } else {
-      const merchants = this.listMerchants();
-      for (const merchant of merchants) {
-        queued += this.queueTrainingSamplesForVectorIndex(merchant.id, filters.countryId);
-        queued += this.queueKnowledgeItemsForVectorIndex(merchant.id, filters.countryId);
-      }
-    }
-    return { deleted: Number(deleted.changes ?? 0), queued };
-  }
-
-  listPendingVectorDocuments(filters: { merchantId?: string; countryId?: string; limit?: number } = {}): VectorDocumentRecord[] {
-    const clauses = ["status = 'pending'"];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    const limit = Math.min(Math.max(filters.limit ?? 20, 1), 200);
-    params.push(limit);
-    return this.db.sqlite
-      .prepare(`
-        SELECT *
-        FROM vector_documents
-        WHERE ${clauses.join(" AND ")}
-        ORDER BY updated_at ASC, id ASC
-        LIMIT ?
-      `)
-      .all(...params)
-      .map((row) => mapVectorDocument(row as Record<string, unknown>));
-  }
-
-  markVectorEmbedded(id: number, embedding: number[], model: string): void {
-    this.db.sqlite
-      .prepare(`
-        UPDATE vector_documents
-        SET embedding_json = ?, embedding_model = ?, status = 'embedded', error = '', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `)
-      .run(JSON.stringify(embedding), model, id);
-  }
-
-  markVectorFailed(id: number, error: string): void {
-    this.db.sqlite
-      .prepare("UPDATE vector_documents SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .run(clipText(error, 800), id);
-  }
-
-  vectorIndexStatus(filters: { merchantId?: string; countryId?: string } = {}): VectorIndexStatusRecord[] {
-    const clauses: string[] = [];
-    const params: string[] = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return this.db.sqlite
-      .prepare(`
-        SELECT status, source_type, COUNT(*) AS count
-        FROM vector_documents
-        ${where}
-        GROUP BY status, source_type
-        ORDER BY status, source_type
-      `)
-      .all(...params)
-      .map((row) => ({
-        status: normalizeVectorStatus((row as Record<string, unknown>).status),
-        sourceType: normalizeVectorSourceType((row as Record<string, unknown>).source_type),
-        count: Number((row as Record<string, unknown>).count ?? 0)
-      }));
-  }
-
-  searchVectorDocuments(filters: {
-    merchantId: string;
-    countryId: string;
-    embedding: number[];
-    customerKey?: string;
-    conversationId?: string;
-    limit?: number;
-  }): VectorSearchHit[] {
-    if (!filters.embedding.length) return [];
-    const rows = this.db.sqlite
-      .prepare(`
-        SELECT *
-        FROM vector_documents
-        WHERE merchant_id = ?
-          AND country_id = ?
-          AND status = 'embedded'
-          AND embedding_json != '[]'
-        ORDER BY updated_at DESC
-        LIMIT 1000
-      `)
-      .all(filters.merchantId, filters.countryId)
-      .map((row) => mapVectorDocument(row as Record<string, unknown>));
-    return rows
-      .map((row) => {
-        const sameCustomerBoost = filters.customerKey && row.customerKey === filters.customerKey ? 0.08 : 0;
-        const sameConversationBoost = filters.conversationId && row.conversationId === filters.conversationId ? 0.04 : 0;
-        const sourceBoost = row.sourceType === "sample" ? 0.03 : row.sourceType === "knowledge" ? 0.02 : 0;
-        return {
-          id: row.id,
-          sourceType: row.sourceType,
-          sourceId: row.sourceId,
-          title: row.title,
-          content: row.content,
-          language: row.language,
-          intent: row.intent,
-          stage: row.stage,
-          customerKey: row.customerKey,
-          conversationId: row.conversationId,
-          score: cosineSimilarity(filters.embedding, row.embedding) + sameCustomerBoost + sameConversationBoost + sourceBoost
-        };
-      })
-      .filter((row) => Number.isFinite(row.score) && row.score > 0.1)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.min(Math.max(filters.limit ?? 8, 1), 20));
-  }
-
-  listConversationRetrievals(conversationId: string, merchantId?: string): Array<{ messageId: number; createdAt: string; hits: VectorSearchHit[] }> {
-    const conversation = this.getConversation(conversationId);
-    if (!conversation || (merchantId && conversation.merchantId !== merchantId)) return [];
-    const rows = this.db.sqlite
-      .prepare(`
-        SELECT id, raw_payload, created_at
-        FROM messages
-        WHERE conversation_id = ? AND direction = 'outbound'
-        ORDER BY id DESC
-        LIMIT 20
-      `)
-      .all(conversationId) as Array<{ id: number; raw_payload: string; created_at: string }>;
-    return rows
-      .map((row) => {
-        const payload = parseJsonObject(row.raw_payload);
-        const hits = Array.isArray(payload.retrievedContext) ? payload.retrievedContext : [];
-        return {
-          messageId: Number(row.id),
-          createdAt: String(row.created_at ?? ""),
-          hits: hits.map(mapVectorSearchHitFromPayload)
-        };
-      })
-      .filter((item) => item.hits.length > 0);
   }
 
   getCustomerMemoryByConversation(conversationId: string): CustomerMemoryRecord | undefined {
@@ -1286,7 +867,6 @@ export class Repositories {
           .run(mapped.merchantId, mapped.countryId, mapped.customerPhone);
       }
       this.db.sqlite.prepare("DELETE FROM customer_memories WHERE conversation_id = ?").run(id);
-      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
       const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
@@ -1399,7 +979,6 @@ export class Repositories {
       const values = entries.map(([key, value]) => (key === "enabled" ? (value ? 1 : 0) : value)) as Array<string | number | null>;
       const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
       this.db.sqlite.prepare(`UPDATE training_samples SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
-      this.queueTrainingSampleForVectorIndex(id);
     }
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
@@ -1410,7 +989,6 @@ export class Repositories {
     const row = this.db.sqlite.prepare(`SELECT id FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
     if (!row) return false;
     this.db.sqlite.prepare("DELETE FROM training_material_items WHERE sample_id = ?").run(id);
-    this.db.sqlite.prepare("DELETE FROM vector_documents WHERE source_type = 'sample' AND source_id = ?").run(String(id));
     const result = this.db.sqlite.prepare(`DELETE FROM training_samples ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return result.changes > 0;
   }
@@ -1468,9 +1046,7 @@ export class Repositories {
         input.enabled === false ? 0 : 1
       );
     const row = this.db.sqlite.prepare("SELECT * FROM knowledge_items WHERE id = last_insert_rowid()").get() as Record<string, unknown>;
-    const mapped = mapKnowledgeItem(row);
-    this.queueKnowledgeItemForVectorIndex(mapped.id);
-    return mapped;
+    return mapKnowledgeItem(row);
   }
 
   patchKnowledgeItem(id: number, patch: Record<string, unknown>, merchantId?: string): KnowledgeItemRecord | undefined {
@@ -1494,7 +1070,6 @@ export class Repositories {
       }) as Array<string | number>;
       const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
       this.db.sqlite.prepare(`UPDATE knowledge_items SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
-      this.queueKnowledgeItemForVectorIndex(id);
     }
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     const row = this.db.sqlite.prepare(`SELECT * FROM knowledge_items ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
@@ -1506,7 +1081,6 @@ export class Repositories {
     const row = this.db.sqlite.prepare(`SELECT id FROM knowledge_items ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
     if (!row) return false;
     this.db.sqlite.prepare("DELETE FROM training_material_items WHERE knowledge_id = ?").run(id);
-    this.db.sqlite.prepare("DELETE FROM vector_documents WHERE source_type = 'knowledge' AND source_id = ?").run(String(id));
     const result = this.db.sqlite.prepare(`DELETE FROM knowledge_items ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return result.changes > 0;
   }
@@ -1603,11 +1177,9 @@ export class Repositories {
       .map((row) => Number((row as { id: number }).id));
     this.db.sqlite.prepare("DELETE FROM training_material_items WHERE material_id = ?").run(id);
     if (sampleIds.length) {
-      this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE source_type = 'sample' AND source_id IN (${sampleIds.map(() => "?").join(",")})`).run(...sampleIds.map(String));
       this.db.sqlite.prepare(`DELETE FROM training_samples WHERE id IN (${sampleIds.map(() => "?").join(",")})`).run(...sampleIds);
     }
     if (knowledgeIds.length) {
-      this.db.sqlite.prepare(`DELETE FROM vector_documents WHERE source_type = 'knowledge' AND source_id IN (${knowledgeIds.map(() => "?").join(",")})`).run(...knowledgeIds.map(String));
       this.db.sqlite.prepare(`DELETE FROM knowledge_items WHERE id IN (${knowledgeIds.map(() => "?").join(",")})`).run(...knowledgeIds);
     }
     this.db.sqlite.prepare(`DELETE FROM training_materials ${where}`).run(id, ...(merchantId ? [merchantId] : []));
@@ -1728,7 +1300,6 @@ export class Repositories {
     if (!merchant) return false;
     this.db.sqlite.exec("BEGIN");
     try {
-      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM training_material_items WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM training_materials WHERE merchant_id = ?").run(id);
@@ -2054,7 +1625,6 @@ export class Repositories {
     this.db.sqlite.prepare("UPDATE training_materials SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
     this.db.sqlite.prepare("UPDATE training_material_items SET country_id = ? WHERE merchant_id = ?").run(countryId, merchantId);
     this.db.sqlite.prepare("UPDATE a2c_invite_codes SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE vector_documents SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
   }
 
   listInviteCodesForA2CAccount(accountId: number, merchantId?: string): A2CInviteCodeRecord[] {
@@ -2429,47 +1999,6 @@ function mapConversationMessage(row: Record<string, unknown>): ConversationMessa
   };
 }
 
-function mapVectorDocument(row: Record<string, unknown>): VectorDocumentRecord {
-  return {
-    id: Number(row.id ?? 0),
-    merchantId: String(row.merchant_id ?? "default"),
-    countryId: String(row.country_id ?? `${String(row.merchant_id ?? "default")}:default`),
-    customerKey: String(row.customer_key ?? ""),
-    conversationId: String(row.conversation_id ?? ""),
-    sourceType: normalizeVectorSourceType(row.source_type),
-    sourceId: String(row.source_id ?? ""),
-    sourceSubId: String(row.source_sub_id ?? ""),
-    title: String(row.title ?? ""),
-    content: String(row.content ?? ""),
-    language: String(row.language ?? "unknown"),
-    intent: String(row.intent ?? "unknown"),
-    stage: String(row.stage ?? ""),
-    embeddingModel: String(row.embedding_model ?? ""),
-    embedding: parseNumberArray(row.embedding_json),
-    status: normalizeVectorStatus(row.status),
-    error: String(row.error ?? ""),
-    createdAt: String(row.created_at ?? ""),
-    updatedAt: String(row.updated_at ?? "")
-  };
-}
-
-function mapVectorSearchHitFromPayload(value: unknown): VectorSearchHit {
-  const row = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
-  return {
-    id: Number(row.id ?? 0),
-    sourceType: normalizeVectorSourceType(row.sourceType),
-    sourceId: String(row.sourceId ?? ""),
-    title: String(row.title ?? ""),
-    content: String(row.content ?? ""),
-    language: String(row.language ?? "unknown"),
-    intent: String(row.intent ?? "unknown"),
-    stage: String(row.stage ?? ""),
-    customerKey: String(row.customerKey ?? ""),
-    conversationId: String(row.conversationId ?? ""),
-    score: Number(row.score ?? 0)
-  };
-}
-
 function mapMerchant(row: Record<string, unknown>): MerchantRecord {
   return { id: String(row.id), name: String(row.name), status: String(row.status ?? "active") as "active" | "disabled" };
 }
@@ -2686,14 +2215,6 @@ function normalizeInviteCodeStatus(value: unknown, fallback: A2CInviteCodeRecord
   return value === "available" || value === "reserved" || value === "used" || value === "disabled" ? value : fallback;
 }
 
-function normalizeVectorSourceType(value: unknown): VectorSourceType {
-  return value === "message" || value === "sample" || value === "knowledge" ? value : "message";
-}
-
-function normalizeVectorStatus(value: unknown): VectorDocumentStatus {
-  return value === "embedded" || value === "failed" || value === "pending" ? value : "pending";
-}
-
 function booleanPatchValue(value: unknown, fallback: boolean): number {
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "string") {
@@ -2724,45 +2245,6 @@ function parseJsonArray(value: unknown): string[] {
   } catch {
     return [];
   }
-}
-
-function parseNumberArray(value: unknown): number[] {
-  try {
-    const parsed = JSON.parse(String(value || "[]")) as unknown;
-    return Array.isArray(parsed) ? parsed.map((item) => Number(item)).filter((item) => Number.isFinite(item)) : [];
-  } catch {
-    return [];
-  }
-}
-
-function normalizeVectorText(value: string): string {
-  return String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isVectorizableText(value: string): boolean {
-  const text = normalizeVectorText(value);
-  if (text.length < 2) return false;
-  if (/^\[(图片|视频|音频|文件|文档)\]$/.test(text)) return false;
-  if (/^https?:\/\/\S+$/i.test(text)) return false;
-  if (/bucket-chatapp-file-internal|oss-[a-z0-9-]+\.aliyuncs\.com/i.test(text)) return false;
-  return true;
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  const length = Math.min(a.length, b.length);
-  if (!length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < length; i += 1) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (!normA || !normB) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 function clipText(value: string, max: number): string {
