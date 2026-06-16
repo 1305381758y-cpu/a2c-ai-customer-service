@@ -49,9 +49,40 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   }));
 
   app.get("/api/admin/merchants", { preHandler: adminOnly }, async () => ({ rows: deps.repos.listMerchants() }));
-  app.post("/api/admin/merchants", { preHandler: adminOnly }, async (request) => {
-    const body = z.object({ name: z.string().min(1) }).parse(request.body);
-    return deps.repos.createMerchant(body.name);
+  app.post("/api/admin/merchants", { preHandler: adminOnly }, async (request, reply) => {
+    const body = z.object({
+      name: z.string().min(1),
+      country: z.object({
+        code: z.string().min(1).optional(),
+        name: z.string().min(1).optional(),
+        defaultLanguage: z.string().min(1).optional(),
+        platformRegisterUrl: z.string().optional(),
+        tgRegisterGuideUrl: z.string().optional(),
+        requirePlatformAccount: z.boolean().optional(),
+        requirePhone: z.boolean().optional(),
+        requireTelegram: z.boolean().optional(),
+        requireWhatsApp: z.boolean().optional()
+      }).optional(),
+      adminUser: z.object({
+        email: z.string().email(),
+        name: z.string().min(1),
+        password: z.string().min(8)
+      }).optional()
+    }).parse(request.body);
+    if (body.adminUser && deps.repos.getUserByEmail(body.adminUser.email)) {
+      return reply.code(400).send({ error: "登录邮箱已存在" });
+    }
+    const merchant = deps.repos.createMerchant(body.name);
+    if (!body.country && !body.adminUser) return merchant;
+    const country = body.country ? deps.repos.createMerchantCountry(merchant.id, body.country) : undefined;
+    const adminUser = body.adminUser ? maskUser(deps.repos.createUser({
+      merchantId: merchant.id,
+      email: body.adminUser.email,
+      name: body.adminUser.name,
+      passwordHash: hashPassword(body.adminUser.password),
+      role: "merchant_admin"
+    })) : undefined;
+    return { merchant, country, adminUser };
   });
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id", { preHandler: adminOnly }, async (request, reply) => {
     const merchant = deps.repos.patchMerchant(request.params.id, request.body ?? {});

@@ -142,9 +142,101 @@ function Dashboard({ platform }: { platform: boolean }) {
 
 function Merchants() {
   const [rows, setRows] = useRows<Merchant>("/api/admin/merchants");
-  const [name, setName] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    countryCode: "br",
+    countryName: "巴西",
+    defaultLanguage: "pt-BR",
+    platformRegisterUrl: "",
+    tgRegisterGuideUrl: "",
+    requirePlatformAccount: "true",
+    requirePhone: "true",
+    requireTelegram: "true",
+    requireWhatsApp: "false",
+    adminEmail: "",
+    adminName: "",
+    adminPassword: "Merchant123456"
+  });
+  const [createdLogin, setCreatedLogin] = useState("");
   const [selected, setSelected] = useState<Merchant | null>(null);
-  return <div className="split"><section><div className="toolbar"><input placeholder="商户名称" value={name} onChange={(e) => setName(e.target.value)} /><button onClick={async () => { await api("/api/admin/merchants", { method: "POST", body: JSON.stringify({ name }) }); setName(""); setRows(await loadRows("/api/admin/merchants")); }}>新增商户</button></div><Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} /></section><section>{selected ? <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => { await api(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) }); setRows(await loadRows("/api/admin/merchants")); }} /> : <p>选择商户后可修改名称和状态。</p>}</section></div>;
+  const update = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
+  const createMerchant = async () => {
+    const payload = {
+      name: form.name.trim(),
+      country: {
+        code: form.countryCode.trim() || "default",
+        name: form.countryName.trim() || "默认国家",
+        defaultLanguage: form.defaultLanguage,
+        platformRegisterUrl: form.platformRegisterUrl.trim(),
+        tgRegisterGuideUrl: form.tgRegisterGuideUrl.trim(),
+        requirePlatformAccount: form.requirePlatformAccount === "true",
+        requirePhone: form.requirePhone === "true",
+        requireTelegram: form.requireTelegram === "true",
+        requireWhatsApp: form.requireWhatsApp === "true"
+      },
+      adminUser: form.adminEmail.trim() ? {
+        email: form.adminEmail.trim(),
+        name: form.adminName.trim() || `${form.name.trim()}管理员`,
+        password: form.adminPassword
+      } : undefined
+    };
+    const result = await api<{ merchant?: Merchant; adminUser?: User } | Merchant>("/api/admin/merchants", { method: "POST", body: JSON.stringify(payload) });
+    const merchant = "merchant" in result ? result.merchant : result;
+    setCreatedLogin(payload.adminUser ? `商户已创建。商户端登录邮箱：${payload.adminUser.email}；初始密码：${payload.adminUser.password}` : "商户已创建，暂未创建商户端登录账号。");
+    setSelected(merchant || null);
+    setForm({ ...form, name: "", adminEmail: "", adminName: "", adminPassword: "Merchant123456" });
+    setRows(await loadRows("/api/admin/merchants"));
+  };
+  return <div className="split merchant-admin-layout">
+    <section className="work-panel">
+      <div className="merchant-create-panel">
+        <div className="panel-heading">
+          <div><h3>新增商户开户</h3><p>一次填写商户、国家/市场和商户端管理员账号，创建后商户可直接登录配置。</p></div>
+        </div>
+        <div className="form-section">
+          <h4>商户基础信息</h4>
+          <div className="form-grid compact-fields">
+            <label>商户名称<input placeholder="例如：阿斯顿" value={form.name} onChange={(e) => update("name", e.target.value)} /></label>
+          </div>
+        </div>
+        <div className="form-section">
+          <h4>国家 / 市场</h4>
+          <div className="form-grid compact-fields">
+            <label>国家代码<input placeholder="br" value={form.countryCode} onChange={(e) => update("countryCode", e.target.value)} /></label>
+            <label>国家名称<input placeholder="巴西" value={form.countryName} onChange={(e) => update("countryName", e.target.value)} /></label>
+            <label>默认语言<select value={form.defaultLanguage} onChange={(e) => update("defaultLanguage", e.target.value)}>{["pt-BR", "zh", "en", "es", "ja", "th", "vi", "id", "ms"].map((item) => <option key={item} value={item}>{languageName(item)}</option>)}</select></label>
+            <label>开户链接<input placeholder="开户链接，可后续在配置页修改" value={form.platformRegisterUrl} onChange={(e) => update("platformRegisterUrl", e.target.value)} /></label>
+            <label>TG注册说明<input placeholder="Telegram 下载或注册说明链接" value={form.tgRegisterGuideUrl} onChange={(e) => update("tgRegisterGuideUrl", e.target.value)} /></label>
+          </div>
+          <div className="target-grid">
+            {[
+              ["requirePlatformAccount", "要求平台开户"],
+              ["requirePhone", "要求手机号"],
+              ["requireTelegram", "要求Telegram"],
+              ["requireWhatsApp", "要求WhatsApp"]
+            ].map(([key, text]) => <label key={key}>{text}<select value={(form as any)[key]} onChange={(e) => update(key as keyof typeof form, e.target.value)}><option value="true">需要</option><option value="false">不需要</option></select></label>)}
+          </div>
+        </div>
+        <div className="form-section">
+          <h4>商户端登录账号</h4>
+          <div className="form-grid compact-fields">
+            <label>登录邮箱<input placeholder="merchant@example.com" value={form.adminEmail} onChange={(e) => update("adminEmail", e.target.value)} /></label>
+            <label>管理员姓名<input placeholder="默认用“商户名管理员”" value={form.adminName} onChange={(e) => update("adminName", e.target.value)} /></label>
+            <label>初始密码<input value={form.adminPassword} onChange={(e) => update("adminPassword", e.target.value)} /></label>
+          </div>
+        </div>
+        <div className="toolbar sticky-actions merchant-create-actions">
+          <AsyncButton disabled={!form.name.trim() || Boolean(form.adminEmail.trim()) && form.adminPassword.length < 8} busyText="创建中..." onClick={createMerchant}><Plus size={16}/>创建商户</AsyncButton>
+          {createdLogin && <span className="success-text">{createdLogin}</span>}
+        </div>
+      </div>
+      <Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+    </section>
+    <section className="detail-panel">{selected ? <div className="merchant-detail">
+      <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => { await api(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) }); setRows(await loadRows("/api/admin/merchants")); }} />
+      <div className="notice">国家、开户链接和 A2C 密钥可在“配置”页继续调整；登录账号可在“后台账号”页重置密码或停用。</div>
+    </div> : <div className="empty-state">选择商户后可修改名称和状态。新增商户时可以同时创建国家和商户端登录账号。</div>}</section>
+  </div>;
 }
 
 function UsersPage() {

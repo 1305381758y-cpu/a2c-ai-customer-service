@@ -87,6 +87,78 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("creates a merchant with country settings and merchant login account", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "Admin123456" }
+    });
+    const cookie = String(login.headers["set-cookie"]);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie },
+      payload: {
+        name: "阿斯顿",
+        country: {
+          code: "br",
+          name: "巴西",
+          defaultLanguage: "pt-BR",
+          platformRegisterUrl: "https://example.com/register",
+          tgRegisterGuideUrl: "https://telegram.org",
+          requirePlatformAccount: true,
+          requirePhone: true,
+          requireTelegram: true,
+          requireWhatsApp: false
+        },
+        adminUser: {
+          email: "aston-admin@test.local",
+          name: "阿斯顿管理员",
+          password: "Merchant123456"
+        }
+      }
+    });
+
+    expect(created.statusCode).toBe(200);
+    expect(created.json().merchant).toMatchObject({ name: "阿斯顿", status: "active" });
+    expect(created.json().country).toMatchObject({ code: "br", name: "巴西", defaultLanguage: "pt-BR", requireWhatsApp: false });
+    expect(created.json().adminUser).toMatchObject({ email: "aston-admin@test.local", role: "merchant_admin" });
+    expect(created.json().adminUser).not.toHaveProperty("passwordHash");
+
+    const merchantLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "aston-admin@test.local", password: "Merchant123456" }
+    });
+    expect(merchantLogin.statusCode).toBe(200);
+
+    const countries = await app.inject({
+      method: "GET",
+      url: "/api/merchant/countries",
+      headers: { cookie: String(merchantLogin.headers["set-cookie"]) }
+    });
+    expect(countries.statusCode).toBe(200);
+    expect(countries.json().rows[0]).toMatchObject({
+      code: "br",
+      name: "巴西",
+      defaultLanguage: "pt-BR",
+      platformRegisterUrl: "https://example.com/register",
+      requireTelegram: true,
+      requireWhatsApp: false
+    });
+
+    await app.close();
+  });
+
   it("clears merchant ownership when a user is promoted to platform admin", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",
