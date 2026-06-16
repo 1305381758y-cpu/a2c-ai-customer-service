@@ -783,8 +783,31 @@ async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, dep
       config: maskConfig(deps.repos.getMerchantConfig(merchantId))
     };
   } catch (error) {
-    return reply.code(502).send({ error: error instanceof Error ? error.message : "A2C accounts sync failed" });
+    const message = error instanceof Error ? error.message : "A2C accounts sync failed";
+    const existingRows = localA2CAccountsForRateLimitFallback(deps.repos, merchantId, cfg);
+    if (existingRows.length && isA2CRateLimitMessage(message)) {
+      return {
+        imported: 0,
+        rows: existingRows,
+        config: maskConfig(deps.repos.getMerchantConfig(merchantId)),
+        stale: true,
+        warning: "A2C 当前限制认证请求，已继续使用本地保存的客服账号。请 10 分钟后再刷新账号。"
+      };
+    }
+    return reply.code(502).send({ error: message });
   }
+}
+
+function localA2CAccountsForRateLimitFallback(repos: Repositories, merchantId: string, cfg: MerchantConfigRecord) {
+  const rows = repos.listMerchantA2CAccounts({ merchantId });
+  if (rows.length) return rows;
+  const configuredAccounts = cfg.a2cAccountPhone
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((apiPhone) => ({ apiPhone }));
+  if (!configuredAccounts.length) return rows;
+  return repos.syncMerchantA2CAccounts(merchantId, configuredAccounts);
 }
 
 type ConfigCheckItem = {
@@ -826,9 +849,13 @@ function checkA2C(config: AppConfig, repos: Repositories, merchantId: string): C
   }
   const accounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
   const detail = accounts.length
-    ? `密钥已填写，当前已保存 ${accounts.length} 个启用客服账号。需要刷新账号时请手动点击“同步A2C客服账号”。`
-    : "密钥已填写，但还没有同步客服账号。请手动点击“同步A2C客服账号”，避免配置检测频繁请求 A2C 认证。";
+    ? `密钥已填写，当前本地已保存 ${accounts.length} 个启用客服账号，收发消息会继续使用这些账号。此检测不会实时请求 A2C，避免触发认证限频；需要拉取最新账号时再手动同步。`
+    : "密钥已填写，但本地还没有客服账号。请手动点击“同步A2C客服账号”；配置检测不会实时请求 A2C，避免触发认证限频。";
   return { key: "a2c", label: "A2C", ok: true, status: "ok", detail };
+}
+
+function isA2CRateLimitMessage(message: string): boolean {
+  return /(visit too frequently|too frequent|rate limit|too many requests|请求.*频繁|访问.*频繁|稍后再试|频繁)/i.test(message);
 }
 
 async function checkGemini(config: AppConfig): Promise<ConfigCheckItem> {

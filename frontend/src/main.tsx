@@ -394,10 +394,10 @@ function Config({ platform }: { platform: boolean }) {
     setError("");
     try {
       if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean> }>(a2cSyncUrl, { method: "POST" });
+      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean>; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
       setForm(result.config);
-      setMessage(`已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
+      setMessage(result.stale ? result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。" : `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "同步 A2C 客服账号失败");
     }

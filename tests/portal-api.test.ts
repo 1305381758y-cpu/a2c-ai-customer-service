@@ -1983,6 +1983,70 @@ describe("portal api", () => {
     }
   });
 
+  it("keeps saved A2C accounts usable when manual sync is rate limited", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith("/open/auth/token")) {
+        return Response.json({ code: 401, msg: "访问过于频繁，请稍后再试" }, { status: 401 });
+      }
+      return Response.json({ code: 500, msg: "unexpected request" }, { status: 500 });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "A2C限频商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "PATCH",
+        url: `/api/admin/merchants/${merchantId}/config`,
+        headers: { cookie: adminCookie },
+        payload: {
+          a2cBaseUrl: "https://a2c-rate-limit.test/api/openapi",
+          a2cAppId: "rate-limit-app",
+          a2cAppSecret: "rate-limit-secret",
+          a2cAccountPhone: "saved-a2c-1,saved-a2c-2"
+        }
+      });
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: {
+          merchantId,
+          email: "a2c-rate-limit@test.local",
+          name: "A2C限频管理员",
+          password: "Merchant123456",
+          role: "merchant_admin"
+        }
+      });
+      const merchantCookie = await login(app, "a2c-rate-limit@test.local", "Merchant123456");
+
+      const sync = await app.inject({
+        method: "POST",
+        url: "/api/merchant/a2c/accounts/sync",
+        headers: { cookie: merchantCookie }
+      });
+
+      expect(sync.statusCode).toBe(200);
+      expect(sync.json()).toMatchObject({ stale: true, imported: 0 });
+      expect(sync.json().warning).toContain("本地保存的客服账号");
+      expect(sync.json().rows).toHaveLength(2);
+      expect(calls.filter((url) => url.endsWith("/open/auth/token"))).toHaveLength(1);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("sends manual merchant messages through A2C with the conversation account", async () => {
     const originalFetch = globalThis.fetch;
     const sentBodies: Array<Record<string, unknown>> = [];
