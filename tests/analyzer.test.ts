@@ -75,10 +75,17 @@ describe("message analyzer", () => {
   });
 
   it("does not classify short positive confirmations as spam", () => {
-    for (const text of ["是的", "对", "可以", "好的", "嗯", "ok", "yes", "sure", "sim", "claro", "sí"]) {
+    for (const text of ["是的", "对", "可以", "好的", "嗯", "有", "有的", "要", "想", "ok", "yes", "sure", "sim", "claro", "sí"]) {
       const result = analyzeMessage(text);
       expect(result.intent, text).not.toBe("irrelevant_or_spam");
       expect(result.intent, text).not.toBe("unknown");
+    }
+  });
+
+  it("treats short registration completion messages as registration done", () => {
+    for (const text of ["好了", "完成了", "注册好了", "注册完了", "已注册", "done", "finished", "registered", "pronto"]) {
+      const result = analyzeMessage(text);
+      expect(result.intent, text).toBe("platform_register_done");
     }
   });
 });

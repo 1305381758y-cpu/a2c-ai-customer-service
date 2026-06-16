@@ -445,6 +445,102 @@ describe("strict Aston Brazil flow", () => {
     expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
   });
 
+  it("does not stall when the customer uses short completion and Telegram confirmations", () => {
+    const turns = simulateStrictFlow([
+      "你好",
+      "想",
+      "要",
+      "好了",
+      "99228822881",
+      "有",
+      "@customer_456"
+    ]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[1].flowStep).toBe("registration_intent");
+    expect(turns[2].flowStep).toBe("wait_registration");
+    expect(replies[2]).toContain("https://register.example/?code=ABC123");
+    expect(turns[3].flowStep).toBe("telegram_confirm");
+    expect(replies[3]).toContain("手机号码");
+    expect(turns[4].flowStep).toBe("telegram_confirm");
+    expect(replies[4]).toContain("Telegram");
+    expect(turns[5].flowStep).toBe("collect_telegram");
+    expect(replies[5]).toContain("@");
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+    expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
+    for (const replyText of replies) {
+      expect(replyText).not.toBe("好的，我继续协助您。");
+    }
+  });
+
+  it("keeps guiding through repeated help requests without resetting the flow", () => {
+    const turns = simulateStrictFlow([
+      "你好",
+      "是的",
+      "怎么弄",
+      "好了",
+      "99228822881",
+      "我没有 Telegram",
+      "怎么弄",
+      "@customer_help"
+    ]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[2].flowStep).toBe("wait_registration");
+    expect(replies[2]).toContain("https://register.example/?code=ABC123");
+    expect(replies[2]).toContain("邀请码");
+    expect(turns[3].flowStep).toBe("telegram_confirm");
+    expect(turns[5].flowStep).toBe("telegram_download");
+    expect(turns[6].flowStep).toBe("collect_telegram");
+    expect(replies[6]).toContain("@");
+    expect(replies[6]).not.toContain("WhatsApp");
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+  });
+
+  it("does not reset completed registration progress on repeated greetings", () => {
+    const turns = simulateStrictFlow([
+      "你好",
+      "是的",
+      "好的",
+      "99228822881",
+      "你好",
+      "有",
+      "@customer_repeat"
+    ]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[3].flowStep).toBe("telegram_confirm");
+    expect(turns[4].flowStep).toBe("telegram_confirm");
+    expect(replies[4]).toContain("我在");
+    expect(replies[4]).toContain("Telegram");
+    expect(replies[4]).not.toContain("register.example");
+    expect(turns[5].flowStep).toBe("collect_telegram");
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+  });
+
+  it("keeps every major strict-flow step actionable for common customer replies", () => {
+    const cases: Array<{ step: Conversation["flowStep"]; text: string; extra?: Partial<Conversation> }> = [
+      { step: "interest_screening", text: "是的" },
+      { step: "interest_screening", text: "什么平台" },
+      { step: "registration_intent", text: "好的" },
+      { step: "registration_intent", text: "怎么弄" },
+      { step: "wait_registration", text: "你好" },
+      { step: "wait_registration", text: "好了" },
+      { step: "telegram_confirm", text: "有", extra: { extractedPhone: "99228822881" } },
+      { step: "telegram_confirm", text: "没有 Telegram", extra: { extractedPhone: "99228822881" } },
+      { step: "telegram_download", text: "怎么弄", extra: { extractedPhone: "99228822881" } },
+      { step: "collect_telegram", text: "你好", extra: { extractedPhone: "99228822881" } }
+    ];
+
+    for (const item of cases) {
+      const result = reply(item.text, { language: "zh", flowStep: item.step, ...item.extra });
+      expect(result.reply, `${item.step}:${item.text}`).not.toBe("好的，我继续协助您。");
+      expect(result.reply, `${item.step}:${item.text}`).not.toMatch(/AI|机器人|自动客服|自动回复/i);
+      expect(result.reply.trim().length, `${item.step}:${item.text}`).toBeGreaterThan(8);
+      expect(result.nextFlowStep, `${item.step}:${item.text}`).not.toBe("first_greeting");
+      if (item.step === "telegram_confirm" || item.step === "telegram_download" || item.step === "collect_telegram") {
+        expect(result.reply, `${item.step}:${item.text}`).not.toContain("WhatsApp");
+      }
+    }
+  });
+
   it("uses inferred strict-flow intent when rule-based intent is ambiguous", () => {
     const ambiguous = analyzeMessage("mn");
     expect(ambiguous.intent).toBe("irrelevant_or_spam");

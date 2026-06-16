@@ -94,7 +94,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (hasPhone) return "provide_phone";
   if (isGreeting(lower)) return "greeting";
   if (/(人工|真人|客服|human|agent|operator|manual|atendente|humano|suporte)/i.test(text)) return "human_request";
-  if (/(完成|注册好了|已注册|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado)/i.test(text)) return "platform_register_done";
+  if (/(完成|好了|注册好了|註冊好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|pronto)/i.test(text)) return "platform_register_done";
   if (isPlatformQuestion(text)) return "ask_platform_register";
   if (/(注册|开户|sign up|signup|register|daftar|สมัคร|cadastro|cadastrar|registrar|abrir conta)/i.test(text)) return "ask_platform_register";
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";
@@ -113,7 +113,7 @@ export function isPositiveConfirmation(text: string): boolean {
     .toLowerCase()
     .replace(/[。.!?！？,，;；:：]+$/g, "")
     .trim();
-  return /^(是|是的|对|對|对的|可以|好|好的|嗯|嗯嗯|行|没问题|沒問題|继续|yes|yep|yeah|ok|okay|sure|correct|right|sim|claro|pode|isso|sí|si|vale|dale)$/i.test(normalized);
+  return /^(是|是的|对|對|对的|可以|可以的|好|好的|嗯|嗯嗯|行|行的|有|有的|要|想|没问题|沒問題|继续|yes|yep|yeah|ok|okay|sure|correct|right|sim|claro|pode|isso|sí|si|vale|dale)$/i.test(normalized);
 }
 
 export function isInternalIntentLabel(value: string): value is InternalIntentLabel {

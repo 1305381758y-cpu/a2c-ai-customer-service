@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
-import type { InternalIntentLabel, MessageAnalysis } from "./analyzer.js";
+import { isPositiveConfirmation, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 
 export const STRICT_FLOW_STEPS = [
   "first_greeting",
@@ -129,6 +129,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (inferredIntent === "negative_refusal") {
       return reply(input, language, "registration_intent", "need_platform_register", scriptLine("refusal_ack", language));
     }
+    if (inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+    }
     if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
     }
@@ -143,7 +146,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "wait_registration") {
-    if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || input.analysis.phone || input.conversation.extractedPhone) {
+    if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       return reply(input, language, "telegram_confirm", "need_tg_register", scriptLine(input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
     }
     if (asksLink || inferredIntent === "ask_link") {
@@ -343,7 +346,12 @@ function normalizeReplyLanguage(detected: string, previous: string, defaultLangu
 function isPositive(text: string, intent: string, inferredIntent: InternalIntentLabel = "unknown"): boolean {
   if (inferredIntent === "positive_confirmation") return true;
   if (intent === "platform_register_done") return true;
-  return /(可以|好的|好|是|想|有兴趣|了解|继续|准备好了|yes|ok|okay|sure|interested|quero|sim|tenho interesse|pode|vamos|continuar|claro|pronto)/i.test(text.trim());
+  if (isPositiveConfirmation(text)) return true;
+  return /(有兴趣|想了解|想继续|要继续|继续|准备好了|愿意|同意|interested|i want|continue|quero|tenho interesse|continuar|vamos|pronto)/i.test(text.trim());
+}
+
+function isRegistrationDoneConfirmation(text: string): boolean {
+  return /^(好了|好啦|完成了|注册好了|註冊好了|注册完了|註冊完了|已注册|已註冊|done|finished|registered|terminei|concluí|conclui|cadastrei|pronto)$/i.test(text.trim().replace(/[。.!?！？,，;；:：]+$/g, ""));
 }
 
 function saysNoTelegram(text: string): boolean {
