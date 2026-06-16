@@ -1,6 +1,6 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import { buildStrictFlowReply, isStrictFlowEnabled, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
+import { buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
 import { classifyGeminiIntent, GeminiReplyClient } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
@@ -56,6 +56,12 @@ export class WebhookProcessor {
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     let analysis = analyzeMessage(analysisText, conversation.language);
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
+    const effectiveStrictFlowStep = isStrictFlowEnabled(merchant, country)
+      ? resolveEffectiveStrictFlowStep(conversation, historyForIntent)
+      : "";
+    if (effectiveStrictFlowStep && conversation.flowStep !== effectiveStrictFlowStep) {
+      conversation.flowStep = effectiveStrictFlowStep;
+    }
     const inferredIntent = await this.inferStrictFlowIntent({
       runtimeConfig,
       merchant,

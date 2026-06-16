@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
-import { buildStrictFlowReply, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
+import { buildStrictFlowReply, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
-import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
+import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
 const merchant: MerchantRecord = { id: "aston", name: "阿斯顿", status: "active" };
 const country: MerchantCountryRecord = {
@@ -129,6 +129,19 @@ function simulateStrictFlow(inputs: string[]) {
   }
 
   return turns;
+}
+
+function outboundMessage(content: string, strictFlowStep = ""): ConversationMessageRecord {
+  return {
+    id: 1,
+    direction: "outbound",
+    content,
+    msgType: "text",
+    language: "zh",
+    intent: "unknown",
+    rawPayload: strictFlowStep ? { strictFlow: true, strictFlowStep } : {},
+    createdAt: "2026-06-16T00:00:00.000Z"
+  };
 }
 
 describe("strict Aston Brazil flow", () => {
@@ -359,6 +372,52 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[1].result.reply).toContain("简单介绍");
     expect(turns[1].result.reply).toContain("如果您觉得可以继续");
     expect(turns[1].result.reply).not.toBe("好的，我继续协助您。");
+  });
+
+  it("continues to the registration link after greeting, positive confirmation, and another short confirmation", () => {
+    const turns = simulateStrictFlow(["你好", "是的", "好的"]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[0].flowStep).toBe("interest_screening");
+    expect(turns[1].flowStep).toBe("registration_intent");
+    expect(turns[2].flowStep).toBe("wait_registration");
+    expect(replies[1]).toContain("简单介绍");
+    expect(replies[2]).toContain("https://register.example/?code=ABC123");
+    expect(replies[2]).toContain("邀请码");
+    expect(replies[1]).not.toBe("好的，我继续协助您。");
+    expect(replies[2]).not.toBe("好的，我继续协助您。");
+  });
+
+  it("recovers the flow step from the previous strict-flow reply when old conversations have no stored flow step", () => {
+    const recoveredStep = resolveEffectiveStrictFlowStep(
+      conversation({ flowStep: "", stage: "need_platform_register" }),
+      [outboundMessage("您好！您是否正在寻找可以在线完成的工作，以获得额外收入呢？")]
+    );
+    expect(recoveredStep).toBe("interest_screening");
+
+    const conv = conversation({ language: "zh", flowStep: recoveredStep });
+    const analysis = analyzeMessage("是的", conv.language);
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: "是的",
+      inviteCode,
+      config
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("简单介绍");
+    expect(result.reply).toContain("如果您觉得可以继续");
+    expect(result.reply).not.toBe("好的，我继续协助您。");
+  });
+
+  it("prefers a later previous strict-flow step over stale stored flow data", () => {
+    const recoveredStep = resolveEffectiveStrictFlowStep(
+      conversation({ flowStep: "interest_screening", stage: "need_platform_register" }),
+      [outboundMessage("好的，现在我会把链接和邀请码发给您。\n开户链接：https://register.example/?code=ABC123\n邀请码：ABC123", "wait_registration")]
+    );
+    expect(recoveredStep).toBe("wait_registration");
   });
 
   it("runs the requested short-confirmation path through registration and Telegram", () => {
