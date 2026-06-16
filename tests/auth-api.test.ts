@@ -159,6 +159,79 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("deletes merchant users and non-default merchants with their owned data", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "admin@test.local", password: "Admin123456" }
+    });
+    const cookie = String(login.headers["set-cookie"]);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie },
+      payload: {
+        name: "可删除商户",
+        country: { code: "br", name: "巴西", defaultLanguage: "pt-BR" },
+        adminUser: { email: "delete-me@test.local", name: "待删除", password: "Merchant123456" }
+      }
+    });
+    const merchantId = created.json().merchant.id as string;
+    const userId = created.json().adminUser.id as string;
+
+    const deleteUser = await app.inject({
+      method: "DELETE",
+      url: `/api/admin/users/${userId}`,
+      headers: { cookie }
+    });
+    expect(deleteUser.statusCode).toBe(200);
+
+    const deletedLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "delete-me@test.local", password: "Merchant123456" }
+    });
+    expect(deletedLogin.statusCode).toBe(401);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie },
+      payload: { merchantId, email: "delete-merchant-user@test.local", name: "商户用户", password: "Merchant123456", role: "merchant_admin" }
+    });
+
+    const deleteDefault = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/merchants/default",
+      headers: { cookie }
+    });
+    expect(deleteDefault.statusCode).toBe(400);
+
+    const deleteMerchant = await app.inject({
+      method: "DELETE",
+      url: `/api/admin/merchants/${merchantId}`,
+      headers: { cookie }
+    });
+    expect(deleteMerchant.statusCode).toBe(200);
+
+    const merchants = await app.inject({ method: "GET", url: "/api/admin/merchants", headers: { cookie } });
+    expect(merchants.json().rows.some((row: { id: string }) => row.id === merchantId)).toBe(false);
+
+    const users = await app.inject({ method: "GET", url: `/api/admin/users?merchantId=${merchantId}`, headers: { cookie } });
+    expect(users.json().rows).toHaveLength(0);
+
+    await app.close();
+  });
+
   it("clears merchant ownership when a user is promoted to platform admin", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",

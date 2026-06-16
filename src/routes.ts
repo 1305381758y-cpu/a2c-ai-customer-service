@@ -89,6 +89,12 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!merchant) return reply.code(404).send({ error: "merchant not found" });
     return merchant;
   });
+  app.delete<{ Params: { id: string } }>("/api/admin/merchants/:id", { preHandler: adminOnly }, async (request, reply) => {
+    if (request.params.id === "default") return reply.code(400).send({ error: "默认商户不能删除" });
+    const ok = deps.repos.deleteMerchant(request.params.id);
+    if (!ok) return reply.code(404).send({ error: "merchant not found" });
+    return { ok: true };
+  });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
@@ -289,6 +295,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     });
     if (!user) return reply.code(404).send({ error: "user not found" });
     return maskUser(user);
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/users/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const current = requestUser(request);
+    if (current.id === request.params.id) return reply.code(400).send({ error: "不能删除当前登录账号" });
+    const ok = deps.repos.deleteUser(request.params.id);
+    if (!ok) return reply.code(404).send({ error: "user not found" });
+    return { ok: true };
   });
 
   app.get("/api/merchant/dashboard", { preHandler: merchantRoles }, async (request) => {

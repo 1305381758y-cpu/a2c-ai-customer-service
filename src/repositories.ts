@@ -1608,6 +1608,36 @@ export class Repositories {
     return this.getMerchant(id);
   }
 
+  deleteMerchant(id: string): boolean {
+    if (id === "default") return false;
+    const merchant = this.getMerchant(id);
+    if (!merchant) return false;
+    this.db.sqlite.exec("BEGIN");
+    try {
+      this.db.sqlite.prepare("DELETE FROM vector_documents WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM training_material_items WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM training_materials WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM training_samples WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM knowledge_items WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM messages WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM handoff_events WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM conversations WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM a2c_invite_codes WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM merchant_a2c_accounts WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM users WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM merchant_configs WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ?").run(id);
+      const result = this.db.sqlite.prepare("DELETE FROM merchants WHERE id = ?").run(id);
+      this.db.sqlite.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   getMerchantConfig(merchantId: string): MerchantConfigRecord {
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
     const row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
@@ -2233,6 +2263,11 @@ export class Repositories {
     }
     this.db.sqlite.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).run(...values, id);
     return this.getUserById(id);
+  }
+
+  deleteUser(id: string): boolean {
+    const result = this.db.sqlite.prepare("DELETE FROM users WHERE id = ?").run(id);
+    return result.changes > 0;
   }
 
   updateHandoffStatus(conversationId: string, merchantId: string, handoffStatus: "pending" | "processing" | "done"): Conversation | undefined {
