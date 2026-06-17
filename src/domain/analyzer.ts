@@ -65,7 +65,8 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   if (/\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih)\b/.test(lower)) return "ms";
   if (/\b(saya|kamu|daftar|akun|nomor|terima kasih|bisa)\b/.test(lower)) return "id";
   if (/\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại)\b/.test(lower)) return "vi";
-  if (/(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
+  if (/(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
+  if (fallback !== "unknown" && isShortContextualReply(text)) return fallback;
   if (/[A-Za-z]/.test(text)) return "en";
   return fallback;
 }
@@ -114,6 +115,14 @@ export function isPositiveConfirmation(text: string): boolean {
     .replace(/[。.!?！？,，;；:：]+$/g, "")
     .trim();
   return /^(是|是的|对|對|对的|可以|可以的|好|好的|嗯|嗯嗯|行|行的|有|有的|要|想|没问题|沒問題|继续|yes|yep|yeah|ok|okay|sure|correct|right|sim|claro|pode|isso|sí|si|vale|dale)$/i.test(normalized);
+}
+
+function isShortContextualReply(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .trim();
+  return isPositiveConfirmation(normalized) || /^(no|nope|nah|não|nao|not now|stop)$/i.test(normalized);
 }
 
 export function isInternalIntentLabel(value: string): value is InternalIntentLabel {

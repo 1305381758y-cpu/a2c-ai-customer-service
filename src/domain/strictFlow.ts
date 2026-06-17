@@ -385,6 +385,8 @@ function complainsAboutReply(text: string): boolean {
 }
 
 function isExplicitRefusal(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  if (/^(不是|不|否|不了|不要|不用|no|nope|nah|não|nao)$/i.test(normalized)) return true;
   return /(不用了|不需要|不了|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|stop|não quero|nao quero|sem interesse|pare)/i.test(text);
 }
 

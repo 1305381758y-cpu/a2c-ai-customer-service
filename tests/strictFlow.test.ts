@@ -145,6 +145,12 @@ function outboundMessage(content: string, strictFlowStep = ""): ConversationMess
 }
 
 describe("strict Aston Brazil flow", () => {
+  it("keeps the previous language for short contextual replies", () => {
+    expect(analyzeMessage("sim", "pt-BR").language).toBe("pt-BR");
+    expect(analyzeMessage("ok", "zh").language).toBe("zh");
+    expect(analyzeMessage("no", "pt-BR").language).toBe("pt-BR");
+  });
+
   it("starts with interest screening instead of sending the registration link", () => {
     const result = reply("olá");
     expect(result.enabled).toBe(true);
@@ -531,11 +537,53 @@ describe("strict Aston Brazil flow", () => {
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
+  it("pauses on short refusals without forcing the next flow step", () => {
+    const interestRefusal = reply("不是", { language: "zh", flowStep: "interest_screening" });
+    expect(interestRefusal.nextFlowStep).toBe("interest_screening");
+    expect(interestRefusal.reply).toContain("先不继续打扰");
+    expect(interestRefusal.reply).not.toContain("简单介绍");
+    expect(interestRefusal.reply).not.toContain("register.example");
+
+    const registrationRefusal = reply("no", { language: "en", flowStep: "registration_intent" });
+    expect(registrationRefusal.nextFlowStep).toBe("registration_intent");
+    expect(registrationRefusal.reply).toContain("not disturb");
+    expect(registrationRefusal.reply).not.toContain("registration link");
+  });
+
+  it("can continue normally after a previous short refusal", () => {
+    const turns = simulateStrictFlow(["你好", "不是", "继续", "好的"]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[1].flowStep).toBe("interest_screening");
+    expect(replies[1]).toContain("先不继续打扰");
+    expect(turns[2].flowStep).toBe("registration_intent");
+    expect(replies[2]).toContain("简单介绍");
+    expect(turns[3].flowStep).toBe("wait_registration");
+    expect(replies[3]).toContain("https://register.example/?code=ABC123");
+  });
+
+  it("keeps Portuguese flow language through short confirmations", () => {
+    const turns = simulateStrictFlow(["olá", "sim", "sim", "cadastrei, telefone 119922882288", "não tenho Telegram", "como faço", "@cliente_pt_123"]);
+    const replies = turns.map((turn) => turn.result.reply);
+    expect(turns[0].flowStep).toBe("interest_screening");
+    expect("language" in turns[1].result ? turns[1].result.language : "").toBe("pt-BR");
+    expect(replies[1]).toContain("vou explicar rapidamente");
+    expect("language" in turns[2].result ? turns[2].result.language : "").toBe("pt-BR");
+    expect(replies[2]).toContain("Link exclusivo de cadastro");
+    expect(turns[3].flowStep).toBe("telegram_confirm");
+    expect(turns[4].flowStep).toBe("telegram_download");
+    expect(replies[4]).toContain("baixar o Telegram");
+    expect(turns[5].flowStep).toBe("collect_telegram");
+    expect(replies[5]).toContain("@");
+    expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
+  });
+
   it("keeps every major strict-flow step actionable for common customer replies", () => {
     const cases: Array<{ step: Conversation["flowStep"]; text: string; extra?: Partial<Conversation> }> = [
       { step: "interest_screening", text: "是的" },
+      { step: "interest_screening", text: "不是" },
       { step: "interest_screening", text: "什么平台" },
       { step: "registration_intent", text: "好的" },
+      { step: "registration_intent", text: "no" },
       { step: "registration_intent", text: "安全吗" },
       { step: "registration_intent", text: "怎么弄" },
       { step: "wait_registration", text: "你好" },
