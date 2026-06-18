@@ -117,7 +117,10 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "interest_screening") {
-    if (positive) {
+    if (inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
+      return reply(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
+    }
+    if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(input, step, text, language, input.analysis.intent));
     }
     if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
@@ -134,7 +137,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "registration_intent") {
-    if (inferredIntent === "negative_refusal") {
+    if (inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
@@ -200,6 +203,7 @@ function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | ""
   const prefix = naturalStrictFlowPrefix(input, step, text, language, intent);
   if (!prefix) return flowGoal;
   if (prefix.pauseFlow) return prefix.content;
+  if (containsNextStepPrompt(prefix.content, nextStep)) return prefix.content;
   const bridge = flowBridgeLine(input, nextStep, language);
   return joinReplyParts(prefix.content, bridge || flowGoal, language);
 }
@@ -229,6 +233,9 @@ function naturalStrictFlowPrefix(input: StrictFlowInput, step: StrictFlowStep | 
   }
   if (intent === "trust_concern" || asksTrustConcern(normalized)) {
     return { content: flowScriptLine(input, "trust_ack", language) };
+  }
+  if (asksEarningConcern(normalized)) {
+    return { content: flowScriptLine(input, "earning_concern_ack", language) };
   }
   if (intent === "need_help" || asksForOperationHelp(normalized)) {
     return { content: helpLineForStep(input, step, language) };
@@ -261,6 +268,19 @@ function joinReplyParts(prefix: string, goal: string, language: string): string 
   if (!cleanGoal || cleanPrefix.includes(cleanGoal)) return cleanPrefix;
   if (cleanGoal.includes(cleanPrefix)) return cleanGoal;
   return language === "zh" ? `${cleanPrefix}${cleanGoal}` : `${cleanPrefix} ${cleanGoal}`;
+}
+
+function containsNextStepPrompt(content: string, nextStep: StrictFlowStep): boolean {
+  if (nextStep === "registration_intent") {
+    return /(有空|空闲时间|空閒時間|有时间|是否.*继续|free time|time now|available|tempo livre|tempo agora|continuar o cadastro)/i.test(content);
+  }
+  if (nextStep === "wait_registration") {
+    return /(https?:\/\/|邀请码[:：]|invitation code[:：]|código de convite[:：]|codigo de convite[:：])/i.test(content);
+  }
+  if (nextStep === "collect_telegram") {
+    return /(@ 开头|@开头|Telegram 用户名|Telegram username|nome de usuário do Telegram)/i.test(content);
+  }
+  return false;
 }
 
 function stageForFlowStep(step: StrictFlowStep, fallback: Conversation["stage"]): Conversation["stage"] {
@@ -395,6 +415,10 @@ function asksTrustConcern(text: string): boolean {
   return /(安全|真的假的|可信|靠谱吗|可靠|骗人|诈骗|safe|trust|real|scam|seguro|confiável|confiavel|golpe|verdade)/i.test(text);
 }
 
+function asksEarningConcern(text: string): boolean {
+  return /(每天.*赚|收益.*多|赚.*这么多|這麼多|这么多|那么多|真的假的|真的.*赚|收入.*真实|佣金.*真实|earn.*that much|so much|income.*real|real earnings|ganhar.*tanto|renda.*real|ganhos.*reais)/i.test(text);
+}
+
 function complainsAboutReply(text: string): boolean {
   return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
 }
@@ -402,7 +426,7 @@ function complainsAboutReply(text: string): boolean {
 function isExplicitRefusal(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(不是|不|否|不了|不要|不用|no|nope|nah|não|nao)$/i.test(normalized)) return true;
-  return /(不用了|不需要|不了|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|stop|não quero|nao quero|sem interesse|pare)/i.test(text);
+  return /(不接受|不想接受|不用了|不需要|不了|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|do not accept|don't accept|stop|não quero|nao quero|não aceito|nao aceito|sem interesse|pare)/i.test(text);
 }
 
 function isHesitant(text: string): boolean {
@@ -538,7 +562,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "您好，我在的。您可以直接问我这份工作的内容，或告诉我您现在卡在哪一步。",
     chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
     complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
-    trust_ack: "我理解您的顾虑。您可以先按步骤开户注册，后续资料核实会由人工继续确认，过程中有不清楚的地方可以直接问我。",
+    trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
+    earning_concern_ack: "收益会根据实际完成任务和平台规则核算，具体以后续确认结果为准。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
@@ -547,7 +572,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     interest_screening_retry: "您好，您是想了解这份兼职在线工作吗？如果您感兴趣，我可以先简单介绍。",
     hesitation_ack: "没关系，您可以先了解清楚再决定。",
     bridge_interest: "您如果感兴趣，我可以先简单介绍。",
-    bridge_registration_intent: "如果您觉得可以继续，我再一步一步带您完成注册。",
+    bridge_registration_intent: "您现在是否有空继续开户注册？",
     bridge_wait_registration: "您准备继续时告诉我，我会继续带您处理注册步骤；如果已经注册完成，请把注册手机号发给我。",
     bridge_telegram_confirm: "下一步只需要确认 Telegram，方便后续人工继续跟进。",
     bridge_collect_telegram: "完成后把 @ 开头的 Telegram 用户名发给我就可以。",
@@ -567,7 +592,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
     chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
     complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
-    trust_ack: "I understand your concern. You can complete the registration step first, and the follow-up verification will be handled by a person. If anything is unclear, ask me directly.",
+    trust_ack: "I understand your concern. The exact rules and information verification will follow the later confirmation. If anything is unclear, ask me directly.",
+    earning_concern_ack: "Earnings are calculated based on actual completed tasks and platform rules, subject to later confirmation.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
@@ -576,7 +602,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     interest_screening_retry: "Hello, would you like to learn about this part-time online job? If you are interested, I can briefly introduce it.",
     hesitation_ack: "No problem. You can understand it first and decide later.",
     bridge_interest: "If you are interested, I can briefly introduce it first.",
-    bridge_registration_intent: "If you feel comfortable continuing, I will guide you through the registration step by step.",
+    bridge_registration_intent: "Do you have time now to continue with the account registration?",
     bridge_wait_registration: "When you are ready to continue, tell me and I will guide you through the registration step. If you have completed registration, please send me the registered phone number.",
     bridge_telegram_confirm: "The next step is only to confirm Telegram so the follow-up can continue smoothly.",
     bridge_collect_telegram: "After that, send me your Telegram username starting with @.",
@@ -596,7 +622,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
     chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
     complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
-    trust_ack: "Entendo sua preocupação. Você pode concluir primeiro o cadastro, e a verificação seguinte será acompanhada por uma pessoa. Se algo não ficar claro, pode me perguntar diretamente.",
+    trust_ack: "Entendo sua preocupação. As regras exatas e a verificação das informações seguem a confirmação posterior. Se algo não ficar claro, pode me perguntar diretamente.",
+    earning_concern_ack: "Os ganhos são calculados conforme as tarefas realmente concluídas e as regras da plataforma, sujeitos à confirmação posterior.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
@@ -605,7 +632,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     interest_screening_retry: "Olá, você gostaria de conhecer este trabalho online de meio período? Se tiver interesse, posso explicar rapidamente.",
     hesitation_ack: "Sem problema. Você pode entender primeiro e decidir depois.",
     bridge_interest: "Se tiver interesse, posso explicar rapidamente primeiro.",
-    bridge_registration_intent: "Se você se sentir confortável para continuar, eu oriento o cadastro passo a passo.",
+    bridge_registration_intent: "Você tem tempo agora para continuar o cadastro da conta?",
     bridge_wait_registration: "Quando estiver pronto para continuar, me avise e eu continuo orientando o cadastro. Se já concluiu o cadastro, envie o telefone usado no cadastro.",
     bridge_telegram_confirm: "O próximo passo é apenas confirmar o Telegram para continuar o acompanhamento.",
     bridge_collect_telegram: "Depois disso, envie seu nome de usuário do Telegram começando com @.",
