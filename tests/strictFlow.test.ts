@@ -890,4 +890,41 @@ describe("strict Aston Brazil flow", () => {
     expect(telegram.reply).not.toContain("register.example");
     expect(telegram.nextFlowStep).toBe("wait_registration");
   });
+
+  it("uses controlled natural answers without changing the strict flow", () => {
+    const earningIntent = reply("我想要赚钱", { language: "zh", flowStep: "interest_screening" });
+    expect(earningIntent.reply).toContain("简单介绍");
+    expect(earningIntent.reply).toContain("空闲时间");
+    expect(earningIntent.reply).not.toContain("不会要求您向客服转账");
+    expect(earningIntent.nextFlowStep).toBe("registration_intent");
+
+    const identity = reply("你是谁", { language: "zh", flowStep: "wait_registration" });
+    expect(identity.reply).toContain("负责协助您完成开户注册和联系方式核对");
+    expect(identity.reply).toContain("如果已经注册完成");
+    expect(identity.reply).not.toMatch(/AI|机器人|自动客服|自动回复/i);
+    expect(identity.nextFlowStep).toBe("wait_registration");
+
+    const unknown = reply("巴西今天下雨吗", { language: "zh", flowStep: "wait_registration" });
+    expect(unknown.reply).toContain("以后续页面或人工确认为准");
+    expect(unknown.reply).toContain("如果已经注册完成");
+    expect(unknown.nextFlowStep).toBe("wait_registration");
+  });
+
+  it("answers Telegram questions according to whether the phone was already collected", () => {
+    const beforePhone = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
+    expect(beforePhone.reply).toContain("先完成平台注册");
+    expect(beforePhone.reply).toContain("注册手机号");
+    expect(beforePhone.nextFlowStep).toBe("wait_registration");
+
+    const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
+    expect(afterPhone.reply).toContain("已经完成手机号这一步");
+    expect(afterPhone.reply).toContain("@ 开头");
+    expect(afterPhone.reply).not.toContain("先完成平台注册");
+    expect(afterPhone.nextFlowStep).toBe("collect_telegram");
+
+    const phoneAlreadySent = reply("手机号我已经发给你了", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
+    expect(phoneAlreadySent.reply).toContain("@ 开头");
+    expect(phoneAlreadySent.reply).not.toContain("注册手机号");
+    expect(phoneAlreadySent.nextFlowStep).toBe("collect_telegram");
+  });
 });

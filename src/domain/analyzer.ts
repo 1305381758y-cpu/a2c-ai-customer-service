@@ -67,6 +67,8 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   if (/\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại)\b/.test(lower)) return "vi";
   if (/(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
   if (fallback !== "unknown" && isShortContextualReply(text)) return fallback;
+  if (fallback !== "unknown" && /^@[A-Za-z0-9_]{5,32}$/.test(text.trim())) return fallback;
+  if (fallback !== "unknown" && /^\+?\d[\d\s-]{5,18}$/.test(text.trim())) return fallback;
   if (/[A-Za-z]/.test(text)) return "en";
   return fallback;
 }
@@ -149,7 +151,7 @@ function isPlatformQuestion(text: string): boolean {
 }
 
 function isInitialConsultation(text: string): boolean {
-  return /(找工作|想找.*工作|想.*工作|需要工作|了解.*工作|介绍.*工作|介绍一下|这份工作|這份工作|兼职|线上工作|在线工作|可以聊|聊聊|咨询|job|work|part[-\s]?time|online work|extra income|tell me more|emprego|trabalho|renda extra|vaga|quero trabalhar|preciso trabalhar)/i.test(text);
+  return /(找工作|想找.*工作|想.*工作|需要工作|了解.*工作|介绍.*工作|介绍一下|这份工作|這份工作|兼职|线上工作|在线工作|赚钱|賺錢|挣钱|掙錢|赚佣金|賺佣金|佣金收入|可以聊|聊聊|咨询|job|work|part[-\s]?time|online work|extra income|tell me more|emprego|trabalho|renda extra|vaga|quero trabalhar|preciso trabalhar)/i.test(text);
 }
 
 function inferStage(intent: IntentLabel, hasPhone: boolean, hasTelegram: boolean): ConversationStage {

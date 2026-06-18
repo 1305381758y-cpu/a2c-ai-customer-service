@@ -39,7 +39,29 @@ export interface StrictFlowReply {
   stage: Conversation["stage"];
   needsInviteCode: boolean;
   fallback?: boolean;
+  controlledQuestionType?: ControlledQuestionType;
+  controlledQuestionFallback?: boolean;
 }
+
+export type ControlledQuestionType =
+  | "none"
+  | "platform"
+  | "chat"
+  | "identity"
+  | "trust"
+  | "payment"
+  | "telegram"
+  | "earning"
+  | "complaint"
+  | "help"
+  | "job"
+  | "repeat_greeting"
+  | "hesitation"
+  | "phone_reason"
+  | "link_open"
+  | "next_step"
+  | "sensitive"
+  | "unknown";
 
 const flowStepSet = new Set<string>(STRICT_FLOW_STEPS);
 const flowStepRank = new Map<StrictFlowStep, number>(STRICT_FLOW_STEPS.map((step, index) => [step, index]));
@@ -164,7 +186,8 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "payment_concern"));
     }
     if (input.analysis.intent === "ask_tg_register" || inferredIntent === "ask_tg_register" || asksTelegramExplanation(text)) {
-      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain"));
+      const line = input.conversation.extractedPhone || input.analysis.phone ? "telegram_explain_after_phone_ack" : "telegram_explain_ack";
+      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain", line));
     }
     if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (negativeTelegram) {
@@ -208,8 +231,8 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
 }
 
-function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = ""): string {
-  const prefix = naturalStrictFlowPrefix(input, step, text, language, intent);
+function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = "", forcedLine = ""): string {
+  const prefix = controlledQuestionAnswer(input, step, text, language, intent, forcedLine);
   if (!prefix) return flowGoal;
   if (prefix.pauseFlow) return prefix.content;
   if (containsNextStepPrompt(prefix.content, nextStep)) return prefix.content;
@@ -219,50 +242,72 @@ function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | ""
 
 function buildInterestProgressReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): string {
   const intro = flowScriptLine(input, "project_intro", language);
-  const prefix = naturalStrictFlowPrefix(input, step, text, language, intent);
+  const prefix = controlledQuestionAnswer(input, step, text, language, intent);
   if (!prefix || prefix.pauseFlow) return intro;
   return joinReplyParts(prefix.content, intro, language);
 }
 
-function naturalStrictFlowPrefix(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): { content: string; pauseFlow?: boolean } | null {
+function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = "", forcedLine = ""): { content: string; pauseFlow?: boolean; type: ControlledQuestionType; cautiousFallback?: boolean } | null {
   if (!step) return null;
   const normalized = text.trim();
   if (!normalized) return null;
   if (isExplicitRefusal(normalized)) {
-    return { content: flowScriptLine(input, "refusal_ack", language), pauseFlow: true };
+    return { content: flowScriptLine(input, "refusal_ack", language), pauseFlow: true, type: "hesitation" };
+  }
+  if (forcedLine) {
+    return { content: flowScriptLine(input, forcedLine, language), type: "telegram" };
+  }
+  if (asksSensitiveInfo(normalized)) {
+    return { content: flowScriptLine(input, "sensitive_info_ack", language), type: "sensitive", cautiousFallback: true };
+  }
+  if (asksServiceIdentity(normalized)) {
+    return { content: flowScriptLine(input, "identity_ack", language), type: "identity" };
+  }
+  if (asksWhyPhone(normalized)) {
+    return { content: flowScriptLine(input, "phone_reason_ack", language), type: "phone_reason" };
+  }
+  if (asksHowToOpenLink(normalized)) {
+    return { content: flowScriptLine(input, "link_open_ack", language), type: "link_open" };
+  }
+  if (asksNextStep(normalized)) {
+    return { content: flowScriptLine(input, "next_step_ack", language), type: "next_step" };
   }
   if (asksAboutPlatform(normalized)) {
-    return { content: flowScriptLine(input, "platform_explain", language) };
+    return { content: flowScriptLine(input, "platform_explain", language), type: "platform" };
   }
   if (asksToChat(normalized)) {
-    return { content: flowScriptLine(input, "chat_ack", language) };
+    return { content: flowScriptLine(input, "chat_ack", language), type: "chat" };
   }
   if (intent === "trust_concern" || asksTrustConcern(normalized)) {
-    return { content: flowScriptLine(input, "trust_ack", language) };
+    return { content: flowScriptLine(input, "trust_ack", language), type: "trust" };
   }
   if (intent === "payment_concern" || asksPaymentConcern(normalized)) {
-    return { content: flowScriptLine(input, "payment_concern_ack", language) };
+    return { content: flowScriptLine(input, "payment_concern_ack", language), type: "payment" };
   }
   if (intent === "telegram_explain" || asksTelegramExplanation(normalized)) {
-    return { content: flowScriptLine(input, "telegram_explain_ack", language) };
+    const line = input.conversation.extractedPhone || input.analysis.phone ? "telegram_explain_after_phone_ack" : "telegram_explain_ack";
+    return { content: flowScriptLine(input, line, language), type: "telegram" };
   }
   if (asksEarningConcern(normalized)) {
-    return { content: flowScriptLine(input, "earning_concern_ack", language) };
+    return { content: flowScriptLine(input, "earning_concern_ack", language), type: "earning" };
   }
   if (complainsAboutReply(normalized)) {
-    return { content: flowScriptLine(input, "complaint_ack", language) };
+    return { content: flowScriptLine(input, "complaint_ack", language), type: "complaint" };
   }
   if (intent === "need_help" || asksForOperationHelp(normalized)) {
-    return { content: helpLineForStep(input, step, language) };
+    return { content: helpLineForStep(input, step, language), type: "help" };
   }
   if (asksAboutJob(normalized)) {
-    return { content: flowScriptLine(input, "project_intro", language) };
+    return { content: flowScriptLine(input, "project_intro", language), type: "job" };
   }
   if (isRepeatGreeting(normalized) && step !== "interest_screening") {
-    return { content: flowScriptLine(input, "repeat_greeting", language) };
+    return { content: flowScriptLine(input, "repeat_greeting", language), type: "repeat_greeting" };
   }
   if (isHesitant(normalized)) {
-    return { content: flowScriptLine(input, "hesitation_ack", language) };
+    return { content: flowScriptLine(input, "hesitation_ack", language), type: "hesitation" };
+  }
+  if (looksLikeQuestion(normalized)) {
+    return { content: flowScriptLine(input, "unknown_question_ack", language), type: "unknown", cautiousFallback: true };
   }
   return null;
 }
@@ -314,6 +359,8 @@ function reply(
   needsInviteCode = false
 ): StrictFlowReply {
   const actionableContent = ensureActionableStrictContent(content, nextFlowStep, language);
+  const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
+  const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, debugIntent);
   return {
     enabled: true,
     reply: actionableContent,
@@ -321,7 +368,9 @@ function reply(
     nextFlowStep,
     stage,
     needsInviteCode,
-    fallback: !input.inviteCode && needsInviteCode
+    fallback: !input.inviteCode && needsInviteCode,
+    controlledQuestionType: controlled?.type ?? "none",
+    controlledQuestionFallback: Boolean(controlled?.cautiousFallback)
   };
 }
 
@@ -435,11 +484,35 @@ function asksEarningConcern(text: string): boolean {
 }
 
 function asksPaymentConcern(text: string): boolean {
-  return /(付钱|付費|付款|交钱|交錢|收费|收費|要钱|要錢|花钱|花錢|充值|转账|轉帳|私下付款|私下转账|私下轉帳|需要.*钱|需要.*錢|要.*钱|要.*錢|pay|payment|fee|charge|deposit|recharge|transfer money|pagar|pagamento|taxa|cobrança|cobranca|recarga|transferir)/i.test(text);
+  return /(付钱|付費|付款|交钱|交錢|收费|收費|花钱|花錢|充值|转账|轉帳|私下付款|私下转账|私下轉帳|需要.{0,4}(付|交|花|转|轉|充值|付款|收费|收費)|要.{0,4}(付|交|花|转|轉|充值|付款|收费|收費)|pay|payment|fee|charge|deposit|recharge|transfer money|pagar|pagamento|taxa|cobrança|cobranca|recarga|transferir)/i.test(text);
 }
 
 function asksTelegramExplanation(text: string): boolean {
   return /(telegram.*是什么|telegram.*是什麼|tg.*是什么|tg.*是什麼|什么是.*telegram|什麼是.*telegram|什么是.*tg|什麼是.*tg|telegram.*干嘛|telegram.*幹嘛|tg.*干嘛|tg.*幹嘛|为什么.*telegram|為什麼.*telegram|为什么.*tg|為什麼.*tg|what is telegram|what.*telegram.*for|why.*telegram|o que.*telegram|para que.*telegram|por que.*telegram)/i.test(text);
+}
+
+function asksServiceIdentity(text: string): boolean {
+  return /(你是谁|你是誰|你是什么人|你是什麼人|你干嘛的|你幹嘛的|你负责什么|你負責什麼|who are you|what are you|quem é você|quem e voce|quem é vc|quem e vc)/i.test(text);
+}
+
+function asksWhyPhone(text: string): boolean {
+  return /(为什么.*手机号|為什麼.*手機號|为什么.*手机号码|为什么.*電話|为什么.*号码|要手机号干嘛|要手机号码干嘛|why.*phone|why.*number|por que.*telefone|para que.*telefone)/i.test(text);
+}
+
+function asksHowToOpenLink(text: string): boolean {
+  return /(链接.*怎么.*打开|链接.*打不开|打不.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+}
+
+function asksNextStep(text: string): boolean {
+  return /(接下来|下一步|然后呢|然后怎么办|现在怎么办|之后呢|next step|what next|what should i do next|e agora|próximo passo|proximo passo)/i.test(text);
+}
+
+function asksSensitiveInfo(text: string): boolean {
+  return /(验证码|驗證碼|密码给你|密碼給你|银行卡|銀行卡|身份证|身份證|护照|護照|私钥|私鑰|verification code|password|bank card|id card|passport|senha|código de verificação|codigo de verificacao|cartão bancário|cartao bancario|documento)/i.test(text);
+}
+
+function looksLikeQuestion(text: string): boolean {
+  return /[?？]$|[吗嗎呢么嘛][。.!！]*$|^(为什么|為什麼|怎么|怎麼|如何|什么|什麼|哪个|哪個|哪里|哪裡|能不能|可不可以|why|how|what|which|where|can|could|o que|por que|como|qual|onde)/i.test(text.trim());
 }
 
 function complainsAboutReply(text: string): boolean {
@@ -471,7 +544,7 @@ function helpLineForStep(input: StrictFlowInput, step: StrictFlowStep | "", lang
 }
 
 function asksAboutJob(text: string): boolean {
-  return /(了解.*工作|这份工作|這份工作|介绍.*工作|找工作|兼职|线上工作|在线工作|工作内容|怎么赚钱|如何赚钱|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text);
+  return /(了解.*工作|这份工作|這份工作|介绍.*工作|找工作|兼职|线上工作|在线工作|工作内容|赚钱|賺錢|挣钱|掙錢|赚佣金|賺佣金|佣金收入|怎么赚钱|如何赚钱|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text);
 }
 
 function isRepeatGreeting(text: string): boolean {
@@ -588,7 +661,14 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
     payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；如平台后续有具体规则，以页面显示和后续确认为准。",
     telegram_explain_ack: "Telegram 是后续联系和指导使用的沟通工具。您现在先完成平台注册，完成后把注册手机号发给我。",
+    telegram_explain_after_phone_ack: "Telegram 是后续联系和指导使用的沟通工具。您已经完成手机号这一步了，接下来只需要下载或注册 Telegram，并把 @ 开头的用户名发给我。",
     earning_concern_ack: "收益会根据实际完成任务和平台规则核算，具体以后续确认结果为准。",
+    identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
+    phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",
+    link_open_ack: "您可以复制开户链接到手机浏览器里打开，建议使用 Chrome 或 Safari；打开后按页面提示填写资料。",
+    next_step_ack: "可以，我按当前进度带您继续下一步。",
+    sensitive_info_ack: "这些敏感信息不用发给我，也不要给任何人。我这里只需要按流程核对开户注册所需的信息。",
+    unknown_question_ack: "这个需要以后续页面或人工确认为准，我先帮您把当前开户注册步骤处理完。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
@@ -620,7 +700,14 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     trust_ack: "I understand your concern. The exact rules and information verification will follow the later confirmation. If anything is unclear, ask me directly.",
     payment_concern_ack: "At this guidance stage, you will not be asked to transfer money to customer service or pay privately. If the platform has later rules, follow the page display and later confirmation.",
     telegram_explain_ack: "Telegram is the contact tool used later for follow-up guidance. Please complete the platform registration first, then send me the registered phone number.",
+    telegram_explain_after_phone_ack: "Telegram is the contact tool used later for follow-up guidance. Your phone step is already done; next, please download or create Telegram and send me the username starting with @.",
     earning_concern_ack: "Earnings are calculated based on actual completed tasks and platform rules, subject to later confirmation.",
+    identity_ack: "I handle the registration and contact verification steps here, and I will guide you according to the current step.",
+    phone_reason_ack: "The phone number is used to verify the platform account you registered, so the follow-up information can match correctly.",
+    link_open_ack: "You can copy the registration link and open it in your phone browser. Chrome or Safari is recommended, then follow the page instructions.",
+    next_step_ack: "Yes, I will continue guiding you from the current step.",
+    sensitive_info_ack: "You do not need to send sensitive information like passwords, verification codes, payment details, or ID documents. I only need the information required by the current registration flow.",
+    unknown_question_ack: "This needs to follow the page display or later confirmation. I will first help you complete the current registration step.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
@@ -652,7 +739,14 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     trust_ack: "Entendo sua preocupação. As regras exatas e a verificação das informações seguem a confirmação posterior. Se algo não ficar claro, pode me perguntar diretamente.",
     payment_concern_ack: "Nesta etapa de orientação, você não precisa transferir dinheiro para o atendimento nem pagar por fora. Se houver regras posteriores da plataforma, siga a página e a confirmação posterior.",
     telegram_explain_ack: "O Telegram é a ferramenta de contato usada depois para orientação. Primeiro conclua o cadastro na plataforma e envie o telefone usado no cadastro.",
+    telegram_explain_after_phone_ack: "O Telegram é a ferramenta de contato usada depois para orientação. A etapa do telefone já foi concluída; agora baixe ou crie o Telegram e envie o nome de usuário começando com @.",
     earning_concern_ack: "Os ganhos são calculados conforme as tarefas realmente concluídas e as regras da plataforma, sujeitos à confirmação posterior.",
+    identity_ack: "Eu acompanho as etapas de cadastro e verificação de contato aqui, e vou orientar você conforme a etapa atual.",
+    phone_reason_ack: "O telefone é usado para verificar a conta que você cadastrou na plataforma, para que as informações sejam confirmadas corretamente depois.",
+    link_open_ack: "Você pode copiar o link de cadastro e abrir no navegador do celular. Recomendo Chrome ou Safari; depois siga as instruções da página.",
+    next_step_ack: "Sim, vou continuar orientando você a partir da etapa atual.",
+    sensitive_info_ack: "Você não precisa enviar informações sensíveis como senha, código de verificação, dados de pagamento ou documentos. Só preciso das informações necessárias para esta etapa do cadastro.",
+    unknown_question_ack: "Isso precisa seguir a página ou a confirmação posterior. Primeiro vou ajudar você a concluir a etapa atual do cadastro.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",

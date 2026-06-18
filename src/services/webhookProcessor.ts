@@ -64,6 +64,10 @@ export class WebhookProcessor {
     if (effectiveStrictFlowStep && conversation.flowStep !== effectiveStrictFlowStep) {
       conversation.flowStep = effectiveStrictFlowStep;
     }
+    const contextualPhone = detectContextualRegistrationPhone(analysisText, effectiveStrictFlowStep || conversation.flowStep);
+    if (contextualPhone && !analysis.phone) {
+      analysis = { ...analysis, phone: contextualPhone, intent: "provide_phone", stage: "need_phone_or_tg" };
+    }
     const inferredIntent = await this.inferStrictFlowIntent({
       runtimeConfig,
       merchant,
@@ -206,6 +210,9 @@ export class WebhookProcessor {
           strictFlow: true,
           strictFlowEnabled,
           strictFlowStep: strictReply.nextFlowStep,
+          controlledQuestionType: strictReply.controlledQuestionType || "none",
+          controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
+          knowledgeHit: false,
           aiFallback: Boolean(strictReply.fallback),
           originalContent: outboundTranslation.originalText,
           operatorTranslatedContent: outboundTranslation.translatedText,
@@ -424,6 +431,14 @@ function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: Internal
     ? "need_phone_or_tg"
     : analysis.stage;
   return { ...analysis, intent, stage };
+}
+
+function detectContextualRegistrationPhone(text: string, flowStep: string): string {
+  if (flowStep !== "wait_registration" && flowStep !== "telegram_confirm") return "";
+  const normalized = text.trim();
+  if (!/^\+?\d[\d\s-]{5,18}$/.test(normalized)) return "";
+  const digits = normalized.replace(/[^\d+]/g, "");
+  return digits.replace(/\D/g, "").length >= 6 ? digits : "";
 }
 
 function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord, country?: { platformRegisterUrl?: string; tgRegisterGuideUrl?: string }): AppConfig {

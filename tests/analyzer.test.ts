@@ -82,6 +82,12 @@ describe("message analyzer", () => {
     }
   });
 
+  it("keeps conversation language for contact-only messages", () => {
+    expect(analyzeMessage("@asfasf", "zh").language).toBe("zh");
+    expect(analyzeMessage("654387654", "zh").language).toBe("zh");
+    expect(analyzeMessage("@asfasf", "pt-BR").language).toBe("pt-BR");
+  });
+
   it("treats short registration completion messages as registration done", () => {
     for (const text of ["好了", "完成了", "注册好了", "注册完了", "已注册", "done", "finished", "registered", "pronto"]) {
       const result = analyzeMessage(text);
