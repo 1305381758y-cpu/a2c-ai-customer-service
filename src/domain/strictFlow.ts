@@ -63,7 +63,11 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
   if (!isStrictFlowEnabled(input.merchant, input.country) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
   const step = normalizeFlowStep(input.conversation.flowStep);
-  return step === "registration_intent" || step === "send_register_link" || input.inferredIntent === "ask_link" || asksForInviteOrLink(input.customerText, input.analysis.intent);
+  if (step === "registration_intent" || step === "send_register_link") return true;
+  if (step === "wait_registration") {
+    return input.inferredIntent === "ask_link" || asksForInviteOrLink(input.customerText, input.analysis.intent);
+  }
+  return false;
 }
 
 export function resolveEffectiveStrictFlowStep(
@@ -422,12 +426,12 @@ function registerInstruction(input: StrictFlowInput, language: string): string {
     return scriptLine("missing_invite", language, display);
   }
   if (language === "en") {
-    return `Okay, I will send you the registration link and invitation code now.\n${display}\nOpen the link in your browser, fill in your phone number, email or phone number, password, and the invitation code. After registration, please tell me when it is completed.`;
+    return `Okay, I will send you the registration link and invitation code now.\n${display}\nRegistration steps:\n1. Open the link in your browser.\n2. Fill in your phone number.\n3. Set your username and password.\n4. Enter the invitation code.\n5. Submit the registration.\nAfter registration is completed, please tell me.`;
   }
   if (language === "pt-BR") {
-    return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nAbra o link no navegador, preencha seu telefone, e-mail ou telefone, senha e o código de convite. Depois de concluir o cadastro, me avise.`;
+    return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir o cadastro, me avise.`;
   }
-  return `好的，现在我会把链接和邀请码发给您。\n${display}\n复制此链接并在浏览器中打开，然后填写手机号码、邮箱或手机号码、密码和邀请码。完成注册后请告诉我。`;
+  return `好的，现在我会把链接和邀请码发给您。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成注册后请告诉我。`;
 }
 
 function inviteDisplayText(inviteCode: A2CInviteCodeRecord | undefined, language: string, fallbackUrl = ""): string {
@@ -473,9 +477,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
     ask_registered_phone: "好的，请将您注册的手机号码发送给我，以便我们进行验证。",
-    telegram_confirm: "恭喜！您已成功注册。您需要一个 Telegram 账号才能领取注册奖励。您有 Telegram 应用吗？",
+    telegram_confirm: "恭喜！您已成功注册。这是您的兼职账号。请保存您的用户名和密码，以免忘记。您需要一个 Telegram 账号才能开始工作，您有 Telegram 应用吗？",
     telegram_confirm_question: "您有 Telegram 应用吗？如果有，请把您的 Telegram 用户名发给我。",
-    telegram_download: "您需要下载 Telegram。如果手机里有 Play Store 或 App Store，可以直接搜索并下载 Telegram。创建 Telegram 账号后，请把 @ 开头的用户名发给我。",
+    telegram_download: "如果你的手机里安装了应用商店（Play Store 或 App Store），可以直接在那里搜索并下载 Telegram 应用。创建 Telegram 账号后请告诉我。我们会在 Telegram 教你如何赚取佣金。完成后请把 @ 开头的用户名发给我。",
     collect_telegram: "您注册好 Telegram 账号了吗？请把 @ 开头的 Telegram 用户名发送给我。",
     collect_telegram_retry: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
     missing_invite: `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${fallback ? `\n开户链接：${fallback}` : ""}`
@@ -502,9 +506,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
     ask_registered_phone: "Okay, please send me the phone number you registered with so we can verify it.",
-    telegram_confirm: "Congratulations, you have registered successfully. You need a Telegram account to receive the registration reward. Do you have the Telegram app?",
+    telegram_confirm: "Congratulations, you have registered successfully. This is your part-time work account. Please save your username and password so you do not forget them. You need a Telegram account to start working. Do you have the Telegram app?",
     telegram_confirm_question: "Do you have the Telegram app? If yes, please send me your Telegram username.",
-    telegram_download: "You need to download Telegram. If your phone has Play Store or App Store, search for Telegram and download it. After creating your Telegram account, please send me the username starting with @.",
+    telegram_download: "If your phone has Play Store or App Store, you can search for Telegram there and download it directly. After creating your Telegram account, please tell me. We will teach you on Telegram how to earn commission. After that, send me your username starting with @.",
     collect_telegram: "Have you registered your Telegram account? Please send me your Telegram username starting with @.",
     collect_telegram_retry: "Please send me your Telegram username. It should start with @.",
     missing_invite: `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${fallback ? `\nRegistration link: ${fallback}` : ""}`
@@ -531,9 +535,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
     ask_registered_phone: "Certo, envie o número de telefone usado no cadastro para fazermos a verificação.",
-    telegram_confirm: "Parabéns, seu cadastro foi concluído. Você precisa de uma conta no Telegram para receber a recompensa de cadastro. Você tem o aplicativo Telegram?",
+    telegram_confirm: "Parabéns, seu cadastro foi concluído. Esta é sua conta de trabalho de meio período. Guarde seu nome de usuário e sua senha para não esquecer. Você precisa de uma conta no Telegram para começar a trabalhar. Você tem o aplicativo Telegram?",
     telegram_confirm_question: "Você tem o aplicativo Telegram? Se tiver, envie seu nome de usuário do Telegram.",
-    telegram_download: "Você precisa baixar o Telegram. Se o seu celular tiver Play Store ou App Store, pesquise por Telegram e baixe o aplicativo. Depois de criar a conta, envie o nome de usuário começando com @.",
+    telegram_download: "Se o seu celular tiver Play Store ou App Store, você pode pesquisar e baixar o Telegram diretamente. Depois de criar a conta do Telegram, me avise. Vamos ensinar no Telegram como ganhar comissão. Depois disso, envie o nome de usuário começando com @.",
     collect_telegram: "Você já registrou sua conta no Telegram? Envie seu nome de usuário do Telegram começando com @.",
     collect_telegram_retry: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
     missing_invite: `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${fallback ? `\nLink de cadastro: ${fallback}` : ""}`

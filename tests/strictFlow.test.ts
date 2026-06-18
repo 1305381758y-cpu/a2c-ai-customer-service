@@ -224,6 +224,10 @@ describe("strict Aston Brazil flow", () => {
 
     expect(result.nextFlowStep).toBe("telegram_confirm");
     expect(result.reply).toContain("Telegram");
+    expect(result.reply).toContain("恭喜");
+    expect(result.reply).toContain("保存您的用户名和密码");
+    expect(result.reply).toContain("开始工作");
+    expect(result.reply).not.toContain("注册奖励");
     expect(result.reply).not.toContain("register.example");
     expect(result.reply).not.toContain("邀请码");
   });
@@ -630,6 +634,37 @@ describe("strict Aston Brazil flow", () => {
       conversation: linkConversation,
       analysis: ambiguous,
       customerText: "mn",
+      inferredIntent: "ask_link"
+    })).toBe(true);
+  });
+
+  it("does not reserve invitation codes before the registration step even if the customer asks for a link", () => {
+    const analysis = analyzeMessage("链接和邀请码发我");
+
+    expect(strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "interest_screening" }),
+      analysis,
+      customerText: "链接和邀请码发我",
+      inferredIntent: "ask_link"
+    })).toBe(false);
+
+    expect(strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "registration_intent" }),
+      analysis,
+      customerText: "链接和邀请码发我",
+      inferredIntent: "ask_link"
+    })).toBe(true);
+
+    expect(strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "wait_registration" }),
+      analysis,
+      customerText: "链接和邀请码发我",
       inferredIntent: "ask_link"
     })).toBe(true);
   });
