@@ -116,10 +116,10 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "interest_screening") {
     if (positive) {
-      return reply(input, language, "registration_intent", "need_platform_register", joinReplyParts(scriptLine("project_intro", language), scriptLine("bridge_registration_intent", language), language));
+      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(step, text, language, input.analysis.intent));
     }
     if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent", input.analysis.intent));
+      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(step, text, language, input.analysis.intent));
     }
     if (asksLink) {
       return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
@@ -200,6 +200,13 @@ function naturalizeStrictReply(step: StrictFlowStep | "", text: string, language
   if (prefix.pauseFlow) return prefix.content;
   const bridge = flowBridgeLine(nextStep, language);
   return joinReplyParts(prefix.content, bridge || flowGoal, language);
+}
+
+function buildInterestProgressReply(step: StrictFlowStep | "", text: string, language: string, intent = ""): string {
+  const intro = scriptLine("project_intro", language);
+  const prefix = naturalStrictFlowPrefix(step, text, language, intent);
+  if (!prefix || prefix.pauseFlow) return intro;
+  return joinReplyParts(prefix.content, intro, language);
 }
 
 function naturalStrictFlowPrefix(step: StrictFlowStep | "", text: string, language: string, intent = ""): { content: string; pauseFlow?: boolean } | null {

@@ -396,7 +396,9 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[1].analysis.intent).not.toBe("irrelevant_or_spam");
     expect(turns[1].flowStep).toBe("registration_intent");
     expect(turns[1].result.reply).toContain("简单介绍");
-    expect(turns[1].result.reply).toContain("如果您觉得可以继续");
+    expect(turns[1].result.reply).toContain("每天可以赚取");
+    expect(turns[1].result.reply).toContain("空闲时间");
+    expect(turns[1].result.reply).not.toContain("register.example");
     expect(turns[1].result.reply).not.toBe("好的，我继续协助您。");
   });
 
@@ -434,8 +436,32 @@ describe("strict Aston Brazil flow", () => {
 
     expect(result.nextFlowStep).toBe("registration_intent");
     expect(result.reply).toContain("简单介绍");
-    expect(result.reply).toContain("如果您觉得可以继续");
+    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("空闲时间");
+    expect(result.reply).not.toContain("register.example");
     expect(result.reply).not.toBe("好的，我继续协助您。");
+  });
+
+  it("answers a concern then still introduces the project when interest is expressed", () => {
+    const result = reply("这个安全吗，我有兴趣", { language: "zh", flowStep: "interest_screening" });
+    expect(result.enabled).toBe(true);
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("理解您的顾虑");
+    expect(result.reply).toContain("简单介绍");
+    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("空闲时间");
+    expect(result.reply).not.toContain("register.example");
+    expect(result.reply).not.toBe("好的，我继续协助您。");
+  });
+
+  it("introduces the project when the customer asks to understand the job", () => {
+    const result = reply("我想了解这个工作", { language: "zh", flowStep: "interest_screening" });
+    expect(result.enabled).toBe(true);
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("简单介绍");
+    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("空闲时间");
+    expect(result.reply).not.toContain("register.example");
   });
 
   it("prefers a later previous strict-flow step over stale stored flow data", () => {

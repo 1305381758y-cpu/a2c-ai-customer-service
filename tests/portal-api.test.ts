@@ -1728,7 +1728,8 @@ describe("portal api", () => {
       expect(String(sentMessages[0].content)).toContain("兼职在线工作");
       expect(String(sentMessages[0].content)).not.toContain("register.example");
       expect(String(sentMessages[1].content)).toContain("简单介绍");
-      expect(String(sentMessages[1].content)).toContain("如果您觉得可以继续");
+      expect(String(sentMessages[1].content)).toContain("每天可以赚取");
+      expect(String(sentMessages[1].content)).toContain("空闲时间");
       expect(String(sentMessages[1].content)).not.toContain("register.example");
       expect(String(sentMessages[2].content)).toContain("https://register.example/?code=ASTON-SHORT-1");
       expect(String(sentMessages[2].content)).toContain("ASTON-SHORT-1");
