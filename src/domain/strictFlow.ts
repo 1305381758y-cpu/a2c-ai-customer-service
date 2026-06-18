@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
+import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
 import { isPositiveConfirmation, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 
 export const STRICT_FLOW_STEPS = [
@@ -27,6 +27,7 @@ export interface StrictFlowInput {
   inviteCode?: A2CInviteCodeRecord;
   config: AppConfig;
   inferredIntent?: InternalIntentLabel;
+  strictFlowEnabled?: boolean;
 }
 
 export interface StrictFlowReply {
@@ -42,7 +43,8 @@ export interface StrictFlowReply {
 const flowStepSet = new Set<string>(STRICT_FLOW_STEPS);
 const flowStepRank = new Map<StrictFlowStep, number>(STRICT_FLOW_STEPS.map((step, index) => [step, index]));
 
-export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantCountryRecord): boolean {
+export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantCountryRecord, merchantConfig?: Pick<MerchantConfigRecord, "strictScriptFlowEnabled">): boolean {
+  if (merchantConfig?.strictScriptFlowEnabled) return true;
   const merchantName = merchant.name.trim().toLowerCase();
   const merchantId = merchant.id.trim().toLowerCase();
   const countryName = country.name.trim().toLowerCase();
@@ -59,8 +61,8 @@ export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantC
   return isAston && (isBrazil || isUnconfiguredMarket);
 }
 
-export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent">): boolean {
-  if (!isStrictFlowEnabled(input.merchant, input.country) || !input.country.requirePlatformAccount) return false;
+export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "strictFlowEnabled">): boolean {
+  if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country)) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
   const step = normalizeFlowStep(input.conversation.flowStep);
   if (step === "registration_intent" || step === "send_register_link") return true;
@@ -85,7 +87,7 @@ export function resolveEffectiveStrictFlowStep(
 }
 
 export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
-  if (!isStrictFlowEnabled(input.merchant, input.country)) {
+  if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country))) {
     return {
       enabled: false,
       reply: "",

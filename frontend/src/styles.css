@@ -1262,6 +1262,24 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 }
 .chat-bubble p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .chat-bubble small { color: var(--muted); display: block; margin-top: 6px; }
+.message-diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.message-diagnostics span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid rgba(47, 95, 214, .2);
+  background: rgba(47, 95, 214, .08);
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
 .bubble-meta {
   display: flex;
   justify-content: space-between;

@@ -56,7 +56,8 @@ export class WebhookProcessor {
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     let analysis = analyzeMessage(analysisText, conversation.language);
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
-    const effectiveStrictFlowStep = isStrictFlowEnabled(merchant, country)
+    const strictFlowEnabled = isStrictFlowEnabled(merchant, country, merchantConfig);
+    const effectiveStrictFlowStep = strictFlowEnabled
       ? resolveEffectiveStrictFlowStep(conversation, historyForIntent)
       : "";
     if (effectiveStrictFlowStep && conversation.flowStep !== effectiveStrictFlowStep) {
@@ -69,6 +70,7 @@ export class WebhookProcessor {
       conversation,
       analysis,
       customerText: analysisText || content,
+      strictFlowEnabled,
       history: historyForIntent
     });
     if (inferredIntent !== "unknown") {
@@ -92,6 +94,8 @@ export class WebhookProcessor {
       rawPayload: {
         ...payload,
         inferredIntent,
+        strictFlowEnabled,
+        strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
         originalContent: inboundTranslation.originalText,
         translatedContent: inboundTranslation.translatedText,
         targetLanguage: inboundTranslation.targetLanguage,
@@ -147,6 +151,7 @@ export class WebhookProcessor {
         conversation,
         analysis,
         customerText: analysisText || content,
+        strictFlowEnabled,
         inferredIntent
       });
       const strictInviteCode = strictNeedsInviteCode
@@ -160,7 +165,8 @@ export class WebhookProcessor {
         customerText: analysisText || content,
         inviteCode: strictInviteCode,
         config: runtimeConfig,
-        inferredIntent
+        inferredIntent,
+        strictFlowEnabled
       });
       if (strictReply.enabled) {
       conversation.language = strictReply.language;
@@ -194,7 +200,9 @@ export class WebhookProcessor {
         language: strictReply.language,
         intent: "unknown",
         rawPayload: {
+          replyMode: strictReply.fallback ? "fallback" : "strict_flow",
           strictFlow: true,
+          strictFlowEnabled,
           strictFlowStep: strictReply.nextFlowStep,
           aiFallback: Boolean(strictReply.fallback),
           originalContent: outboundTranslation.originalText,
@@ -282,6 +290,8 @@ export class WebhookProcessor {
       language: aiReply.language || conversation.language,
       intent: "unknown",
       rawPayload: {
+        replyMode: aiReply.fallback ? "fallback" : "gemini",
+        strictFlowEnabled,
         samples: samples.map((sample) => sample.id),
         trainingMaterials: trainingMaterials.map((item) => item.id),
         aiFallback: Boolean(aiReply.fallback),
@@ -344,6 +354,7 @@ export class WebhookProcessor {
       language,
       intent: "human_request",
       rawPayload: {
+        replyMode: "fallback",
         systemFinalReply: true,
         originalContent: operatorTranslation.originalText,
         operatorTranslatedContent: operatorTranslation.translatedText,
@@ -380,10 +391,11 @@ export class WebhookProcessor {
     conversation: Parameters<Repositories["updateConversation"]>[0];
     analysis: MessageAnalysis;
     customerText: string;
+    strictFlowEnabled: boolean;
     history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   }): Promise<InternalIntentLabel> {
     if (!input.customerText.trim()) return "unknown";
-    if (!isStrictFlowEnabled(input.merchant, input.country)) return "unknown";
+    if (!input.strictFlowEnabled) return "unknown";
     if (!input.conversation.flowStep) return "unknown";
     if (input.analysis.intent !== "unknown" && input.analysis.intent !== "irrelevant_or_spam") return "unknown";
     return classifyGeminiIntent(input.runtimeConfig, {

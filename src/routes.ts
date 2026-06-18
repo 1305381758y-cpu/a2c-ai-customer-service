@@ -549,6 +549,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
         language: conversation.language,
         intent: "unknown",
         rawPayload: {
+          replyMode: "manual",
           manual: true,
           originalContent: translation?.originalText,
           translatedContent: translation?.translatedText,
@@ -604,6 +605,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
         language: conversation.language,
         intent: "unknown",
         rawPayload: {
+          replyMode: "manual",
           manual: true,
           proactive: true,
           originalContent: translation?.originalText,
