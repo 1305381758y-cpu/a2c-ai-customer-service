@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
+import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../repositories.js";
 import { isPositiveConfirmation, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 
 export const STRICT_FLOW_STEPS = [
@@ -28,6 +28,7 @@ export interface StrictFlowInput {
   config: AppConfig;
   inferredIntent?: InternalIntentLabel;
   strictFlowEnabled?: boolean;
+  scriptFlow?: ScriptFlowRuntime;
 }
 
 export interface StrictFlowReply {
@@ -108,44 +109,44 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const inferredIntent = input.inferredIntent ?? "unknown";
 
   if (!step || step === "first_greeting") {
-    return reply(input, language, "interest_screening", "need_platform_register", scriptLine("first_greeting", language));
+    return reply(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "first_greeting", language));
   }
 
   if ((input.analysis.telegram || input.conversation.extractedTelegram) && !(input.analysis.phone || input.conversation.extractedPhone)) {
-    return reply(input, language, "collect_telegram", "need_phone_or_tg", scriptLine("ask_registered_phone", language));
+    return reply(input, language, "collect_telegram", "need_phone_or_tg", flowScriptLine(input, "ask_registered_phone", language));
   }
 
   if (step === "interest_screening") {
     if (positive) {
-      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(step, text, language, input.analysis.intent));
+      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(input, step, text, language, input.analysis.intent));
     }
     if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(step, text, language, input.analysis.intent));
+      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(input, step, text, language, input.analysis.intent));
     }
     if (asksLink) {
-      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
+      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
     }
-    return reply(input, language, "interest_screening", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("interest_screening_retry", language), "interest_screening", input.analysis.intent));
+    return reply(input, language, "interest_screening", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "interest_screening_retry", language), "interest_screening", input.analysis.intent));
   }
 
   if (step === "project_intro") {
-    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("project_intro", language), "registration_intent", input.analysis.intent));
+    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "project_intro", language), "registration_intent", input.analysis.intent));
   }
 
   if (step === "registration_intent") {
     if (inferredIntent === "negative_refusal") {
-      return reply(input, language, "registration_intent", "need_platform_register", scriptLine("refusal_ack", language));
+      return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
     if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
-      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
+      return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
     }
     if (positive || asksLink || inferredIntent === "ask_link" || inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
-    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("registration_intent", language), "registration_intent", input.analysis.intent));
+    return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
   }
 
   if (step === "send_register_link") {
@@ -155,101 +156,101 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "wait_registration") {
     if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (negativeTelegram) {
-        return reply(input, language, "telegram_download", "need_tg_register", scriptLine("telegram_download", language));
+        return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
       }
-      return reply(input, language, "telegram_confirm", "need_tg_register", scriptLine(input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
+      return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
     }
     if (asksLink || inferredIntent === "ask_link") {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
-    return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(step, text, language, scriptLine("wait_registration", language), "wait_registration", input.analysis.intent));
+    return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", input.analysis.intent));
   }
 
   if (step === "telegram_confirm") {
     if (inferredIntent === "negative_refusal") {
-      return reply(input, language, "telegram_confirm", "need_tg_register", scriptLine("refusal_ack", language));
+      return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (negativeTelegram) {
-      return reply(input, language, "telegram_download", "need_tg_register", scriptLine("telegram_download", language));
+      return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
     }
     if (positive || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
-      return reply(input, language, "collect_telegram", "need_tg_register", scriptLine("collect_telegram", language));
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram", language));
     }
-    return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("telegram_confirm_question", language), "telegram_confirm", input.analysis.intent));
+    return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_confirm_question", language), "telegram_confirm", input.analysis.intent));
   }
 
   if (step === "telegram_download") {
-    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram", language), "collect_telegram", input.analysis.intent));
+    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram", language), "collect_telegram", input.analysis.intent));
   }
 
   if (step === "collect_telegram") {
     if (inferredIntent === "negative_refusal") {
-      return reply(input, language, "collect_telegram", "need_tg_register", scriptLine("refusal_ack", language));
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (negativeTelegram) {
-      return reply(input, language, "telegram_download", "need_tg_register", scriptLine("telegram_download", language));
+      return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
     }
-    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(step, text, language, scriptLine("collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
+    return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
   }
 
   return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
 }
 
-function naturalizeStrictReply(step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = ""): string {
-  const prefix = naturalStrictFlowPrefix(step, text, language, intent);
+function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = ""): string {
+  const prefix = naturalStrictFlowPrefix(input, step, text, language, intent);
   if (!prefix) return flowGoal;
   if (prefix.pauseFlow) return prefix.content;
-  const bridge = flowBridgeLine(nextStep, language);
+  const bridge = flowBridgeLine(input, nextStep, language);
   return joinReplyParts(prefix.content, bridge || flowGoal, language);
 }
 
-function buildInterestProgressReply(step: StrictFlowStep | "", text: string, language: string, intent = ""): string {
-  const intro = scriptLine("project_intro", language);
-  const prefix = naturalStrictFlowPrefix(step, text, language, intent);
+function buildInterestProgressReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): string {
+  const intro = flowScriptLine(input, "project_intro", language);
+  const prefix = naturalStrictFlowPrefix(input, step, text, language, intent);
   if (!prefix || prefix.pauseFlow) return intro;
   return joinReplyParts(prefix.content, intro, language);
 }
 
-function naturalStrictFlowPrefix(step: StrictFlowStep | "", text: string, language: string, intent = ""): { content: string; pauseFlow?: boolean } | null {
+function naturalStrictFlowPrefix(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): { content: string; pauseFlow?: boolean } | null {
   if (!step) return null;
   const normalized = text.trim();
   if (!normalized) return null;
   if (isExplicitRefusal(normalized)) {
-    return { content: scriptLine("refusal_ack", language), pauseFlow: true };
+    return { content: flowScriptLine(input, "refusal_ack", language), pauseFlow: true };
   }
   if (asksAboutPlatform(normalized)) {
-    return { content: scriptLine("platform_explain", language) };
+    return { content: flowScriptLine(input, "platform_explain", language) };
   }
   if (asksToChat(normalized)) {
-    return { content: scriptLine("chat_ack", language) };
+    return { content: flowScriptLine(input, "chat_ack", language) };
   }
   if (complainsAboutReply(normalized)) {
-    return { content: scriptLine("complaint_ack", language) };
+    return { content: flowScriptLine(input, "complaint_ack", language) };
   }
   if (intent === "trust_concern" || asksTrustConcern(normalized)) {
-    return { content: scriptLine("trust_ack", language) };
+    return { content: flowScriptLine(input, "trust_ack", language) };
   }
   if (intent === "need_help" || asksForOperationHelp(normalized)) {
-    return { content: helpLineForStep(step, language) };
+    return { content: helpLineForStep(input, step, language) };
   }
   if (asksAboutJob(normalized)) {
-    return { content: scriptLine("project_intro", language) };
+    return { content: flowScriptLine(input, "project_intro", language) };
   }
   if (isRepeatGreeting(normalized) && step !== "interest_screening") {
-    return { content: scriptLine("repeat_greeting", language) };
+    return { content: flowScriptLine(input, "repeat_greeting", language) };
   }
   if (isHesitant(normalized)) {
-    return { content: scriptLine("hesitation_ack", language) };
+    return { content: flowScriptLine(input, "hesitation_ack", language) };
   }
   return null;
 }
 
-function flowBridgeLine(step: StrictFlowStep, language: string): string {
-  if (step === "interest_screening") return scriptLine("bridge_interest", language);
-  if (step === "registration_intent") return scriptLine("bridge_registration_intent", language);
-  if (step === "wait_registration") return scriptLine("bridge_wait_registration", language);
-  if (step === "telegram_confirm") return scriptLine("bridge_telegram_confirm", language);
-  if (step === "telegram_download" || step === "collect_telegram") return scriptLine("bridge_collect_telegram", language);
+function flowBridgeLine(input: StrictFlowInput, step: StrictFlowStep, language: string): string {
+  if (step === "interest_screening") return flowScriptLine(input, "bridge_interest", language);
+  if (step === "registration_intent") return flowScriptLine(input, "bridge_registration_intent", language);
+  if (step === "wait_registration") return flowScriptLine(input, "bridge_wait_registration", language);
+  if (step === "telegram_confirm") return flowScriptLine(input, "bridge_telegram_confirm", language);
+  if (step === "telegram_download" || step === "collect_telegram") return flowScriptLine(input, "bridge_collect_telegram", language);
   return "";
 }
 
@@ -367,7 +368,7 @@ function isPositive(text: string, intent: string, inferredIntent: InternalIntent
   if (inferredIntent === "positive_confirmation") return true;
   if (intent === "platform_register_done") return true;
   if (isPositiveConfirmation(text)) return true;
-  return /(有兴趣|想了解|想继续|要继续|继续|准备好了|愿意|同意|interested|i want|continue|quero|tenho interesse|continuar|vamos|pronto)/i.test(text.trim());
+  return /(有兴趣|想了解|想继续|要继续|继续|准备好了|有空|空闲|有时间|现在可以|愿意|同意|interested|i want|continue|free time|available|quero|tenho interesse|continuar|tenho tempo|dispon[ií]vel|vamos|pronto)/i.test(text.trim());
 }
 
 function isRegistrationDoneConfirmation(text: string): boolean {
@@ -412,14 +413,14 @@ function asksForOperationHelp(text: string): boolean {
   return /(不会|不會|不懂|怎么弄|怎麼弄|怎么操作|如何操作|怎么注册|怎么下载|怎么用|帮我|教我|一步一步|help|how do i|how to|cannot|can't|ajuda|me ajuda|como faço|como fazer|não consigo|nao consigo)/i.test(text);
 }
 
-function helpLineForStep(step: StrictFlowStep | "", language: string): string {
+function helpLineForStep(input: StrictFlowInput, step: StrictFlowStep | "", language: string): string {
   if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") {
-    return scriptLine("telegram_help_ack", language);
+    return flowScriptLine(input, "telegram_help_ack", language);
   }
   if (step === "wait_registration" || step === "send_register_link" || step === "registration_intent") {
-    return scriptLine("registration_help_ack", language);
+    return flowScriptLine(input, "registration_help_ack", language);
   }
-  return scriptLine("general_help_ack", language);
+  return flowScriptLine(input, "general_help_ack", language);
 }
 
 function asksAboutJob(text: string): boolean {
@@ -432,6 +433,16 @@ function isRepeatGreeting(text: string): boolean {
 
 function registerInstruction(input: StrictFlowInput, language: string): string {
   const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
+  const customStep = activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
+  if (customStep?.standardReply) {
+    const withVariables = applyScriptVariables(customStep.standardReply, input, language, display);
+    if (customStep.sendLink || customStep.sendInvite) {
+      return withVariables.includes(display) || withVariables.includes(input.inviteCode?.code || "__missing_code__")
+        ? withVariables
+        : joinReplyParts(withVariables, display, language);
+    }
+    return withVariables;
+  }
   if (!input.inviteCode) {
     return scriptLine("missing_invite", language, display);
   }
@@ -442,6 +453,63 @@ function registerInstruction(input: StrictFlowInput, language: string): string {
     return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir o cadastro, me avise.`;
   }
   return `好的，现在我会把链接和邀请码发给您。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成注册后请告诉我。`;
+}
+
+function flowScriptLine(input: StrictFlowInput, key: string, language: string): string {
+  const step = activeScriptStep(input, key);
+  if (step?.standardReply) {
+    return applyScriptVariables(step.standardReply, input, language, "");
+  }
+  return scriptLine(key, language);
+}
+
+function activeScriptStep(input: StrictFlowInput, key: string) {
+  const steps = input.scriptFlow?.steps ?? [];
+  const enabledSteps = steps.filter((step) => step.enabled);
+  const normalizedKey = key.toLowerCase();
+  const exact = enabledSteps.find((step) => step.flowStep === key || step.flowCode.toLowerCase() === normalizedKey);
+  if (exact) return exact;
+
+  if (key === "first_greeting" || key === "interest_screening_retry") {
+    return enabledSteps.find((step) => step.flowStep === "interest_screening");
+  }
+
+  if (key === "project_intro") {
+    return (
+      enabledSteps.find((step) => step.flowStep === "registration_intent" && /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
+      enabledSteps.find((step) => /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
+      enabledSteps.find((step) => step.flowCode.toUpperCase() === "B" || step.flowCode.toUpperCase() === "C") ??
+      enabledSteps.find((step) => step.flowStep === "registration_intent")
+    );
+  }
+
+  if (key === "registration_intent") {
+    return (
+      enabledSteps.find((step) => step.flowStep === "registration_intent" && (step.sendLink || step.sendInvite)) ??
+      enabledSteps.find((step) => step.flowStep === "registration_intent" && /注册|注册链接|开户链接|邀请码|register|invite/i.test(`${step.flowName} ${step.goal} ${step.standardReply}`))
+    );
+  }
+
+  if (key === "wait_registration") {
+    return enabledSteps.find((step) => step.flowStep === "wait_registration" || step.sendLink || step.sendInvite);
+  }
+
+  return undefined;
+}
+
+function applyScriptVariables(content: string, input: StrictFlowInput, language: string, display: string): string {
+  const fallbackUrl = input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL || "";
+  const registerUrl = input.inviteCode?.registerUrl
+    ? input.inviteCode.registerUrl.includes("{code}")
+      ? input.inviteCode.registerUrl.replaceAll("{code}", input.inviteCode.code)
+      : input.inviteCode.registerUrl
+    : fallbackUrl;
+  return content
+    .replaceAll("{{REGISTER_URL}}", registerUrl)
+    .replaceAll("{{INVITE_CODE}}", input.inviteCode?.code || "")
+    .replaceAll("{{INVITE_DISPLAY}}", display || inviteDisplayText(input.inviteCode, language, fallbackUrl))
+    .replaceAll("{{CUSTOMER_PHONE}}", input.conversation.extractedPhone || input.analysis.phone || "")
+    .replaceAll("{{TELEGRAM_USERNAME}}", input.conversation.extractedTelegram || input.analysis.telegram || "");
 }
 
 function inviteDisplayText(inviteCode: A2CInviteCodeRecord | undefined, language: string, fallbackUrl = ""): string {

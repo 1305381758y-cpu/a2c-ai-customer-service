@@ -9,6 +9,7 @@ import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
 import { parseTrainingMaterial } from "./import/trainingMaterials.js";
+import { parseScriptFlowWorkbook } from "./import/scriptFlows.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
@@ -226,6 +227,71 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!ok) return reply.code(404).send({ error: "material not found" });
     return { ok: true };
   });
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string } }>("/api/admin/script-flows", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listScriptFlows({
+      merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
+      status: request.query.status
+    })
+  }));
+  app.post("/api/admin/script-flows/import", { preHandler: adminOnly }, async (request, reply) => importScriptFlow(request, reply, deps, undefined));
+  app.get<{ Params: { id: string } }>("/api/admin/script-flows/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.getScriptFlow(Number(request.params.id));
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    return { ...row, versions: deps.repos.listScriptFlowVersions(Number(request.params.id)) };
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/script-flows/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.patchScriptFlow(Number(request.params.id), undefined, request.body ?? {}, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/script-flows/:id", { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      const ok = deps.repos.deleteScriptFlow(Number(request.params.id));
+      if (!ok) return reply.code(404).send({ error: "script flow not found" });
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "delete failed" });
+    }
+  });
+  app.post<{ Params: { id: string } }>("/api/admin/script-flows/:id/enable", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.enableScriptFlow(Number(request.params.id), undefined, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    return row;
+  });
+  app.post<{ Params: { id: string; versionId: string } }>("/api/admin/script-flows/:id/versions/:versionId/restore", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.restoreScriptFlowVersion(Number(request.params.id), Number(request.params.versionId), undefined, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow version not found" });
+    return row;
+  });
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/script-flows/:id/steps", { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      const row = deps.repos.createScriptFlowStep(Number(request.params.id), undefined, request.body ?? {}, requestUser(request).name);
+      if (!row) return reply.code(404).send({ error: "script flow not found" });
+      return row;
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid step" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/script-flow-steps/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.patchScriptFlowStep(Number(request.params.id), undefined, request.body ?? {}, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow step not found" });
+    return row;
+  });
+  app.post<{ Params: { id: string } }>("/api/admin/script-flow-steps/:id/duplicate", { preHandler: adminOnly }, async (request, reply) => {
+    const row = deps.repos.duplicateScriptFlowStep(Number(request.params.id), undefined, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow step not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/script-flow-steps/:id", { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      const ok = deps.repos.deleteScriptFlowStep(Number(request.params.id), undefined, requestUser(request).name);
+      if (!ok) return reply.code(404).send({ error: "script flow step not found" });
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "delete failed" });
+    }
+  });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: request.query.merchantId,
@@ -432,6 +498,72 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const ok = deps.repos.deleteTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
     if (!ok) return reply.code(404).send({ error: "material not found" });
     return { ok: true };
+  });
+  app.get<{ Querystring: { countryId?: string; status?: string } }>("/api/merchant/script-flows", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.listScriptFlows({
+      merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
+      status: request.query.status
+    })
+  }));
+  app.post("/api/merchant/script-flows/import", { preHandler: merchantAdmins }, async (request, reply) => importScriptFlow(request, reply, deps, scopedMerchantId(request)));
+  app.get<{ Params: { id: string } }>("/api/merchant/script-flows/:id", { preHandler: merchantRoles }, async (request, reply) => {
+    const row = deps.repos.getScriptFlow(Number(request.params.id), scopedMerchantId(request));
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    return { ...row, versions: deps.repos.listScriptFlowVersions(Number(request.params.id), scopedMerchantId(request)) };
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/script-flows/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.patchScriptFlow(Number(request.params.id), scopedMerchantId(request), request.body ?? {}, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/merchant/script-flows/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    try {
+      const ok = deps.repos.deleteScriptFlow(Number(request.params.id), scopedMerchantId(request));
+      if (!ok) return reply.code(404).send({ error: "script flow not found" });
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "delete failed" });
+    }
+  });
+  app.post<{ Params: { id: string } }>("/api/merchant/script-flows/:id/enable", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.enableScriptFlow(Number(request.params.id), scopedMerchantId(request), requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow not found" });
+    deps.repos.patchMerchantConfig(scopedMerchantId(request), { strictScriptFlowEnabled: true });
+    return row;
+  });
+  app.post<{ Params: { id: string; versionId: string } }>("/api/merchant/script-flows/:id/versions/:versionId/restore", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.restoreScriptFlowVersion(Number(request.params.id), Number(request.params.versionId), scopedMerchantId(request), requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow version not found" });
+    return row;
+  });
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/script-flows/:id/steps", { preHandler: merchantAdmins }, async (request, reply) => {
+    try {
+      const row = deps.repos.createScriptFlowStep(Number(request.params.id), scopedMerchantId(request), request.body ?? {}, requestUser(request).name);
+      if (!row) return reply.code(404).send({ error: "script flow not found" });
+      return row;
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid step" });
+    }
+  });
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/script-flow-steps/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.patchScriptFlowStep(Number(request.params.id), scopedMerchantId(request), request.body ?? {}, requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow step not found" });
+    return row;
+  });
+  app.post<{ Params: { id: string } }>("/api/merchant/script-flow-steps/:id/duplicate", { preHandler: merchantAdmins }, async (request, reply) => {
+    const row = deps.repos.duplicateScriptFlowStep(Number(request.params.id), scopedMerchantId(request), requestUser(request).name);
+    if (!row) return reply.code(404).send({ error: "script flow step not found" });
+    return row;
+  });
+  app.delete<{ Params: { id: string } }>("/api/merchant/script-flow-steps/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    try {
+      const ok = deps.repos.deleteScriptFlowStep(Number(request.params.id), scopedMerchantId(request), requestUser(request).name);
+      if (!ok) return reply.code(404).send({ error: "script flow step not found" });
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "delete failed" });
+    }
   });
   app.get<{ Querystring: { countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
@@ -1056,6 +1188,36 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
     return { material: finalized, imported: sampleCount + knowledgeCount, samples: sampleCount, knowledge: knowledgeCount, warnings: finalized.warnings };
   } catch (error) {
     return reply.code(400).send({ error: "invalid training material file", message: error instanceof Error ? error.message : "unknown parse error" });
+  }
+}
+
+async function importScriptFlow(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, scopedMerchantId?: string) {
+  let uploadError = "";
+  const file = await request.file().catch((error) => {
+    uploadError = error instanceof Error ? error.message : "文件上传失败";
+    return undefined;
+  });
+  if (uploadError) return reply.code(413).send({ error: "文件过大或上传失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
+  if (!file) return reply.code(400).send({ error: "file is required" });
+  const query = request.query as Record<string, string | undefined>;
+  const fields = (file as unknown as { fields?: Record<string, { value?: string }> }).fields || {};
+  const merchantId = scopedMerchantId || query.merchantId || fields.merchantId?.value || "default";
+  const countryId = query.countryId || fields.countryId?.value || deps.repos.defaultCountryId(merchantId);
+  const name = query.name || fields.name?.value || file.filename.replace(/\.(xlsx|xls)$/i, "") || "话本流程";
+  const buffer = await file.toBuffer().catch(() => null);
+  if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
+  try {
+    const steps = await parseScriptFlowWorkbook(buffer);
+    const result = deps.repos.createScriptFlow(merchantId, {
+      name,
+      countryId,
+      sourceFilename: file.filename,
+      steps: steps as unknown as Array<Record<string, unknown>>,
+      createdBy: requestUser(request).name
+    });
+    return { ...result, imported: steps.length };
+  } catch (error) {
+    return reply.code(400).send({ error: "invalid script flow file", message: error instanceof Error ? error.message : "unknown parse error" });
   }
 }
 

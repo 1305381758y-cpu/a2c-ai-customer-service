@@ -287,6 +287,73 @@ export function migrate(db: DatabaseSync): void {
       UNIQUE(merchant_id, country_id, customer_key),
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS script_flows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT DEFAULT '',
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      active INTEGER DEFAULT 0,
+      version INTEGER DEFAULT 1,
+      source_filename TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS script_flow_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flow_id INTEGER NOT NULL,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT DEFAULT '',
+      flow_code TEXT NOT NULL,
+      flow_name TEXT DEFAULT '',
+      flow_step TEXT DEFAULT '',
+      goal TEXT DEFAULT '',
+      trigger_condition TEXT DEFAULT '',
+      customer_expressions TEXT DEFAULT '',
+      standard_reply TEXT NOT NULL,
+      collect_info TEXT DEFAULT '',
+      send_link INTEGER DEFAULT 0,
+      send_invite INTEGER DEFAULT 0,
+      next_condition TEXT DEFAULT '',
+      next_flow_code TEXT DEFAULT '',
+      next_flow_step TEXT DEFAULT '',
+      forbidden TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      sort_order INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(flow_id) REFERENCES script_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS script_flow_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flow_id INTEGER NOT NULL,
+      merchant_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      note TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(flow_id) REFERENCES script_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_script_state (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL UNIQUE,
+      flow_id INTEGER,
+      flow_version INTEGER DEFAULT 1,
+      current_step_id INTEGER,
+      current_flow_step TEXT DEFAULT '',
+      collected_json TEXT DEFAULT '{}',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id),
+      FOREIGN KEY(flow_id) REFERENCES script_flows(id)
+    );
 	  `);
 
   db.exec("DROP TABLE IF EXISTS vector_documents;");
@@ -341,6 +408,12 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "customer_memories", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customer_memories", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "customer_memories", "extracted_whatsapp", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flows", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flows", "source_filename", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flow_steps", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flow_steps", "flow_step", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flow_steps", "next_flow_step", "TEXT DEFAULT ''");
+  ensureColumn(db, "script_flow_steps", "enabled", "INTEGER DEFAULT 1");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
@@ -357,6 +430,9 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_materials SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_material_items SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE customer_memories SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE script_flows SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE script_flow_steps SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE script_flow_versions SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_samples SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE conversations SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE merchant_a2c_accounts SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
@@ -366,6 +442,8 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE training_materials SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE training_material_items SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE customer_memories SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
+  db.prepare("UPDATE script_flows SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
+  db.prepare("UPDATE script_flow_steps SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
 }
 
 function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {

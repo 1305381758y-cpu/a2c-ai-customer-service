@@ -56,6 +56,47 @@ function csvUploadPayload(csv: string) {
 }
 
 describe("portal api", () => {
+  it("creates editable script flows, enables one active flow, and protects referenced steps", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("话本商户");
+    const flow = repos.createScriptFlow(merchant.id, {
+      name: "直营网话本",
+      steps: [
+        {
+          flowCode: "A",
+          flowName: "兴趣筛选",
+          flowStep: "interest_screening",
+          standardReply: "您好，是否有兴趣？",
+          nextFlowCode: "B",
+          nextFlowStep: "registration_intent",
+          sortOrder: 1
+        },
+        {
+          flowCode: "B",
+          flowName: "项目介绍",
+          flowStep: "registration_intent",
+          standardReply: "这里是自定义项目介绍。",
+          sortOrder: 2
+        }
+      ],
+      createdBy: "测试员"
+    });
+
+    expect(flow.flow.stepCount).toBe(2);
+    expect(flow.steps[0].flowStep).toBe("interest_screening");
+
+    const enabled = repos.enableScriptFlow(flow.flow.id, merchant.id, "测试员");
+    expect(enabled?.flow.active).toBe(true);
+    expect(repos.getActiveScriptFlow(merchant.id)?.flow.id).toBe(flow.flow.id);
+
+    const patched = repos.patchScriptFlowStep(flow.steps[1].id, merchant.id, { standardReply: "更新后的项目介绍。" }, "测试员");
+    expect(patched?.standardReply).toBe("更新后的项目介绍。");
+    expect(repos.listScriptFlowVersions(flow.flow.id, merchant.id).length).toBeGreaterThanOrEqual(3);
+
+    expect(() => repos.deleteScriptFlowStep(flow.steps[1].id, merchant.id, "测试员")).toThrow(/引用/);
+  });
+
   it("clears all training samples through the internal maintenance endpoint", async () => {
     const app = buildApp(testConfig());
     try {

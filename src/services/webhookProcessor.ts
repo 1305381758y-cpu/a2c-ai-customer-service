@@ -56,7 +56,8 @@ export class WebhookProcessor {
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     let analysis = analyzeMessage(analysisText, conversation.language);
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
-    const strictFlowEnabled = isStrictFlowEnabled(merchant, country, merchantConfig);
+    const scriptFlow = this.repos.getActiveScriptFlow(merchant.id, country.id);
+    const strictFlowEnabled = Boolean(scriptFlow) || isStrictFlowEnabled(merchant, country, merchantConfig);
     const effectiveStrictFlowStep = strictFlowEnabled
       ? resolveEffectiveStrictFlowStep(conversation, historyForIntent)
       : "";
@@ -166,7 +167,8 @@ export class WebhookProcessor {
         inviteCode: strictInviteCode,
         config: runtimeConfig,
         inferredIntent,
-        strictFlowEnabled
+        strictFlowEnabled,
+        scriptFlow
       });
       if (strictReply.enabled) {
       conversation.language = strictReply.language;

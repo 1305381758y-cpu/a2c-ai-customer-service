@@ -15,6 +15,9 @@ type TrainingMaterialItem = { id: number; kind: string; title: string; content: 
 type A2CAccount = { id: number; merchantId: string; countryId: string; countryCode: string; countryName: string; defaultLanguage: string; apiPhone: string; wabaId: string; status: number; numberStatus: number; qualityRating: number; messagingLimit: number; verifiedName: string; enabled: boolean; syncedAt: string };
 type InviteCode = { id: number; merchantId: string; countryId: string; countryName: string; a2cAccountId: number; a2cAccountPhone: string; code: string; registerUrl: string; status: string; assignedCustomerKey: string; assignedConversationId: string; platformAccount: string; assignedAt: string; usedAt: string; createdAt: string; updatedAt: string };
 type MerchantCountry = { id: string; merchantId: string; code: string; name: string; defaultLanguage: string; platformRegisterUrl: string; tgRegisterGuideUrl: string; requirePlatformAccount: boolean; requirePhone: boolean; requireTelegram: boolean; requireWhatsApp: boolean; status: string };
+type ScriptFlow = { id: number; merchantId: string; countryId: string; countryName: string; name: string; status: string; active: boolean; version: number; sourceFilename: string; stepCount: number; createdAt: string; updatedAt: string };
+type ScriptFlowStep = { id: number; flowId: number; flowCode: string; flowName: string; flowStep: string; goal: string; triggerCondition: string; customerExpressions: string; standardReply: string; collectInfo: string; sendLink: boolean; sendInvite: boolean; nextCondition: string; nextFlowCode: string; nextFlowStep: string; forbidden: string; notes: string; sortOrder: number; enabled: boolean };
+type ScriptFlowVersion = { id: number; flowId: number; version: number; note: string; createdBy: string; createdAt: string };
 type UnreadSummary = { a2cAccountPhone: string; unreadCount: number; conversations: Array<{ conversationId: string; customerPhone: string; unreadCount: number }> };
 type ChatMessage = { id: number; direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; translationStatus?: "translated" | "skipped" | "failed"; translationError?: string; operatorTranslatedContent?: string; operatorTranslationTargetLanguage?: string; operatorTranslationStatus?: "translated" | "skipped" | "failed"; operatorTranslationError?: string; manual?: boolean; replyMode?: "strict_flow" | "gemini" | "fallback" | "manual"; strictFlow?: boolean; strictFlowEnabled?: boolean; strictFlowStep?: string; a2cSendStatus?: string; a2cSendError?: string } };
 type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
@@ -33,6 +36,17 @@ const MESSAGE_TYPE_OPTIONS = [
   { value: "video", label: "视频" },
   { value: "audio", label: "音频" },
   { value: "document", label: "文件" }
+];
+
+const STRICT_STEP_OPTIONS = [
+  "interest_screening",
+  "registration_intent",
+  "wait_registration",
+  "telegram_confirm",
+  "telegram_download",
+  "collect_telegram",
+  "human_handoff",
+  "ended"
 ];
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -104,8 +118,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const merchantTrainingViews = ["materials", "knowledge", "samples"];
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["scriptFlows", "话本流程", Workflow], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
   useEffect(() => {
     if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
@@ -125,6 +139,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
         {activeView === "customers" && <Customers platform={user.role === "platform_admin"} />}
+        {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
         {activeView === "training" && <TrainingMaterials platform={false} simple />}
         {activeView === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
         {activeView === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
@@ -538,6 +553,177 @@ function Samples({ platform = false }: { platform?: boolean }) {
   const [selected, setSelected] = useState<Sample | null>(null);
   const reload = async () => { setRows(await loadRows(rowsUrl)); pager.setPage(1); };
   return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel"><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败"); const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] }; notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`); setFile(null); await reload(); }}><Upload size={16}/>上传训练文件</AsyncButton></div><small>支持 CSV、Excel、Word、TXT、截图/图片。表格直接生成样本；文本、Word、截图会自动提取话术。</small></div>}<Table rows={pager.rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); await reload(); }} onDelete={async () => { if (!window.confirm("确认彻底删除这个样本？删除后 AI 不会再引用它。")) return; await api(`${base}/${selected.id}`, { method: "DELETE" }); setSelected(null); await reload(); notify("success", "样本已彻底删除"); }} /></section>}</div>;
+}
+
+function ScriptFlows({ platform = false }: { platform?: boolean }) {
+  const base = platform ? "/api/admin/script-flows" : "/api/merchant/script-flows";
+  const stepBase = platform ? "/api/admin/script-flow-steps" : "/api/merchant/script-flow-steps";
+  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "" });
+  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status });
+  const [rows, setRows] = useRows<ScriptFlow>(rowsUrl);
+  const [selected, setSelected] = useState<ScriptFlow | null>(null);
+  const [detail, setDetail] = useState<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] } | null>(null);
+  const [selectedStep, setSelectedStep] = useState<ScriptFlowStep | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [flowName, setFlowName] = useState("");
+  const reload = async () => setRows(await loadRows(rowsUrl));
+  const loadDetail = async (flow: ScriptFlow) => {
+    setSelected(flow);
+    const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${flow.id}`);
+    setDetail(next);
+    setSelectedStep(next.steps[0] || null);
+  };
+  const upload = async () => {
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    const params = new URLSearchParams();
+    const countryId = filters.countryId || countries[0]?.id || "";
+    if (flowName.trim()) params.set("name", flowName.trim());
+    if (countryId) params.set("countryId", countryId);
+    if (platform && filters.merchantId.trim()) params.set("merchantId", filters.merchantId.trim());
+    const response = await fetch(`${base}/import${params.toString() ? `?${params}` : ""}`, { method: "POST", body });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || "上传失败");
+    const result = await response.json() as { flow: ScriptFlow; imported: number };
+    notify("success", "话本流程已导入", `已生成 ${result.imported} 个流程节点`);
+    setFile(null);
+    setFlowName("");
+    await reload();
+  };
+  const refreshDetail = async () => {
+    if (!selected) return;
+    const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${selected.id}`);
+    setDetail(next);
+    setSelected(next.flow);
+    setSelectedStep((current) => next.steps.find((step) => step.id === current?.id) || next.steps[0] || null);
+    await reload();
+  };
+  const addStep = async () => {
+    if (!detail) return;
+    const order = detail.steps.length + 1;
+    const created = await api<ScriptFlowStep>(`${base}/${detail.flow.id}/steps`, {
+      method: "POST",
+      body: JSON.stringify({
+        flowCode: `step_${order}`,
+        flowName: "新流程节点",
+        flowStep: "interest_screening",
+        standardReply: "请在这里填写客服标准话术。",
+        sortOrder: order,
+        enabled: true
+      })
+    });
+    setSelectedStep(created);
+    await refreshDetail();
+  };
+  const deleteFlow = async () => {
+    if (!selected) return;
+    if (!window.confirm("确认删除这个话本流程？删除后不可恢复。当前启用的话本需要先启用其他话本后再删除。")) return;
+    await api(`${base}/${selected.id}`, { method: "DELETE" });
+    notify("success", "话本流程已删除");
+    setSelected(null);
+    setDetail(null);
+    setSelectedStep(null);
+    await reload();
+  };
+  return <div className="script-flow-page work-split">
+    <section className="script-flow-list work-panel">
+      <div className="training-center-hero compact">
+        <div><h3>话本流程</h3><p>这里维护“客户下一步该怎么走”。上传 Excel 后可直接编辑节点，启用后客户会话优先按该流程推进。</p></div>
+      </div>
+      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status"] : ["countryId", "status"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "draft", "active", "disabled"] }} onApply={reload} />
+      <div className="material-uploader compact-uploader">
+        <div className="toolbar wrap">
+          <input placeholder="话本名称，可选" value={flowName} onChange={(event) => setFlowName(event.target.value)} />
+          <input type="file" accept=".xlsx,.xls" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="导入中..." onClick={upload}><Upload size={16}/>导入话本流程</AsyncButton>
+        </div>
+        <small>Excel 表头需包含“客服标准话术”；建议使用“流程编号、流程名称、客户常见表达、是否发链接、是否发邀请码、下一流程编号”等列。</small>
+      </div>
+      <Table rows={rows} columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]} onRow={loadDetail} selectedKey={selected?.id} rowKey={(row) => row.id} />
+    </section>
+    <section className="script-flow-detail detail-panel">
+      {detail ? <div className="script-flow-editor">
+        <div className="detail-title-row">
+          <div>
+            <h3>{detail.flow.name}</h3>
+            <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
+          </div>
+          <div className="toolbar">
+            <AsyncButton busyText="启用中..." onClick={async () => { await api(`${base}/${detail.flow.id}/enable`, { method: "POST" }); notify("success", "话本流程已启用"); await refreshDetail(); }}>启用流程</AsyncButton>
+            <AsyncButton className="danger" busyText="删除中..." onClick={deleteFlow}>删除流程</AsyncButton>
+          </div>
+        </div>
+        <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
+        <div className="script-flow-columns">
+          <div className="script-step-list">
+            <div className="panel-title"><h3>流程节点</h3><AsyncButton busyText="新增中..." onClick={addStep}><Plus size={16}/>新增节点</AsyncButton></div>
+            {detail.steps.map((step) => <button key={step.id} className={`script-step-card ${selectedStep?.id === step.id ? "active" : ""}`} onClick={() => setSelectedStep(step)}>
+              <strong>{step.flowCode} · {step.flowName || label(step.flowStep)}</strong>
+              <span>{label(step.flowStep)} · 顺序 {step.sortOrder} · {step.enabled ? "启用" : "停用"}</span>
+              <small>{step.standardReply}</small>
+            </button>)}
+            {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入 Excel。</div>}
+          </div>
+          <div className="script-step-editor">
+            {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后编辑话术和跳转规则。</div>}
+          </div>
+        </div>
+        <details className="version-panel">
+          <summary>版本记录</summary>
+          <div className="stack-list">
+            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt)}</span><AsyncButton busyText="恢复中..." onClick={async () => { if (!window.confirm(`确认恢复到版本 ${version.version}？`)) return; await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</AsyncButton></div>)}
+          </div>
+        </details>
+      </div> : <div className="empty-chat"><h3>选择话本流程</h3><p>上传或选择一个流程后，可以在这里编辑每一步话术、触发条件和下一步规则。</p></div>}
+    </section>
+  </div>;
+}
+
+function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowStep; endpoint: string; onSaved: () => Promise<void> }) {
+  const [draft, setDraft] = useState<ScriptFlowStep>(step);
+  useEffect(() => setDraft(step), [step]);
+  const set = (key: keyof ScriptFlowStep, value: string | boolean | number) => setDraft({ ...draft, [key]: value } as ScriptFlowStep);
+  const save = async () => {
+    await api(`${endpoint}/${step.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(draft as unknown as Record<string, any>)) });
+    notify("success", "流程节点已保存");
+    await onSaved();
+  };
+  const duplicate = async () => {
+    await api(`${endpoint}/${step.id}/duplicate`, { method: "POST" });
+    notify("success", "流程节点已复制");
+    await onSaved();
+  };
+  const remove = async () => {
+    if (!window.confirm("确认删除这个流程节点？如果有其他节点引用它，需要先修改引用。")) return;
+    await api(`${endpoint}/${step.id}`, { method: "DELETE" });
+    notify("success", "流程节点已删除");
+    await onSaved();
+  };
+  return <div className="script-node-form">
+    <div className="form-grid compact-fields">
+      <label>流程编号<input value={draft.flowCode} onChange={(e) => set("flowCode", e.target.value)} /></label>
+      <label>流程名称<input value={draft.flowName} onChange={(e) => set("flowName", e.target.value)} /></label>
+      <label>系统步骤<select value={draft.flowStep} onChange={(e) => set("flowStep", e.target.value)}>{STRICT_STEP_OPTIONS.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></label>
+      <label>顺序<input type="number" value={draft.sortOrder} onChange={(e) => set("sortOrder", Number(e.target.value || 0))} /></label>
+      <label>是否发链接<select value={String(draft.sendLink)} onChange={(e) => set("sendLink", e.target.value === "true")}><option value="false">否</option><option value="true">是</option></select></label>
+      <label>是否发邀请码<select value={String(draft.sendInvite)} onChange={(e) => set("sendInvite", e.target.value === "true")}><option value="false">否</option><option value="true">是</option></select></label>
+      <label>启用<select value={String(draft.enabled)} onChange={(e) => set("enabled", e.target.value === "true")}><option value="true">启用</option><option value="false">停用</option></select></label>
+      <label>下一流程编号<input value={draft.nextFlowCode} onChange={(e) => set("nextFlowCode", e.target.value)} /></label>
+    </div>
+    <div className="form-grid">
+      <label>当前节点目标<textarea value={draft.goal} onChange={(e) => set("goal", e.target.value)} /></label>
+      <label>触发条件<textarea value={draft.triggerCondition} onChange={(e) => set("triggerCondition", e.target.value)} /></label>
+      <label>客户常见表达<textarea value={draft.customerExpressions} onChange={(e) => set("customerExpressions", e.target.value)} /></label>
+      <label>客服标准话术<textarea value={draft.standardReply} onChange={(e) => set("standardReply", e.target.value)} /></label>
+      <label>需要收集的信息<textarea value={draft.collectInfo} onChange={(e) => set("collectInfo", e.target.value)} /></label>
+      <label>下一步条件<textarea value={draft.nextCondition} onChange={(e) => set("nextCondition", e.target.value)} /></label>
+      <label>禁止事项<textarea value={draft.forbidden} onChange={(e) => set("forbidden", e.target.value)} /></label>
+      <label>备注<textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} /></label>
+    </div>
+    <div className="notice">变量：{"{{REGISTER_URL}}"} 注册链接，{"{{INVITE_CODE}}"} 邀请码，{"{{INVITE_DISPLAY}}"} 链接和邀请码完整文本。</div>
+    <div className="toolbar"><AsyncButton busyText="保存中..." onClick={save}>保存节点</AsyncButton><AsyncButton busyText="复制中..." onClick={duplicate}><Copy size={16}/>复制节点</AsyncButton><AsyncButton className="danger" busyText="删除中..." onClick={remove}>删除节点</AsyncButton></div>
+  </div>;
 }
 
 function TrainingMaterials({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
@@ -1077,14 +1263,14 @@ function replyModeLabel(mode?: string) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", training: "训练中心", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", training: "训练中心", scriptFlows: "话本流程", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
     googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", smartReplyEnabled: "智能回复", strictScriptFlowEnabled: "严格话本流程", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
-    limit: "数量", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
+    limit: "数量", version: "版本", stepCount: "节点数", draft: "草稿", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
     pending: "待处理", processing: "处理中", done: "已完成", sourceType: "资料类型", count: "数量", filename: "文件名", itemCount: "学习数", sampleCount: "样本数",
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "表格", xlsx: "表格", docx: "文档", txt: "文本", image: "图片",
     lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
@@ -1099,6 +1285,8 @@ function label(key: string) {
     need_platform_register: "待开户注册", need_phone_or_tg: "待补联系方式", ready_for_handoff: "可接管",
     first_greeting: "首次问候", interest_screening: "兴趣筛选", project_intro: "项目介绍", registration_intent: "确认注册意向", send_register_link: "发送链接邀请码",
     wait_registration: "等待完成注册", telegram_confirm: "确认TG", telegram_download: "引导下载TG", collect_telegram: "收集TG用户名", ended: "结束",
+    flowCode: "流程编号", flowName: "流程名称", flowStep: "系统步骤", goal: "当前节点目标", triggerCondition: "触发条件", customerExpressions: "客户常见表达",
+    collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
     greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册",
     provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
     ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息"

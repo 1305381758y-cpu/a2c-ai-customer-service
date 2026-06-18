@@ -3,7 +3,7 @@ import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
-import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
+import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../src/repositories.js";
 
 const merchant: MerchantRecord = { id: "aston", name: "阿斯顿", status: "active" };
 const country: MerchantCountryRecord = {
@@ -49,6 +49,76 @@ const inviteCode: A2CInviteCodeRecord = {
   usedAt: "",
   createdAt: "",
   updatedAt: ""
+};
+
+const scriptFlow: ScriptFlowRuntime = {
+  flow: {
+    id: 1,
+    merchantId: "aston",
+    countryId: "aston:br",
+    countryCode: "BR",
+    countryName: "巴西",
+    name: "测试话本",
+    status: "active",
+    active: true,
+    version: 1,
+    sourceFilename: "",
+    stepCount: 2,
+    createdAt: "",
+    updatedAt: ""
+  },
+  steps: [
+    {
+      id: 1,
+      flowId: 1,
+      merchantId: "aston",
+      countryId: "aston:br",
+      flowCode: "B",
+      flowName: "项目介绍",
+      flowStep: "registration_intent",
+      goal: "",
+      triggerCondition: "",
+      customerExpressions: "",
+      standardReply: "好的，我来自测试商户。这里是甲方自定义项目介绍，收益由话本填写。您现在有空继续吗？",
+      collectInfo: "",
+      sendLink: false,
+      sendInvite: false,
+      nextCondition: "",
+      nextFlowCode: "C",
+      nextFlowStep: "wait_registration",
+      forbidden: "",
+      notes: "",
+      sortOrder: 1,
+      enabled: true,
+      createdAt: "",
+      updatedAt: ""
+    },
+    {
+      id: 2,
+      flowId: 1,
+      merchantId: "aston",
+      countryId: "aston:br",
+      flowCode: "C",
+      flowName: "发送链接",
+      flowStep: "wait_registration",
+      goal: "",
+      triggerCondition: "",
+      customerExpressions: "",
+      standardReply: "请打开 {{REGISTER_URL}}，邀请码是 {{INVITE_CODE}}。注册完成后告诉我。",
+      collectInfo: "",
+      sendLink: true,
+      sendInvite: true,
+      nextCondition: "",
+      nextFlowCode: "D",
+      nextFlowStep: "telegram_confirm",
+      forbidden: "",
+      notes: "",
+      sortOrder: 2,
+      enabled: true,
+      createdAt: "",
+      updatedAt: ""
+    }
+  ]
 };
 
 function conversation(overrides: Partial<Conversation> = {}): Conversation {
@@ -210,6 +280,35 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("https://register.example/?code=ABC123");
     expect(result.reply).toContain("ABC123");
+  });
+
+  it("uses the active merchant script flow to override strict-flow node wording", () => {
+    const first = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ flowStep: "interest_screening", language: "zh" }),
+      analysis: analyzeMessage("是的", "zh"),
+      customerText: "是的",
+      inviteCode,
+      config,
+      scriptFlow
+    });
+    expect(first.nextFlowStep).toBe("registration_intent");
+    expect(first.reply).toContain("甲方自定义项目介绍");
+
+    const second = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ flowStep: "registration_intent", language: "zh" }),
+      analysis: analyzeMessage("有空", "zh"),
+      customerText: "有空",
+      inviteCode,
+      config,
+      scriptFlow
+    });
+    expect(second.nextFlowStep).toBe("wait_registration");
+    expect(second.reply).toContain("https://register.example/?code=ABC123");
+    expect(second.reply).toContain("ABC123");
   });
 
   it("guides Telegram download when the customer says they do not have Telegram", () => {
