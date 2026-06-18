@@ -859,4 +859,35 @@ describe("strict Aston Brazil flow", () => {
     expect(refusal.reply).not.toContain("register.example");
     expect(refusal.nextFlowStep).toBe("wait_registration");
   });
+
+  it("answers trust payment and Telegram questions while waiting for registration", () => {
+    const scam = reply("你不会是骗子吧", { language: "zh", flowStep: "wait_registration" });
+    expect(scam.reply).toContain("理解您的顾虑");
+    expect(scam.reply).toContain("如果已经注册完成");
+    expect(scam.reply).not.toContain("刚才没有理解");
+    expect(scam.reply).not.toContain("register.example");
+    expect(scam.reply).not.toContain("邀请码");
+    expect(scam.nextFlowStep).toBe("wait_registration");
+
+    const fraud = reply("你这不是诈骗吧", { language: "zh", flowStep: "wait_registration" });
+    expect(fraud.reply).toContain("理解您的顾虑");
+    expect(fraud.reply).toContain("如果已经注册完成");
+    expect(fraud.reply).not.toContain("刚才没有理解");
+    expect(fraud.nextFlowStep).toBe("wait_registration");
+
+    const payment = reply("我要付钱么", { language: "zh", flowStep: "wait_registration" });
+    expect(payment.reply).toContain("不会要求您向客服转账或私下付款");
+    expect(payment.reply).toContain("如果已经注册完成");
+    expect(payment.reply).not.toContain("register.example");
+    expect(payment.reply).not.toContain("邀请码");
+    expect(payment.nextFlowStep).toBe("wait_registration");
+
+    const telegram = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
+    expect(telegram.reply).toContain("Telegram 是后续联系和指导使用的沟通工具");
+    expect(telegram.reply).toContain("完成平台注册");
+    expect(telegram.reply).toContain("注册手机号");
+    expect(telegram.reply).not.toContain("下载 Telegram");
+    expect(telegram.reply).not.toContain("register.example");
+    expect(telegram.nextFlowStep).toBe("wait_registration");
+  });
 });

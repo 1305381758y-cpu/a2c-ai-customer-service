@@ -157,6 +157,15 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "wait_registration") {
+    if (input.analysis.intent === "trust_concern" || asksTrustConcern(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "trust_concern"));
+    }
+    if (asksPaymentConcern(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "payment_concern"));
+    }
+    if (input.analysis.intent === "ask_tg_register" || inferredIntent === "ask_tg_register" || asksTelegramExplanation(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain"));
+    }
     if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (negativeTelegram) {
         return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
@@ -228,14 +237,20 @@ function naturalStrictFlowPrefix(input: StrictFlowInput, step: StrictFlowStep | 
   if (asksToChat(normalized)) {
     return { content: flowScriptLine(input, "chat_ack", language) };
   }
-  if (complainsAboutReply(normalized)) {
-    return { content: flowScriptLine(input, "complaint_ack", language) };
-  }
   if (intent === "trust_concern" || asksTrustConcern(normalized)) {
     return { content: flowScriptLine(input, "trust_ack", language) };
   }
+  if (intent === "payment_concern" || asksPaymentConcern(normalized)) {
+    return { content: flowScriptLine(input, "payment_concern_ack", language) };
+  }
+  if (intent === "telegram_explain" || asksTelegramExplanation(normalized)) {
+    return { content: flowScriptLine(input, "telegram_explain_ack", language) };
+  }
   if (asksEarningConcern(normalized)) {
     return { content: flowScriptLine(input, "earning_concern_ack", language) };
+  }
+  if (complainsAboutReply(normalized)) {
+    return { content: flowScriptLine(input, "complaint_ack", language) };
   }
   if (intent === "need_help" || asksForOperationHelp(normalized)) {
     return { content: helpLineForStep(input, step, language) };
@@ -275,7 +290,7 @@ function containsNextStepPrompt(content: string, nextStep: StrictFlowStep): bool
     return /(有空|空闲时间|空閒時間|有时间|是否.*继续|free time|time now|available|tempo livre|tempo agora|continuar o cadastro)/i.test(content);
   }
   if (nextStep === "wait_registration") {
-    return /(https?:\/\/|邀请码[:：]|invitation code[:：]|código de convite[:：]|codigo de convite[:：])/i.test(content);
+    return /(https?:\/\/|邀请码[:：]|invitation code[:：]|código de convite[:：]|codigo de convite[:：]|注册手机号|注册的手机号码|registered phone|phone number you registered|telefone usado no cadastro|número de telefone usado no cadastro)/i.test(content);
   }
   if (nextStep === "collect_telegram") {
     return /(@ 开头|@开头|Telegram 用户名|Telegram username|nome de usuário do Telegram)/i.test(content);
@@ -412,11 +427,19 @@ function asksToChat(text: string): boolean {
 }
 
 function asksTrustConcern(text: string): boolean {
-  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|诈骗|safe|trust|real|scam|seguro|confiável|confiavel|golpe|verdade)/i.test(text);
+  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|骗子|騙子|欺骗|欺騙|诈骗|詐騙|safe|trust|real|scam|fraud|seguro|confiável|confiavel|golpe|verdade)/i.test(text);
 }
 
 function asksEarningConcern(text: string): boolean {
   return /(每天.*赚|收益.*多|赚.*这么多|這麼多|这么多|那么多|真的假的|真的.*赚|收入.*真实|佣金.*真实|earn.*that much|so much|income.*real|real earnings|ganhar.*tanto|renda.*real|ganhos.*reais)/i.test(text);
+}
+
+function asksPaymentConcern(text: string): boolean {
+  return /(付钱|付費|付款|交钱|交錢|收费|收費|要钱|要錢|花钱|花錢|充值|转账|轉帳|私下付款|私下转账|私下轉帳|需要.*钱|需要.*錢|要.*钱|要.*錢|pay|payment|fee|charge|deposit|recharge|transfer money|pagar|pagamento|taxa|cobrança|cobranca|recarga|transferir)/i.test(text);
+}
+
+function asksTelegramExplanation(text: string): boolean {
+  return /(telegram.*是什么|telegram.*是什麼|tg.*是什么|tg.*是什麼|什么是.*telegram|什麼是.*telegram|什么是.*tg|什麼是.*tg|telegram.*干嘛|telegram.*幹嘛|tg.*干嘛|tg.*幹嘛|为什么.*telegram|為什麼.*telegram|为什么.*tg|為什麼.*tg|what is telegram|what.*telegram.*for|why.*telegram|o que.*telegram|para que.*telegram|por que.*telegram)/i.test(text);
 }
 
 function complainsAboutReply(text: string): boolean {
@@ -563,6 +586,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
     complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
     trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
+    payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；如平台后续有具体规则，以页面显示和后续确认为准。",
+    telegram_explain_ack: "Telegram 是后续联系和指导使用的沟通工具。您现在先完成平台注册，完成后把注册手机号发给我。",
     earning_concern_ack: "收益会根据实际完成任务和平台规则核算，具体以后续确认结果为准。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
@@ -593,6 +618,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
     complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
     trust_ack: "I understand your concern. The exact rules and information verification will follow the later confirmation. If anything is unclear, ask me directly.",
+    payment_concern_ack: "At this guidance stage, you will not be asked to transfer money to customer service or pay privately. If the platform has later rules, follow the page display and later confirmation.",
+    telegram_explain_ack: "Telegram is the contact tool used later for follow-up guidance. Please complete the platform registration first, then send me the registered phone number.",
     earning_concern_ack: "Earnings are calculated based on actual completed tasks and platform rules, subject to later confirmation.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
@@ -623,6 +650,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
     complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
     trust_ack: "Entendo sua preocupação. As regras exatas e a verificação das informações seguem a confirmação posterior. Se algo não ficar claro, pode me perguntar diretamente.",
+    payment_concern_ack: "Nesta etapa de orientação, você não precisa transferir dinheiro para o atendimento nem pagar por fora. Se houver regras posteriores da plataforma, siga a página e a confirmação posterior.",
+    telegram_explain_ack: "O Telegram é a ferramenta de contato usada depois para orientação. Primeiro conclua o cadastro na plataforma e envie o telefone usado no cadastro.",
     earning_concern_ack: "Os ganhos são calculados conforme as tarefas realmente concluídas e as regras da plataforma, sujeitos à confirmação posterior.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
