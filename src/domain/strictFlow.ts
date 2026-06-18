@@ -50,6 +50,7 @@ export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantC
   const countryName = country.name.trim().toLowerCase();
   const countryCode = country.code.trim().toLowerCase();
   const isAston = merchantName.includes("阿斯顿") || merchantName.includes("aston") || merchantId.includes("aston");
+  const isDefaultMerchant = merchantId === "default" || merchantName.includes("默认") || merchantName.includes("default");
   const isBrazil = countryName.includes("巴西") || countryName.includes("brazil") || countryName.includes("brasil") || countryCode === "br" || countryCode === "brasil";
   const isUnconfiguredMarket =
     !countryName ||
@@ -58,7 +59,7 @@ export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantC
     countryName.includes("default") ||
     countryCode === "default" ||
     countryCode === "unknown";
-  return isAston && (isBrazil || isUnconfiguredMarket);
+  return (isAston || isDefaultMerchant) && (isBrazil || isUnconfiguredMarket);
 }
 
 export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "strictFlowEnabled">): boolean {

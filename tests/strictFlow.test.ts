@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
-import { buildStrictFlowReply, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
+import { buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
@@ -145,6 +145,20 @@ function outboundMessage(content: string, strictFlowStep = ""): ConversationMess
 }
 
 describe("strict Aston Brazil flow", () => {
+  it("enables strict flow for the default merchant on the Brazil registration flow", () => {
+    const defaultMerchant: MerchantRecord = { id: "default", name: "默认商户", status: "active" };
+    const defaultMerchantCountry: MerchantCountryRecord = {
+      ...country,
+      id: "default:br",
+      merchantId: "default",
+      requirePlatformAccount: true,
+      requirePhone: true,
+      requireTelegram: true,
+      requireWhatsApp: false
+    };
+    expect(isStrictFlowEnabled(defaultMerchant, defaultMerchantCountry, { strictScriptFlowEnabled: false })).toBe(true);
+  });
+
   it("keeps the previous language for short contextual replies", () => {
     expect(analyzeMessage("sim", "pt-BR").language).toBe("pt-BR");
     expect(analyzeMessage("ok", "zh").language).toBe("zh");
