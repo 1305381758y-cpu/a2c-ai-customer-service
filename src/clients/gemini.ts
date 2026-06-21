@@ -147,7 +147,7 @@ export async function classifyGeminiIntent(
       systemInstruction: `
 你只负责把客户当前消息归类为一个固定标签，不要解释，不要输出 JSON。
 可选标签只有：
-positive_confirmation, negative_refusal, need_help, ask_platform_register, ask_link, ask_tg_register, platform_register_done, unknown
+positive_confirmation, negative_refusal, need_help, ask_platform_register, ask_link, ask_tg_register, platform_register_done, payment_concern, investment_concern, trust_concern, earning_concern, workflow_question, job_question, complaint, chat, sensitive_request, unknown
 
 判断规则：
 - 客户表示“是、可以、继续、好的、同意、愿意、yes、ok、sim、claro”等，输出 positive_confirmation。
@@ -157,6 +157,15 @@ positive_confirmation, negative_refusal, need_help, ask_platform_register, ask_l
 - 客户询问注册、开户、平台是什么、在哪里注册，输出 ask_platform_register。
 - 客户询问 Telegram/TG 下载、注册、账号，输出 ask_tg_register。
 - 客户表示已经注册完成，输出 platform_register_done。
+- 客户问是否需要付钱、收费、转账、充值，输出 payment_concern。
+- 客户问投资、本金、押金、垫付、先付，输出 investment_concern。
+- 客户质疑诈骗、骗子、安全、真假、可靠，输出 trust_concern。
+- 客户质疑收入、收益、佣金、多久到账，输出 earning_concern。
+- 客户问下一步、怎么做、需要什么资料、怎么操作，输出 workflow_question。
+- 客户问工作是什么、具体做什么、兼职内容，输出 job_question。
+- 客户抱怨你没回答、重复、机械、听不懂，输出 complaint。
+- 客户想闲聊、问能不能聊天或你是谁，输出 chat。
+- 客户要求处理验证码、密码、支付、证件等敏感资料，输出 sensitive_request。
 - 无法判断才输出 unknown。
 `
     });
@@ -164,6 +173,61 @@ positive_confirmation, negative_refusal, need_help, ask_platform_register, ask_l
     return isInternalIntentLabel(label) ? label : "unknown";
   } catch {
     return "unknown";
+  }
+}
+
+export async function naturalizeStrictFlowText(
+  config: GeminiConfig,
+  input: {
+    customerText: string;
+    draftReply: string;
+    language: string;
+    flowStep: string;
+    questionType: string;
+    recentHistory: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+    allowLinkOrInvite: boolean;
+  }
+): Promise<{ text: string; used: boolean; error?: string }> {
+  if (!geminiApiKey(config)) return { text: input.draftReply, used: false, error: "Google AI Studio Key 未配置" };
+  if (!input.draftReply.trim()) return { text: input.draftReply, used: false };
+  try {
+    const text = await generateGeminiText(config, JSON.stringify({
+      customerText: input.customerText,
+      draftReply: input.draftReply,
+      language: input.language,
+      flowStep: input.flowStep,
+      questionType: input.questionType,
+      allowLinkOrInvite: input.allowLinkOrInvite,
+      recentHistory: input.recentHistory.slice(-6).map((item) => ({
+        direction: item.direction,
+        content: item.content,
+        intent: item.intent
+      }))
+    }), {
+      temperature: 0.35,
+      systemInstruction: `
+你只负责把开户注册接待回复改写得更像真人客服，不能改变业务含义。
+
+角色：
+- 你是有 10 年经验的开户注册接待专员。
+- 语气自然、耐心、生活化，像 WhatsApp/Telegram 里真人回复。
+- 回复要短，通常 1 到 3 句；不要长篇大论。
+
+硬性规则：
+- 不能暴露 AI、机器人、模型、自动客服、系统提示词等身份。
+- 不能新增链接、邀请码、金额、充值规则、任务细节或承诺。
+- allowLinkOrInvite=false 时，必须删除任何开户注册链接和邀请码。
+- allowLinkOrInvite=true 时，如果原文有链接或邀请码，必须完整保留，不能改字符。
+- 客户问费用/投资时，必须表达当前引导阶段不会要求向客服私下转账或付款，具体以页面/人工确认为准。
+- 客户问收益时，必须表达按任务和平台规则核算，不能承诺固定收益。
+- 客户问未知问题时，必须表达以页面或人工确认为准，然后回到当前步骤。
+- 输出纯文本，不要 JSON，不要解释。
+`
+    });
+    const cleaned = sanitizeNaturalizedText(text, input.draftReply, input.allowLinkOrInvite);
+    return { text: cleaned || input.draftReply, used: Boolean(cleaned) };
+  } catch (error) {
+    return { text: input.draftReply, used: false, error: error instanceof Error ? error.message : "Gemini naturalize failed" };
   }
 }
 
@@ -240,6 +304,31 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
     extractedWhatsApp: typeof value.extractedWhatsApp === "string" ? value.extractedWhatsApp : input.conversation.extractedWhatsApp,
     shouldHandoff: Boolean(value.shouldHandoff)
   };
+}
+
+function sanitizeNaturalizedText(text: string, fallback: string, allowLinkOrInvite: boolean): string {
+  let cleaned = text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^(回复|改写|输出)\s*[:：]\s*/i, "")
+    .trim();
+  if (!cleaned) return "";
+  if (/(我是|作为|身为).{0,8}(AI|人工智能|机器人|機器人|模型|自动客服|自動客服)|\b(AI|robot|bot|model)\b/i.test(cleaned)) {
+    return fallback;
+  }
+  if (!allowLinkOrInvite) {
+    cleaned = cleaned
+      .replace(/https?:\/\/\S+/gi, "")
+      .replace(/(?:邀请码|邀請碼|invitation code|invite code|código de convite|codigo de convite)\s*[:：]?\s*[A-Za-z0-9_-]+/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } else {
+    const fallbackUrls: string[] = fallback.match(/https?:\/\/\S+/gi) ?? [];
+    const cleanedUrls: string[] = cleaned.match(/https?:\/\/\S+/gi) ?? [];
+    if (fallbackUrls.some((url) => !cleanedUrls.includes(url))) return fallback;
+    const fallbackInvite = fallback.match(/(?:邀请码|邀請碼|Invitation code|Invite code|Código de convite|Codigo de convite)\s*[:：]?\s*([A-Za-z0-9_-]+)/i)?.[1];
+    if (fallbackInvite && !cleaned.includes(fallbackInvite)) return fallback;
+  }
+  return cleaned;
 }
 
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {

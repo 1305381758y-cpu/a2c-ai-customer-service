@@ -17,6 +17,15 @@ export const INTERNAL_INTENT_LABELS = [
   "ask_link",
   "ask_tg_register",
   "platform_register_done",
+  "payment_concern",
+  "investment_concern",
+  "trust_concern",
+  "earning_concern",
+  "workflow_question",
+  "job_question",
+  "complaint",
+  "chat",
+  "sensitive_request",
   "unknown"
 ] as const;
 
@@ -103,7 +112,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";
   if (/(链接|link|url|入口|网址|endereço|acesso)/i.test(text)) return "ask_link";
   if (/(优惠|活动|奖励|promotion|bonus|reward|promo|promoção|promocao|bônus|bonus|recompensa)/i.test(text)) return "ask_promotion";
-  if (/(安全|真的假的|可信|靠谱吗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
+  if (/(安全|真的假的|可信|靠谱吗|骗人|骗子|诈骗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
   if (/(不会|帮我|怎么|如何|help|how|cannot|can't|tak tahu|tidak tahu|bantuan|ajuda|como faço|não consigo|nao consigo)/i.test(text)) return "need_help";
   if (isInitialConsultation(text)) return "greeting";
   if (isPositiveConfirmation(text)) return "greeting";

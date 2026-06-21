@@ -50,6 +50,7 @@ export type ControlledQuestionType =
   | "identity"
   | "trust"
   | "payment"
+  | "investment"
   | "telegram"
   | "earning"
   | "complaint"
@@ -231,6 +232,29 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
 }
 
+export function buildStrictFlowFollowUp(flowStep: string, language: string): string {
+  const step = normalizeFlowStep(flowStep);
+  const replyLanguage = language && language !== "unknown" ? language : "zh";
+  if (step === "interest_screening" || step === "registration_intent" || step === "project_intro") {
+    if (replyLanguage === "en") return "Are you free to continue now? I can guide you step by step.";
+    if (replyLanguage === "pt-BR") return "Você está livre para continuar agora? Posso orientar você passo a passo.";
+    return "您现在方便继续吗？我可以一步步带您完成。";
+  }
+  if (step === "wait_registration" || step === "send_register_link") {
+    if (replyLanguage === "en") return "Which registration step are you on now? If anything is stuck, send me what you see and I will help.";
+    if (replyLanguage === "pt-BR") return "Em qual etapa do cadastro você está agora? Se travar em alguma parte, me envie o que aparece e eu ajudo.";
+    return "您注册到哪一步了？如果卡住，把页面情况发我就行。";
+  }
+  if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") {
+    if (replyLanguage === "en") return "If Telegram is difficult to set up, tell me where you are stuck and I will guide you.";
+    if (replyLanguage === "pt-BR") return "Se estiver difícil configurar o Telegram, me diga onde travou e eu oriento você.";
+    return "Telegram 这一步如果不会弄，告诉我卡在哪里，我继续带您。";
+  }
+  if (replyLanguage === "en") return "I am here. Tell me when you are ready and I will continue from the current step.";
+  if (replyLanguage === "pt-BR") return "Estou aqui. Quando estiver pronto, me avise e continuo pela etapa atual.";
+  return "我在的，您准备好了告诉我，我按当前步骤继续带您。";
+}
+
 function naturalizeStrictReply(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, flowGoal: string, nextStep: StrictFlowStep, intent = "", forcedLine = ""): string {
   const prefix = controlledQuestionAnswer(input, step, text, language, intent, forcedLine);
   if (!prefix) return flowGoal;
@@ -281,6 +305,9 @@ function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep |
   if (intent === "trust_concern" || asksTrustConcern(normalized)) {
     return { content: flowScriptLine(input, "trust_ack", language), type: "trust" };
   }
+  if (intent === "investment_concern" || asksInvestmentConcern(normalized)) {
+    return { content: flowScriptLine(input, "investment_concern_ack", language), type: "investment" };
+  }
   if (intent === "payment_concern" || asksPaymentConcern(normalized)) {
     return { content: flowScriptLine(input, "payment_concern_ack", language), type: "payment" };
   }
@@ -291,13 +318,13 @@ function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep |
   if (asksEarningConcern(normalized)) {
     return { content: flowScriptLine(input, "earning_concern_ack", language), type: "earning" };
   }
-  if (complainsAboutReply(normalized)) {
+  if (intent === "complaint" || complainsAboutReply(normalized)) {
     return { content: flowScriptLine(input, "complaint_ack", language), type: "complaint" };
   }
-  if (intent === "need_help" || asksForOperationHelp(normalized)) {
+  if (intent === "workflow_question" || intent === "need_help" || asksForOperationHelp(normalized)) {
     return { content: helpLineForStep(input, step, language), type: "help" };
   }
-  if (asksAboutJob(normalized)) {
+  if (intent === "job_question" || asksAboutJob(normalized)) {
     return { content: flowScriptLine(input, "project_intro", language), type: "job" };
   }
   if (isRepeatGreeting(normalized) && step !== "interest_screening") {
@@ -487,6 +514,10 @@ function asksPaymentConcern(text: string): boolean {
   return /(付钱|付費|付款|交钱|交錢|收费|收費|花钱|花錢|充值|转账|轉帳|私下付款|私下转账|私下轉帳|需要.{0,4}(付|交|花|转|轉|充值|付款|收费|收費)|要.{0,4}(付|交|花|转|轉|充值|付款|收费|收費)|pay|payment|fee|charge|deposit|recharge|transfer money|pagar|pagamento|taxa|cobrança|cobranca|recarga|transferir)/i.test(text);
 }
 
+function asksInvestmentConcern(text: string): boolean {
+  return /(投资|投資|投钱|投錢|本金|押金|垫付|墊付|先付|先交|先充|预付|預付|需要.{0,6}(投资|投資|本金|押金|垫付|墊付)|investment|invest|principal|advance payment|upfront|pay first|dep[oó]sito|adiantar|investimento)/i.test(text);
+}
+
 function asksTelegramExplanation(text: string): boolean {
   return /(telegram.*是什么|telegram.*是什麼|tg.*是什么|tg.*是什麼|什么是.*telegram|什麼是.*telegram|什么是.*tg|什麼是.*tg|telegram.*干嘛|telegram.*幹嘛|tg.*干嘛|tg.*幹嘛|为什么.*telegram|為什麼.*telegram|为什么.*tg|為什麼.*tg|what is telegram|what.*telegram.*for|why.*telegram|o que.*telegram|para que.*telegram|por que.*telegram)/i.test(text);
 }
@@ -516,7 +547,7 @@ function looksLikeQuestion(text: string): boolean {
 }
 
 function complainsAboutReply(text: string): boolean {
-  return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
+  return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|没回答|沒有回答|没有回答|答非所问|没说清楚|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|didn.?t answer|não respondeu|nao respondeu|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
 }
 
 function isExplicitRefusal(text: string): boolean {
@@ -654,21 +685,22 @@ function verificationLine(language: string): string {
 
 function scriptLine(key: string, language: string, fallback = ""): string {
   const zh: Record<string, string> = {
-    first_greeting: "您好，您是想找一份兼职在线工作来赚取额外收入吗？",
-    repeat_greeting: "您好，我在的。您可以直接问我这份工作的内容，或告诉我您现在卡在哪一步。",
+    first_greeting: "您好，您是想了解一份兼职在线工作吗？",
+    repeat_greeting: "您好，我在的。您直接说现在卡在哪一步就行。",
     chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
-    complaint_ack: "抱歉，刚才没有理解到您的意思。您可以直接告诉我想了解工作内容、注册步骤，还是 Telegram 问题，我会按您的问题回答。",
+    complaint_ack: "抱歉，刚才没接住您的问题，我先按您问的点说明清楚。",
     trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
-    payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；如平台后续有具体规则，以页面显示和后续确认为准。",
+    payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；后续如有平台规则，以页面和人工确认为准。",
+    investment_concern_ack: "不用先给我这边投钱或交押金；如果页面后面有规则，也以页面和人工确认为准。",
     telegram_explain_ack: "Telegram 是后续联系和指导使用的沟通工具。您现在先完成平台注册，完成后把注册手机号发给我。",
     telegram_explain_after_phone_ack: "Telegram 是后续联系和指导使用的沟通工具。您已经完成手机号这一步了，接下来只需要下载或注册 Telegram，并把 @ 开头的用户名发给我。",
-    earning_concern_ack: "收益会根据实际完成任务和平台规则核算，具体以后续确认结果为准。",
+    earning_concern_ack: "收益不是我这边口头固定承诺的，会按实际任务和平台规则核算，后面会再确认。",
     identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
     phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",
     link_open_ack: "您可以复制开户链接到手机浏览器里打开，建议使用 Chrome 或 Safari；打开后按页面提示填写资料。",
     next_step_ack: "可以，我按当前进度带您继续下一步。",
     sensitive_info_ack: "这些敏感信息不用发给我，也不要给任何人。我这里只需要按流程核对开户注册所需的信息。",
-    unknown_question_ack: "这个需要以后续页面或人工确认为准，我先帮您把当前开户注册步骤处理完。",
+    unknown_question_ack: "这个细节要以后续页面或人工确认为准，我先帮您把当前步骤走顺。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
@@ -681,7 +713,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "您准备继续时告诉我，我会继续带您处理注册步骤；如果已经注册完成，请把注册手机号发给我。",
     bridge_telegram_confirm: "下一步只需要确认 Telegram，方便后续人工继续跟进。",
     bridge_collect_telegram: "完成后把 @ 开头的 Telegram 用户名发给我就可以。",
-    project_intro: "好的，我先简单介绍一下，您可以自行决定是否接受这份工作。我们的目标是通过兼职在线工作，帮助商家提升产品销量和排名。您每天可以赚取 300 至 800 雷亚尔。您现在在家有空闲时间吗？",
+    project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
     ask_registered_phone: "好的，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -693,15 +725,16 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     missing_invite: `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${fallback ? `\n开户链接：${fallback}` : ""}`
   };
   const en: Record<string, string> = {
-    first_greeting: "Hello, are you looking for a part-time online job to earn extra income?",
+    first_greeting: "Hello, are you looking for an online part-time job?",
     repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
     chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
     complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
     trust_ack: "I understand your concern. The exact rules and information verification will follow the later confirmation. If anything is unclear, ask me directly.",
-    payment_concern_ack: "At this guidance stage, you will not be asked to transfer money to customer service or pay privately. If the platform has later rules, follow the page display and later confirmation.",
+    payment_concern_ack: "At this step, you do not need to transfer money to customer service or pay privately. If the platform has later rules, follow the page and later confirmation.",
+    investment_concern_ack: "You do not need to invest money or pay a deposit to me here first. If there are later platform rules, follow the page and later confirmation.",
     telegram_explain_ack: "Telegram is the contact tool used later for follow-up guidance. Please complete the platform registration first, then send me the registered phone number.",
     telegram_explain_after_phone_ack: "Telegram is the contact tool used later for follow-up guidance. Your phone step is already done; next, please download or create Telegram and send me the username starting with @.",
-    earning_concern_ack: "Earnings are calculated based on actual completed tasks and platform rules, subject to later confirmation.",
+    earning_concern_ack: "The income is not a fixed verbal promise from me. It is calculated by actual tasks and platform rules, subject to later confirmation.",
     identity_ack: "I handle the registration and contact verification steps here, and I will guide you according to the current step.",
     phone_reason_ack: "The phone number is used to verify the platform account you registered, so the follow-up information can match correctly.",
     link_open_ack: "You can copy the registration link and open it in your phone browser. Chrome or Safari is recommended, then follow the page instructions.",
@@ -720,7 +753,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "When you are ready to continue, tell me and I will guide you through the registration step. If you have completed registration, please send me the registered phone number.",
     bridge_telegram_confirm: "The next step is only to confirm Telegram so the follow-up can continue smoothly.",
     bridge_collect_telegram: "After that, send me your Telegram username starting with @.",
-    project_intro: "Okay, let me briefly introduce it first. You can decide whether to accept this job. Our goal is to help merchants improve product sales and rankings through part-time online work. You can earn 300 to 800 reais per day. Do you have free time at home now?",
+    project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
     ask_registered_phone: "Okay, please send me the phone number you registered with so we can verify it.",
@@ -732,15 +765,16 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     missing_invite: `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${fallback ? `\nRegistration link: ${fallback}` : ""}`
   };
   const pt: Record<string, string> = {
-    first_greeting: "Olá, você está procurando um trabalho online de meio período para ganhar uma renda extra?",
+    first_greeting: "Olá, você quer conhecer um trabalho online de meio período?",
     repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
     chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
     complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
     trust_ack: "Entendo sua preocupação. As regras exatas e a verificação das informações seguem a confirmação posterior. Se algo não ficar claro, pode me perguntar diretamente.",
-    payment_concern_ack: "Nesta etapa de orientação, você não precisa transferir dinheiro para o atendimento nem pagar por fora. Se houver regras posteriores da plataforma, siga a página e a confirmação posterior.",
+    payment_concern_ack: "Nesta etapa, você não precisa transferir dinheiro para o atendimento nem pagar por fora. Se houver regras da plataforma depois, siga a página e a confirmação posterior.",
+    investment_concern_ack: "Você não precisa investir dinheiro nem pagar depósito para mim aqui primeiro. Se houver regras da plataforma depois, siga a página e a confirmação posterior.",
     telegram_explain_ack: "O Telegram é a ferramenta de contato usada depois para orientação. Primeiro conclua o cadastro na plataforma e envie o telefone usado no cadastro.",
     telegram_explain_after_phone_ack: "O Telegram é a ferramenta de contato usada depois para orientação. A etapa do telefone já foi concluída; agora baixe ou crie o Telegram e envie o nome de usuário começando com @.",
-    earning_concern_ack: "Os ganhos são calculados conforme as tarefas realmente concluídas e as regras da plataforma, sujeitos à confirmação posterior.",
+    earning_concern_ack: "O ganho não é uma promessa fixa minha; é calculado conforme as tarefas e regras da plataforma, sujeito à confirmação posterior.",
     identity_ack: "Eu acompanho as etapas de cadastro e verificação de contato aqui, e vou orientar você conforme a etapa atual.",
     phone_reason_ack: "O telefone é usado para verificar a conta que você cadastrou na plataforma, para que as informações sejam confirmadas corretamente depois.",
     link_open_ack: "Você pode copiar o link de cadastro e abrir no navegador do celular. Recomendo Chrome ou Safari; depois siga as instruções da página.",
@@ -759,7 +793,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "Quando estiver pronto para continuar, me avise e eu continuo orientando o cadastro. Se já concluiu o cadastro, envie o telefone usado no cadastro.",
     bridge_telegram_confirm: "O próximo passo é apenas confirmar o Telegram para continuar o acompanhamento.",
     bridge_collect_telegram: "Depois disso, envie seu nome de usuário do Telegram começando com @.",
-    project_intro: "Certo, vou explicar rapidamente primeiro. Você pode decidir se quer aceitar este trabalho. Nosso objetivo é ajudar comerciantes a aumentar as vendas e o ranqueamento dos produtos por meio de trabalho online de meio período. Você pode ganhar de 300 a 800 reais por dia. Você tem tempo livre em casa agora?",
+    project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
     ask_registered_phone: "Certo, envie o número de telefone usado no cadastro para fazermos a verificação.",

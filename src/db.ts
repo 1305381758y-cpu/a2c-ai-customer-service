@@ -354,6 +354,19 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(conversation_id) REFERENCES conversations(id),
       FOREIGN KEY(flow_id) REFERENCES script_flows(id)
     );
+
+    CREATE TABLE IF NOT EXISTS conversation_followups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      flow_step TEXT NOT NULL,
+      followup_type TEXT NOT NULL DEFAULT 'idle_2m',
+      sent INTEGER DEFAULT 0,
+      error TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(conversation_id, flow_step, followup_type),
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    );
 	  `);
 
   db.exec("DROP TABLE IF EXISTS vector_documents;");
@@ -414,6 +427,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "script_flow_steps", "flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "script_flow_steps", "next_flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "script_flow_steps", "enabled", "INTEGER DEFAULT 1");
+  ensureColumn(db, "conversation_followups", "error", "TEXT DEFAULT ''");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();

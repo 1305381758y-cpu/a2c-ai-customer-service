@@ -910,6 +910,19 @@ describe("strict Aston Brazil flow", () => {
     expect(unknown.nextFlowStep).toBe("wait_registration");
   });
 
+  it("answers investment and complaint questions before returning to the current step", () => {
+    const investment = reply("这份工作需要投资么", { language: "zh", flowStep: "registration_intent" });
+    expect(investment.reply).toContain("不用先给我这边投钱或交押金");
+    expect(investment.reply).toContain("有空继续开户注册");
+    expect(investment.reply).not.toContain("我先简单介绍一下");
+    expect(investment.nextFlowStep).toBe("registration_intent");
+
+    const missedQuestion = reply("你没有回答我的疑问", { language: "zh", flowStep: "wait_registration" });
+    expect(missedQuestion.reply).toContain("刚才没接住您的问题");
+    expect(missedQuestion.reply).toContain("如果已经注册完成");
+    expect(missedQuestion.nextFlowStep).toBe("wait_registration");
+  });
+
   it("answers Telegram questions according to whether the phone was already collected", () => {
     const beforePhone = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
     expect(beforePhone.reply).toContain("先完成平台注册");

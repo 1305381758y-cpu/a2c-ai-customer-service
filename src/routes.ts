@@ -814,6 +814,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
   });
 
+  app.post<{ Querystring: { limit?: string } }>("/internal/follow-ups/due", { preHandler: auth(deps.config) }, async (request) => {
+    const limit = request.query.limit ? Number(request.query.limit) : 50;
+    return deps.processor.processDueFollowUps(Number.isFinite(limit) ? limit : 50);
+  });
+
   app.post("/webhooks/a2c", async (request, reply) => {
     const result = await deps.processor.process(request.body as never);
     return reply.code(200).send(result);

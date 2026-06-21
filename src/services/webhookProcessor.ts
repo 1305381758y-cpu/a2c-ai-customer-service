@@ -1,8 +1,8 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import { buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
+import { buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { classifyGeminiIntent, GeminiReplyClient } from "../clients/gemini.js";
+import { classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord } from "../repositories.js";
@@ -178,6 +178,16 @@ export class WebhookProcessor {
       conversation.language = strictReply.language;
       conversation.stage = strictReply.stage;
       conversation.flowStep = strictReply.nextFlowStep;
+      const naturalized = await naturalizeStrictReply(runtimeConfig, {
+        customerText: analysisText || content,
+        draftReply: strictReply.reply,
+        language: strictReply.language,
+        flowStep: strictReply.nextFlowStep,
+        questionType: strictReply.controlledQuestionType || "none",
+        history: historyForIntent,
+        allowLinkOrInvite: strictReply.needsInviteCode
+      });
+      strictReply.reply = naturalized.reply;
 
       let externalId = "";
       let a2cSendStatus: "sent" | "failed" = "sent";
@@ -212,6 +222,9 @@ export class WebhookProcessor {
           strictFlowStep: strictReply.nextFlowStep,
           controlledQuestionType: strictReply.controlledQuestionType || "none",
           controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
+          strictQuestionType: strictReply.controlledQuestionType || "none",
+          usedGeminiNaturalizer: naturalized.used,
+          naturalizerError: naturalized.error || "",
           knowledgeHit: false,
           aiFallback: Boolean(strictReply.fallback),
           originalContent: outboundTranslation.originalText,
@@ -329,6 +342,67 @@ export class WebhookProcessor {
     return { status: a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
   }
 
+  async processDueFollowUps(limit = 50): Promise<{ scanned: number; sent: number; skipped: number; failed: number }> {
+    const candidates = this.repos.listDueFollowUpCandidates(limit);
+    let sent = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const candidate of candidates) {
+      const conversation = candidate.conversation;
+      const merchant = this.repos.getMerchant(conversation.merchantId);
+      if (!merchant || merchant.status !== "active") {
+        skipped += 1;
+        continue;
+      }
+      const merchantConfig = this.repos.getMerchantConfig(conversation.merchantId);
+      if (!merchantConfig.smartReplyEnabled) {
+        skipped += 1;
+        continue;
+      }
+      const country = this.repos.getMerchantCountry(conversation.countryId);
+      const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
+      const content = buildStrictFlowFollowUp(conversation.flowStep || conversation.stage, conversation.language || country?.defaultLanguage || "zh");
+      const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(conversation.merchantId));
+      const flowStep = conversation.flowStep || conversation.stage || "unknown";
+      let externalId = "";
+      let errorMessage = "";
+      try {
+        externalId = await a2c.sendMessage({
+          to: conversation.customerPhone,
+          senderPhoneNumber: conversation.a2cAccountPhone,
+          type: "text",
+          content
+        });
+        if (!externalId) externalId = `followup:${conversation.id}:${Date.now()}`;
+        this.repos.insertMessage({
+          conversationId: conversation.id,
+          direction: "outbound",
+          externalId,
+          content,
+          msgType: "text",
+          language: conversation.language || country?.defaultLanguage || "unknown",
+          intent: "unknown",
+          rawPayload: {
+            replyMode: "strict_flow",
+            followupSent: true,
+            followupReason: "idle_2m",
+            strictFlow: true,
+            strictFlowStep: flowStep,
+            a2cSendStatus: "sent"
+          }
+        });
+        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
+        this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content, direction: "outbound" });
+        sent += 1;
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : "follow-up send failed";
+        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: errorMessage });
+        failed += 1;
+      }
+    }
+    return { scanned: candidates.length, sent, skipped, failed };
+  }
+
   private async sendVerificationReply(
     conversation: Parameters<Repositories["updateConversation"]>[0],
     data: A2CWebhookPayload["data"],
@@ -424,13 +498,52 @@ function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: Internal
     ask_platform_register: "ask_platform_register",
     ask_link: "ask_link",
     ask_tg_register: "ask_tg_register",
-    platform_register_done: "platform_register_done"
+    platform_register_done: "platform_register_done",
+    trust_concern: "trust_concern",
+    payment_concern: "unknown",
+    investment_concern: "unknown",
+    earning_concern: "unknown",
+    workflow_question: "need_help",
+    job_question: "greeting",
+    complaint: "unknown",
+    chat: "greeting",
+    sensitive_request: "unknown"
   };
   const intent = intentMap[inferredIntent] ?? analysis.intent;
   const stage = intent === "ask_tg_register" || intent === "platform_register_done"
     ? "need_phone_or_tg"
     : analysis.stage;
   return { ...analysis, intent, stage };
+}
+
+async function naturalizeStrictReply(
+  config: AppConfig,
+  input: {
+    customerText: string;
+    draftReply: string;
+    language: string;
+    flowStep: string;
+    questionType: string;
+    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+    allowLinkOrInvite: boolean;
+  }
+): Promise<{ reply: string; used: boolean; error?: string }> {
+  if (!input.customerText.trim() || input.allowLinkOrInvite) {
+    return { reply: input.draftReply, used: false };
+  }
+  if (input.questionType === "none" && input.draftReply.length <= 90) {
+    return { reply: input.draftReply, used: false };
+  }
+  const result = await naturalizeStrictFlowText(config, {
+    customerText: input.customerText,
+    draftReply: input.draftReply,
+    language: input.language,
+    flowStep: input.flowStep,
+    questionType: input.questionType,
+    recentHistory: input.history,
+    allowLinkOrInvite: input.allowLinkOrInvite
+  });
+  return { reply: result.text, used: result.used, error: result.error };
 }
 
 function detectContextualRegistrationPhone(text: string, flowStep: string): string {
