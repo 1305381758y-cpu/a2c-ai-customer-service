@@ -842,6 +842,22 @@ export class Repositories {
       .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));
   }
 
+  listPromotedIntentLearningEvents(filters: { merchantId: string; countryId: string; limit?: number }): IntentLearningEventRecord[] {
+    const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM intent_learning_events
+        WHERE merchant_id = ?
+          AND country_id = ?
+          AND status = 'promoted'
+        ORDER BY occurrence_count DESC, updated_at DESC, id DESC
+        LIMIT ?
+      `)
+      .all(filters.merchantId, filters.countryId, limit)
+      .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));
+  }
+
   patchIntentLearningEvent(id: number, patch: Record<string, unknown>, merchantId?: string): IntentLearningEventRecord | undefined {
     const allowed: Record<string, string> = {
       status: "status",

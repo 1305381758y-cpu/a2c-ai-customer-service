@@ -1,11 +1,11 @@
-import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
+import { analyzeMessage, isContextualIntentLabel, isInternalIntentLabel, type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
 import { classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
-import type { MerchantConfigRecord } from "../repositories.js";
+import type { IntentLearningEventRecord, MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { translateForOperator } from "./translation.js";
@@ -68,7 +68,12 @@ export class WebhookProcessor {
     if (contextualPhone && !analysis.phone) {
       analysis = { ...analysis, phone: contextualPhone, intent: "provide_phone", stage: "need_phone_or_tg" };
     }
-    const inferredIntent = await this.inferStrictFlowIntent({
+    const learnedIntent = findLearnedIntentMatch({
+      events: this.repos.listPromotedIntentLearningEvents({ merchantId: merchant.id, countryId: country.id }),
+      customerText: analysisText || content,
+      flowStep: effectiveStrictFlowStep || conversation.flowStep || ""
+    });
+    let inferredIntent = await this.inferStrictFlowIntent({
       runtimeConfig,
       merchant,
       country,
@@ -78,10 +83,13 @@ export class WebhookProcessor {
       strictFlowEnabled,
       history: historyForIntent
     });
+    if (learnedIntent?.internalIntent && inferredIntent === "unknown") {
+      inferredIntent = learnedIntent.internalIntent;
+    }
     if (inferredIntent !== "unknown") {
       analysis = applyInternalIntent(analysis, inferredIntent);
     }
-    const contextualIntent = await this.inferContextualIntent({
+    let contextualIntent = await this.inferContextualIntent({
       runtimeConfig,
       conversation,
       analysis,
@@ -90,6 +98,16 @@ export class WebhookProcessor {
       history: historyForIntent,
       inferredIntent
     });
+    if (learnedIntent?.contextualIntent && (contextualIntent.intent === "unknown" || contextualIntent.intent === "unknown_question" || contextualIntent.source === "gemini")) {
+      contextualIntent = {
+        ...contextualIntent,
+        intent: learnedIntent.contextualIntent,
+        source: "rule",
+        questionType: contextualQuestionTypeFromLearnedIntent(learnedIntent.contextualIntent),
+        nextAction: `learned intent: ${learnedIntent.event.displayName || learnedIntent.event.suggestedIntent}`,
+        reason: `matched promoted intent #${learnedIntent.event.id}`
+      };
+    }
     const inboundTranslation = analysisText
       ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
       : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
@@ -109,6 +127,12 @@ export class WebhookProcessor {
         ...payload,
         inferredIntent,
         contextualIntent,
+        learnedIntent: learnedIntent ? {
+          id: learnedIntent.event.id,
+          suggestedIntent: learnedIntent.event.suggestedIntent,
+          displayName: learnedIntent.event.displayName,
+          score: learnedIntent.score
+        } : null,
         strictFlowEnabled,
         strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
         originalContent: inboundTranslation.originalText,
@@ -258,6 +282,12 @@ export class WebhookProcessor {
           controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
           strictQuestionType: strictReply.controlledQuestionType || "none",
           contextualIntent: strictReply.contextualIntent,
+          learnedIntent: learnedIntent ? {
+            id: learnedIntent.event.id,
+            suggestedIntent: learnedIntent.event.suggestedIntent,
+            displayName: learnedIntent.event.displayName,
+            score: learnedIntent.score
+          } : null,
           intentSource: strictReply.contextualIntent?.source || "none",
           answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
           questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
@@ -353,6 +383,12 @@ export class WebhookProcessor {
       rawPayload: {
         replyMode: aiReply.fallback ? "fallback" : "gemini",
         strictFlowEnabled,
+        learnedIntent: learnedIntent ? {
+          id: learnedIntent.event.id,
+          suggestedIntent: learnedIntent.event.suggestedIntent,
+          displayName: learnedIntent.event.displayName,
+          score: learnedIntent.score
+        } : null,
         samples: samples.map((sample) => sample.id),
         trainingMaterials: trainingMaterials.map((item) => item.id),
         aiFallback: Boolean(aiReply.fallback),
@@ -581,6 +617,97 @@ function shouldAskGeminiForContext(rule: StrictContextualIntent, text: string, i
     (intent === "greeting" && !/^(你好|您好|早上好|下午好|晚上好|hi|hello|hey)$/i.test(normalized)) ||
     normalized.length <= 16 ||
     /[?？为什么為什麼怎么怎麼如何什么什麼]/.test(normalized);
+}
+
+interface LearnedIntentMatch {
+  event: IntentLearningEventRecord;
+  score: number;
+  internalIntent?: InternalIntentLabel;
+  contextualIntent?: ContextualIntentLabel;
+}
+
+function findLearnedIntentMatch(input: { events: IntentLearningEventRecord[]; customerText: string; flowStep: string }): LearnedIntentMatch | undefined {
+  const text = input.customerText.trim();
+  if (!text || text.length < 2) return undefined;
+  const signature = signatureForIntent(text);
+  let best: LearnedIntentMatch | undefined;
+  for (const event of input.events) {
+    if (!isLearnedIntentApplicableToStep(event, input.flowStep)) continue;
+    const texts = [event.customerText, ...event.examples.map((example) => String(example.text || example.customerText || ""))].filter(Boolean);
+    const score = Math.max(...texts.map((candidate) => learnedTextSimilarity(text, candidate, signature)));
+    if (score < 0.74) continue;
+    const match = {
+      event,
+      score,
+      internalIntent: isInternalIntentLabel(event.suggestedIntent) ? event.suggestedIntent : undefined,
+      contextualIntent: isContextualIntentLabel(event.suggestedIntent) ? event.suggestedIntent : undefined
+    };
+    if (!best || match.score > best.score || match.score === best.score && event.occurrenceCount > best.event.occurrenceCount) best = match;
+  }
+  return best;
+}
+
+function isLearnedIntentApplicableToStep(event: IntentLearningEventRecord, currentStep: string): boolean {
+  if (!event.flowStep || !currentStep) return true;
+  if (event.flowStep === currentStep) return true;
+  if (event.suggestedIntent.startsWith("custom_unknown")) return true;
+  return false;
+}
+
+function learnedTextSimilarity(text: string, candidate: string, signature: string): number {
+  const candidateSignature = signatureForIntent(candidate);
+  if (signature && signature === candidateSignature) return 1;
+  const a = tokenSetForLearning(text);
+  const b = tokenSetForLearning(candidate);
+  if (!a.size || !b.size) return 0;
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection += 1;
+  }
+  const union = new Set([...a, ...b]).size;
+  const jaccard = union ? intersection / union : 0;
+  const normalizedA = normalizeLearningText(text);
+  const normalizedB = normalizeLearningText(candidate);
+  const containment = normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA) ? Math.min(normalizedA.length, normalizedB.length) / Math.max(normalizedA.length, normalizedB.length) : 0;
+  return Math.max(jaccard, containment);
+}
+
+function tokenSetForLearning(text: string): Set<string> {
+  const normalized = normalizeLearningText(text);
+  const tokens = normalized.match(/[a-z0-9]+|[\u4E00-\u9FFF]/gi) || [];
+  const grams = new Set<string>(tokens);
+  for (let i = 0; i < normalized.length - 1; i += 1) {
+    grams.add(normalized.slice(i, i + 2));
+  }
+  return grams;
+}
+
+function normalizeLearningText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, "url")
+    .replace(/@\w+/g, "@user")
+    .replace(/\d{4,}/g, "number")
+    .replace(/[^\p{L}\p{N}\u4E00-\u9FFF]+/gu, "")
+    .trim();
+}
+
+function contextualQuestionTypeFromLearnedIntent(intent: ContextualIntentLabel): StrictContextualIntent["questionType"] {
+  const map: Partial<Record<ContextualIntentLabel, StrictContextualIntent["questionType"]>> = {
+    payment_concern: "payment",
+    investment_concern: "investment",
+    trust_concern: "trust",
+    earning_concern: "earning",
+    workflow_question: "help",
+    job_question: "job",
+    ask_tg_register: "telegram",
+    telegram_username_help: "telegram",
+    complaint: "complaint",
+    chat: "chat",
+    sensitive_request: "sensitive",
+    unknown_question: "unknown"
+  };
+  return map[intent] || "none";
 }
 
 function buildIntentLearningCandidate(input: {

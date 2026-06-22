@@ -162,11 +162,53 @@ describe("portal api", () => {
         headers: { cookie: merchantCookie }
       });
       expect(list.statusCode).toBe(200);
-      const rows = list.json().rows as Array<{ suggestedIntent: string; occurrenceCount: number; examples: unknown[]; detectedIntent: string }>;
+      const rows = list.json().rows as Array<{ id: number; suggestedIntent: string; occurrenceCount: number; examples: unknown[]; detectedIntent: string }>;
       expect(rows).toHaveLength(1);
       expect(rows[0].suggestedIntent).toBe("custom_unknown_question");
       expect(rows[0].occurrenceCount).toBe(2);
       expect(rows[0].examples.length).toBeGreaterThanOrEqual(1);
+
+      const promoted = await app.inject({
+        method: "PATCH",
+        url: `/api/merchant/intent-learning/${rows[0].id}`,
+        headers: { cookie: merchantCookie },
+        payload: { status: "promoted", suggestedIntent: "investment_concern", displayName: "投资疑问" }
+      });
+      expect(promoted.statusCode).toBe(200);
+
+      const learnedWebhook = await app.inject({
+        method: "POST",
+        url: `/webhooks/a2c/${merchantId}`,
+        payload: {
+          id: "intent-learning-event-3",
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: "intent-learning-message-3",
+            content: "蓝色香蕉权益是什么东西？",
+            from: "intent-learning-customer",
+            to: "intent-learning-a2c",
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        }
+      });
+      expect(learnedWebhook.statusCode).toBe(200);
+
+      const conversations = await app.inject({
+        method: "GET",
+        url: "/api/merchant/conversations",
+        headers: { cookie: merchantCookie }
+      });
+      const conversationId = conversations.json().rows[0].id as string;
+      const messages = await app.inject({
+        method: "GET",
+        url: `/api/merchant/conversations/${conversationId}/messages?limit=20`,
+        headers: { cookie: merchantCookie }
+      });
+      const outbound = [...messages.json().rows].reverse().find((item: { direction: string }) => item.direction === "outbound") as { rawPayload: Record<string, any> };
+      expect(outbound.rawPayload.learnedIntent?.suggestedIntent).toBe("investment_concern");
+      expect(outbound.rawPayload.contextualIntent?.intent).toBe("investment_concern");
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;
