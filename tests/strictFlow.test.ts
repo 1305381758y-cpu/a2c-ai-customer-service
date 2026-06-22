@@ -976,6 +976,28 @@ describe("strict Aston Brazil flow", () => {
     expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
   });
 
+  it("guides customers to find or set a Telegram username", () => {
+    const findUsername = reply("怎么找用户名", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(findUsername.nextFlowStep).toBe("collect_telegram");
+    expect(findUsername.reply).toContain("打开 Telegram");
+    expect(findUsername.reply).toContain("设置");
+    expect(findUsername.reply).toContain("Username");
+    expect(findUsername.reply).toContain("@ 开头");
+    expect(findUsername.contextualIntent?.intent).toBe("telegram_username_help");
+    expect(findUsername.contextualIntent?.nextAction).toBe("guide telegram username setup");
+
+    const noAt = reply("我没有@", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(noAt.nextFlowStep).toBe("collect_telegram");
+    expect(noAt.reply).toContain("用户名");
+    expect(noAt.reply).toContain("保存后");
+    expect(noAt.reply).not.toContain("不继续打扰");
+
+    const installedButLost = reply("装好了，但不知道用户名在哪", { language: "zh", flowStep: "telegram_download", extractedPhone: "9876789" });
+    expect(installedButLost.nextFlowStep).toBe("collect_telegram");
+    expect(installedButLost.reply).toContain("Username");
+    expect(installedButLost.reply).toContain("@ 开头");
+  });
+
   it("uses context to distinguish short no answers outside Telegram", () => {
     const notRegistered = reply("我没有", { language: "zh", flowStep: "wait_registration" });
     expect(notRegistered.nextFlowStep).toBe("wait_registration");

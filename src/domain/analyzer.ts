@@ -42,6 +42,7 @@ export const CONTEXTUAL_INTENT_LABELS = [
   "not_registered",
   "no_telegram",
   "telegram_installed",
+  "telegram_username_help",
   "need_help",
   "ask_platform_register",
   "ask_link",

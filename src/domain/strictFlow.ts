@@ -155,6 +155,9 @@ export function buildRuleContextualIntent(
   if (step === "telegram_confirm" && saysContextualNo(text)) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
   }
+  if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && asksTelegramUsernameHelp(text)) {
+    return base("telegram_username_help", { answeredPreviousQuestion: Boolean(previousAssistantMessage), nextAction: "guide telegram username setup", reason: "telegram username help" });
+  }
   if (step === "telegram_download" && saysTelegramInstalled(text)) {
     return base("telegram_installed", { answeredPreviousQuestion: true, nextAction: "collect telegram username", reason: "telegram installed" });
   }
@@ -298,6 +301,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
+    if (contextualLabel === "telegram_username_help") {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
+    }
     if (negativeTelegram) {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
     }
@@ -308,6 +314,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "telegram_download") {
+    if (contextualLabel === "telegram_username_help") {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
+    }
     if (contextualLabel === "no_telegram" || contextualLabel === "need_help" || contextualLabel === "workflow_question" || contextualLabel === "ask_tg_register") {
       return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
     }
@@ -320,6 +329,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "collect_telegram") {
     if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
+    }
+    if (contextualLabel === "telegram_username_help") {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
     }
     if (negativeTelegram || contextualLabel === "need_help") {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
@@ -621,7 +633,7 @@ function mapInternalToContextual(intent: InternalIntentLabel): ContextualIntentL
 }
 
 function contextualQuestionType(intent: ContextualIntentLabel): ControlledQuestionType {
-  if (intent === "ask_tg_register" || intent === "no_telegram" || intent === "telegram_installed") return "telegram";
+  if (intent === "ask_tg_register" || intent === "no_telegram" || intent === "telegram_installed" || intent === "telegram_username_help") return "telegram";
   if (intent === "incomplete_phone") return "phone_reason";
   if (intent === "payment_concern") return "payment";
   if (intent === "investment_concern") return "investment";
@@ -666,6 +678,11 @@ function saysNotRegistered(text: string): boolean {
 
 function saysTelegramInstalled(text: string): boolean {
   return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|installed|downloaded|instalei|baixei)/i.test(text.trim());
+}
+
+function asksTelegramUsernameHelp(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return /(怎么找.*(用户名|用戶名|@)|哪里.*(用户名|用戶名|@)|在哪.*(用户名|用戶名|@)|(用户名|用戶名|@).*(在哪|哪里|哪裡)|看.*(用户名|用戶名|@)|没有\s*@|沒有\s*@|没有用户名|沒有用戶名|没用户名|沒用戶名|怎么设置.*(用户名|用戶名|@)|设置.*(用户名|用戶名|@)|用户名是什么|用戶名是什麼|我找不到|找不到.*(用户名|用戶名|@)|不会设置|不會設置|username.*(where|在哪|哪里|哪裡)|where.*username|set.*username|create.*username)/i.test(normalized);
 }
 
 function isAcknowledgement(text: string): boolean {
@@ -924,6 +941,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm_question: "您有 Telegram 应用吗？如果有，请把您的 Telegram 用户名发给我。",
     telegram_download: "如果你的手机里安装了应用商店（Play Store 或 App Store），可以直接在那里搜索并下载 Telegram 应用。创建 Telegram 账号后请告诉我。我们会在 Telegram 教你如何赚取佣金。完成后请把 @ 开头的用户名发给我。",
     telegram_installed_ack: "好的，那接下来请注册 Telegram 账号；注册好后，把 @ 开头的 Telegram 用户名发给我。",
+    telegram_username_help: "可以，打开 Telegram 后进入设置，找到 Username/用户名。如果已经有 @ 开头的用户名，直接发给我；如果没有，就在用户名那里设置一个英文或数字组合，保存后把 @ 开头的用户名发我。",
     collect_telegram: "您注册好 Telegram 账号了吗？请把 @ 开头的 Telegram 用户名发送给我。",
     collect_telegram_wait: "好的，注册好后把 @ 开头的 Telegram 用户名发给我就行，我在这边等您。",
     collect_telegram_retry: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
@@ -969,6 +987,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm_question: "Do you have the Telegram app? If yes, please send me your Telegram username.",
     telegram_download: "If your phone has Play Store or App Store, you can search for Telegram there and download it directly. After creating your Telegram account, please tell me. We will teach you on Telegram how to earn commission. After that, send me your username starting with @.",
     telegram_installed_ack: "Okay, next please create your Telegram account. After that, send me your Telegram username starting with @.",
+    telegram_username_help: "Sure. Open Telegram, go to Settings, and find Username. If you already have a username starting with @, send it to me. If not, set one with letters or numbers, save it, then send me the @ username.",
     collect_telegram: "Have you registered your Telegram account? Please send me your Telegram username starting with @.",
     collect_telegram_wait: "Okay, after you finish, just send me the Telegram username starting with @. I will wait here.",
     collect_telegram_retry: "Please send me your Telegram username. It should start with @.",
@@ -1014,6 +1033,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm_question: "Você tem o aplicativo Telegram? Se tiver, envie seu nome de usuário do Telegram.",
     telegram_download: "Se o seu celular tiver Play Store ou App Store, você pode pesquisar e baixar o Telegram diretamente. Depois de criar a conta do Telegram, me avise. Vamos ensinar no Telegram como ganhar comissão. Depois disso, envie o nome de usuário começando com @.",
     telegram_installed_ack: "Certo, agora crie sua conta no Telegram. Depois disso, envie seu nome de usuário começando com @.",
+    telegram_username_help: "Claro. Abra o Telegram, entre em Configurações e procure Username/nome de usuário. Se já tiver um nome começando com @, envie para mim. Se não tiver, crie um com letras ou números, salve e me envie o @.",
     collect_telegram: "Você já registrou sua conta no Telegram? Envie seu nome de usuário do Telegram começando com @.",
     collect_telegram_wait: "Certo, quando terminar, envie seu nome de usuário do Telegram começando com @. Vou aguardar por aqui.",
     collect_telegram_retry: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
