@@ -312,6 +312,22 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; limit?: string } }>("/api/admin/intent-learning", { preHandler: adminOnly }, async (request) => ({
+    rows: deps.repos.listIntentLearningEvents({
+      merchantId: request.query.merchantId,
+      countryId: request.query.countryId,
+      status: request.query.status,
+      suggestedIntent: request.query.suggestedIntent,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/intent-learning/:id", { preHandler: adminOnly }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchIntentLearningEvent(id, request.body ?? {});
+    if (!row) return reply.code(404).send({ error: "intent learning event not found" });
+    return row;
+  });
   app.delete<{ Params: { customerKey: string }; Querystring: { merchantId?: string } }>("/api/admin/customers/:customerKey", { preHandler: adminOnly }, async (request, reply) => {
     const merchantId = request.query.merchantId || "default";
     const result = deps.repos.deleteCustomer(merchantId, decodeURIComponent(request.params.customerKey));
@@ -610,6 +626,22 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.get<{ Querystring: { countryId?: string; status?: string; suggestedIntent?: string; limit?: string } }>("/api/merchant/intent-learning", { preHandler: merchantRoles }, async (request) => ({
+    rows: deps.repos.listIntentLearningEvents({
+      merchantId: scopedMerchantId(request),
+      countryId: request.query.countryId,
+      status: request.query.status,
+      suggestedIntent: request.query.suggestedIntent,
+      limit: request.query.limit ? Number(request.query.limit) : undefined
+    })
+  }));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/intent-learning/:id", { preHandler: merchantAdmins }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
+    const row = deps.repos.patchIntentLearningEvent(id, request.body ?? {}, scopedMerchantId(request));
+    if (!row) return reply.code(404).send({ error: "intent learning event not found" });
+    return row;
+  });
   app.delete<{ Params: { customerKey: string } }>("/api/merchant/customers/:customerKey", { preHandler: merchantAdmins }, async (request, reply) => {
     const result = deps.repos.deleteCustomer(scopedMerchantId(request), decodeURIComponent(request.params.customerKey));
     if (!result.deleted) return reply.code(404).send({ error: "customer not found" });

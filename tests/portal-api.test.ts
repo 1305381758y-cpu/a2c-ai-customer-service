@@ -97,6 +97,82 @@ describe("portal api", () => {
     expect(() => repos.deleteScriptFlowStep(flow.steps[1].id, merchant.id, "测试员")).toThrow(/引用/);
   });
 
+  it("learns missing intent candidates from webhook messages and aggregates repeats", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "intent-learning-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: `intent-learning-sent-${Date.now()}` });
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "意图学习商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "intent-learning@test.local", name: "意图学习", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "intent-learning@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://intent-learning-a2c.test/api/openapi",
+          a2cAppId: "intent-learning-app",
+          a2cAppSecret: "intent-learning-secret",
+          strictScriptFlowEnabled: true
+        }
+      });
+
+      for (const index of [1, 2]) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `intent-learning-event-${index}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `intent-learning-message-${index}`,
+              content: "蓝色香蕉权益是什么东西？",
+              from: "intent-learning-customer",
+              to: "intent-learning-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000)
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+      }
+
+      const list = await app.inject({
+        method: "GET",
+        url: "/api/merchant/intent-learning",
+        headers: { cookie: merchantCookie }
+      });
+      expect(list.statusCode).toBe(200);
+      const rows = list.json().rows as Array<{ suggestedIntent: string; occurrenceCount: number; examples: unknown[]; detectedIntent: string }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].suggestedIntent).toBe("custom_unknown_question");
+      expect(rows[0].occurrenceCount).toBe(2);
+      expect(rows[0].examples.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("clears all training samples through the internal maintenance endpoint", async () => {
     const app = buildApp(testConfig());
     try {

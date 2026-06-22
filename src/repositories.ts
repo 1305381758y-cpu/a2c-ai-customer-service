@@ -304,6 +304,47 @@ export interface ConversationMessageRecord {
   createdAt: string;
 }
 
+export interface IntentLearningEventRecord {
+  id: number;
+  merchantId: string;
+  countryId: string;
+  conversationId: string;
+  messageId: number | null;
+  candidateKey: string;
+  suggestedIntent: string;
+  displayName: string;
+  description: string;
+  customerText: string;
+  language: string;
+  detectedIntent: string;
+  inferredIntent: string;
+  contextualIntent: string;
+  flowStep: string;
+  status: "candidate" | "reviewed" | "ignored" | "promoted";
+  occurrenceCount: number;
+  examples: Array<Record<string, unknown>>;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntentLearningInput {
+  merchantId: string;
+  countryId: string;
+  conversationId: string;
+  messageId?: number;
+  customerText: string;
+  language: string;
+  detectedIntent: string;
+  inferredIntent: string;
+  contextualIntent: string;
+  flowStep: string;
+  candidateKey: string;
+  suggestedIntent: string;
+  displayName: string;
+  description: string;
+}
+
 export class Repositories {
   constructor(private readonly db: Db) {}
 
@@ -333,6 +374,7 @@ export class Repositories {
     trainingMaterialsDeleted: number;
     trainingSamplesDeleted: number;
     knowledgeItemsDeleted: number;
+    intentLearningEventsDeleted: number;
     scriptFlowsDeleted: number;
     messagesDeleted: number;
     handoffEventsDeleted: number;
@@ -347,6 +389,7 @@ export class Repositories {
       const trainingMaterials = this.db.sqlite.prepare("DELETE FROM training_materials").run();
       const trainingSamples = this.db.sqlite.prepare("DELETE FROM training_samples").run();
       const knowledgeItems = this.db.sqlite.prepare("DELETE FROM knowledge_items").run();
+      const intentLearningEvents = this.db.sqlite.prepare("DELETE FROM intent_learning_events").run();
       this.db.sqlite.prepare("DELETE FROM conversation_followups").run();
       this.db.sqlite.prepare("DELETE FROM conversation_script_state").run();
       this.db.sqlite.prepare("DELETE FROM script_flow_versions").run();
@@ -375,6 +418,7 @@ export class Repositories {
         trainingMaterialsDeleted: Number(trainingMaterials.changes ?? 0),
         trainingSamplesDeleted: Number(trainingSamples.changes ?? 0),
         knowledgeItemsDeleted: Number(knowledgeItems.changes ?? 0),
+        intentLearningEventsDeleted: Number(intentLearningEvents.changes ?? 0),
         scriptFlowsDeleted: Number(scriptFlows.changes ?? 0),
         messagesDeleted: Number(messages.changes ?? 0),
         handoffEventsDeleted: Number(handoffEvents.changes ?? 0),
@@ -582,6 +626,7 @@ export class Repositories {
         const placeholders = conversations.map(() => "?").join(",");
         const conversationSampleMarkers = conversations.map((id) => `conversation_sample:${id}:%`);
         messagesDeleted = Number(this.db.sqlite.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...conversations).changes ?? 0);
+        this.db.sqlite.prepare(`DELETE FROM intent_learning_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM conversation_followups WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversations);
@@ -644,7 +689,7 @@ export class Repositories {
       } else {
         this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
       }
-      return { inserted: true };
+      return { inserted: true, id: Number(result.lastInsertRowid ?? 0) || undefined };
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE")) {
         if (input.direction === "outbound") {
@@ -668,12 +713,155 @@ export class Repositories {
               JSON.stringify({ ...(typeof input.rawPayload === "object" && input.rawPayload !== null ? input.rawPayload as Record<string, unknown> : {}), externalIdConflict: input.externalId ?? "", whatsappDetected: input.whatsappDetected ?? "" })
             );
           this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
-          return { inserted: true };
+          return { inserted: true, id: Number(result.lastInsertRowid ?? 0) || undefined };
         }
         return { inserted: false };
       }
       throw error;
     }
+  }
+
+  recordIntentLearningEvent(input: IntentLearningInput): IntentLearningEventRecord {
+    const existing = this.db.sqlite
+      .prepare("SELECT * FROM intent_learning_events WHERE merchant_id = ? AND country_id = ? AND candidate_key = ?")
+      .get(input.merchantId, input.countryId, input.candidateKey) as Record<string, unknown> | undefined;
+    const example = {
+      text: clipText(input.customerText, 300),
+      conversationId: input.conversationId,
+      messageId: input.messageId ?? null,
+      detectedIntent: input.detectedIntent,
+      inferredIntent: input.inferredIntent,
+      contextualIntent: input.contextualIntent,
+      flowStep: input.flowStep,
+      at: new Date().toISOString()
+    };
+    if (existing) {
+      const examples = [example, ...parseJsonRecordArray(existing.examples_json)]
+        .filter((item, index, array) => {
+          const text = String((item as Record<string, unknown>).text ?? "");
+          return text && array.findIndex((candidate) => String((candidate as Record<string, unknown>).text ?? "") === text) === index;
+        })
+        .slice(0, 8);
+      this.db.sqlite
+        .prepare(`
+          UPDATE intent_learning_events
+          SET conversation_id = ?,
+              message_id = ?,
+              customer_text = ?,
+              language = ?,
+              detected_intent = ?,
+              inferred_intent = ?,
+              contextual_intent = ?,
+              flow_step = ?,
+              occurrence_count = occurrence_count + 1,
+              examples_json = ?,
+              last_seen_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `)
+        .run(
+          input.conversationId,
+          input.messageId ?? null,
+          clipText(input.customerText, 1200),
+          input.language || "unknown",
+          input.detectedIntent || "unknown",
+          input.inferredIntent || "unknown",
+          input.contextualIntent || "unknown",
+          input.flowStep || "",
+          JSON.stringify(examples),
+          Number(existing.id)
+        );
+      return this.getIntentLearningEvent(Number(existing.id))!;
+    }
+
+    this.db.sqlite
+      .prepare(`
+        INSERT INTO intent_learning_events
+          (merchant_id, country_id, conversation_id, message_id, candidate_key, suggested_intent, display_name, description,
+           customer_text, language, detected_intent, inferred_intent, contextual_intent, flow_step, examples_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        input.merchantId,
+        input.countryId,
+        input.conversationId,
+        input.messageId ?? null,
+        input.candidateKey,
+        input.suggestedIntent,
+        input.displayName,
+        input.description,
+        clipText(input.customerText, 1200),
+        input.language || "unknown",
+        input.detectedIntent || "unknown",
+        input.inferredIntent || "unknown",
+        input.contextualIntent || "unknown",
+        input.flowStep || "",
+        JSON.stringify([example])
+      );
+    const row = this.db.sqlite.prepare("SELECT * FROM intent_learning_events WHERE id = last_insert_rowid()").get() as Record<string, unknown>;
+    return mapIntentLearningEvent(row);
+  }
+
+  getIntentLearningEvent(id: number, merchantId?: string): IntentLearningEventRecord | undefined {
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    const row = this.db.sqlite.prepare(`SELECT * FROM intent_learning_events ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    return row ? mapIntentLearningEvent(row) : undefined;
+  }
+
+  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.countryId) {
+      clauses.push("country_id = ?");
+      params.push(filters.countryId);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (filters.suggestedIntent) {
+      clauses.push("suggested_intent = ?");
+      params.push(filters.suggestedIntent);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    params.push(limit);
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM intent_learning_events
+        ${where}
+        ORDER BY occurrence_count DESC, last_seen_at DESC, id DESC
+        LIMIT ?
+      `)
+      .all(...params)
+      .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));
+  }
+
+  patchIntentLearningEvent(id: number, patch: Record<string, unknown>, merchantId?: string): IntentLearningEventRecord | undefined {
+    const allowed: Record<string, string> = {
+      status: "status",
+      suggestedIntent: "suggested_intent",
+      displayName: "display_name",
+      description: "description"
+    };
+    const assignments: string[] = [];
+    const values: Array<string | number> = [];
+    for (const [key, column] of Object.entries(allowed)) {
+      if (patch[key] === undefined) continue;
+      assignments.push(`${column} = ?`);
+      values.push(String(patch[key] ?? "").slice(0, key === "description" ? 500 : 80));
+    }
+    if (!assignments.length) return this.getIntentLearningEvent(id, merchantId);
+    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
+    this.db.sqlite
+      .prepare(`UPDATE intent_learning_events SET ${assignments.join(", ")}, updated_at = CURRENT_TIMESTAMP ${where}`)
+      .run(...values, id, ...(merchantId ? [merchantId] : []));
+    return this.getIntentLearningEvent(id, merchantId);
   }
 
   private learnFromConversationReply(conversationId: string, outboundMessageId: number, input: MessageInput): void {
@@ -2454,6 +2642,32 @@ function mapConversationMessage(row: Record<string, unknown>): ConversationMessa
   };
 }
 
+function mapIntentLearningEvent(row: Record<string, unknown>): IntentLearningEventRecord {
+  return {
+    id: Number(row.id ?? 0),
+    merchantId: String(row.merchant_id ?? "default"),
+    countryId: String(row.country_id ?? ""),
+    conversationId: String(row.conversation_id ?? ""),
+    messageId: row.message_id === null || row.message_id === undefined ? null : Number(row.message_id),
+    candidateKey: String(row.candidate_key ?? ""),
+    suggestedIntent: String(row.suggested_intent ?? "custom_unknown"),
+    displayName: String(row.display_name ?? ""),
+    description: String(row.description ?? ""),
+    customerText: String(row.customer_text ?? ""),
+    language: String(row.language ?? "unknown"),
+    detectedIntent: String(row.detected_intent ?? "unknown"),
+    inferredIntent: String(row.inferred_intent ?? "unknown"),
+    contextualIntent: String(row.contextual_intent ?? "unknown"),
+    flowStep: String(row.flow_step ?? ""),
+    status: String(row.status ?? "candidate") as IntentLearningEventRecord["status"],
+    occurrenceCount: Number(row.occurrence_count ?? 0),
+    examples: parseJsonRecordArray(row.examples_json),
+    lastSeenAt: String(row.last_seen_at ?? ""),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
 function mapMerchant(row: Record<string, unknown>): MerchantRecord {
   return { id: String(row.id), name: String(row.name), status: String(row.status ?? "active") as "active" | "disabled" };
 }
@@ -2813,6 +3027,17 @@ function parseJsonArray(value: unknown): string[] {
   try {
     const parsed = JSON.parse(String(value || "[]")) as unknown;
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseJsonRecordArray(value: unknown): Array<Record<string, unknown>> {
+  try {
+    const parsed = JSON.parse(String(value || "[]")) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item))
+      : [];
   } catch {
     return [];
   }

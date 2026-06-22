@@ -367,6 +367,31 @@ export function migrate(db: DatabaseSync): void {
       UNIQUE(conversation_id, flow_step, followup_type),
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS intent_learning_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT DEFAULT '',
+      conversation_id TEXT DEFAULT '',
+      message_id INTEGER,
+      candidate_key TEXT NOT NULL,
+      suggested_intent TEXT NOT NULL,
+      display_name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      customer_text TEXT NOT NULL,
+      language TEXT DEFAULT 'unknown',
+      detected_intent TEXT DEFAULT 'unknown',
+      inferred_intent TEXT DEFAULT 'unknown',
+      contextual_intent TEXT DEFAULT 'unknown',
+      flow_step TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'candidate',
+      occurrence_count INTEGER DEFAULT 1,
+      examples_json TEXT DEFAULT '[]',
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, country_id, candidate_key)
+    );
 	  `);
 
   db.exec("DROP TABLE IF EXISTS vector_documents;");
@@ -428,6 +453,12 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "script_flow_steps", "next_flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "script_flow_steps", "enabled", "INTEGER DEFAULT 1");
   ensureColumn(db, "conversation_followups", "error", "TEXT DEFAULT ''");
+  ensureColumn(db, "intent_learning_events", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "intent_learning_events", "conversation_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "intent_learning_events", "message_id", "INTEGER");
+  ensureColumn(db, "intent_learning_events", "display_name", "TEXT DEFAULT ''");
+  ensureColumn(db, "intent_learning_events", "description", "TEXT DEFAULT ''");
+  ensureColumn(db, "intent_learning_events", "examples_json", "TEXT DEFAULT '[]'");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
