@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { Bot, Building2, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
@@ -18,6 +18,7 @@ type MerchantCountry = { id: string; merchantId: string; code: string; name: str
 type ScriptFlow = { id: number; merchantId: string; countryId: string; countryName: string; name: string; status: string; active: boolean; version: number; sourceFilename: string; stepCount: number; createdAt: string; updatedAt: string };
 type ScriptFlowStep = { id: number; flowId: number; flowCode: string; flowName: string; flowStep: string; goal: string; triggerCondition: string; customerExpressions: string; standardReply: string; collectInfo: string; sendLink: boolean; sendInvite: boolean; nextCondition: string; nextFlowCode: string; nextFlowStep: string; forbidden: string; notes: string; sortOrder: number; enabled: boolean };
 type ScriptFlowVersion = { id: number; flowId: number; version: number; note: string; createdBy: string; createdAt: string };
+type IntentLearningEvent = { id: number; merchantId: string; countryId: string; conversationId: string; messageId: number | null; candidateKey: string; suggestedIntent: string; displayName: string; description: string; customerText: string; language: string; detectedIntent: string; inferredIntent: string; contextualIntent: string; flowStep: string; status: "candidate" | "reviewed" | "ignored" | "promoted"; occurrenceCount: number; examples: Array<Record<string, unknown>>; lastSeenAt: string; createdAt: string; updatedAt: string };
 type UnreadSummary = { a2cAccountPhone: string; unreadCount: number; conversations: Array<{ conversationId: string; customerPhone: string; unreadCount: number }> };
 type ChatMessage = { id: number; direction: string; content: string; msgType: string; language: string; intent: string; createdAt: string; rawPayload?: { originalContent?: string; translatedContent?: string; targetLanguage?: string; translationStatus?: "translated" | "skipped" | "failed"; translationError?: string; operatorTranslatedContent?: string; operatorTranslationTargetLanguage?: string; operatorTranslationStatus?: "translated" | "skipped" | "failed"; operatorTranslationError?: string; manual?: boolean; replyMode?: "strict_flow" | "gemini" | "fallback" | "manual"; strictFlow?: boolean; strictFlowEnabled?: boolean; strictFlowStep?: string; a2cSendStatus?: string; a2cSendError?: string } };
 type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
@@ -118,8 +119,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const merchantTrainingViews = ["materials", "knowledge", "samples"];
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["scriptFlows", "话本流程", Workflow], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
   useEffect(() => {
     if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
@@ -140,6 +141,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
         {activeView === "customers" && <Customers platform={user.role === "platform_admin"} />}
         {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
+        {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} />}
         {activeView === "training" && <TrainingMaterials platform={false} simple />}
         {activeView === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
         {activeView === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
@@ -726,6 +728,102 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
   </div>;
 }
 
+function IntentLearning({ platform = false }: { platform?: boolean }) {
+  const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
+  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", limit: "100" });
+  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, limit: filters.limit });
+  const [rows, setRows] = useRows<IntentLearningEvent>(rowsUrl);
+  const pager = useClientPagination(rows, 20);
+  const [selected, setSelected] = useState<IntentLearningEvent | null>(null);
+  const [detailDraft, setDetailDraft] = useState({ status: "candidate", displayName: "", description: "" });
+  useEffect(() => {
+    if (!selected) return;
+    setDetailDraft({ status: selected.status, displayName: selected.displayName, description: selected.description });
+  }, [selected]);
+  const reload = async () => {
+    const next = await loadRows<IntentLearningEvent>(rowsUrl);
+    setRows(next);
+    pager.setPage(1);
+    setSelected((current) => current ? next.find((item) => item.id === current.id) || null : null);
+  };
+  const patchSelected = async (patch: Record<string, unknown>, message = "意图候选已更新") => {
+    if (!selected) return;
+    const saved = await api<IntentLearningEvent>(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    setRows((current) => current.map((item) => item.id === saved.id ? saved : item));
+    setSelected(saved);
+    notify("success", message);
+  };
+  const metrics = {
+    candidate: rows.filter((item) => item.status === "candidate").length,
+    reviewed: rows.filter((item) => item.status === "reviewed").length,
+    promoted: rows.filter((item) => item.status === "promoted").length,
+    ignored: rows.filter((item) => item.status === "ignored").length
+  };
+  return <div className="intent-learning-page work-split">
+    <section className="work-panel">
+      <div className="training-center-hero compact">
+        <div>
+          <h3>意图学习</h3>
+          <p>系统会把没识别准、规则库没有覆盖、或需要靠上下文判断的客户表达自动沉淀到这里。运营处理后，再把高频意图补进话本或规则。</p>
+        </div>
+      </div>
+      <div className="learning-metrics">
+        <span>待处理 <strong>{metrics.candidate}</strong></span>
+        <span>已确认 <strong>{metrics.reviewed}</strong></span>
+        <span>已沉淀 <strong>{metrics.promoted}</strong></span>
+        <span>已忽略 <strong>{metrics.ignored}</strong></span>
+      </div>
+      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "suggestedIntent", "limit"] : ["countryId", "status", "suggestedIntent", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
+      <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+      <Pagination pager={pager} />
+    </section>
+    <section className="detail-panel">
+      {selected ? <div className="intent-learning-detail">
+        <div className="detail-title-row">
+          <div>
+            <h3>{selected.displayName || selected.suggestedIntent}</h3>
+            <p>{countryLabel(selected.countryId)} · 出现 {selected.occurrenceCount} 次 · 最近 {formatDateTime(selected.lastSeenAt)}</p>
+          </div>
+          <span className={`status-pill ${statusTone(selected.status)}`}>{label(selected.status)}</span>
+        </div>
+        <div className="learning-summary">
+          <strong>客户原话</strong>
+          <p>{selected.customerText}</p>
+        </div>
+        <div className="learning-facts">
+          <span>系统识别：{label(selected.detectedIntent || "unknown")}</span>
+          <span>上下文识别：{label(selected.contextualIntent || "unknown")}</span>
+          <span>建议意图：{label(selected.suggestedIntent || "unknown")}</span>
+          <span>流程节点：{label(selected.flowStep || "unknown")}</span>
+          <span>语言：{languageName(selected.language)}</span>
+        </div>
+        <div className="form-grid">
+          <label>意图名称<input value={detailDraft.displayName} onChange={(event) => setDetailDraft({ ...detailDraft, displayName: event.target.value })} /></label>
+          <label>处理状态<select value={detailDraft.status} onChange={(event) => setDetailDraft({ ...detailDraft, status: event.target.value })}>{["candidate", "reviewed", "promoted", "ignored"].map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></label>
+          <label className="wide-field">处理说明<textarea value={detailDraft.description} onChange={(event) => setDetailDraft({ ...detailDraft, description: event.target.value })} /></label>
+        </div>
+        <div className="toolbar">
+          <AsyncButton busyText="保存中..." onClick={() => patchSelected(detailDraft, "意图处理结果已保存")}>保存处理</AsyncButton>
+          <AsyncButton busyText="标记中..." onClick={() => patchSelected({ status: "reviewed" }, "已标记为已确认")}>标记已确认</AsyncButton>
+          <AsyncButton busyText="沉淀中..." onClick={() => patchSelected({ status: "promoted" }, "已标记为已沉淀")}>标记已沉淀</AsyncButton>
+          <AsyncButton className="danger" busyText="忽略中..." onClick={() => patchSelected({ status: "ignored" }, "已忽略该候选")}>忽略</AsyncButton>
+        </div>
+        <details className="version-panel" open>
+          <summary>样例记录</summary>
+          <div className="learning-examples">
+            {selected.examples?.length ? selected.examples.map((example, index) => <article key={index}>
+              <strong>{String(example.customerText || selected.customerText)}</strong>
+              <p>流程：{label(String(example.flowStep || selected.flowStep || "unknown"))} · 原识别：{label(String(example.detectedIntent || "unknown"))} · 时间：{formatDateTime(String(example.at || ""))}</p>
+            </article>) : <div className="empty-state compact">暂无样例</div>}
+          </div>
+        </details>
+        <div className="notice">下一步建议：高频候选先标记“已确认”，再把对应表达补到“话本流程”的客户常见表达或规则里。系统后续就会更稳定地识别这类客户意图。</div>
+      </div> : <div className="empty-chat"><h3>选择一个候选意图</h3><p>左侧显示的是系统自动发现的识别盲区。选择后可以查看样例、确认它属于什么意图，并标记处理状态。</p></div>}
+    </section>
+  </div>;
+}
+
 function TrainingMaterials({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
@@ -1177,9 +1275,9 @@ function optionLabel(field: string, option: string) {
 }
 
 function statusTone(value: string) {
-  if (["active", "enabled", "ok", "bound", "done", "ready_for_handoff", "available"].includes(value)) return "success";
-  if (["pending", "processing", "waiting", "need_platform_register", "need_phone_or_tg", "reserved"].includes(value)) return "warning";
-  if (["disabled", "error", "invalid", "human_handoff", "irrelevant_or_spam"].includes(value)) return "danger";
+  if (["active", "enabled", "ok", "bound", "done", "ready_for_handoff", "available", "reviewed", "promoted"].includes(value)) return "success";
+  if (["pending", "processing", "waiting", "need_platform_register", "need_phone_or_tg", "reserved", "candidate"].includes(value)) return "warning";
+  if (["disabled", "error", "invalid", "human_handoff", "irrelevant_or_spam", "ignored"].includes(value)) return "danger";
   return "neutral";
 }
 
@@ -1263,13 +1361,14 @@ function replyModeLabel(mode?: string) {
 
 function label(key: string) {
   return ({
-    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", training: "训练中心", scriptFlows: "话本流程", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
+    merchants: "商户", conversations: "会话", handoffs: "接管", samples: "样本", knowledge: "知识库", materials: "素材", training: "训练中心", scriptFlows: "话本流程", intentLearning: "意图学习", customers: "客户", active: "活跃", disabled: "停用", enabled: "启用", pendingHandoffs: "待接管",
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
     googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", smartReplyEnabled: "智能回复", strictScriptFlowEnabled: "严格话本流程", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
+    candidateKey: "候选键", suggestedIntent: "建议意图", displayName: "意图名称", description: "说明", customerText: "客户表达", detectedIntent: "原始意图", inferredIntent: "推断意图", contextualIntent: "上下文意图", occurrenceCount: "出现次数",
     limit: "数量", version: "版本", stepCount: "节点数", draft: "草稿", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
     pending: "待处理", processing: "处理中", done: "已完成", sourceType: "资料类型", count: "数量", filename: "文件名", itemCount: "学习数", sampleCount: "样本数",
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "表格", xlsx: "表格", docx: "文档", txt: "文本", image: "图片",
@@ -1280,7 +1379,7 @@ function label(key: string) {
     ok: "正常", missing: "未配置", error: "异常", unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效", apiPhone: "客服账号", verifiedName: "显示名称",
     wabaId: "业务账号ID", numberStatus: "号码状态", qualityRating: "质量评分", messagingLimit: "消息额度", syncedAt: "同步时间",
     platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营",
-    text: "文本", video: "视频", audio: "音频", document: "文件", sample: "样本", item: "条目", available: "可用", reserved: "已分配", used: "已使用",
+    text: "文本", video: "视频", audio: "音频", document: "文件", sample: "样本", item: "条目", available: "可用", reserved: "已分配", used: "已使用", candidate: "待处理", reviewed: "已确认", promoted: "已沉淀", ignored: "已忽略",
     inbound: "客户", outbound: "客服", unknown: "未知",
     need_platform_register: "待开户注册", need_phone_or_tg: "待补联系方式", ready_for_handoff: "可接管",
     first_greeting: "首次问候", interest_screening: "兴趣筛选", project_intro: "项目介绍", registration_intent: "确认注册意向", send_register_link: "发送链接邀请码",
@@ -1289,7 +1388,8 @@ function label(key: string) {
     collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
     greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册",
     provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
-    ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息"
+    ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息",
+    custom_unknown_question: "未知问题", contextual_acknowledgement: "上下文短确认", custom_unclassified_or_noise: "待判断噪声", custom_unclassified: "待识别新意图"
   } as Record<string, string>)[key] || key;
 }
 
