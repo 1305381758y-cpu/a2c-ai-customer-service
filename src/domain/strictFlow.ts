@@ -104,9 +104,18 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
   if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country)) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
   const step = normalizeFlowStep(input.conversation.flowStep);
-  if (step === "registration_intent" || step === "send_register_link") return true;
+  if (step === "send_register_link") return true;
+  if (step === "registration_intent") {
+    return asksForInviteOrLink(input.customerText, input.analysis.intent) ||
+      asksForRegistrationSteps(input.customerText) ||
+      isReadyToStartRegistration(input.customerText) ||
+      isPositive(input.customerText, input.analysis.intent, input.inferredIntent);
+  }
   if (step === "wait_registration") {
-    return input.inferredIntent === "ask_link" || asksForInviteOrLink(input.customerText, input.analysis.intent);
+    return input.inferredIntent === "ask_link" ||
+      asksForInviteOrLink(input.customerText, input.analysis.intent) ||
+      asksForRegistrationSteps(input.customerText) ||
+      isReadyToStartRegistration(input.customerText);
   }
   return false;
 }
@@ -246,6 +255,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (contextualLabel === "not_available" || contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
+    if (asksForMoreJobInfo(text)) {
+      return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
+    }
     if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
@@ -265,6 +277,12 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "wait_registration") {
     if (contextualLabel === "incomplete_phone") {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
+    }
+    if (asksForRegistrationSteps(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+    }
+    if (isReadyToStartRegistration(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", registrationStartInstruction(input, language), true);
     }
     if (contextualLabel === "acknowledgement") {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "wait_registration_ack", language));
@@ -286,6 +304,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
     if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
+      if (!(input.analysis.phone || input.conversation.extractedPhone)) {
+        return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_registered_phone", language));
+      }
       if (negativeTelegram) {
         return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
       }
@@ -781,6 +802,19 @@ function asksForOperationHelp(text: string): boolean {
   return /(不会|不會|不懂|怎么弄|怎麼弄|怎么操作|如何操作|怎么注册|怎么下载|怎么用|帮我|教我|一步一步|help|how do i|how to|cannot|can't|ajuda|me ajuda|como faço|como fazer|não consigo|nao consigo)/i.test(text);
 }
 
+function asksForMoreJobInfo(text: string): boolean {
+  return /(更多.*(信息|资料|資料|细节|細節)|提供.*(信息|资料|資料|细节|細節)|给我.*(信息|资料|資料|细节|細節)|告訴我.*(信息|资料|資料|细节|細節)|告诉我.*(信息|资料|資料|细节|細節)|多讲|多说|再介绍|详细介绍|具体介绍|具体.*工作|工作.*具体|更多了解|了解更多|more info|more information|tell me more|details|mais informações|mais informacoes|me explica melhor)/i.test(text);
+}
+
+function asksForRegistrationSteps(text: string): boolean {
+  return /(注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|registration steps|register.*steps|how.*register)/i.test(text);
+}
+
+function isReadyToStartRegistration(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  return /^(方便|方便的|有空|有空的|可以开始|开始吧|准备好了|準備好了|我准备好了|我準備好了|现在可以|現在可以|可以操作|继续|继续吧|ok|okay|yes|sim|pronto)$/i.test(normalized);
+}
+
 function helpLineForStep(input: StrictFlowInput, step: StrictFlowStep | "", language: string): string {
   if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") {
     return flowScriptLine(input, "telegram_help_ack", language);
@@ -821,6 +855,13 @@ function registerInstruction(input: StrictFlowInput, language: string): string {
     return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir o cadastro, me avise.`;
   }
   return `好的，现在我会把链接和邀请码发给您。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成注册后请告诉我。`;
+}
+
+function registrationStartInstruction(input: StrictFlowInput, language: string): string {
+  const instruction = registerInstruction(input, language);
+  if (language === "en") return `Okay, let's start with the first step. Please open the link first, and I will guide you step by step.\n${instruction}`;
+  if (language === "pt-BR") return `Certo, vamos começar pelo primeiro passo. Abra primeiro o link, e eu vou orientar você etapa por etapa.\n${instruction}`;
+  return `好的，我们先从第一步开始。您先打开下面这个链接，我一步步带您操作。\n${instruction}`;
 }
 
 function flowScriptLine(input: StrictFlowInput, key: string, language: string): string {
@@ -933,6 +974,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     not_registered_ack: "没关系，您先按页面步骤注册；如果卡在哪一步，把页面情况发我就行。注册完成后把注册手机号发给我。",
     wait_registration_ack: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
     incomplete_phone_ack: "我看到您说注册好了，不过这个手机号好像不完整。请把注册时填写的完整手机号发我一下。",
+    more_job_info_ack: "可以，我再简单补充一下：具体任务细节、规则和收益核算以后续页面和人工确认为准。我这边主要负责先协助您完成开户注册，方便后面继续安排。您现在方便继续注册吗？",
     project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -979,6 +1021,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     not_registered_ack: "No problem. Please follow the page steps first. If you get stuck, send me what you see. After registration, send me the registered phone number.",
     wait_registration_ack: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
     incomplete_phone_ack: "I see you said registration is done, but that phone number looks incomplete. Please send me the full phone number used for registration.",
+    more_job_info_ack: "Sure, I can add a little more: the exact task details, rules, and earnings calculation should follow the page and later confirmation. My role here is to help you finish the account registration first so the next step can continue. Do you have time to continue registration now?",
     project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
@@ -1025,6 +1068,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     not_registered_ack: "Sem problema. Siga primeiro as etapas da página. Se travar em alguma parte, me envie o que aparece. Depois do cadastro, envie o telefone usado no cadastro.",
     wait_registration_ack: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
     incomplete_phone_ack: "Entendi que você concluiu o cadastro, mas esse telefone parece incompleto. Envie o número completo usado no cadastro, por favor.",
+    more_job_info_ack: "Claro, posso explicar um pouco mais: os detalhes das tarefas, regras e cálculo de ganhos devem seguir a página e a confirmação posterior. Meu papel aqui é ajudar você a concluir primeiro o cadastro da conta para continuar a próxima etapa. Você tem tempo agora para continuar o cadastro?",
     project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
