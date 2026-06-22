@@ -148,6 +148,9 @@ export function buildRuleContextualIntent(
   if (!text) return base("unknown", { source: "none" });
   if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
   if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
+  if (step === "wait_registration" && hasIncompleteRegistrationPhone(text)) {
+    return base("incomplete_phone", { nextAction: "need_complete_phone", reason: "registration done with incomplete phone" });
+  }
 
   if (step === "telegram_confirm" && saysContextualNo(text)) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
@@ -163,6 +166,9 @@ export function buildRuleContextualIntent(
   }
   if ((step === "telegram_download" || step === "collect_telegram") && isAcknowledgement(text)) {
     return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "wait for telegram username", reason: "acknowledged current telegram step" });
+  }
+  if (step === "wait_registration" && isAcknowledgement(text)) {
+    return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "wait_registration_ack", reason: "acknowledged registration instructions" });
   }
 
   if (input.inferredIntent && input.inferredIntent !== "unknown") {
@@ -254,6 +260,12 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "wait_registration") {
+    if (contextualLabel === "incomplete_phone") {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
+    }
+    if (contextualLabel === "acknowledgement") {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "wait_registration_ack", language));
+    }
     if (contextualLabel === "not_registered") {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "not_registered_ack", language), "wait_registration", "not_registered"));
     }
@@ -266,6 +278,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (contextualLabel === "ask_tg_register" || input.analysis.intent === "ask_tg_register" || inferredIntent === "ask_tg_register" || asksTelegramExplanation(text)) {
       const line = input.conversation.extractedPhone || input.analysis.phone ? "telegram_explain_after_phone_ack" : "telegram_explain_ack";
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain", line));
+    }
+    if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
     if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (negativeTelegram) {
@@ -607,6 +622,7 @@ function mapInternalToContextual(intent: InternalIntentLabel): ContextualIntentL
 
 function contextualQuestionType(intent: ContextualIntentLabel): ControlledQuestionType {
   if (intent === "ask_tg_register" || intent === "no_telegram" || intent === "telegram_installed") return "telegram";
+  if (intent === "incomplete_phone") return "phone_reason";
   if (intent === "payment_concern") return "payment";
   if (intent === "investment_concern") return "investment";
   if (intent === "trust_concern") return "trust";
@@ -655,6 +671,15 @@ function saysTelegramInstalled(text: string): boolean {
 function isAcknowledgement(text: string): boolean {
   const normalized = normalizeShortReply(text);
   return /^(好|好的|好吧|ok|okay|明白|明白了|知道了|懂了|嗯|嗯嗯|行|可以|yes|sim|claro)$/i.test(normalized);
+}
+
+function hasIncompleteRegistrationPhone(text: string): boolean {
+  if (!/(注册好了|註冊好了|注册完|註冊完|已注册|已註冊|完成注册|完成註冊|registered|cadastrei|registrado)/i.test(text)) return false;
+  const digits = text.replace(/https?:\/\/\S+/gi, " ").match(/\d[\d\s-]{4,10}\d/g);
+  if (!digits) return false;
+  return digits
+    .map((value) => value.replace(/\D/g, ""))
+    .some((value) => value.length > 0 && value.length < 8);
 }
 
 function isRegistrationDoneConfirmation(text: string): boolean {
@@ -889,6 +914,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_telegram_confirm: "下一步只需要确认 Telegram，方便后续人工继续跟进。",
     bridge_collect_telegram: "完成后把 @ 开头的 Telegram 用户名发给我就可以。",
     not_registered_ack: "没关系，您先按页面步骤注册；如果卡在哪一步，把页面情况发我就行。注册完成后把注册手机号发给我。",
+    wait_registration_ack: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
+    incomplete_phone_ack: "我看到您说注册好了，不过这个手机号好像不完整。请把注册时填写的完整手机号发我一下。",
     project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -932,6 +959,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_telegram_confirm: "The next step is only to confirm Telegram so the follow-up can continue smoothly.",
     bridge_collect_telegram: "After that, send me your Telegram username starting with @.",
     not_registered_ack: "No problem. Please follow the page steps first. If you get stuck, send me what you see. After registration, send me the registered phone number.",
+    wait_registration_ack: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
+    incomplete_phone_ack: "I see you said registration is done, but that phone number looks incomplete. Please send me the full phone number used for registration.",
     project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
@@ -975,6 +1004,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_telegram_confirm: "O próximo passo é apenas confirmar o Telegram para continuar o acompanhamento.",
     bridge_collect_telegram: "Depois disso, envie seu nome de usuário do Telegram começando com @.",
     not_registered_ack: "Sem problema. Siga primeiro as etapas da página. Se travar em alguma parte, me envie o que aparece. Depois do cadastro, envie o telefone usado no cadastro.",
+    wait_registration_ack: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
+    incomplete_phone_ack: "Entendi que você concluiu o cadastro, mas esse telefone parece incompleto. Envie o número completo usado no cadastro, por favor.",
     project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",

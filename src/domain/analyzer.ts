@@ -33,6 +33,7 @@ export type InternalIntentLabel = (typeof INTERNAL_INTENT_LABELS)[number];
 
 export const CONTEXTUAL_INTENT_LABELS = [
   "phone_submission",
+  "incomplete_phone",
   "telegram_submission",
   "positive_confirmation",
   "acknowledgement",

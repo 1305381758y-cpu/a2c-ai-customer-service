@@ -855,9 +855,9 @@ describe("strict Aston Brazil flow", () => {
 
   it("continues proactively after help requests but pauses on explicit refusal", () => {
     const help = reply("我不会操作，你帮我", { language: "zh", flowStep: "wait_registration" });
-    expect(help.reply).toContain("带您处理注册步骤");
-    expect(help.reply).toContain("如果已经注册完成");
-    expect(help.reply).not.toContain("register.example");
+    expect(help.reply).toContain("开户链接");
+    expect(help.reply).toContain("邀请码");
+    expect(help.reply).toContain("注册步骤");
     expect(help.nextFlowStep).toBe("wait_registration");
 
     const telegramHelp = reply("怎么下载", { language: "zh", flowStep: "telegram_download", extractedPhone: "99228822881" });
@@ -988,5 +988,32 @@ describe("strict Aston Brazil flow", () => {
     expect(notAvailable.reply).toContain("先不继续打扰");
     expect(notAvailable.reply).not.toContain("开户链接");
     expect(notAvailable.contextualIntent?.intent).toBe("not_available");
+  });
+
+  it("keeps wait-registration replies natural and does not repeat the same phone prompt", () => {
+    const ack = reply("好的", { language: "zh", flowStep: "wait_registration" });
+    expect(ack.nextFlowStep).toBe("wait_registration");
+    expect(ack.reply).toContain("先按页面操作");
+    expect(ack.reply).toContain("卡在哪一步");
+    expect(ack.reply).not.toBe("请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。");
+    expect(ack.contextualIntent?.intent).toBe("acknowledgement");
+
+    const help = reply("教我怎么注册", { language: "zh", flowStep: "wait_registration" });
+    expect(help.nextFlowStep).toBe("wait_registration");
+    expect(help.reply).toContain("开户链接");
+    expect(help.reply).toContain("邀请码");
+    expect(help.reply).toContain("注册步骤");
+  });
+
+  it("does not advance to Telegram when registration message contains an incomplete phone", () => {
+    const incomplete = reply("4567890 注册好了", { language: "zh", flowStep: "wait_registration" });
+    expect(incomplete.nextFlowStep).toBe("wait_registration");
+    expect(incomplete.reply).toContain("手机号好像不完整");
+    expect(incomplete.reply).toContain("完整手机号");
+    expect(incomplete.contextualIntent?.intent).toBe("incomplete_phone");
+
+    const complete = reply("918273718271 注册好了", { language: "zh", flowStep: "wait_registration" });
+    expect(complete.nextFlowStep).toBe("telegram_confirm");
+    expect(complete.reply).toContain("Telegram");
   });
 });

@@ -43,3 +43,21 @@ services:
       name: a2c-ai-data
       mountPath: /var/data
       sizeGB: 1
+
+  - type: cron
+    name: a2c-ai-follow-ups
+    runtime: node
+    plan: starter
+    region: singapore
+    schedule: "* * * * *"
+    buildCommand: npm ci
+    startCommand: npm run followups:due
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.1
+      - key: FOLLOW_UP_BASE_URL
+        value: https://a2c-ai-customer-service.onrender.com
+      - key: FOLLOW_UP_LIMIT
+        value: "50"
+      - key: INTERNAL_API_KEY
+        sync: false

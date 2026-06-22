@@ -13,6 +13,7 @@
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsc -p tsconfig.build.json",
     "build:web": "vite build --config frontend/vite.config.ts",
+    "followups:due": "node scripts/run-followups-due.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },

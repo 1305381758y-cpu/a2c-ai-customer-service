@@ -402,6 +402,7 @@ export class WebhookProcessor {
             replyMode: "strict_flow",
             followupSent: true,
             followupReason: "idle_2m",
+            followupStep: flowStep,
             strictFlow: true,
             strictFlowStep: flowStep,
             a2cSendStatus: "sent"
