@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMessage } from "../src/domain/analyzer.js";
-import { buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
+import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../src/repositories.js";
@@ -147,14 +147,21 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
 
 function reply(text: string, overrides: Partial<Conversation> = {}) {
   const analysis = analyzeMessage(text, overrides.language ?? "unknown");
+  const conv = conversation(overrides);
+  const contextualIntent = buildRuleContextualIntent({
+    conversation: conv,
+    analysis,
+    customerText: text
+  });
   return buildStrictFlowReply({
     merchant,
     country,
-    conversation: conversation(overrides),
+    conversation: conv,
     analysis,
     customerText: text,
     inviteCode,
-    config
+    config,
+    contextualIntent
   });
 }
 
@@ -190,7 +197,12 @@ function simulateStrictFlow(inputs: string[]) {
       analysis,
       customerText: inputText,
       inviteCode,
-      config
+      config,
+      contextualIntent: buildRuleContextualIntent({
+        conversation: conv,
+        analysis,
+        customerText: inputText
+      })
     });
     conv.language = result.language;
     conv.stage = result.stage;
@@ -939,5 +951,42 @@ describe("strict Aston Brazil flow", () => {
     expect(phoneAlreadySent.reply).toContain("@ 开头");
     expect(phoneAlreadySent.reply).not.toContain("注册手机号");
     expect(phoneAlreadySent.nextFlowStep).toBe("collect_telegram");
+  });
+
+  it("uses context to understand short Telegram-stage replies", () => {
+    const noTelegram = reply("我没有", { language: "zh", flowStep: "telegram_confirm", extractedPhone: "9876789" });
+    expect(noTelegram.nextFlowStep).toBe("telegram_download");
+    expect(noTelegram.reply).toContain("应用商店");
+    expect(noTelegram.reply).not.toContain("不继续打扰");
+    expect(noTelegram.contextualIntent?.intent).toBe("no_telegram");
+
+    const installed = reply("装好了", { language: "zh", flowStep: "telegram_download", extractedPhone: "9876789" });
+    expect(installed.nextFlowStep).toBe("collect_telegram");
+    expect(installed.reply).toContain("@ 开头");
+    expect(installed.contextualIntent?.intent).toBe("telegram_installed");
+
+    const tgQuestion = reply("为什么要使用Telegram呢", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(tgQuestion.nextFlowStep).toBe("collect_telegram");
+    expect(tgQuestion.reply).toContain("后续联系和指导");
+    expect(tgQuestion.reply).toContain("@ 开头");
+
+    const acknowledgement = reply("ok", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(acknowledgement.nextFlowStep).toBe("collect_telegram");
+    expect(acknowledgement.reply).toContain("我在这边等");
+    expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
+  });
+
+  it("uses context to distinguish short no answers outside Telegram", () => {
+    const notRegistered = reply("我没有", { language: "zh", flowStep: "wait_registration" });
+    expect(notRegistered.nextFlowStep).toBe("wait_registration");
+    expect(notRegistered.reply).toContain("卡在哪一步");
+    expect(notRegistered.reply).not.toContain("Telegram");
+    expect(notRegistered.contextualIntent?.intent).toBe("not_registered");
+
+    const notAvailable = reply("我没有", { language: "zh", flowStep: "registration_intent" });
+    expect(notAvailable.nextFlowStep).toBe("registration_intent");
+    expect(notAvailable.reply).toContain("先不继续打扰");
+    expect(notAvailable.reply).not.toContain("开户链接");
+    expect(notAvailable.contextualIntent?.intent).toBe("not_available");
   });
 });

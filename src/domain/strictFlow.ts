@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../repositories.js";
-import { isPositiveConfirmation, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
+import { isPositiveConfirmation, type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 
 export const STRICT_FLOW_STEPS = [
   "first_greeting",
@@ -27,6 +27,7 @@ export interface StrictFlowInput {
   inviteCode?: A2CInviteCodeRecord;
   config: AppConfig;
   inferredIntent?: InternalIntentLabel;
+  contextualIntent?: StrictContextualIntent;
   strictFlowEnabled?: boolean;
   scriptFlow?: ScriptFlowRuntime;
 }
@@ -41,6 +42,19 @@ export interface StrictFlowReply {
   fallback?: boolean;
   controlledQuestionType?: ControlledQuestionType;
   controlledQuestionFallback?: boolean;
+  contextualIntent?: StrictContextualIntent;
+}
+
+export interface StrictContextualIntent {
+  intent: ContextualIntentLabel;
+  source: "rule" | "gemini" | "none";
+  answeredPreviousQuestion: boolean;
+  isQuestion: boolean;
+  isSubmission: boolean;
+  shouldPause: boolean;
+  questionType: ControlledQuestionType;
+  nextAction: string;
+  reason: string;
 }
 
 export type ControlledQuestionType =
@@ -111,6 +125,64 @@ export function resolveEffectiveStrictFlowStep(
   return inferredRank > storedRank ? inferred : stored;
 }
 
+export function buildRuleContextualIntent(
+  input: Pick<StrictFlowInput, "conversation" | "analysis" | "customerText" | "inferredIntent">,
+  history: Array<Pick<ConversationMessageRecord, "direction" | "content">> = []
+): StrictContextualIntent {
+  const step = normalizeFlowStep(input.conversation.flowStep);
+  const text = input.customerText.trim();
+  const previousAssistantMessage = lastAssistantContent(history);
+  const base = (intent: ContextualIntentLabel, overrides: Partial<StrictContextualIntent> = {}): StrictContextualIntent => ({
+    intent,
+    source: "rule",
+    answeredPreviousQuestion: Boolean(previousAssistantMessage && isContextualShortReply(text)),
+    isQuestion: looksLikeQuestion(text),
+    isSubmission: intent === "phone_submission" || intent === "telegram_submission",
+    shouldPause: intent === "negative_refusal" || intent === "not_available",
+    questionType: contextualQuestionType(intent),
+    nextAction: "",
+    reason: "",
+    ...overrides
+  });
+
+  if (!text) return base("unknown", { source: "none" });
+  if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
+  if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
+
+  if (step === "telegram_confirm" && saysContextualNo(text)) {
+    return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
+  }
+  if (step === "telegram_download" && saysTelegramInstalled(text)) {
+    return base("telegram_installed", { answeredPreviousQuestion: true, nextAction: "collect telegram username", reason: "telegram installed" });
+  }
+  if (step === "wait_registration" && saysNotRegistered(text)) {
+    return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "help registration", reason: "not registered yet" });
+  }
+  if (step === "registration_intent" && saysNotAvailable(text)) {
+    return base("not_available", { answeredPreviousQuestion: true, nextAction: "pause politely", reason: "not available now" });
+  }
+  if ((step === "telegram_download" || step === "collect_telegram") && isAcknowledgement(text)) {
+    return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "wait for telegram username", reason: "acknowledged current telegram step" });
+  }
+
+  if (input.inferredIntent && input.inferredIntent !== "unknown") {
+    return base(mapInternalToContextual(input.inferredIntent), { source: "rule", reason: "internal intent" });
+  }
+  if (input.analysis.intent === "trust_concern" || asksTrustConcern(text)) return base("trust_concern", { reason: "trust concern" });
+  if (asksInvestmentConcern(text)) return base("investment_concern", { reason: "investment concern" });
+  if (asksPaymentConcern(text)) return base("payment_concern", { reason: "payment concern" });
+  if (asksEarningConcern(text)) return base("earning_concern", { reason: "earning concern" });
+  if (asksTelegramExplanation(text)) return base("ask_tg_register", { reason: "telegram question" });
+  if (asksForOperationHelp(text)) return base("workflow_question", { reason: "operation help" });
+  if (asksAboutJob(text)) return base("job_question", { reason: "job question" });
+  if (complainsAboutReply(text)) return base("complaint", { reason: "complaint" });
+  if (asksSensitiveInfo(text)) return base("sensitive_request", { reason: "sensitive request" });
+  if (isPositive(text, input.analysis.intent, input.inferredIntent)) return base("positive_confirmation", { answeredPreviousQuestion: true, reason: "positive confirmation" });
+  if (isExplicitRefusal(text)) return base("negative_refusal", { answeredPreviousQuestion: true, reason: "explicit refusal" });
+  if (looksLikeQuestion(text)) return base("unknown_question", { reason: "unclassified question" });
+  return base("unknown", { source: "none" });
+}
+
 export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country))) {
     return {
@@ -126,8 +198,10 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const language = normalizeReplyLanguage(input.analysis.language, input.conversation.language, input.country.defaultLanguage);
   const step = normalizeFlowStep(input.conversation.flowStep);
   const text = input.customerText.trim();
-  const positive = isPositive(text, input.analysis.intent, input.inferredIntent);
-  const negativeTelegram = saysNoTelegram(text);
+  const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
+  const contextualLabel = contextualIntent.intent;
+  const positive = isContextualPositive(step, contextualLabel) || isPositive(text, input.analysis.intent, input.inferredIntent);
+  const negativeTelegram = contextualLabel === "no_telegram" || saysNoTelegram(text);
   const asksLink = asksForInviteOrLink(text, input.analysis.intent);
   const inferredIntent = input.inferredIntent ?? "unknown";
 
@@ -140,7 +214,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "interest_screening") {
-    if (inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
+    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
       return reply(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
@@ -160,10 +234,10 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "registration_intent") {
-    if (inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
+    if (contextualLabel === "not_available" || contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
-    if (inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
+    if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
     if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
@@ -180,17 +254,20 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "wait_registration") {
+    if (contextualLabel === "not_registered") {
+      return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "not_registered_ack", language), "wait_registration", "not_registered"));
+    }
     if (input.analysis.intent === "trust_concern" || asksTrustConcern(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "trust_concern"));
     }
     if (asksPaymentConcern(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "payment_concern"));
     }
-    if (input.analysis.intent === "ask_tg_register" || inferredIntent === "ask_tg_register" || asksTelegramExplanation(text)) {
+    if (contextualLabel === "ask_tg_register" || input.analysis.intent === "ask_tg_register" || inferredIntent === "ask_tg_register" || asksTelegramExplanation(text)) {
       const line = input.conversation.extractedPhone || input.analysis.phone ? "telegram_explain_after_phone_ack" : "telegram_explain_ack";
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain", line));
     }
-    if (inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
+    if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (negativeTelegram) {
         return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
       }
@@ -203,28 +280,37 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "telegram_confirm") {
-    if (inferredIntent === "negative_refusal") {
+    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (negativeTelegram) {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
     }
-    if (positive || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
+    if (positive || contextualLabel === "telegram_installed" || contextualLabel === "ask_tg_register" || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram", language));
     }
     return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_confirm_question", language), "telegram_confirm", input.analysis.intent));
   }
 
   if (step === "telegram_download") {
+    if (contextualLabel === "no_telegram" || contextualLabel === "need_help" || contextualLabel === "workflow_question" || contextualLabel === "ask_tg_register") {
+      return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
+    }
+    if (contextualLabel === "telegram_installed" || contextualLabel === "acknowledgement" || positive) {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_installed_ack", language));
+    }
     return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram", language), "collect_telegram", input.analysis.intent));
   }
 
   if (step === "collect_telegram") {
-    if (inferredIntent === "negative_refusal") {
+    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
-    if (negativeTelegram) {
+    if (negativeTelegram || contextualLabel === "need_help") {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
+    }
+    if (contextualLabel === "acknowledgement" || positive) {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram_wait", language));
     }
     return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
   }
@@ -275,6 +361,12 @@ function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep |
   if (!step) return null;
   const normalized = text.trim();
   if (!normalized) return null;
+  if (input.contextualIntent?.intent === "not_registered") {
+    return { content: flowScriptLine(input, "not_registered_ack", language), type: "help" };
+  }
+  if (input.contextualIntent?.intent === "acknowledgement" && (step === "telegram_download" || step === "collect_telegram")) {
+    return { content: flowScriptLine(input, "collect_telegram_wait", language), type: "telegram" };
+  }
   if (isExplicitRefusal(normalized)) {
     return { content: flowScriptLine(input, "refusal_ack", language), pauseFlow: true, type: "hesitation" };
   }
@@ -386,6 +478,7 @@ function reply(
   needsInviteCode = false
 ): StrictFlowReply {
   const actionableContent = ensureActionableStrictContent(content, nextFlowStep, language);
+  const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
   const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, debugIntent);
   return {
@@ -397,7 +490,8 @@ function reply(
     needsInviteCode,
     fallback: !input.inviteCode && needsInviteCode,
     controlledQuestionType: controlled?.type ?? "none",
-    controlledQuestionFallback: Boolean(controlled?.cautiousFallback)
+    controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
+    contextualIntent
   };
 }
 
@@ -480,6 +574,87 @@ function isPositive(text: string, intent: string, inferredIntent: InternalIntent
   if (intent === "platform_register_done") return true;
   if (isPositiveConfirmation(text)) return true;
   return /(有兴趣|想了解|想继续|要继续|继续|准备好了|有空|空闲|有时间|现在可以|愿意|同意|interested|i want|continue|free time|available|quero|tenho interesse|continuar|tenho tempo|dispon[ií]vel|vamos|pronto)/i.test(text.trim());
+}
+
+function isContextualPositive(step: StrictFlowStep | "", intent: ContextualIntentLabel): boolean {
+  if (intent === "positive_confirmation") return true;
+  if (intent === "telegram_installed") return step === "telegram_confirm" || step === "telegram_download";
+  if (intent === "acknowledgement") return step === "registration_intent" || step === "telegram_download";
+  return false;
+}
+
+function mapInternalToContextual(intent: InternalIntentLabel): ContextualIntentLabel {
+  const map: Partial<Record<InternalIntentLabel, ContextualIntentLabel>> = {
+    positive_confirmation: "positive_confirmation",
+    negative_refusal: "negative_refusal",
+    need_help: "need_help",
+    ask_platform_register: "ask_platform_register",
+    ask_link: "ask_link",
+    ask_tg_register: "ask_tg_register",
+    platform_register_done: "platform_register_done",
+    payment_concern: "payment_concern",
+    investment_concern: "investment_concern",
+    trust_concern: "trust_concern",
+    earning_concern: "earning_concern",
+    workflow_question: "workflow_question",
+    job_question: "job_question",
+    complaint: "complaint",
+    chat: "chat",
+    sensitive_request: "sensitive_request"
+  };
+  return map[intent] ?? "unknown";
+}
+
+function contextualQuestionType(intent: ContextualIntentLabel): ControlledQuestionType {
+  if (intent === "ask_tg_register" || intent === "no_telegram" || intent === "telegram_installed") return "telegram";
+  if (intent === "payment_concern") return "payment";
+  if (intent === "investment_concern") return "investment";
+  if (intent === "trust_concern") return "trust";
+  if (intent === "earning_concern") return "earning";
+  if (intent === "workflow_question" || intent === "not_registered" || intent === "need_help") return "help";
+  if (intent === "job_question") return "job";
+  if (intent === "complaint") return "complaint";
+  if (intent === "chat") return "chat";
+  if (intent === "sensitive_request") return "sensitive";
+  if (intent === "unknown_question") return "unknown";
+  return "none";
+}
+
+function lastAssistantContent(history: Array<Pick<ConversationMessageRecord, "direction" | "content">>): string {
+  return [...history].reverse().find((message) => message.direction === "outbound")?.content ?? "";
+}
+
+function isContextualShortReply(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return normalized.length > 0 && normalized.length <= 12 && /^(我没有|没有|沒|沒有|无|無|不会|不會|装好了|安装好了|下载好了|好了|好的|好|ok|okay|明白|知道了|yes|no|não|nao|sim)$/i.test(normalized);
+}
+
+function normalizeShortReply(text: string): string {
+  return text.toLowerCase().replace(/[。.!?！？,，;；:：\s]+$/g, "").trim();
+}
+
+function saysContextualNo(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return /^(我没有|没有|沒有|没|沒|无|無|还没有|還沒有|没有telegram|没有tg|沒有telegram|沒有tg|no|nope|não tenho|nao tenho|sem telegram)$/i.test(normalized);
+}
+
+function saysNotAvailable(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return /^(我没有|没有|沒有|没|沒|没空|沒有空|没时间|沒時間|没有时间|暂时没空|现在不行|no|not now|no time)$/i.test(normalized);
+}
+
+function saysNotRegistered(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return /^(我没有|没有|沒有|没|沒|还没|还没有|還沒|還沒有|没完成|沒有完成|没注册|沒有注册|没有注册|不会注册|no|not yet)$/i.test(normalized);
+}
+
+function saysTelegramInstalled(text: string): boolean {
+  return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|installed|downloaded|instalei|baixei)/i.test(text.trim());
+}
+
+function isAcknowledgement(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return /^(好|好的|好吧|ok|okay|明白|明白了|知道了|懂了|嗯|嗯嗯|行|可以|yes|sim|claro)$/i.test(normalized);
 }
 
 function isRegistrationDoneConfirmation(text: string): boolean {
@@ -713,6 +888,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "您准备继续时告诉我，我会继续带您处理注册步骤；如果已经注册完成，请把注册手机号发给我。",
     bridge_telegram_confirm: "下一步只需要确认 Telegram，方便后续人工继续跟进。",
     bridge_collect_telegram: "完成后把 @ 开头的 Telegram 用户名发给我就可以。",
+    not_registered_ack: "没关系，您先按页面步骤注册；如果卡在哪一步，把页面情况发我就行。注册完成后把注册手机号发给我。",
     project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -720,7 +896,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm: "恭喜！您已成功注册。这是您的兼职账号。请保存您的用户名和密码，以免忘记。您需要一个 Telegram 账号才能开始工作，您有 Telegram 应用吗？",
     telegram_confirm_question: "您有 Telegram 应用吗？如果有，请把您的 Telegram 用户名发给我。",
     telegram_download: "如果你的手机里安装了应用商店（Play Store 或 App Store），可以直接在那里搜索并下载 Telegram 应用。创建 Telegram 账号后请告诉我。我们会在 Telegram 教你如何赚取佣金。完成后请把 @ 开头的用户名发给我。",
+    telegram_installed_ack: "好的，那接下来请注册 Telegram 账号；注册好后，把 @ 开头的 Telegram 用户名发给我。",
     collect_telegram: "您注册好 Telegram 账号了吗？请把 @ 开头的 Telegram 用户名发送给我。",
+    collect_telegram_wait: "好的，注册好后把 @ 开头的 Telegram 用户名发给我就行，我在这边等您。",
     collect_telegram_retry: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
     missing_invite: `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${fallback ? `\n开户链接：${fallback}` : ""}`
   };
@@ -753,6 +931,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "When you are ready to continue, tell me and I will guide you through the registration step. If you have completed registration, please send me the registered phone number.",
     bridge_telegram_confirm: "The next step is only to confirm Telegram so the follow-up can continue smoothly.",
     bridge_collect_telegram: "After that, send me your Telegram username starting with @.",
+    not_registered_ack: "No problem. Please follow the page steps first. If you get stuck, send me what you see. After registration, send me the registered phone number.",
     project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
@@ -760,7 +939,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm: "Congratulations, you have registered successfully. This is your part-time work account. Please save your username and password so you do not forget them. You need a Telegram account to start working. Do you have the Telegram app?",
     telegram_confirm_question: "Do you have the Telegram app? If yes, please send me your Telegram username.",
     telegram_download: "If your phone has Play Store or App Store, you can search for Telegram there and download it directly. After creating your Telegram account, please tell me. We will teach you on Telegram how to earn commission. After that, send me your username starting with @.",
+    telegram_installed_ack: "Okay, next please create your Telegram account. After that, send me your Telegram username starting with @.",
     collect_telegram: "Have you registered your Telegram account? Please send me your Telegram username starting with @.",
+    collect_telegram_wait: "Okay, after you finish, just send me the Telegram username starting with @. I will wait here.",
     collect_telegram_retry: "Please send me your Telegram username. It should start with @.",
     missing_invite: `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${fallback ? `\nRegistration link: ${fallback}` : ""}`
   };
@@ -793,6 +974,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     bridge_wait_registration: "Quando estiver pronto para continuar, me avise e eu continuo orientando o cadastro. Se já concluiu o cadastro, envie o telefone usado no cadastro.",
     bridge_telegram_confirm: "O próximo passo é apenas confirmar o Telegram para continuar o acompanhamento.",
     bridge_collect_telegram: "Depois disso, envie seu nome de usuário do Telegram começando com @.",
+    not_registered_ack: "Sem problema. Siga primeiro as etapas da página. Se travar em alguma parte, me envie o que aparece. Depois do cadastro, envie o telefone usado no cadastro.",
     project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
@@ -800,7 +982,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_confirm: "Parabéns, seu cadastro foi concluído. Esta é sua conta de trabalho de meio período. Guarde seu nome de usuário e sua senha para não esquecer. Você precisa de uma conta no Telegram para começar a trabalhar. Você tem o aplicativo Telegram?",
     telegram_confirm_question: "Você tem o aplicativo Telegram? Se tiver, envie seu nome de usuário do Telegram.",
     telegram_download: "Se o seu celular tiver Play Store ou App Store, você pode pesquisar e baixar o Telegram diretamente. Depois de criar a conta do Telegram, me avise. Vamos ensinar no Telegram como ganhar comissão. Depois disso, envie o nome de usuário começando com @.",
+    telegram_installed_ack: "Certo, agora crie sua conta no Telegram. Depois disso, envie seu nome de usuário começando com @.",
     collect_telegram: "Você já registrou sua conta no Telegram? Envie seu nome de usuário do Telegram começando com @.",
+    collect_telegram_wait: "Certo, quando terminar, envie seu nome de usuário do Telegram começando com @. Vou aguardar por aqui.",
     collect_telegram_retry: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
     missing_invite: `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${fallback ? `\nLink de cadastro: ${fallback}` : ""}`
   };

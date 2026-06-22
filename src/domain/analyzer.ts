@@ -31,6 +31,36 @@ export const INTERNAL_INTENT_LABELS = [
 
 export type InternalIntentLabel = (typeof INTERNAL_INTENT_LABELS)[number];
 
+export const CONTEXTUAL_INTENT_LABELS = [
+  "phone_submission",
+  "telegram_submission",
+  "positive_confirmation",
+  "acknowledgement",
+  "negative_refusal",
+  "not_available",
+  "not_registered",
+  "no_telegram",
+  "telegram_installed",
+  "need_help",
+  "ask_platform_register",
+  "ask_link",
+  "ask_tg_register",
+  "platform_register_done",
+  "payment_concern",
+  "investment_concern",
+  "trust_concern",
+  "earning_concern",
+  "workflow_question",
+  "job_question",
+  "complaint",
+  "chat",
+  "sensitive_request",
+  "unknown_question",
+  "unknown"
+] as const;
+
+export type ContextualIntentLabel = (typeof CONTEXTUAL_INTENT_LABELS)[number];
+
 const telegramRegexes = [
   /(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{5,32})/i,
   /(?:telegram|tg|电报|飞机|텔레그램|เทเลแกรม|telegram saya|telegram aku)\s*(?:账号|號|account|id|user|username|是|:|：)?\s*@?([A-Za-z0-9_]{5,32})/i,
@@ -138,6 +168,10 @@ function isShortContextualReply(text: string): boolean {
 
 export function isInternalIntentLabel(value: string): value is InternalIntentLabel {
   return INTERNAL_INTENT_LABELS.includes(value as InternalIntentLabel);
+}
+
+export function isContextualIntentLabel(value: string): value is ContextualIntentLabel {
+  return CONTEXTUAL_INTENT_LABELS.includes(value as ContextualIntentLabel);
 }
 
 function isGreeting(lower: string): boolean {

@@ -1,8 +1,8 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import { buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode } from "../domain/strictFlow.js";
+import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
+import { classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord } from "../repositories.js";
@@ -81,6 +81,15 @@ export class WebhookProcessor {
     if (inferredIntent !== "unknown") {
       analysis = applyInternalIntent(analysis, inferredIntent);
     }
+    const contextualIntent = await this.inferContextualIntent({
+      runtimeConfig,
+      conversation,
+      analysis,
+      customerText: analysisText || content,
+      strictFlowEnabled,
+      history: historyForIntent,
+      inferredIntent
+    });
     const inboundTranslation = analysisText
       ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
       : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
@@ -99,6 +108,7 @@ export class WebhookProcessor {
       rawPayload: {
         ...payload,
         inferredIntent,
+        contextualIntent,
         strictFlowEnabled,
         strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
         originalContent: inboundTranslation.originalText,
@@ -171,6 +181,7 @@ export class WebhookProcessor {
         inviteCode: strictInviteCode,
         config: runtimeConfig,
         inferredIntent,
+        contextualIntent,
         strictFlowEnabled,
         scriptFlow
       });
@@ -223,6 +234,11 @@ export class WebhookProcessor {
           controlledQuestionType: strictReply.controlledQuestionType || "none",
           controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
           strictQuestionType: strictReply.controlledQuestionType || "none",
+          contextualIntent: strictReply.contextualIntent,
+          intentSource: strictReply.contextualIntent?.source || "none",
+          answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
+          questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
+          nextAction: strictReply.contextualIntent?.nextAction || "",
           usedGeminiNaturalizer: naturalized.used,
           naturalizerError: naturalized.error || "",
           knowledgeHit: false,
@@ -488,6 +504,79 @@ export class WebhookProcessor {
       recentHistory: input.history
     });
   }
+
+  private async inferContextualIntent(input: {
+    runtimeConfig: AppConfig;
+    conversation: Parameters<Repositories["updateConversation"]>[0];
+    analysis: MessageAnalysis;
+    customerText: string;
+    strictFlowEnabled: boolean;
+    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+    inferredIntent: InternalIntentLabel;
+  }): Promise<StrictContextualIntent> {
+    const rule = buildRuleContextualIntent({
+      conversation: input.conversation,
+      analysis: input.analysis,
+      customerText: input.customerText,
+      inferredIntent: input.inferredIntent
+    }, input.history);
+    if (!input.strictFlowEnabled || !input.conversation.flowStep || !shouldAskGeminiForContext(rule, input.customerText, input.analysis.intent)) {
+      return rule;
+    }
+    const gemini = await classifyGeminiContextualIntent(input.runtimeConfig, {
+      customerText: input.customerText,
+      language: input.analysis.language || input.conversation.language,
+      flowStep: input.conversation.flowStep,
+      previousAssistantMessage: lastAssistantContent(input.history),
+      recentHistory: input.history,
+      knownPhone: input.conversation.extractedPhone,
+      knownTelegram: input.conversation.extractedTelegram
+    });
+    if (gemini.intent === "unknown") return rule;
+    return {
+      intent: gemini.intent,
+      source: "gemini",
+      answeredPreviousQuestion: gemini.answeredPreviousQuestion,
+      isQuestion: gemini.isQuestion,
+      isSubmission: gemini.intent === "phone_submission" || gemini.intent === "telegram_submission",
+      shouldPause: gemini.shouldPause,
+      questionType: normalizeContextualQuestionType(gemini.questionType),
+      nextAction: gemini.nextAction,
+      reason: gemini.reason
+    };
+  }
+}
+
+function shouldAskGeminiForContext(rule: StrictContextualIntent, text: string, intent: MessageAnalysis["intent"]): boolean {
+  if (rule.source === "rule" && rule.intent !== "unknown" && rule.intent !== "unknown_question") return false;
+  const normalized = text.trim();
+  if (!normalized) return false;
+  return rule.intent === "unknown_question" ||
+    intent === "unknown" ||
+    intent === "irrelevant_or_spam" ||
+    (intent === "greeting" && !/^(你好|您好|早上好|下午好|晚上好|hi|hello|hey)$/i.test(normalized)) ||
+    normalized.length <= 16 ||
+    /[?？为什么為什麼怎么怎麼如何什么什麼]/.test(normalized);
+}
+
+function normalizeContextualQuestionType(value: string): StrictContextualIntent["questionType"] {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "telegram") return "telegram";
+  if (normalized === "payment") return "payment";
+  if (normalized === "investment") return "investment";
+  if (normalized === "trust") return "trust";
+  if (normalized === "earning") return "earning";
+  if (normalized === "workflow") return "help";
+  if (normalized === "job") return "job";
+  if (normalized === "complaint") return "complaint";
+  if (normalized === "chat") return "chat";
+  if (normalized === "sensitive") return "sensitive";
+  if (normalized === "unknown") return "unknown";
+  return "none";
+}
+
+function lastAssistantContent(history: Array<{ direction: string; content: string }>): string {
+  return [...history].reverse().find((message) => message.direction === "outbound")?.content ?? "";
 }
 
 function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: InternalIntentLabel): MessageAnalysis {
