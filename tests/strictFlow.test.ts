@@ -327,8 +327,9 @@ describe("strict Aston Brazil flow", () => {
     const result = reply("兼职?你介绍下", { language: "zh", flowStep: "interest_screening" });
 
     expect(result.nextFlowStep).toBe("registration_intent");
-    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("300 至 800");
     expect(result.reply).toContain("空闲时间");
+    expect(result.reply).not.toContain("话本");
     expect(result.reply).not.toContain("您如果感兴趣，我可以先简单介绍");
     expect(result.reply).not.toContain("开户链接");
     expect(result.reply).not.toContain("邀请码");
@@ -363,6 +364,44 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("WhatsApp");
     expect(result.reply).not.toContain("register.example");
     expect(result.needsInviteCode).toBe(false);
+  });
+
+  it("does not expose script wording in customer-visible project introduction", () => {
+    const result = reply("是的", { language: "zh", flowStep: "interest_screening" });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("300 至 800");
+    expect(result.reply).not.toMatch(/话本|脚本|模板|严格流程|自动客服|机器人|AI/i);
+  });
+
+  it("prioritizes no Telegram over refusal when the customer says they do not have it", () => {
+    const analysis = analyzeMessage("我没有", "zh");
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "telegram_confirm", extractedPhone: "56789045678" }),
+      analysis,
+      customerText: "我没有",
+      inviteCode,
+      config,
+      inferredIntent: "negative_refusal",
+      contextualIntent: {
+        intent: "negative_refusal",
+        source: "gemini",
+        answeredPreviousQuestion: true,
+        isQuestion: false,
+        isSubmission: false,
+        shouldPause: true,
+        questionType: "none",
+        nextAction: "pause politely",
+        reason: "misclassified short no"
+      }
+    });
+
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.reply).toContain("Telegram");
+    expect(result.reply).toContain("应用商店");
+    expect(result.reply).not.toContain("不继续打扰");
   });
 
   it("does not reserve or repeat invite codes after the registration link step", () => {
@@ -939,11 +978,13 @@ describe("strict Aston Brazil flow", () => {
     const beforePhone = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
     expect(beforePhone.reply).toContain("先完成平台注册");
     expect(beforePhone.reply).toContain("注册手机号");
+    expect(beforePhone.reply).not.toContain("微信");
     expect(beforePhone.nextFlowStep).toBe("wait_registration");
 
     const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
     expect(afterPhone.reply).toContain("已经完成手机号这一步");
     expect(afterPhone.reply).toContain("@ 开头");
+    expect(afterPhone.reply).not.toContain("微信");
     expect(afterPhone.reply).not.toContain("先完成平台注册");
     expect(afterPhone.nextFlowStep).toBe("collect_telegram");
 

@@ -332,14 +332,14 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "telegram_confirm") {
-    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
-      return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
-    }
     if (contextualLabel === "telegram_username_help") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
     }
     if (negativeTelegram) {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
+    }
+    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
+      return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (positive || contextualLabel === "telegram_installed" || contextualLabel === "ask_tg_register" || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram", language));
@@ -544,7 +544,7 @@ function reply(
   content: string,
   needsInviteCode = false
 ): StrictFlowReply {
-  const actionableContent = ensureActionableStrictContent(content, nextFlowStep, language);
+  const actionableContent = sanitizeCustomerVisibleStrictReply(ensureActionableStrictContent(content, nextFlowStep, language));
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
   const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, debugIntent);
@@ -560,6 +560,26 @@ function reply(
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
     contextualIntent
   };
+}
+
+function sanitizeCustomerVisibleStrictReply(content: string): string {
+  return content
+    .replace(/话本里的参考收益是/g, "参考收益一般是")
+    .replace(/话本里说/g, "")
+    .replace(/收益由话本填写/g, "收益以页面和后续确认为准")
+    .replace(/话本里的/g, "")
+    .replace(/话本里/g, "")
+    .replace(/脚本(?:里|中)?(?:说|写|参考)?/g, "")
+    .replace(/模板(?:里|中)?(?:说|写|参考)?/g, "")
+    .replace(/按(?:当前)?流程/g, "按当前步骤")
+    .replace(/严格流程/g, "当前步骤")
+    .replace(/自动客服|机器人|AI|模型/g, "客服")
+    .replace(/跟微信差不多[，,、\s]*/g, "")
+    .replace(/类似微信[，,、\s]*/g, "")
+    .replace(/像微信一样[，,、\s]*/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/^[，,、。\s]+/gm, "")
+    .trim();
 }
 
 function normalizeFlowStep(value: string): StrictFlowStep | "" {
@@ -1054,7 +1074,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     incomplete_phone_ack: "我看到您说注册好了，不过这个手机号好像不完整。请把注册时填写的完整手机号发我一下。",
     more_job_info_ack: "可以，我再简单补充一下：具体任务细节、规则和收益核算以后续页面和人工确认为准。我这边主要负责先协助您完成开户注册，方便后面继续安排。您现在方便继续注册吗？",
     registration_question_retry_ack: "抱歉，刚才没有回答清楚。注册页面里的用户名按页面要求填写即可，不一定要写真实姓名；手机号建议填写您自己能正常使用的号码，方便后面核对您刚注册的平台账号。填好提交后，把注册手机号发给我就行。",
-    project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
+    project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。参考收益一般是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
     ask_registered_phone: "好的，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -1102,7 +1122,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     incomplete_phone_ack: "I see you said registration is done, but that phone number looks incomplete. Please send me the full phone number used for registration.",
     more_job_info_ack: "Sure, I can add a little more: the exact task details, rules, and earnings calculation should follow the page and later confirmation. My role here is to help you finish the account registration first so the next step can continue. Do you have time to continue registration now?",
     registration_question_retry_ack: "Sorry, I did not answer that clearly. For the username, follow the page requirement; it usually does not have to be your real name unless the page asks for it. For the phone number, use one you can actually use so the platform account can be matched later. After submitting, send me the registered phone number.",
-    project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
+    project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The reference range is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
     ask_registered_phone: "Okay, please send me the phone number you registered with so we can verify it.",
@@ -1150,7 +1170,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     incomplete_phone_ack: "Entendi que você concluiu o cadastro, mas esse telefone parece incompleto. Envie o número completo usado no cadastro, por favor.",
     more_job_info_ack: "Claro, posso explicar um pouco mais: os detalhes das tarefas, regras e cálculo de ganhos devem seguir a página e a confirmação posterior. Meu papel aqui é ajudar você a concluir primeiro o cadastro da conta para continuar a próxima etapa. Você tem tempo agora para continuar o cadastro?",
     registration_question_retry_ack: "Desculpe, não respondi isso com clareza. Para o nome de usuário, siga o que a página pede; normalmente não precisa ser seu nome real, a menos que a página peça. Para o telefone, use um número que você realmente consegue usar para conferir a conta depois. Depois de enviar, me mande o telefone usado no cadastro.",
-    project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
+    project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
     ask_registered_phone: "Certo, envie o número de telefone usado no cadastro para fazermos a verificação.",
