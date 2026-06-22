@@ -73,6 +73,7 @@ export type ControlledQuestionType =
   | "repeat_greeting"
   | "hesitation"
   | "phone_reason"
+  | "registration_field"
   | "link_open"
   | "next_step"
   | "sensitive"
@@ -172,6 +173,12 @@ export function buildRuleContextualIntent(
   }
   if (step === "wait_registration" && saysNotRegistered(text)) {
     return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "help registration", reason: "not registered yet" });
+  }
+  if (step === "wait_registration" && asksToAnswerPreviousQuestion(text)) {
+    return base("complaint", { nextAction: "answer previous registration question", reason: "asked to answer previous question" });
+  }
+  if ((step === "wait_registration" || step === "send_register_link") && asksRegistrationFieldQuestion(text)) {
+    return base("registration_field_question", { nextAction: "answer registration field question", reason: "registration field question" });
   }
   if (step === "registration_intent" && saysNotAvailable(text)) {
     return base("not_available", { answeredPreviousQuestion: true, nextAction: "pause politely", reason: "not available now" });
@@ -277,6 +284,12 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "wait_registration") {
     if (contextualLabel === "incomplete_phone") {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
+    }
+    if (contextualLabel === "registration_field_question" || asksRegistrationFieldQuestion(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", registrationFieldQuestionReply(input, language, text));
+    }
+    if (asksToAnswerPreviousQuestion(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_question_retry_ack", language));
     }
     if (asksForRegistrationSteps(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
@@ -426,6 +439,12 @@ function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep |
   }
   if (asksServiceIdentity(normalized)) {
     return { content: flowScriptLine(input, "identity_ack", language), type: "identity" };
+  }
+  if (asksRegistrationFieldQuestion(normalized)) {
+    return { content: registrationFieldQuestionReply(input, language, normalized), type: "registration_field" };
+  }
+  if (step === "wait_registration" && asksToAnswerPreviousQuestion(normalized)) {
+    return { content: flowScriptLine(input, "registration_question_retry_ack", language), type: "registration_field" };
   }
   if (asksWhyPhone(normalized)) {
     return { content: flowScriptLine(input, "phone_reason_ack", language), type: "phone_reason" };
@@ -645,6 +664,7 @@ function mapInternalToContextual(intent: InternalIntentLabel): ContextualIntentL
     trust_concern: "trust_concern",
     earning_concern: "earning_concern",
     workflow_question: "workflow_question",
+    registration_field_question: "registration_field_question",
     job_question: "job_question",
     complaint: "complaint",
     chat: "chat",
@@ -660,6 +680,7 @@ function contextualQuestionType(intent: ContextualIntentLabel): ControlledQuesti
   if (intent === "investment_concern") return "investment";
   if (intent === "trust_concern") return "trust";
   if (intent === "earning_concern") return "earning";
+  if (intent === "registration_field_question") return "registration_field";
   if (intent === "workflow_question" || intent === "not_registered" || intent === "need_help") return "help";
   if (intent === "job_question") return "job";
   if (intent === "complaint") return "complaint";
@@ -766,6 +787,63 @@ function asksServiceIdentity(text: string): boolean {
 
 function asksWhyPhone(text: string): boolean {
   return /(为什么.*手机号|為什麼.*手機號|为什么.*手机号码|为什么.*電話|为什么.*号码|要手机号干嘛|要手机号码干嘛|why.*phone|why.*number|por que.*telefone|para que.*telefone)/i.test(text);
+}
+
+function asksRegistrationFieldQuestion(text: string): boolean {
+  return /(用户名.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|用户名称.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|姓名.*(要不要|需要|必须|必須|真实|真實)|真实.*名字|真名|手机号.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|手机号码.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|电话号码.*(真实|真實|自己的|本人)|電話號碼.*(真实|真實|自己的|本人)|密码.*(怎么填|怎麼填|填什么|填什麼|要求)|密碼.*(怎么填|怎麼填|填什么|填什麼|要求)|邮箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|郵箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|邀请码.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|邀請碼.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|页面.*字段|表单.*字段|username.*(real|name|fill)|phone.*(real|own|fill)|password.*fill|email.*fill|invite.*where|invite.*fill)/i.test(text);
+}
+
+function registrationFieldQuestionReply(input: StrictFlowInput, language: string, text: string): string {
+  const asksUsername = /(用户名|用户名称|username|姓名|名字|真名|真实.*名字)/i.test(text);
+  const asksPhone = /(手机号|手机号码|电话号码|電話號碼|phone|number|telefone)/i.test(text);
+  const asksPassword = /(密码|密碼|password|senha)/i.test(text);
+  const asksEmail = /(邮箱|郵箱|email|e-mail)/i.test(text);
+  const asksInvite = /(邀请码|邀請碼|invite|invitation|convite)/i.test(text);
+
+  const zhParts: string[] = [];
+  const enParts: string[] = [];
+  const ptParts: string[] = [];
+
+  if (asksUsername) {
+    zhParts.push("用户名一般按页面要求填写即可，不一定要写真实姓名；如果页面明确要求实名，就按页面提示来。");
+    enParts.push("For the username, follow the page requirement. It usually does not have to be your real name unless the page clearly asks for real-name information.");
+    ptParts.push("Para o nome de usuário, siga o que a página pede. Normalmente não precisa ser seu nome real, a menos que a página peça claramente dados reais.");
+  }
+  if (asksPhone) {
+    zhParts.push("手机号建议填写您自己能正常使用的号码，因为后面要用它核对您刚注册的平台账号。");
+    enParts.push("For the phone number, use a number you can actually use, because it will be used to match the platform account you just registered.");
+    ptParts.push("Para o telefone, use um número que você realmente consegue usar, porque ele será usado para conferir a conta cadastrada.");
+  }
+  if (asksPassword) {
+    zhParts.push("密码您自己设置并保存好就行，不需要发给我。");
+    enParts.push("Set and keep the password yourself. You do not need to send it to me.");
+    ptParts.push("Defina a senha e guarde com você. Não precisa enviar a senha para mim.");
+  }
+  if (asksEmail) {
+    zhParts.push("邮箱如果页面要求就填写您能正常使用的邮箱；页面没要求的话按页面提示跳过即可。");
+    enParts.push("If the page asks for email, use one you can access. If it does not ask, just follow the page and skip it.");
+    ptParts.push("Se a página pedir e-mail, use um e-mail que você consegue acessar. Se não pedir, siga a página e pule essa parte.");
+  }
+  if (asksInvite) {
+    zhParts.push("邀请码填在页面显示邀请码的位置，使用我刚才发给您的那个邀请码。");
+    enParts.push("Enter the invitation code in the invitation-code field on the page, using the code I sent you earlier.");
+    ptParts.push("Digite o código de convite no campo de convite da página, usando o código que enviei antes.");
+  }
+
+  const fallbackZh = "这些注册字段按页面提示填写就可以；不确定的地方可以直接问我。";
+  const fallbackEn = "For these registration fields, follow the page prompts. If anything is unclear, ask me directly.";
+  const fallbackPt = "Para esses campos de cadastro, siga as instruções da página. Se algo não ficar claro, pode me perguntar.";
+  const nextZh = "填好并提交后，把注册手机号发给我，我帮您继续核对下一步。";
+  const nextEn = "After submitting the registration, send me the registered phone number and I will help with the next step.";
+  const nextPt = "Depois de enviar o cadastro, envie o telefone usado no cadastro e eu ajudo na próxima etapa.";
+
+  if (language === "en") return joinReplyParts(enParts.length ? enParts.join(" ") : fallbackEn, nextEn, language);
+  if (language === "pt-BR") return joinReplyParts(ptParts.length ? ptParts.join(" ") : fallbackPt, nextPt, language);
+  return joinReplyParts(zhParts.length ? zhParts.join("") : fallbackZh, nextZh, language);
+}
+
+function asksToAnswerPreviousQuestion(text: string): boolean {
+  return /(回答.*问题|回覆.*问题|回复.*问题|回答我的问题|回我的问题|没回答我的问题|沒有回答我的問題|没有回复我的问题|沒有回覆我的問題|answer my question)/i.test(text);
 }
 
 function asksHowToOpenLink(text: string): boolean {
@@ -975,6 +1053,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     wait_registration_ack: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
     incomplete_phone_ack: "我看到您说注册好了，不过这个手机号好像不完整。请把注册时填写的完整手机号发我一下。",
     more_job_info_ack: "可以，我再简单补充一下：具体任务细节、规则和收益核算以后续页面和人工确认为准。我这边主要负责先协助您完成开户注册，方便后面继续安排。您现在方便继续注册吗？",
+    registration_question_retry_ack: "抱歉，刚才没有回答清楚。注册页面里的用户名按页面要求填写即可，不一定要写真实姓名；手机号建议填写您自己能正常使用的号码，方便后面核对您刚注册的平台账号。填好提交后，把注册手机号发给我就行。",
     project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。话本里的参考收益是每天可以赚取 300 至 800 雷亚尔，具体按平台规则核算。您现在有空闲时间继续开户注册吗？",
     registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
     wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
@@ -1022,6 +1101,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     wait_registration_ack: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
     incomplete_phone_ack: "I see you said registration is done, but that phone number looks incomplete. Please send me the full phone number used for registration.",
     more_job_info_ack: "Sure, I can add a little more: the exact task details, rules, and earnings calculation should follow the page and later confirmation. My role here is to help you finish the account registration first so the next step can continue. Do you have time to continue registration now?",
+    registration_question_retry_ack: "Sorry, I did not answer that clearly. For the username, follow the page requirement; it usually does not have to be your real name unless the page asks for it. For the phone number, use one you can actually use so the platform account can be matched later. After submitting, send me the registered phone number.",
     project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The script reference is 300 to 800 reais per day, subject to platform rules. Do you have time to continue registration now?",
     registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
     wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
@@ -1069,6 +1149,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     wait_registration_ack: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
     incomplete_phone_ack: "Entendi que você concluiu o cadastro, mas esse telefone parece incompleto. Envie o número completo usado no cadastro, por favor.",
     more_job_info_ack: "Claro, posso explicar um pouco mais: os detalhes das tarefas, regras e cálculo de ganhos devem seguir a página e a confirmação posterior. Meu papel aqui é ajudar você a concluir primeiro o cadastro da conta para continuar a próxima etapa. Você tem tempo agora para continuar o cadastro?",
+    registration_question_retry_ack: "Desculpe, não respondi isso com clareza. Para o nome de usuário, siga o que a página pede; normalmente não precisa ser seu nome real, a menos que a página peça. Para o telefone, use um número que você realmente consegue usar para conferir a conta depois. Depois de enviar, me mande o telefone usado no cadastro.",
     project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. A referência do roteiro é de 300 a 800 reais por dia, conforme as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
     wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",

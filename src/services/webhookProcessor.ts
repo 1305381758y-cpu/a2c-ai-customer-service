@@ -698,6 +698,7 @@ function contextualQuestionTypeFromLearnedIntent(intent: ContextualIntentLabel):
     investment_concern: "investment",
     trust_concern: "trust",
     earning_concern: "earning",
+    registration_field_question: "registration_field",
     workflow_question: "help",
     job_question: "job",
     ask_tg_register: "telegram",

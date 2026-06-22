@@ -1074,6 +1074,42 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("Telegram");
   });
 
+  it("answers registration field questions without resending link or invite", () => {
+    const username = reply("用户名需要我真实的名字吗", { language: "zh", flowStep: "wait_registration" });
+    expect(username.nextFlowStep).toBe("wait_registration");
+    expect(username.reply).toContain("用户名");
+    expect(username.reply).toContain("不一定");
+    expect(username.reply).toContain("真实姓名");
+    expect(username.reply).not.toContain("开户链接");
+    expect(username.reply).not.toContain("邀请码");
+    expect(username.contextualIntent?.intent).toBe("registration_field_question");
+
+    const phone = reply("注册流程中填写的手机号要我真实的手机号吗", { language: "zh", flowStep: "wait_registration" });
+    expect(phone.nextFlowStep).toBe("wait_registration");
+    expect(phone.reply).toContain("手机号");
+    expect(phone.reply).toContain("正常使用");
+    expect(phone.reply).toContain("核对");
+    expect(phone.reply).not.toContain("注册步骤");
+    expect(phone.reply).not.toContain("邀请码");
+
+    const combined = reply("用户名需要我真实的名字吗\n注册流程中填写的手机号要我真实的手机号吗", { language: "zh", flowStep: "wait_registration" });
+    expect(combined.reply).toContain("用户名");
+    expect(combined.reply).toContain("手机号");
+    expect(combined.reply).not.toContain("开户链接");
+    expect(combined.reply).not.toContain("邀请码");
+  });
+
+  it("recovers from customer complaint that a registration field question was not answered", () => {
+    const result = reply("回答我的问题", { language: "zh", flowStep: "wait_registration" });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("刚才没有回答清楚");
+    expect(result.reply).toContain("用户名");
+    expect(result.reply).toContain("手机号");
+    expect(result.reply).not.toContain("开户链接");
+    expect(result.reply).not.toContain("邀请码");
+  });
+
   it("does not advance to Telegram when registration message contains an incomplete phone", () => {
     const incomplete = reply("4567890 注册好了", { language: "zh", flowStep: "wait_registration" });
     expect(incomplete.nextFlowStep).toBe("wait_registration");
