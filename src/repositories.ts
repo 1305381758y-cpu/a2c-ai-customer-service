@@ -2369,7 +2369,11 @@ export class Repositories {
         LIMIT 200
       `)
       .all(conversation.merchantId, conversation.countryId) as Array<Record<string, unknown>>;
-    const available = availableRows.find((row) => inviteCodeAccountMatches(String(row.a2c_account_phone ?? ""), conversation.a2cAccountPhone));
+    const available =
+      availableRows.find((row) => inviteCodeAccountMatches(String(row.a2c_account_phone ?? ""), conversation.a2cAccountPhone)) ??
+      availableRows.find((row) => String(row.country_id ?? "") === conversation.countryId) ??
+      availableRows.find((row) => String(row.country_id ?? "") === "") ??
+      availableRows[0];
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);

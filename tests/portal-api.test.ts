@@ -123,6 +123,35 @@ describe("portal api", () => {
     });
   });
 
+  it("falls back to an available country invite code when the receiving A2C account format does not match", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("国家邀请码兜底测试");
+    const accounts = repos.syncMerchantA2CAccounts(merchant.id, [
+      { apiPhone: "18507251675", verifiedName: "Numidia" },
+      { apiPhone: "unmatched-a2c", verifiedName: "Unmatched" }
+    ]);
+    const invite = repos.createInviteCodeForA2CAccount(accounts[0].id, {
+      code: "BR-FALLBACK",
+      registerUrl: "https://register.example/?code={code}"
+    }, merchant.id);
+
+    const reserved = repos.reserveInviteCodeForConversation({
+      id: "conv-country-fallback",
+      merchantId: merchant.id,
+      countryId: accounts[0].countryId,
+      customerPhone: "5511913586749",
+      a2cAccountPhone: "unmatched-a2c"
+    });
+
+    expect(reserved).toMatchObject({
+      id: invite.id,
+      code: "BR-FALLBACK",
+      status: "reserved",
+      assignedConversationId: "conv-country-fallback"
+    });
+  });
+
   it("learns missing intent candidates from webhook messages and aggregates repeats", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {
@@ -1922,6 +1951,103 @@ describe("portal api", () => {
         expect(String(message.content)).not.toBe("好的，我继续协助您。");
         expect(String(message.content)).not.toMatch(/AI|机器人|自动客服/i);
       }
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      expect(conversations.json().rows[0]).toMatchObject({ flowStep: "wait_registration", stage: "need_platform_register" });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends full registration package after ok with a country invite pool fallback", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "country-pool-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({
+          code: 200,
+          data: [
+            { apiPhone: "18507251675", wabaId: "waba-country-pool", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "邀请码池客服" },
+            { apiPhone: "runtime-a2c", wabaId: "waba-runtime", status: 1, numberStatus: 1, qualityRating: 3, messagingLimit: 1000, verifiedName: "实际接收客服" }
+          ]
+        });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `sent-country-pool-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "国家池邀请码流程商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "country-pool@test.local", name: "国家池流程", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "country-pool@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://country-pool-a2c.test/api/openapi",
+          a2cAppId: "country-pool-app",
+          a2cAppSecret: "country-pool-secret",
+          strictScriptFlowEnabled: true
+        }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const poolAccount = sync.json().rows.find((row: { apiPhone: string }) => row.apiPhone === "18507251675") as { id: number };
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${poolAccount.id}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "6", registerUrl: "https://www.google.com" }
+      });
+
+      for (const [index, content] of ["你好", "是的", "ok"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `country-pool-event-${index + 1}`,
+            timestamp: Math.floor(Date.now() / 1000) + index,
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `country-pool-message-${index + 1}`,
+              content,
+              from: "country-pool-customer",
+              to: "runtime-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000) + index
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+        expect(webhook.json().status).toBe("strict_flow_replied");
+      }
+
+      expect(sentMessages).toHaveLength(3);
+      const registrationPackage = String(sentMessages[2].content);
+      expect(registrationPackage).toContain("开户链接：https://www.google.com");
+      expect(registrationPackage).toContain("邀请码：6");
+      expect(registrationPackage).toContain("注册步骤");
+      expect(registrationPackage).toContain("填写手机号码");
+      expect(registrationPackage).not.toContain("正在确认");
 
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       expect(conversations.json().rows[0]).toMatchObject({ flowStep: "wait_registration", stage: "need_platform_register" });
