@@ -1055,6 +1055,25 @@ describe("strict Aston Brazil flow", () => {
     expect(installedButLost.nextFlowStep).toBe("collect_telegram");
     expect(installedButLost.reply).toContain("Username");
     expect(installedButLost.reply).toContain("@ 开头");
+
+    const englishLostUsername = reply("I've downloaded it, but I couldn't find a username starting with @.", { language: "en", flowStep: "telegram_download", extractedPhone: "456789098" });
+    expect(englishLostUsername.nextFlowStep).toBe("collect_telegram");
+    expect(englishLostUsername.contextualIntent?.intent).toBe("telegram_username_help");
+    expect(englishLostUsername.reply).toContain("Open Telegram");
+    expect(englishLostUsername.reply).toContain("Settings");
+    expect(englishLostUsername.reply).toContain("Username");
+    expect(englishLostUsername.reply).toContain("@");
+  });
+
+  it("does not resend the full registration package for a plain ok while waiting for registration", () => {
+    const result = reply("ok", { language: "en", flowStep: "wait_registration" });
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.contextualIntent?.intent).toBe("acknowledgement");
+    expect(result.reply).toContain("After registration");
+    expect(result.reply).toContain("If you get stuck");
+    expect(result.reply).not.toContain("Registration link");
+    expect(result.reply).not.toContain("Invitation code");
+    expect(result.reply).not.toContain("Registration steps");
   });
 
   it("uses context to distinguish short no answers outside Telegram", () => {

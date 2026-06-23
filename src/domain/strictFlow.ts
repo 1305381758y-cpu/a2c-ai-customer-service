@@ -745,7 +745,7 @@ function saysTelegramInstalled(text: string): boolean {
 
 function asksTelegramUsernameHelp(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return /(怎么找.*(用户名|用戶名|@)|哪里.*(用户名|用戶名|@)|在哪.*(用户名|用戶名|@)|(用户名|用戶名|@).*(在哪|哪里|哪裡)|看.*(用户名|用戶名|@)|没有\s*@|沒有\s*@|没有用户名|沒有用戶名|没用户名|沒用戶名|怎么设置.*(用户名|用戶名|@)|设置.*(用户名|用戶名|@)|用户名是什么|用戶名是什麼|我找不到|找不到.*(用户名|用戶名|@)|不会设置|不會設置|username.*(where|在哪|哪里|哪裡)|where.*username|set.*username|create.*username)/i.test(normalized);
+  return /(怎么找.*(用户名|用戶名|@)|哪里.*(用户名|用戶名|@)|在哪.*(用户名|用戶名|@)|(用户名|用戶名|@).*(在哪|哪里|哪裡)|看.*(用户名|用戶名|@)|没有\s*@|沒有\s*@|没有用户名|沒有用戶名|没用户名|沒用戶名|怎么设置.*(用户名|用戶名|@)|设置.*(用户名|用戶名|@)|用户名是什么|用戶名是什麼|我找不到|找不到.*(用户名|用戶名|@)|不会设置|不會設置|username.*(where|在哪|哪里|哪裡)|where.*username|set.*username|create.*username|find.*username|find.*@|couldn'?t.*(find|see).*(username|@)|can'?t.*(find|see).*(username|@)|cannot.*(find|see).*(username|@)|no\s*@|no username|don'?t have.*username|starting with @)/i.test(normalized);
 }
 
 function isAcknowledgement(text: string): boolean {
@@ -911,7 +911,7 @@ function asksForRegistrationSteps(text: string): boolean {
 
 function isReadyToStartRegistration(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
-  return /^(方便|方便的|有空|有空的|可以开始|开始吧|准备好了|準備好了|我准备好了|我準備好了|现在可以|現在可以|可以操作|继续|继续吧|ok|okay|yes|sim|pronto)$/i.test(normalized);
+  return /^(方便|方便的|有空|有空的|可以开始|开始吧|准备好了|準備好了|我准备好了|我準備好了|现在可以|現在可以|可以操作|继续|继续吧|ready|i'?m ready|i am ready|start|let'?s start|pronto)$/i.test(normalized);
 }
 
 function helpLineForStep(input: StrictFlowInput, step: StrictFlowStep | "", language: string): string {
