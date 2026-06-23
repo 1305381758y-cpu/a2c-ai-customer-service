@@ -1097,6 +1097,23 @@ describe("strict Aston Brazil flow", () => {
     expect(walkthrough.reply).toContain("注册步骤");
   });
 
+  it("resends the same full registration package when invite code or steps are missing to the customer", () => {
+    const missingInvite = reply("我没看到邀请码哦", { language: "zh", flowStep: "wait_registration" });
+    expect(missingInvite.nextFlowStep).toBe("wait_registration");
+    expect(missingInvite.reply).toContain("开户链接");
+    expect(missingInvite.reply).toContain("邀请码");
+    expect(missingInvite.reply).toContain("ABC123");
+    expect(missingInvite.reply).toContain("注册步骤");
+    expect(missingInvite.reply).not.toContain("正在确认");
+
+    const missingSteps = reply("也没看到注册流程", { language: "zh", flowStep: "wait_registration" });
+    expect(missingSteps.reply).toContain("开户链接");
+    expect(missingSteps.reply).toContain("邀请码");
+    expect(missingSteps.reply).toContain("注册步骤");
+    expect(missingSteps.reply).toContain("填写手机号码");
+    expect(missingSteps.reply).not.toContain("正在确认");
+  });
+
   it("guides the first registration action when the customer is ready in wait-registration", () => {
     const result = reply("方便", { language: "zh", flowStep: "wait_registration" });
 

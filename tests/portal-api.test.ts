@@ -97,6 +97,32 @@ describe("portal api", () => {
     expect(() => repos.deleteScriptFlowStep(flow.steps[1].id, merchant.id, "测试员")).toThrow(/引用/);
   });
 
+  it("reserves invite codes when A2C account phone formats differ by country code", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("邀请码格式测试");
+    const accounts = repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "18507251675", verifiedName: "Numidia" }]);
+    const invite = repos.createInviteCodeForA2CAccount(accounts[0].id, {
+      code: "BR001",
+      registerUrl: "https://register.example/?code={code}"
+    }, merchant.id);
+
+    const reserved = repos.reserveInviteCodeForConversation({
+      id: "conv-format-test",
+      merchantId: merchant.id,
+      countryId: accounts[0].countryId,
+      customerPhone: "5511913586749",
+      a2cAccountPhone: "8507251675"
+    });
+
+    expect(reserved).toMatchObject({
+      id: invite.id,
+      code: "BR001",
+      status: "reserved",
+      assignedConversationId: "conv-format-test"
+    });
+  });
+
   it("learns missing intent candidates from webhook messages and aggregates repeats", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {
