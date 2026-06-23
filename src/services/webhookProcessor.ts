@@ -8,7 +8,7 @@ import type { AppConfig } from "../config.js";
 import type { IntentLearningEventRecord, MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { buildHandoffMessage } from "./handoff.js";
-import { translateForOperator } from "./translation.js";
+import { translateForCustomer, translateForOperator } from "./translation.js";
 
 export interface A2CWebhookPayload {
   id: string;
@@ -246,6 +246,13 @@ export class WebhookProcessor {
         allowLinkOrInvite: strictReply.needsInviteCode
       });
       strictReply.reply = naturalized.reply;
+      const languageGuard = await ensureReplyCustomerLanguage(runtimeConfig, {
+        reply: strictReply.reply,
+        targetLanguage: strictReply.language,
+        flowStep: strictReply.nextFlowStep,
+        allowLinkOrInvite: strictReply.needsInviteCode
+      });
+      strictReply.reply = languageGuard.reply;
 
       let externalId = "";
       let a2cSendStatus: "sent" | "failed" = "sent";
@@ -294,6 +301,11 @@ export class WebhookProcessor {
           nextAction: strictReply.contextualIntent?.nextAction || "",
           usedGeminiNaturalizer: naturalized.used,
           naturalizerError: naturalized.error || "",
+          languageGuardTarget: languageGuard.targetLanguage,
+          languageGuardStatus: languageGuard.status,
+          languageGuardAttempts: languageGuard.attempts,
+          languageGuardFallbackUsed: languageGuard.fallbackUsed,
+          languageGuardError: languageGuard.error || "",
           knowledgeHit: false,
           aiFallback: Boolean(strictReply.fallback),
           originalContent: outboundTranslation.originalText,
@@ -891,6 +903,171 @@ async function naturalizeStrictReply(
     allowLinkOrInvite: input.allowLinkOrInvite
   });
   return { reply: result.text, used: result.used, error: result.error };
+}
+
+interface LanguageGuardResult {
+  reply: string;
+  targetLanguage: string;
+  status: "matched" | "translated" | "fallback" | "skipped";
+  attempts: number;
+  fallbackUsed: boolean;
+  error?: string;
+}
+
+async function ensureReplyCustomerLanguage(
+  config: AppConfig,
+  input: {
+    reply: string;
+    targetLanguage: string;
+    flowStep: string;
+    allowLinkOrInvite: boolean;
+  }
+): Promise<LanguageGuardResult> {
+  const targetLanguage = normalizeCustomerLanguage(input.targetLanguage);
+  const originalReply = input.reply.trim();
+  if (!originalReply || targetLanguage === "unknown") {
+    return { reply: originalReply, targetLanguage, status: "skipped", attempts: 0, fallbackUsed: false };
+  }
+  if (replyLooksLikeCustomerLanguage(originalReply, targetLanguage)) {
+    return { reply: originalReply, targetLanguage, status: "matched", attempts: 0, fallbackUsed: false };
+  }
+
+  let lastError = "回复语言与客户语言不一致";
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const translated = await translateForCustomer(config, originalReply, targetLanguage);
+    if (translated.status === "translated" && replyLooksLikeCustomerLanguage(translated.translatedText, targetLanguage)) {
+      return { reply: translated.translatedText, targetLanguage, status: "translated", attempts: attempt, fallbackUsed: false };
+    }
+    lastError = translated.error || lastError;
+  }
+
+  const fallback = strictLanguageFallback(input.flowStep, targetLanguage, originalReply, input.allowLinkOrInvite);
+  return {
+    reply: fallback,
+    targetLanguage,
+    status: "fallback",
+    attempts: 2,
+    fallbackUsed: true,
+    error: lastError
+  };
+}
+
+function normalizeCustomerLanguage(language: string): string {
+  const normalized = (language || "").trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "unknown";
+  if (normalized === "cn" || normalized === "zh" || normalized.startsWith("zh-")) return "zh";
+  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt-BR";
+  if (normalized === "en" || normalized.startsWith("en-")) return "en";
+  return normalized;
+}
+
+function replyLooksLikeCustomerLanguage(reply: string, targetLanguage: string): boolean {
+  const naturalText = stripNonLanguagePayload(reply);
+  if (!naturalText) return true;
+  const cjkCount = countMatches(naturalText, /[\u3400-\u9fff]/g);
+  const latinCount = countMatches(naturalText, /[a-zA-ZÀ-ÿ]/g);
+  if (targetLanguage === "zh") return cjkCount >= 2 || cjkCount >= latinCount;
+  if (targetLanguage === "en" || targetLanguage === "pt-BR") return cjkCount === 0 && latinCount > 0;
+  return cjkCount === 0 || latinCount === 0;
+}
+
+function stripNonLanguagePayload(reply: string): string {
+  return reply
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/@\w+/g, " ")
+    .replace(/\b\d[\d\s-]{3,}\b/g, " ")
+    .replace(/邀请码[:：]?\s*\S*/g, " ")
+    .replace(/invitation code[:：]?\s*\S*/gi, " ")
+    .replace(/c[oó]digo de convite[:：]?\s*\S*/gi, " ")
+    .trim();
+}
+
+function countMatches(value: string, pattern: RegExp): number {
+  return value.match(pattern)?.length ?? 0;
+}
+
+function strictLanguageFallback(flowStep: string, language: string, originalReply: string, allowLinkOrInvite: boolean): string {
+  if (allowLinkOrInvite) return registrationFallback(language, originalReply);
+  if (language === "en") return englishStrictFallback(flowStep);
+  if (language === "pt-BR") return portugueseStrictFallback(flowStep);
+  return chineseStrictFallback(flowStep);
+}
+
+function registrationFallback(language: string, originalReply: string): string {
+  const url = originalReply.match(/https?:\/\/\S+/i)?.[0]?.replace(/[，。,.]+$/, "") || "";
+  const code = extractInviteCode(originalReply);
+  if (language === "en") {
+    return [
+      "Okay, I will send you the registration link and invitation code now.",
+      url ? `Registration link: ${url}` : "",
+      code ? `Invitation code: ${code}` : "",
+      "Registration steps:",
+      "1. Open the link in your browser.",
+      "2. Fill in your phone number.",
+      "3. Set your username and password.",
+      "4. Enter the invitation code.",
+      "5. Submit the registration.",
+      "After registration is completed, please tell me."
+    ].filter(Boolean).join("\n");
+  }
+  if (language === "pt-BR") {
+    return [
+      "Certo, vou enviar agora o link de cadastro e o código de convite.",
+      url ? `Link de cadastro: ${url}` : "",
+      code ? `Código de convite: ${code}` : "",
+      "Passos do cadastro:",
+      "1. Abra o link no navegador.",
+      "2. Preencha seu número de telefone.",
+      "3. Defina seu nome de usuário e sua senha.",
+      "4. Insira o código de convite.",
+      "5. Envie o cadastro.",
+      "Depois de concluir o cadastro, me avise."
+    ].filter(Boolean).join("\n");
+  }
+  return chineseStrictFallback("wait_registration");
+}
+
+function extractInviteCode(value: string): string {
+  return value.match(/(?:邀请码|invitation code|c[oó]digo de convite)[:：]?\s*([A-Za-z0-9_-]+)/i)?.[1] || "";
+}
+
+function englishStrictFallback(flowStep: string): string {
+  const map: Record<string, string> = {
+    interest_screening: "Hello, would you like to learn about an online part-time job?",
+    registration_intent: "Okay, let me briefly explain: this online part-time job helps merchants improve product sales and rankings, and commission is calculated by tasks. Earnings are subject to platform rules. Do you have time to continue registration now?",
+    wait_registration: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
+    telegram_confirm: "Congratulations, your registration is done. Please save your username and password. You need Telegram for the next step. Do you have the Telegram app?",
+    telegram_download: "No problem. Search for Telegram in the Play Store or App Store, install it, then create an account. After that, send me your username starting with @.",
+    collect_telegram: "Please send me your Telegram username. It should start with @.",
+    human_handoff: "We are verifying your information. Please wait a moment."
+  };
+  return map[flowStep] ?? map.registration_intent;
+}
+
+function portugueseStrictFallback(flowStep: string): string {
+  const map: Record<string, string> = {
+    interest_screening: "Olá, você gostaria de conhecer um trabalho online de meio período?",
+    registration_intent: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
+    wait_registration: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
+    telegram_confirm: "Parabéns, seu cadastro foi concluído. Guarde seu nome de usuário e senha. Você precisa do Telegram para a próxima etapa. Você tem o app Telegram?",
+    telegram_download: "Sem problema. Procure Telegram na Play Store ou App Store, instale e crie uma conta. Depois envie seu nome de usuário começando com @.",
+    collect_telegram: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
+    human_handoff: "Estamos verificando suas informações. Aguarde um momento."
+  };
+  return map[flowStep] ?? map.registration_intent;
+}
+
+function chineseStrictFallback(flowStep: string): string {
+  const map: Record<string, string> = {
+    interest_screening: "您好，您是想了解一份兼职在线工作吗？",
+    registration_intent: "好的，我简单介绍一下：这份兼职主要是帮商家提升产品销量和排名，佣金按任务和平台规则核算。您现在方便继续开户注册吗？",
+    wait_registration: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
+    telegram_confirm: "恭喜，注册已完成。请保存好用户名和密码。下一步需要 Telegram，您有 Telegram 应用吗？",
+    telegram_download: "没关系，您可以在 Play Store 或 App Store 搜索 Telegram 下载并注册。完成后把 @ 开头的用户名发给我。",
+    collect_telegram: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
+    human_handoff: "我们正在核实，请稍后。"
+  };
+  return map[flowStep] ?? map.registration_intent;
 }
 
 function detectContextualRegistrationPhone(text: string, flowStep: string): string {

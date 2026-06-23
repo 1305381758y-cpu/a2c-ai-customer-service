@@ -2411,6 +2411,99 @@ describe("portal api", () => {
     }
   });
 
+  it("guards strict flow replies so customer-visible language matches the customer language", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "language-guard-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) return Response.json({ code: 200, data: [{ apiPhone: "language-guard-a2c", verifiedName: "语言防线客服" }] });
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return Response.json({ candidates: [{ content: { parts: [{ text: "好的，我简单介绍一下：这份兼职主要是帮商家提升产品销量和排名，佣金按任务和平台规则核算。您现在方便继续开户注册吗？" }] } }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `language-guard-sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: { name: "语言防线商户" }
+      });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "language-guard@test.local", name: "语言防线", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "language-guard@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://language-guard-a2c.test/api/openapi",
+          a2cAppId: "language-guard-app",
+          a2cAppSecret: "language-guard-secret",
+          googleAiApiKey: "gemini-test",
+          strictScriptFlowEnabled: true
+        }
+      });
+      await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+
+      for (const [index, content] of ["Hello", "yes"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `language-guard-event-${index}`,
+            timestamp: Math.floor(Date.now() / 1000) + index,
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `language-guard-message-${index}`,
+              content,
+              from: "language-guard-customer",
+              to: "language-guard-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000) + index
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+        expect(webhook.json().status).toBe("strict_flow_replied");
+      }
+
+      expect(sentMessages).toHaveLength(2);
+      const secondReply = String(sentMessages[1].content);
+      expect(secondReply).toContain("online part-time job");
+      expect(secondReply).toContain("registration");
+      expect(secondReply).not.toMatch(/[\u3400-\u9fff]/);
+
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      const conversationId = conversations.json().rows[0].id as string;
+      const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
+      const outbounds = messages.json().rows.filter((row: { direction: string }) => row.direction === "outbound");
+      expect(outbounds[1].rawPayload).toMatchObject({
+        strictFlow: true,
+        strictFlowStep: "registration_intent",
+        languageGuardTarget: "en",
+        languageGuardStatus: "fallback",
+        languageGuardFallbackUsed: true
+      });
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("auto-binds telegram handoff chat from bot group updates", async () => {
     const originalFetch = globalThis.fetch;
     const telegramCalls: Array<Record<string, unknown>> = [];
