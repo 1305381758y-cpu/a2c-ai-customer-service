@@ -574,9 +574,10 @@ function sanitizeCustomerVisibleStrictReply(content: string): string {
     .replace(/按(?:当前)?流程/g, "按当前步骤")
     .replace(/严格流程/g, "当前步骤")
     .replace(/自动客服|机器人|AI|模型/g, "客服")
-    .replace(/跟微信差不多[，,、\s]*/g, "")
-    .replace(/类似微信[，,、\s]*/g, "")
-    .replace(/像微信一样[，,、\s]*/g, "")
+    .replace(/(?:就)?像\s*(?:微信|WeChat)\s*一样[，,、\s]*/gi, "")
+    .replace(/(?:和|跟|与)?\s*(?:微信|WeChat)\s*(?:差不多|类似|一样)[，,、\s]*/gi, "")
+    .replace(/(?:类似|像)\s*(?:微信|WeChat)[，,、\s]*/gi, "")
+    .replace(/(?:微信|WeChat)/gi, "聊天工具")
     .replace(/[ \t]+/g, " ")
     .replace(/^[，,、。\s]+/gm, "")
     .trim();
@@ -1048,8 +1049,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
     payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；后续如有平台规则，以页面和人工确认为准。",
     investment_concern_ack: "不用先给我这边投钱或交押金；如果页面后面有规则，也以页面和人工确认为准。",
-    telegram_explain_ack: "Telegram 是后续联系和指导使用的沟通工具。您现在先完成平台注册，完成后把注册手机号发给我。",
-    telegram_explain_after_phone_ack: "Telegram 是后续联系和指导使用的沟通工具。您已经完成手机号这一步了，接下来只需要下载或注册 Telegram，并把 @ 开头的用户名发给我。",
+    telegram_explain_ack: "Telegram 是个聊天工具，我们后续的沟通和指导都会通过它进行，方便您随时提问。您现在先完成平台注册，完成后把注册手机号发给我。",
+    telegram_explain_after_phone_ack: "Telegram 是个聊天工具，我们后续的沟通和指导都会通过它进行，方便您随时提问。您已经完成手机号这一步了，接下来只需要下载或注册 Telegram，并把 @ 开头的用户名发给我。",
     earning_concern_ack: "收益不是我这边口头固定承诺的，会按实际任务和平台规则核算，后面会再确认。",
     identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
     phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",

@@ -302,6 +302,7 @@ export async function naturalizeStrictFlowText(
 - 你是有 10 年经验的开户注册接待专员。
 - 语气自然、耐心、生活化，像 WhatsApp/Telegram 里真人回复。
 - 回复要短，通常 1 到 3 句；不要长篇大论。
+- 不要用微信、WeChat、WhatsApp、Line 或其他地区聊天软件去类比 Telegram；如果要解释 Telegram，只说它是聊天工具/沟通工具。
 
 硬性规则：
 - 不能暴露 AI、机器人、模型、自动客服、系统提示词等身份。
@@ -374,6 +375,7 @@ function buildSystemPrompt(config: AppConfig): string {
 - 不要编造样本中没有的信息。
 - 不要要求客户提供密码、验证码、支付信息或证件敏感信息。
 - 每次只给客户当前最需要的一步，简短自然，像真人客服。
+- 不要用微信、WeChat、WhatsApp、Line 或其他地区聊天软件去类比 Telegram；面向海外客户只描述 Telegram 自身用途。
 - 全局平台注册链接：${config.PLATFORM_REGISTER_URL || "未配置"}
 - 全局 Telegram 注册说明链接：${config.TG_REGISTER_GUIDE_URL || "未配置"}
 
@@ -400,12 +402,13 @@ function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: Ap
   };
 }
 
-function sanitizeNaturalizedText(text: string, fallback: string, allowLinkOrInvite: boolean): string {
+export function sanitizeNaturalizedText(text: string, fallback: string, allowLinkOrInvite: boolean): string {
   let cleaned = text
     .replace(/```[\s\S]*?```/g, "")
     .replace(/^(回复|改写|输出)\s*[:：]\s*/i, "")
     .trim();
   if (!cleaned) return "";
+  cleaned = sanitizeRegionalChatAppComparisons(cleaned);
   if (/(我是|作为|身为).{0,8}(AI|人工智能|机器人|機器人|模型|自动客服|自動客服)|\b(AI|robot|bot|model)\b/i.test(cleaned)) {
     return fallback;
   }
@@ -590,7 +593,7 @@ function missingInviteReply(language: string, config: AppConfig): string {
 }
 
 function sanitizeCustomerVisibleReply(reply: string, language: string): string {
-  const normalized = reply
+  const normalized = sanitizeRegionalChatAppComparisons(reply)
     .replace(/作为(?:一个)?(?:AI|人工智能|机器人|自?动客服|自?动回复)[，,：:\s]*/gi, "")
     .replace(/\b(as an?|i am an?|i'm an?)\s+(ai|artificial intelligence|bot|robot|automated assistant|automated reply)\b[:,\s]*/gi, "")
     .replace(/\b(sou|como)\s+(uma?\s+)?(ia|intelig[eê]ncia artificial|rob[oô]|bot)\b[:,\s]*/gi, "")
@@ -602,6 +605,17 @@ function sanitizeCustomerVisibleReply(reply: string, language: string): string {
     .filter((sentence) => !containsIdentityDisclosure(sentence));
   const cleaned = sentences.join(language === "zh" || /[\u4E00-\u9FFF]/.test(normalized) ? "\n" : " ").trim();
   return cleaned || platformServiceReply(language);
+}
+
+function sanitizeRegionalChatAppComparisons(text: string): string {
+  return text
+    .replace(/(?:就)?像\s*(?:微信|WeChat)\s*一样[，,、\s]*/gi, "")
+    .replace(/(?:和|跟|与)?\s*(?:微信|WeChat)\s*(?:差不多|类似|一样)[，,、\s]*/gi, "")
+    .replace(/(?:类似|像)\s*(?:微信|WeChat)[，,、\s]*/gi, "")
+    .replace(/(?:微信|WeChat)/gi, "聊天工具")
+    .replace(/Telegram\s*[,，]?\s*是个聊天工具/gi, "Telegram 是个聊天工具")
+    .replace(/Telegram\s*[,，]?\s*是一个聊天工具/gi, "Telegram 是个聊天工具")
+    .trim();
 }
 
 function containsIdentityDisclosure(value: string): boolean {

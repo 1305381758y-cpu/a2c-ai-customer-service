@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { sanitizeNaturalizedText } from "../src/clients/gemini.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
 import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
@@ -934,11 +935,13 @@ describe("strict Aston Brazil flow", () => {
     expect(payment.nextFlowStep).toBe("wait_registration");
 
     const telegram = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
-    expect(telegram.reply).toContain("Telegram 是后续联系和指导使用的沟通工具");
+    expect(telegram.reply).toContain("Telegram 是个聊天工具");
+    expect(telegram.reply).toContain("后续的沟通和指导都会通过它进行");
     expect(telegram.reply).toContain("完成平台注册");
     expect(telegram.reply).toContain("注册手机号");
     expect(telegram.reply).not.toContain("下载 Telegram");
     expect(telegram.reply).not.toContain("register.example");
+    expect(telegram.reply).not.toMatch(/微信|WeChat/i);
     expect(telegram.nextFlowStep).toBe("wait_registration");
   });
 
@@ -976,15 +979,17 @@ describe("strict Aston Brazil flow", () => {
 
   it("answers Telegram questions according to whether the phone was already collected", () => {
     const beforePhone = reply("Telegram是什么", { language: "zh", flowStep: "wait_registration" });
+    expect(beforePhone.reply).toContain("Telegram 是个聊天工具");
     expect(beforePhone.reply).toContain("先完成平台注册");
     expect(beforePhone.reply).toContain("注册手机号");
-    expect(beforePhone.reply).not.toContain("微信");
+    expect(beforePhone.reply).not.toMatch(/微信|WeChat/i);
     expect(beforePhone.nextFlowStep).toBe("wait_registration");
 
     const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
+    expect(afterPhone.reply).toContain("Telegram 是个聊天工具");
     expect(afterPhone.reply).toContain("已经完成手机号这一步");
     expect(afterPhone.reply).toContain("@ 开头");
-    expect(afterPhone.reply).not.toContain("微信");
+    expect(afterPhone.reply).not.toMatch(/微信|WeChat/i);
     expect(afterPhone.reply).not.toContain("先完成平台注册");
     expect(afterPhone.nextFlowStep).toBe("collect_telegram");
 
@@ -992,6 +997,18 @@ describe("strict Aston Brazil flow", () => {
     expect(phoneAlreadySent.reply).toContain("@ 开头");
     expect(phoneAlreadySent.reply).not.toContain("注册手机号");
     expect(phoneAlreadySent.nextFlowStep).toBe("collect_telegram");
+  });
+
+  it("removes regional chat app comparisons from naturalized Telegram explanations", () => {
+    const cleaned = sanitizeNaturalizedText(
+      "Telegram 就像微信一样，是个聊天工具。我们后续的沟通和指导都会通过它进行，方便您随时提问。",
+      "Telegram 是个聊天工具，我们后续的沟通和指导都会通过它进行，方便您随时提问。",
+      false
+    );
+
+    expect(cleaned).toContain("Telegram 是个聊天工具");
+    expect(cleaned).toContain("后续的沟通和指导都会通过它进行");
+    expect(cleaned).not.toMatch(/微信|WeChat/i);
   });
 
   it("uses context to understand short Telegram-stage replies", () => {
@@ -1008,7 +1025,8 @@ describe("strict Aston Brazil flow", () => {
 
     const tgQuestion = reply("为什么要使用Telegram呢", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
     expect(tgQuestion.nextFlowStep).toBe("collect_telegram");
-    expect(tgQuestion.reply).toContain("后续联系和指导");
+    expect(tgQuestion.reply).toContain("后续的沟通和指导都会通过它进行");
+    expect(tgQuestion.reply).not.toMatch(/微信|WeChat/i);
     expect(tgQuestion.reply).toContain("@ 开头");
 
     const acknowledgement = reply("ok", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
