@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { join } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
@@ -97,6 +98,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
+  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantCountries(request.params.id) }));
   app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries", { preHandler: adminOnly }, async (request, reply) => {
@@ -405,6 +407,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.post("/api/merchant/config/registration-tutorial-image", { preHandler: merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/config/check", { preHandler: merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
 	  app.get("/api/merchant/countries", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
   app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: merchantAdmins }, async (request, reply) => {
@@ -1226,6 +1229,49 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
   } catch (error) {
     return reply.code(400).send({ error: "invalid training material file", message: error instanceof Error ? error.message : "unknown parse error" });
   }
+}
+
+async function uploadRegistrationTutorialImage(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
+  let uploadError = "";
+  const file = await request.file().catch((error) => {
+    uploadError = error instanceof Error ? error.message : "图片上传失败";
+    return undefined;
+  });
+  if (uploadError) return reply.code(413).send({ error: "图片过大或上传失败", message: "注册教程图片上传失败，请压缩后重试。" });
+  if (!file) return reply.code(400).send({ error: "请上传注册教程图片" });
+  if (!isAllowedTutorialImage(file.filename, file.mimetype)) {
+    return reply.code(400).send({ error: "只支持图片文件", message: "请上传 PNG、JPG、JPEG、WEBP 或 GIF 图片。" });
+  }
+  const buffer = await file.toBuffer().catch(() => null);
+  if (!buffer) return reply.code(413).send({ error: "图片过大或读取失败", message: "注册教程图片读取失败，请压缩后重试。" });
+  const ext = tutorialImageExtension(file.filename, file.mimetype);
+  const uploadDir = registrationUploadDir(deps.config);
+  mkdirSync(uploadDir, { recursive: true });
+  const filename = `${merchantId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}-${randomUUID()}${ext}`;
+  writeFileSync(join(uploadDir, filename), buffer);
+  const imageUrl = `${requestOrigin(request)}/uploads/${encodeURIComponent(filename)}`;
+  const config = deps.repos.patchMerchantConfig(merchantId, { registrationTutorialImageUrl: imageUrl });
+  return { ok: true, imageUrl, config: maskConfig(config) };
+}
+
+function registrationUploadDir(config: AppConfig): string {
+  return config.DATABASE_URL === ":memory:" ? join(process.cwd(), "data", "uploads") : join(dirname(resolve(config.DATABASE_URL)), "uploads");
+}
+
+function isAllowedTutorialImage(filename: string, mimeType = ""): boolean {
+  const mime = mimeType.toLowerCase();
+  const name = filename.toLowerCase();
+  return /^(image\/)(png|jpe?g|webp|gif)$/.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(name);
+}
+
+function tutorialImageExtension(filename: string, mimeType = ""): string {
+  const ext = extname(filename).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext)) return ext;
+  const mime = mimeType.toLowerCase();
+  if (mime.includes("png")) return ".png";
+  if (mime.includes("webp")) return ".webp";
+  if (mime.includes("gif")) return ".gif";
+  return ".jpg";
 }
 
 async function importScriptFlow(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, scopedMerchantId?: string) {

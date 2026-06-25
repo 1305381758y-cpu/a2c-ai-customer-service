@@ -352,6 +352,7 @@ function Config({ platform }: { platform: boolean }) {
   const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
   const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
+  const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
   const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
   useEffect(() => { reloadConfig().catch(() => null); }, [url]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
@@ -372,9 +373,27 @@ function Config({ platform }: { platform: boolean }) {
       requireWhatsApp: String(country.requireWhatsApp)
     });
   }, [countries]);
-  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl", "registrationTutorialImageUrl"];
+  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
   const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+  const uploadTutorialImage = async () => {
+    if (!tutorialImageFile) return;
+    setMessage("");
+    setError("");
+    const body = new FormData();
+    body.append("file", tutorialImageFile);
+    const endpoint = platform ? `/api/admin/merchants/${merchantId}/config/registration-tutorial-image` : "/api/merchant/config/registration-tutorial-image";
+    const response = await fetch(endpoint, { method: "POST", body });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));
+    }
+    const result = await response.json() as { imageUrl: string; config: Record<string, string | boolean> };
+    setForm(result.config);
+    setTutorialImageFile(null);
+    setMessage("注册教程图片已上传。客户问怎么注册、不会注册、有教程吗时会自动发送这张图片。");
+    notify("success", "注册教程图片已保存");
+  };
   const runConfigCheck = async () => {
     setError("");
     setMessage("正在检测配置...");
@@ -455,6 +474,22 @@ function Config({ platform }: { platform: boolean }) {
       <button className={form.strictScriptFlowEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, strictScriptFlowEnabled: !form.strictScriptFlowEnabled })}>{form.strictScriptFlowEnabled ? "关闭严格流程" : "开启严格流程"}</button>
     </div>
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div>
+    <div className="memory tutorial-upload-card">
+      <div>
+        <h3>注册教程图片</h3>
+        <p>商户只需要上传图片。客户问“怎么注册”“我不会”“有教程吗”时，系统会自动把这张图发给客户。</p>
+      </div>
+      <div className="tutorial-upload-layout">
+        <div className="tutorial-preview">
+          {form.registrationTutorialImageUrl ? <img src={String(form.registrationTutorialImageUrl)} alt="注册教程图片预览" /> : <span>还未上传注册教程图片</span>}
+        </div>
+        <div className="tutorial-upload-actions">
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setTutorialImageFile(e.target.files?.[0] || null)} />
+          <AsyncButton disabled={!tutorialImageFile} busyText="上传中..." onClick={uploadTutorialImage}><Upload size={16}/>上传图片</AsyncButton>
+          <small>{tutorialImageFile ? `已选择：${tutorialImageFile.name}` : "支持 PNG、JPG、WEBP、GIF；上传后会替换当前教程图。"}</small>
+        </div>
+      </div>
+    </div>
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}

@@ -2146,6 +2146,49 @@ describe("portal api", () => {
     }
   });
 
+  it("stores registration tutorial images from merchant image upload only", async () => {
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "教程上传商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "tutorial-upload@test.local", name: "教程上传", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "tutorial-upload@test.local", "Merchant123456");
+
+      const textUpload = multipartUploadPayload("tutorial.txt", "text/plain", "not an image");
+      const rejected = await app.inject({
+        method: "POST",
+        url: "/api/merchant/config/registration-tutorial-image",
+        headers: { cookie: merchantCookie, ...textUpload.headers },
+        payload: textUpload.payload
+      });
+      expect(rejected.statusCode).toBe(400);
+      expect(rejected.json().error).toBe("只支持图片文件");
+
+      const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+      const imageUpload = multipartUploadPayload("register-guide.png", "image/png", png);
+      const uploaded = await app.inject({
+        method: "POST",
+        url: "/api/merchant/config/registration-tutorial-image",
+        headers: { cookie: merchantCookie, host: "example.test", "x-forwarded-proto": "https", ...imageUpload.headers },
+        payload: imageUpload.payload
+      });
+      expect(uploaded.statusCode).toBe(200);
+      expect(uploaded.json().imageUrl).toMatch(/^https:\/\/example\.test\/uploads\/.+\.png$/);
+      expect(uploaded.json().config.registrationTutorialImageUrl).toBe(uploaded.json().imageUrl);
+
+      const config = await app.inject({ method: "GET", url: "/api/merchant/config", headers: { cookie: merchantCookie } });
+      expect(config.json().registrationTutorialImageUrl).toBe(uploaded.json().imageUrl);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

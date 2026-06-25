@@ -1,8 +1,8 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { A2CClient } from "./clients/a2c.js";
 import { GeminiReplyClient } from "./clients/gemini.js";
 import { TelegramClient } from "./clients/telegram.js";
@@ -47,6 +47,13 @@ export function buildApp(config: AppConfig) {
       decorateReply: false
     });
   }
+  const uploadDir = config.DATABASE_URL === ":memory:" ? join(process.cwd(), "data", "uploads") : join(dirname(resolve(config.DATABASE_URL)), "uploads");
+  mkdirSync(uploadDir, { recursive: true });
+  app.register(fastifyStatic, {
+    root: uploadDir,
+    prefix: "/uploads/",
+    decorateReply: false
+  });
   registerRoutes(app, { config, repos, processor });
 
   return app;
