@@ -962,6 +962,16 @@ describe("strict Aston Brazil flow", () => {
     expect(link.reply).not.toContain("register.example");
     expect(link.reply).not.toContain("ABC123");
     expect(link.tutorialImageRequested).toBe(false);
+
+    const stillCannotOpen = reply("还是打不开", { language: "zh", flowStep: "wait_registration" });
+    expect(stillCannotOpen.reply).toContain("浏览器");
+    expect(stillCannotOpen.reply).toContain("截图");
+    expect(stillCannotOpen.reply).not.toContain("注册步骤");
+
+    const stuckOpening = reply("卡在打开链接", { language: "zh", flowStep: "wait_registration" });
+    expect(stuckOpening.reply).toContain("浏览器");
+    expect(stuckOpening.reply).toContain("截图");
+    expect(stuckOpening.reply).not.toContain("注册步骤");
   });
 
   it("treats inbound registration screenshots as a registration blocker instead of missing invite", () => {
@@ -971,6 +981,20 @@ describe("strict Aston Brazil flow", () => {
     expect(screenshot.reply).not.toContain("正在确认您的专属邀请码");
     expect(screenshot.reply).not.toContain("开户链接");
     expect(screenshot.nextFlowStep).toBe("wait_registration");
+
+    const conv = conversation({ language: "zh", flowStep: "wait_registration" });
+    const imageWithTutorial = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis: analyzeMessage("客户发送的图片", "zh"),
+      customerText: "客户发送的图片",
+      inviteCode,
+      config: { ...config, REGISTRATION_TUTORIAL_IMAGE_URL: "https://cdn.example/tutorial.jpg" } as AppConfig,
+      contextualIntent: buildRuleContextualIntent({ conversation: conv, analysis: analyzeMessage("客户发送的图片", "zh"), customerText: "客户发送的图片" })
+    });
+    expect(imageWithTutorial.reply).toContain("截图");
+    expect(imageWithTutorial.tutorialImageRequested).toBe(false);
   });
 
   it("answers trust payment and Telegram questions while waiting for registration", () => {
@@ -1124,6 +1148,34 @@ describe("strict Aston Brazil flow", () => {
     expect(englishLostUsername.reply).toContain("Settings");
     expect(englishLostUsername.reply).toContain("Username");
     expect(englishLostUsername.reply).toContain("@");
+
+    const plainNoInUsernameStep = reply("没有", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(plainNoInUsernameStep.nextFlowStep).toBe("collect_telegram");
+    expect(plainNoInUsernameStep.reply).toContain("用户名");
+    expect(plainNoInUsernameStep.reply).toContain("设置");
+    expect(plainNoInUsernameStep.reply).not.toContain("先不继续打扰");
+
+    const needsSetup = reply("是需要设置吗", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(needsSetup.nextFlowStep).toBe("collect_telegram");
+    expect(needsSetup.reply).toContain("设置");
+    expect(needsSetup.reply).toContain("@ 开头");
+
+    const android = reply("我的安卓手机", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(android.nextFlowStep).toBe("collect_telegram");
+    expect(android.reply).toContain("安卓手机");
+    expect(android.reply).toContain("左上角");
+    expect(android.reply).toContain("设置");
+
+    const registeredButNoUsername = reply("注册好了，但是没找到@开头的用户名", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(registeredButNoUsername.nextFlowStep).toBe("collect_telegram");
+    expect(registeredButNoUsername.reply).toContain("用户名");
+    expect(registeredButNoUsername.reply).toContain("设置");
+
+    const anotherQuestion = reply("我还有一个问题", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
+    expect(anotherQuestion.nextFlowStep).toBe("collect_telegram");
+    expect(anotherQuestion.reply).toContain("直接问");
+    expect(anotherQuestion.reply).toContain("Telegram 用户名");
+    expect(anotherQuestion.reply).not.toContain("充值");
   });
 
   it("does not resend the full registration package for a plain ok while waiting for registration", () => {

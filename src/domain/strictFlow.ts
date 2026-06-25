@@ -166,6 +166,9 @@ export function buildRuleContextualIntent(
   if (step === "telegram_confirm" && saysContextualNo(text)) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
   }
+  if (step === "collect_telegram" && saysTelegramUsernameMissing(text)) {
+    return base("telegram_username_help", { answeredPreviousQuestion: true, nextAction: "guide telegram username setup", reason: "missing telegram username after username request" });
+  }
   if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && asksTelegramUsernameHelp(text)) {
     return base("telegram_username_help", { answeredPreviousQuestion: Boolean(previousAssistantMessage), nextAction: "guide telegram username setup", reason: "telegram username help" });
   }
@@ -359,7 +362,8 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "telegram_confirm") {
     if (contextualLabel === "telegram_username_help") {
-      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
+      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
     if (negativeTelegram) {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
@@ -375,7 +379,8 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "telegram_download") {
     if (contextualLabel === "telegram_username_help") {
-      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
+      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
     if (contextualLabel === "no_telegram" || contextualLabel === "need_help" || contextualLabel === "workflow_question" || contextualLabel === "ask_tg_register") {
       return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
@@ -387,11 +392,15 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   if (step === "collect_telegram") {
+    if (contextualLabel === "telegram_username_help") {
+      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
+    }
+    if (asksGenericQuestionPermission(text)) {
+      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "ask_question_prompt_tg", language));
+    }
     if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
-    }
-    if (contextualLabel === "telegram_username_help") {
-      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_username_help", language));
     }
     if (negativeTelegram || contextualLabel === "need_help") {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
@@ -773,7 +782,16 @@ function saysTelegramInstalled(text: string): boolean {
 
 function asksTelegramUsernameHelp(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return /(怎么找.*(用户名|用戶名|@)|哪里.*(用户名|用戶名|@)|在哪.*(用户名|用戶名|@)|(用户名|用戶名|@).*(在哪|哪里|哪裡)|看.*(用户名|用戶名|@)|没有\s*@|沒有\s*@|没有用户名|沒有用戶名|没用户名|沒用戶名|怎么设置.*(用户名|用戶名|@)|设置.*(用户名|用戶名|@)|用户名是什么|用戶名是什麼|我找不到|找不到.*(用户名|用戶名|@)|不会设置|不會設置|username.*(where|在哪|哪里|哪裡)|where.*username|set.*username|create.*username|find.*username|find.*@|couldn'?t.*(find|see).*(username|@)|can'?t.*(find|see).*(username|@)|cannot.*(find|see).*(username|@)|no\s*@|no username|don'?t have.*username|starting with @)/i.test(normalized);
+  return /(怎么找.*(用户名|用戶名|@)|哪里.*(用户名|用戶名|@)|在哪.*(用户名|用戶名|@)|(用户名|用戶名|@).*(在哪|哪里|哪裡)|看.*(用户名|用戶名|@)|没有\s*@|沒有\s*@|没有看到\s*@|没看到\s*@|沒看到\s*@|没有用户名|沒有用戶名|没用户名|沒用戶名|怎么设置.*(用户名|用戶名|@)|设置.*(用户名|用戶名|@)|需要设置吗|要设置吗|是不是.*设置|用户名是什么|用戶名是什麼|我找不到|找不到.*(用户名|用戶名|@)|没找到.*(用户名|用戶名|@)|沒找到.*(用户名|用戶名|@)|不会设置|不會設置|安卓手机|安卓|android|username.*(where|在哪|哪里|哪裡)|where.*username|set.*username|create.*username|find.*username|find.*@|couldn'?t.*(find|see).*(username|@)|can'?t.*(find|see).*(username|@)|cannot.*(find|see).*(username|@)|no\s*@|no username|don'?t have.*username|starting with @)/i.test(normalized);
+}
+
+function saysTelegramUsernameMissing(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  return /^(我没有|没有|沒有|没|沒|无|無|没有@|沒有@|没看到|沒看到|没找到|沒找到|找不到|没有用户名|沒有用戶名|没用户名|沒用戶名|no|no username)$/i.test(normalized);
+}
+
+function mentionsAndroidPhone(text: string): boolean {
+  return /(安卓手机|安卓|android)/i.test(text);
 }
 
 function isAcknowledgement(text: string): boolean {
@@ -897,12 +915,12 @@ function asksToAnswerPreviousQuestion(text: string): boolean {
 
 function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
-  if (/^(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
-  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+  if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
+  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
 }
 
 function asksGenericQuestionPermission(text: string): boolean {
-  return /(我有(个|個)?问题.*(可以|能|帮|幫).*?(解答|回答|问|問)|可以.*(问|問).*问题|能.*(问|問).*问题|我想问.*问题|i have.*question|can i ask|posso perguntar|tenho uma pergunta)/i.test(text);
+  return /(我有(个|個)?问题.*(可以|能|帮|幫).*?(解答|回答|问|問)|我还有(一个|個|个)?问题|还有(一个|個|个)?问题|可以.*(问|問).*问题|能.*(问|問).*问题|我想问.*问题|i have.*question|another question|can i ask|posso perguntar|tenho uma pergunta)/i.test(text);
 }
 
 function asksLookAtCurrentProblem(text: string): boolean {
@@ -922,7 +940,7 @@ function reportsRegistrationBlocker(text: string): boolean {
 function isInboundImageOrScreenshot(text: string): boolean {
   const normalized = text.trim();
   return /^\[(图片|圖片|照片|截图|截圖|image|photo|screenshot)\](?:\s|$)/i.test(normalized) ||
-    /客户发送了.*(图片|圖片|照片|截图|截圖|页面|頁面)|截图.*(注册|页面|链接|打不开|报错)|图片.*(注册|页面|链接|打不开|报错)/i.test(normalized);
+    /客户发送[了的].*(图片|圖片|照片|截图|截圖|页面|頁面)|截图.*(注册|页面|链接|打不开|报错)|图片.*(注册|页面|链接|打不开|报错)/i.test(normalized);
 }
 
 function asksWhetherCanReadImage(text: string): boolean {
@@ -969,6 +987,7 @@ function asksForRegistrationSteps(text: string): boolean {
 
 function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {
   if (!tutorialUrl || step !== "wait_registration") return false;
+  if (isInboundImageOrScreenshot(text) || asksLookAtCurrentProblem(text) || asksHowToOpenLink(text) || reportsRegistrationBlocker(text)) return false;
   return asksForRegistrationSteps(text) ||
     /(教程|图文|圖片教程|图片教程|步骤图|流程图|不会注册|不會註冊|不懂注册|不懂註冊|注册.*不会|註冊.*不會|注册.*不懂|註冊.*不懂|怎么注册|怎麼註冊|如何注册|如何註冊|how.*register|registration.*tutorial|passo.*cadastro|como.*cadastrar)/i.test(text);
 }
@@ -1137,6 +1156,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "可以，我会一步步带您。您先确认现在方便操作吗？方便的话我再把注册入口和专属码发给您。",
     registration_help_ack: "可以，我继续带您处理。您告诉我卡在打开链接、填写手机号、设置账号，还是输入邀请码，我就按那一步帮您。",
     ask_question_prompt: "当然可以，您直接问我就行。我会先按您当前开户注册这一步帮您处理。",
+    ask_question_prompt_tg: "当然可以，您直接问我就行。问完我再继续带您处理 Telegram 用户名这一步。",
     look_at_problem_ack: "可以，您把页面截图或提示文字发我，我帮您看具体卡在哪里；如果是链接打不开，也可以告诉我是打不开还是页面报错。",
     registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
     registration_screenshot_ack: "我看到您发的截图了。您先别急，我帮您看注册页面卡在哪一步；如果页面上有报错文字，也可以直接把提示发我。",
@@ -1166,6 +1186,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_download: "如果你的手机里安装了应用商店（Play Store 或 App Store），可以直接在那里搜索并下载 Telegram 应用。创建 Telegram 账号后请告诉我。我们会在 Telegram 教你如何赚取佣金。完成后请把 @ 开头的用户名发给我。",
     telegram_installed_ack: "好的，那接下来请注册 Telegram 账号；注册好后，把 @ 开头的 Telegram 用户名发给我。",
     telegram_username_help: "可以，打开 Telegram 后进入设置，找到 Username/用户名。如果已经有 @ 开头的用户名，直接发给我；如果没有，就在用户名那里设置一个英文或数字组合，保存后把 @ 开头的用户名发我。",
+    telegram_username_android_help: "安卓手机一般这样找：打开 Telegram，点左上角三条线菜单，再点“设置”。里面会有“用户名/Username”。如果还没有用户名，就点进去设置一个英文或数字组合，保存后把 @ 开头的用户名发我。",
     collect_telegram: "您注册好 Telegram 账号了吗？请把 @ 开头的 Telegram 用户名发送给我。",
     collect_telegram_wait: "好的，注册好后把 @ 开头的 Telegram 用户名发给我就行，我在这边等您。",
     collect_telegram_retry: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
@@ -1192,6 +1213,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "Yes, I can guide you step by step. Please confirm whether you are free to operate now; if yes, I will send the registration entry and dedicated code.",
     registration_help_ack: "Yes, I will keep guiding you. Tell me whether you are stuck opening the link, filling the phone number, setting the account, or entering the invitation code.",
     ask_question_prompt: "Of course. Ask me directly, and I will answer based on the current registration step.",
+    ask_question_prompt_tg: "Of course. Ask me directly. After that, I will continue guiding you through the Telegram username step.",
     look_at_problem_ack: "Sure, send me the page screenshot or prompt text and I will check where it is stuck. If the link does not open, tell me whether it cannot open or shows an error.",
     registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
     registration_screenshot_ack: "I saw the screenshot you sent. Do not rush; I will help check where the registration page is stuck. If there is an error message on the page, you can also send me that text.",
@@ -1221,6 +1243,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_download: "If your phone has Play Store or App Store, you can search for Telegram there and download it directly. After creating your Telegram account, please tell me. We will teach you on Telegram how to earn commission. After that, send me your username starting with @.",
     telegram_installed_ack: "Okay, next please create your Telegram account. After that, send me your Telegram username starting with @.",
     telegram_username_help: "Sure. Open Telegram, go to Settings, and find Username. If you already have a username starting with @, send it to me. If not, set one with letters or numbers, save it, then send me the @ username.",
+    telegram_username_android_help: "On Android, open Telegram, tap the three-line menu on the top left, then tap Settings. Find Username. If there is no username yet, tap it and set one with letters or numbers, then send me the @ username.",
     collect_telegram: "Have you registered your Telegram account? Please send me your Telegram username starting with @.",
     collect_telegram_wait: "Okay, after you finish, just send me the Telegram username starting with @. I will wait here.",
     collect_telegram_retry: "Please send me your Telegram username. It should start with @.",
@@ -1247,6 +1270,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "Sim, posso orientar você passo a passo. Primeiro confirme se você tem tempo para operar agora; se tiver, envio a entrada de cadastro e o código exclusivo.",
     registration_help_ack: "Sim, vou continuar orientando você. Me diga se travou ao abrir o link, preencher o telefone, criar a conta ou inserir o código de convite.",
     ask_question_prompt: "Claro, pode me perguntar diretamente. Vou responder considerando esta etapa atual do cadastro.",
+    ask_question_prompt_tg: "Claro, pode me perguntar diretamente. Depois eu continuo orientando você na etapa do nome de usuário do Telegram.",
     look_at_problem_ack: "Claro, envie a captura de tela ou a mensagem da página e eu verifico onde travou. Se o link não abrir, me diga se não abre ou se aparece erro.",
     registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
     registration_screenshot_ack: "Vi a captura de tela que você enviou. Não precisa ter pressa; vou ajudar a verificar onde a página de cadastro travou. Se aparecer alguma mensagem de erro, pode me enviar o texto também.",
@@ -1276,6 +1300,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     telegram_download: "Se o seu celular tiver Play Store ou App Store, você pode pesquisar e baixar o Telegram diretamente. Depois de criar a conta do Telegram, me avise. Vamos ensinar no Telegram como ganhar comissão. Depois disso, envie o nome de usuário começando com @.",
     telegram_installed_ack: "Certo, agora crie sua conta no Telegram. Depois disso, envie seu nome de usuário começando com @.",
     telegram_username_help: "Claro. Abra o Telegram, entre em Configurações e procure Username/nome de usuário. Se já tiver um nome começando com @, envie para mim. Se não tiver, crie um com letras ou números, salve e me envie o @.",
+    telegram_username_android_help: "No Android, abra o Telegram, toque no menu de três linhas no canto superior esquerdo e depois em Configurações. Procure Username/nome de usuário. Se ainda não tiver, crie um com letras ou números, salve e me envie o @.",
     collect_telegram: "Você já registrou sua conta no Telegram? Envie seu nome de usuário do Telegram começando com @.",
     collect_telegram_wait: "Certo, quando terminar, envie seu nome de usuário do Telegram começando com @. Vou aguardar por aqui.",
     collect_telegram_retry: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
