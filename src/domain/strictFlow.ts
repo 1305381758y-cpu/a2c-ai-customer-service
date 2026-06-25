@@ -315,7 +315,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_question_retry_ack", language));
     }
     if (asksForRegistrationSteps(text)) {
-      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language, "help"), true);
     }
     if (isReadyToStartRegistration(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registrationStartInstruction(input, language), true);
@@ -337,7 +337,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain", line));
     }
     if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
-      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language, "help"), true);
     }
     if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (!(input.analysis.phone || input.conversation.extractedPhone)) {
@@ -986,7 +986,7 @@ function isRepeatGreeting(text: string): boolean {
   return /^(你好|您好|在吗|在不在|嗨|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
 }
 
-function registerInstruction(input: StrictFlowInput, language: string): string {
+function registerInstruction(input: StrictFlowInput, language: string, mode: "initial" | "help" = "initial"): string {
   const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
   const customStep = activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
   if (customStep?.standardReply) {
@@ -1002,10 +1002,19 @@ function registerInstruction(input: StrictFlowInput, language: string): string {
     return scriptLine("missing_invite", language, display);
   }
   if (language === "en") {
+    if (mode === "help") {
+      return `Sure, I will send the registration steps clearly again${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? " together with the tutorial image" : ""}.\n${display}\nRegistration steps:\n1. Open the link in your browser.\n2. Fill in your phone number.\n3. Set your username and password.\n4. Enter the invitation code.\n5. Submit the registration.\nAfter registration is completed, send me the registered phone number.`;
+    }
     return `Okay, I will send you the registration link and invitation code now.\n${display}\nRegistration steps:\n1. Open the link in your browser.\n2. Fill in your phone number.\n3. Set your username and password.\n4. Enter the invitation code.\n5. Submit the registration.\nAfter registration is completed, please tell me.`;
   }
   if (language === "pt-BR") {
+    if (mode === "help") {
+      return `Claro, vou enviar os passos do cadastro novamente${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? " junto com a imagem do tutorial" : ""}.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir, envie o telefone usado no cadastro.`;
+    }
     return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir o cadastro, me avise.`;
+  }
+  if (mode === "help") {
+    return `可以，我把注册步骤给您列清楚${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? "，教程图片也会一起发您" : ""}。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成后把注册手机号发给我就可以。`;
   }
   return `好的，现在我会把链接和邀请码发给您。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成注册后请告诉我。`;
 }

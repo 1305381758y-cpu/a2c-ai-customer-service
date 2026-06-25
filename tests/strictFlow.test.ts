@@ -1284,8 +1284,15 @@ describe("strict Aston Brazil flow", () => {
     expect(complete.reply).toContain("Telegram");
   });
 
-  it("requests the configured registration tutorial image when the customer asks for a tutorial", () => {
-    const text = "我不会，有教程吗";
+  it.each([
+    "如何注册",
+    "我不会，有教程吗",
+    "怎么注册",
+    "我打开了不懂怎么注册",
+    "请把注册步骤发给我",
+    "注册流程是什么",
+    "再走一遍流程"
+  ])("requests the configured registration tutorial image for registration help: %s", (text) => {
     const analysis = analyzeMessage(text, "zh");
     const conv = conversation({ language: "zh", flowStep: "wait_registration" });
     const result = buildStrictFlowReply({
@@ -1302,6 +1309,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("注册步骤");
     expect(result.reply).toContain("邀请码");
+    expect(result.reply).toContain("教程图片");
     expect(result.tutorialImageRequested).toBe(true);
   });
 
