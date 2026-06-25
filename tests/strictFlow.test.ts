@@ -916,6 +916,39 @@ describe("strict Aston Brazil flow", () => {
     expect(refusal.nextFlowStep).toBe("wait_registration");
   });
 
+  it("does not fall back to missing invite when customer asks for tutorial or cannot open registration", () => {
+    const tutorialAnalysis = analyzeMessage("我不会，有教程吗", "zh");
+    expect(strictFlowNeedsInviteCode({
+      merchant,
+      country,
+      conversation: conversation({ language: "zh", flowStep: "wait_registration" }),
+      analysis: tutorialAnalysis,
+      customerText: "我不会，有教程吗",
+      inferredIntent: "need_help"
+    })).toBe(true);
+
+    const tutorial = reply("我不会，有教程吗", { language: "zh", flowStep: "wait_registration" });
+    expect(tutorial.reply).toContain("开户链接");
+    expect(tutorial.reply).toContain("邀请码");
+    expect(tutorial.reply).toContain("注册步骤");
+    expect(tutorial.reply).not.toContain("正在确认您的专属邀请码");
+
+    const cannotOpen = reply("打不开", { language: "zh", flowStep: "wait_registration" });
+    expect(cannotOpen.reply).toContain("浏览器");
+    expect(cannotOpen.reply).toContain("截图");
+    expect(cannotOpen.reply).not.toContain("正在确认您的专属邀请码");
+    expect(cannotOpen.nextFlowStep).toBe("wait_registration");
+  });
+
+  it("treats inbound registration screenshots as a registration blocker instead of missing invite", () => {
+    const screenshot = reply("[图片]", { language: "zh", flowStep: "wait_registration" });
+    expect(screenshot.reply).toContain("看到您发的截图");
+    expect(screenshot.reply).toContain("卡在哪一步");
+    expect(screenshot.reply).not.toContain("正在确认您的专属邀请码");
+    expect(screenshot.reply).not.toContain("开户链接");
+    expect(screenshot.nextFlowStep).toBe("wait_registration");
+  });
+
   it("answers trust payment and Telegram questions while waiting for registration", () => {
     const scam = reply("你不会是骗子吧", { language: "zh", flowStep: "wait_registration" });
     expect(scam.reply).toContain("理解您的顾虑");

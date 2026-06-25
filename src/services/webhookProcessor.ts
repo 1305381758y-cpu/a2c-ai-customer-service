@@ -2,7 +2,7 @@ import { analyzeMessage, isContextualIntentLabel, isInternalIntentLabel, type Co
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
+import { analyzeGeminiImage, classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { IntentLearningEventRecord, MerchantConfigRecord } from "../repositories.js";
@@ -54,7 +54,14 @@ export class WebhookProcessor {
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
-    let analysis = analyzeMessage(analysisText, conversation.language);
+    const imageAnalysis = msgType === "image" && mediaUrl
+      ? await analyzeGeminiImage(runtimeConfig, mediaUrl)
+      : { text: "", status: "skipped" as const };
+    const customerTextForAi = analysisText || imageAnalysis.text || content;
+    let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
+    if (msgType === "image" && !analysisText && !imageAnalysis.text) {
+      analysis = { ...analysis, language: conversation.language || analysis.language, intent: "need_help", stage: "need_platform_register" };
+    }
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
     const scriptFlow = this.repos.getActiveScriptFlow(merchant.id, country.id);
     const strictFlowEnabled = Boolean(scriptFlow) || isStrictFlowEnabled(merchant, country, merchantConfig);
@@ -70,7 +77,7 @@ export class WebhookProcessor {
     }
     const learnedIntent = findLearnedIntentMatch({
       events: this.repos.listPromotedIntentLearningEvents({ merchantId: merchant.id, countryId: country.id }),
-      customerText: analysisText || content,
+      customerText: customerTextForAi,
       flowStep: effectiveStrictFlowStep || conversation.flowStep || ""
     });
     let inferredIntent = await this.inferStrictFlowIntent({
@@ -79,7 +86,7 @@ export class WebhookProcessor {
       country,
       conversation,
       analysis,
-      customerText: analysisText || content,
+      customerText: customerTextForAi,
       strictFlowEnabled,
       history: historyForIntent
     });
@@ -93,7 +100,7 @@ export class WebhookProcessor {
       runtimeConfig,
       conversation,
       analysis,
-      customerText: analysisText || content,
+      customerText: customerTextForAi,
       strictFlowEnabled,
       history: historyForIntent,
       inferredIntent
@@ -141,12 +148,13 @@ export class WebhookProcessor {
         translationStatus: inboundTranslation.status,
         translationError: inboundTranslation.error || "",
         mediaUrl,
-        fileName: data.fileName || ""
+        fileName: data.fileName || "",
+        imageAnalysis: msgType === "image" ? imageAnalysis : null
       }
     });
     if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };
     const intentLearningCandidate = buildIntentLearningCandidate({
-      customerText: analysisText || content,
+      customerText: customerTextForAi,
       analysis,
       inferredIntent,
       contextualIntent,
@@ -159,7 +167,7 @@ export class WebhookProcessor {
         countryId: country.id,
         conversationId: conversation.id,
         messageId: inserted.id,
-        customerText: analysisText || content,
+        customerText: customerTextForAi,
         language: analysis.language,
         detectedIntent: analysis.intent,
         inferredIntent,
@@ -178,7 +186,7 @@ export class WebhookProcessor {
       this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
     }
     this.repos.upsertCustomerFromConversation(conversation);
-    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content: analysisText || content, direction: "inbound" });
+    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content: customerTextForAi, direction: "inbound" });
 
     if (conversation.status === "human_handoff") {
       this.repos.updateConversation(conversation);
@@ -205,14 +213,14 @@ export class WebhookProcessor {
       return { status: "auto_reply_disabled", conversationId: conversation.id };
     }
 
-    const useNaturalReply = shouldBypassStrictFlowForNaturalReply(analysisText || content, conversation);
+    const useNaturalReply = shouldBypassStrictFlowForNaturalReply(customerTextForAi, conversation);
     if (!useNaturalReply) {
       const strictNeedsInviteCode = strictFlowNeedsInviteCode({
         merchant,
         country,
         conversation,
         analysis,
-        customerText: analysisText || content,
+        customerText: customerTextForAi,
         strictFlowEnabled,
         inferredIntent
       });
@@ -224,7 +232,7 @@ export class WebhookProcessor {
         country,
         conversation,
         analysis,
-        customerText: analysisText || content,
+        customerText: customerTextForAi,
         inviteCode: strictInviteCode,
         config: runtimeConfig,
         inferredIntent,
@@ -237,7 +245,7 @@ export class WebhookProcessor {
       conversation.stage = strictReply.stage;
       conversation.flowStep = strictReply.nextFlowStep;
       const naturalized = await naturalizeStrictReply(runtimeConfig, {
-        customerText: analysisText || content,
+        customerText: customerTextForAi,
         draftReply: strictReply.reply,
         language: strictReply.language,
         flowStep: strictReply.nextFlowStep,
@@ -335,18 +343,18 @@ export class WebhookProcessor {
     const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
     const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
-    const shouldIncludeRegistrationDetails = shouldUseInviteForReply(country, conversation, analysis.intent, analysisText || content);
+    const shouldIncludeRegistrationDetails = shouldUseInviteForReply(country, conversation, analysis.intent, customerTextForAi);
     const inviteCode = shouldIncludeRegistrationDetails
       ? this.repos.reserveInviteCodeForConversation(conversation)
       : undefined;
     const samples = rankSamples(enabledSamples, {
-      text: analysisText || content,
+      text: customerTextForAi,
       language: analysis.language,
       intent: analysis.intent,
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: analysisText || content, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
+    const aiReply = await ai.generateReply({ customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
     if (!shouldIncludeRegistrationDetails) {
       aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
     }

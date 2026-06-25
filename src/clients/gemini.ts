@@ -122,6 +122,45 @@ export async function generateGeminiText(
   return response.text?.trim() || "";
 }
 
+export interface GeminiImageAnalysis {
+  text: string;
+  status: "ok" | "failed" | "skipped";
+  error?: string;
+}
+
+export async function analyzeGeminiImage(config: GeminiConfig, imageUrl: string): Promise<GeminiImageAnalysis> {
+  if (!imageUrl) return { text: "", status: "skipped" };
+  if (!geminiApiKey(config)) return { text: "", status: "skipped", error: "Google AI Studio Key 未配置" };
+
+  try {
+    const response = await fetch(imageUrl, { signal: timeoutSignal() });
+    if (!response.ok) throw new Error(`图片下载失败 ${response.status}`);
+    const mimeType = normalizeImageMimeType(response.headers.get("content-type") || imageUrl);
+    if (!mimeType) return { text: "", status: "skipped", error: "不是可识别图片格式" };
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length) return { text: "", status: "skipped", error: "图片为空" };
+    if (buffer.length > 8 * 1024 * 1024) return { text: "", status: "skipped", error: "图片超过 8MB，跳过识别" };
+
+    const text = await generateGeminiText(config, [
+      {
+        text: `请分析这张客户发来的开户注册/Telegram 操作截图。
+只输出一段很短的内部中文说明，30 字以内。
+重点判断：客户是否遇到链接打不开、页面报错、验证码、邀请码、注册字段、Telegram 用户名等问题。
+不要输出图片 URL，不要提取或猜测手机号，不要编造页面上没有的信息。`
+      },
+      {
+        inlineData: {
+          mimeType,
+          data: buffer.toString("base64")
+        }
+      }
+    ], { temperature: 0 });
+    return { text: text.slice(0, 160), status: text ? "ok" : "skipped" };
+  } catch (error) {
+    return { text: "", status: "failed", error: error instanceof Error ? error.message : "图片识别失败" };
+  }
+}
+
 export async function classifyGeminiIntent(
   config: GeminiConfig,
   input: {
@@ -333,6 +372,17 @@ export function geminiModel(config: GeminiConfig): string {
 
 function timeoutSignal(): AbortSignal {
   return AbortSignal.timeout(GEMINI_TIMEOUT_MS);
+}
+
+function normalizeImageMimeType(value: string): string {
+  const lower = value.toLowerCase();
+  const contentType = lower.split(";")[0].trim();
+  if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(contentType)) return contentType;
+  if (/\.(png)(?:[?#]|$)/i.test(value)) return "image/png";
+  if (/\.(jpe?g)(?:[?#]|$)/i.test(value)) return "image/jpeg";
+  if (/\.(webp)(?:[?#]|$)/i.test(value)) return "image/webp";
+  if (/\.(gif)(?:[?#]|$)/i.test(value)) return "image/gif";
+  return "";
 }
 
 function stripJsonFence(text: string): string {

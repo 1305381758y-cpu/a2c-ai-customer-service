@@ -2183,8 +2183,9 @@ describe("portal api", () => {
       expect(conversation.extractedPhone).toBe("");
       const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversation.id}/messages`, headers: { cookie: merchantCookie } });
       const inbound = messages.json().rows.find((row: { direction: string }) => row.direction === "inbound");
-      expect(inbound).toMatchObject({ msgType: "image", content: "[图片]", intent: "unknown" });
+      expect(inbound).toMatchObject({ msgType: "image", content: "[图片]", intent: "need_help" });
       expect(inbound.rawPayload.mediaUrl).toBe(imageUrl);
+      expect(inbound.rawPayload.imageAnalysis.status).toBe("skipped");
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

@@ -116,6 +116,9 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
     return input.inferredIntent === "ask_link" ||
       asksForInviteOrLink(input.customerText, input.analysis.intent) ||
       asksForRegistrationSteps(input.customerText) ||
+      asksForOperationHelp(input.customerText) ||
+      input.inferredIntent === "need_help" ||
+      input.analysis.intent === "need_help" ||
       isReadyToStartRegistration(input.customerText);
   }
   return false;
@@ -288,6 +291,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "wait_registration") {
     if (contextualLabel === "incomplete_phone") {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
+    }
+    if (isInboundImageOrScreenshot(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_screenshot_ack", language));
     }
     if (contextualLabel === "registration_field_question" || asksRegistrationFieldQuestion(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registrationFieldQuestionReply(input, language, text));
@@ -881,6 +887,8 @@ function asksToAnswerPreviousQuestion(text: string): boolean {
 }
 
 function asksHowToOpenLink(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  if (/^(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
   return /(链接.*怎么.*打开|链接.*打不开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
 }
 
@@ -890,6 +898,12 @@ function asksVerificationCodeProblem(text: string): boolean {
 
 function reportsRegistrationBlocker(text: string): boolean {
   return /(卡住|卡在|过不去|過不去|提交不了|提交失败|提交失敗|页面报错|頁面報錯|页面错误|頁面錯誤|不能注册|無法注册|无法注册|不能註冊|注册不了|註冊不了|打不开页面|打不開頁面|页面打不开|頁面打不開|stuck|cannot register|can'?t register|registration failed|page error|erro na página|erro na pagina|não consigo cadastrar|nao consigo cadastrar)/i.test(text);
+}
+
+function isInboundImageOrScreenshot(text: string): boolean {
+  const normalized = text.trim();
+  return /^\[(图片|圖片|照片|截图|截圖|image|photo|screenshot)\]$/i.test(normalized) ||
+    /客户发送了.*(图片|圖片|照片|截图|截圖|页面|頁面)|截图.*(注册|页面|链接|打不开|报错)|图片.*(注册|页面|链接|打不开|报错)/i.test(normalized);
 }
 
 function asksNextStep(text: string): boolean {
@@ -927,7 +941,7 @@ function asksForMoreJobInfo(text: string): boolean {
 }
 
 function asksForRegistrationSteps(text: string): boolean {
-  return /(注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|registration steps|register.*steps|how.*register)/i.test(text);
+  return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|registration steps|register.*steps|how.*register)/i.test(text);
 }
 
 function isReadyToStartRegistration(text: string): boolean {
@@ -1085,6 +1099,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "可以，我会一步步带您。您先确认现在方便操作吗？方便的话我再把注册入口和专属码发给您。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
+    registration_screenshot_ack: "我看到您发的截图了。您先别急，我帮您看注册页面卡在哪一步；如果页面上有报错文字，也可以直接把提示发我。",
     verification_code_ack: "验证码收不到的话，先确认手机号填对、网络正常，再等一会儿重试。页面如果有提示，截图发我看一下。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
     refusal_ack: "好的，我先不继续打扰您。如果您之后还想了解或继续注册，随时联系我就可以。",
@@ -1136,6 +1151,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "Yes, I can guide you step by step. Please confirm whether you are free to operate now; if yes, I will send the registration entry and dedicated code.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
     registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
+    registration_screenshot_ack: "I saw the screenshot you sent. Do not rush; I will help check where the registration page is stuck. If there is an error message on the page, you can also send me that text.",
     verification_code_ack: "If the verification code does not arrive, first check that the phone number is correct and the network is stable, then retry after a moment. If the page shows a prompt, send me a screenshot.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
     refusal_ack: "Okay, I will not disturb you further for now. If you want to learn more or continue registration later, you can contact me anytime.",
@@ -1187,6 +1203,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_before_ready: "Sim, posso orientar você passo a passo. Primeiro confirme se você tem tempo para operar agora; se tiver, envio a entrada de cadastro e o código exclusivo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
     registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
+    registration_screenshot_ack: "Vi a captura de tela que você enviou. Não precisa ter pressa; vou ajudar a verificar onde a página de cadastro travou. Se aparecer alguma mensagem de erro, pode me enviar o texto também.",
     verification_code_ack: "Se o código de verificação não chegar, confirme primeiro se o telefone está correto e se a rede está estável, depois tente novamente. Se a página mostrar algum aviso, envie uma captura de tela.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
     refusal_ack: "Tudo bem, não vou incomodar você agora. Se quiser saber mais ou continuar o cadastro depois, pode me chamar a qualquer momento.",
