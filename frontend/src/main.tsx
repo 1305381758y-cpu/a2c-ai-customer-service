@@ -372,7 +372,7 @@ function Config({ platform }: { platform: boolean }) {
       requireWhatsApp: String(country.requireWhatsApp)
     });
   }, [countries]);
-  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
+  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl", "registrationTutorialImageUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
   const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
   const runConfigCheck = async () => {
@@ -1366,7 +1366,7 @@ function label(key: string) {
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
     googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", smartReplyEnabled: "智能回复", strictScriptFlowEnabled: "严格话本流程", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
-    platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", type: "类型", title: "标题", content: "内容", password: "新密码",
+    platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", registrationTutorialImageUrl: "注册教程图片", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
     candidateKey: "候选键", suggestedIntent: "建议意图", displayName: "意图名称", description: "说明", customerText: "客户表达", detectedIntent: "原始意图", inferredIntent: "推断意图", contextualIntent: "上下文意图", occurrenceCount: "出现次数",
     limit: "数量", version: "版本", stepCount: "节点数", draft: "草稿", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",

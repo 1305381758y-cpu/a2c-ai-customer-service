@@ -1283,4 +1283,43 @@ describe("strict Aston Brazil flow", () => {
     expect(complete.nextFlowStep).toBe("telegram_confirm");
     expect(complete.reply).toContain("Telegram");
   });
+
+  it("requests the configured registration tutorial image when the customer asks for a tutorial", () => {
+    const text = "我不会，有教程吗";
+    const analysis = analyzeMessage(text, "zh");
+    const conv = conversation({ language: "zh", flowStep: "wait_registration" });
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config: { ...config, REGISTRATION_TUTORIAL_IMAGE_URL: "https://cdn.example/tutorial.jpg" } as AppConfig,
+      contextualIntent: buildRuleContextualIntent({ conversation: conv, analysis, customerText: text })
+    });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("注册步骤");
+    expect(result.reply).toContain("邀请码");
+    expect(result.tutorialImageRequested).toBe(true);
+  });
+
+  it("treats analyzed image messages as registration screenshots instead of invite-code fallback", () => {
+    const result = reply("[图片] 客户发送了注册页面截图，页面提示链接无法打开", { language: "zh", flowStep: "wait_registration" });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("截图");
+    expect(result.reply).toContain("注册页面");
+    expect(result.reply).not.toContain("正在确认您的专属邀请码");
+  });
+
+  it("answers whether it can read an image in the registration step", () => {
+    const result = reply("你能识别我发送的图片是什么意思吗", { language: "zh", flowStep: "wait_registration" });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("图片");
+    expect(result.reply).toContain("提示文字");
+    expect(result.reply).not.toContain("看不到");
+  });
 });

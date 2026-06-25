@@ -61,6 +61,7 @@ export function migrate(db: DatabaseSync): void {
       strict_script_flow_enabled INTEGER DEFAULT 0,
       platform_register_url TEXT DEFAULT '',
       tg_register_guide_url TEXT DEFAULT '',
+      registration_tutorial_image_url TEXT DEFAULT '',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
@@ -435,6 +436,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "google_ai_model", "TEXT DEFAULT 'gemini-2.5-flash'");
   ensureColumn(db, "merchant_configs", "smart_reply_enabled", "INTEGER DEFAULT 1");
   ensureColumn(db, "merchant_configs", "strict_script_flow_enabled", "INTEGER DEFAULT 0");
+  ensureColumn(db, "merchant_configs", "registration_tutorial_image_url", "TEXT DEFAULT ''");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");

@@ -56,6 +56,7 @@ export interface MerchantConfigRecord {
   strictScriptFlowEnabled: boolean;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
+  registrationTutorialImageUrl: string;
 }
 
 export interface FollowUpCandidate {
@@ -2098,7 +2099,8 @@ export class Repositories {
       smartReplyEnabled: "smart_reply_enabled",
       strictScriptFlowEnabled: "strict_script_flow_enabled",
       platformRegisterUrl: "platform_register_url",
-      tgRegisterGuideUrl: "tg_register_guide_url"
+      tgRegisterGuideUrl: "tg_register_guide_url",
+      registrationTutorialImageUrl: "registration_tutorial_image_url"
     };
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
     const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean"));
@@ -2713,7 +2715,8 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     smartReplyEnabled: Boolean(Number(row.smart_reply_enabled ?? 1)),
     strictScriptFlowEnabled: Boolean(Number(row.strict_script_flow_enabled ?? 0)),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
-    tgRegisterGuideUrl: String(row.tg_register_guide_url ?? "")
+    tgRegisterGuideUrl: String(row.tg_register_guide_url ?? ""),
+    registrationTutorialImageUrl: String(row.registration_tutorial_image_url ?? "")
   };
 }
 

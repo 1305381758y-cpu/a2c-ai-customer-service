@@ -43,6 +43,7 @@ export interface StrictFlowReply {
   controlledQuestionType?: ControlledQuestionType;
   controlledQuestionFallback?: boolean;
   contextualIntent?: StrictContextualIntent;
+  tutorialImageRequested?: boolean;
 }
 
 export interface StrictContextualIntent {
@@ -291,6 +292,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   if (step === "wait_registration") {
     if (contextualLabel === "incomplete_phone") {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
+    }
+    if (asksWhetherCanReadImage(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "image_recognition_ack", language));
     }
     if (isInboundImageOrScreenshot(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_screenshot_ack", language));
@@ -567,6 +571,7 @@ function reply(
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
   const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, debugIntent);
+  const currentStep = normalizeFlowStep(input.conversation.flowStep);
   return {
     enabled: true,
     reply: actionableContent,
@@ -577,7 +582,8 @@ function reply(
     fallback: !input.inviteCode && needsInviteCode,
     controlledQuestionType: controlled?.type ?? "none",
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
-    contextualIntent
+    contextualIntent,
+    tutorialImageRequested: shouldSendRegistrationTutorialImage(input.customerText, currentStep, needsInviteCode, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
   };
 }
 
@@ -902,8 +908,12 @@ function reportsRegistrationBlocker(text: string): boolean {
 
 function isInboundImageOrScreenshot(text: string): boolean {
   const normalized = text.trim();
-  return /^\[(图片|圖片|照片|截图|截圖|image|photo|screenshot)\]$/i.test(normalized) ||
+  return /^\[(图片|圖片|照片|截图|截圖|image|photo|screenshot)\](?:\s|$)/i.test(normalized) ||
     /客户发送了.*(图片|圖片|照片|截图|截圖|页面|頁面)|截图.*(注册|页面|链接|打不开|报错)|图片.*(注册|页面|链接|打不开|报错)/i.test(normalized);
+}
+
+function asksWhetherCanReadImage(text: string): boolean {
+  return /(能.*(识别|識別|看懂|看到|分析).*(图片|圖片|照片|截图|截圖)|图片.*(是什么意思|什麼意思|什么意思|能看吗|能看嗎|能识别|能識別)|截图.*(是什么意思|什么意思|能看吗|能看嗎|能识别|能識別)|看.*(我发|我發).*(图片|圖片|截图|截圖)|can.*(read|see|understand|analyze).*(image|photo|screenshot)|what.*(image|photo|screenshot).*(mean|show))/i.test(text);
 }
 
 function asksNextStep(text: string): boolean {
@@ -942,6 +952,13 @@ function asksForMoreJobInfo(text: string): boolean {
 
 function asksForRegistrationSteps(text: string): boolean {
   return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|registration steps|register.*steps|how.*register)/i.test(text);
+}
+
+function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {
+  if (!tutorialUrl || step !== "wait_registration") return false;
+  return asksForRegistrationSteps(text) ||
+    asksForOperationHelp(text) ||
+    (needsInviteCode && /(教程|步骤|流程|不会|不懂|怎么|如何|help|how to|passo|como)/i.test(text));
 }
 
 function isReadyToStartRegistration(text: string): boolean {
@@ -1100,6 +1117,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
     registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
     registration_screenshot_ack: "我看到您发的截图了。您先别急，我帮您看注册页面卡在哪一步；如果页面上有报错文字，也可以直接把提示发我。",
+    image_recognition_ack: "可以，我能看到您发的是图片或截图。如果页面字比较小，您也可以把提示文字发我；我先帮您按注册问题处理，看看卡在哪一步。",
     verification_code_ack: "验证码收不到的话，先确认手机号填对、网络正常，再等一会儿重试。页面如果有提示，截图发我看一下。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
     refusal_ack: "好的，我先不继续打扰您。如果您之后还想了解或继续注册，随时联系我就可以。",
@@ -1152,6 +1170,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
     registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
     registration_screenshot_ack: "I saw the screenshot you sent. Do not rush; I will help check where the registration page is stuck. If there is an error message on the page, you can also send me that text.",
+    image_recognition_ack: "Yes, I can see that you sent an image or screenshot. If the text on it is small, you can also type the page prompt here, and I will help check the registration issue.",
     verification_code_ack: "If the verification code does not arrive, first check that the phone number is correct and the network is stable, then retry after a moment. If the page shows a prompt, send me a screenshot.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
     refusal_ack: "Okay, I will not disturb you further for now. If you want to learn more or continue registration later, you can contact me anytime.",
@@ -1204,6 +1223,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
     registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
     registration_screenshot_ack: "Vi a captura de tela que você enviou. Não precisa ter pressa; vou ajudar a verificar onde a página de cadastro travou. Se aparecer alguma mensagem de erro, pode me enviar o texto também.",
+    image_recognition_ack: "Sim, consigo ver que você enviou uma imagem ou captura de tela. Se o texto estiver pequeno, envie também a mensagem da página, e eu ajudo a verificar o problema do cadastro.",
     verification_code_ack: "Se o código de verificação não chegar, confirme primeiro se o telefone está correto e se a rede está estável, depois tente novamente. Se a página mostrar algum aviso, envie uma captura de tela.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
     refusal_ack: "Tudo bem, não vou incomodar você agora. Se quiser saber mais ou continuar o cadastro depois, pode me chamar a qualquer momento.",

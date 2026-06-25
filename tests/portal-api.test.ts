@@ -2057,6 +2057,95 @@ describe("portal api", () => {
     }
   });
 
+  it("sends configured registration tutorial image when customer asks for registration help", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentMessages: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "tutorial-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/accounts")) {
+        return Response.json({ code: 200, data: [{ apiPhone: "tutorial-a2c", verifiedName: "教程客服" }] });
+      }
+      if (url.endsWith("/v1/messages")) {
+        sentMessages.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+        return Response.json({ code: 200, data: `tutorial-sent-${sentMessages.length}` });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "教程图商户" } });
+      const merchantId = merchant.json().id as string;
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/users",
+        headers: { cookie: adminCookie },
+        payload: { merchantId, email: "tutorial@test.local", name: "教程图", password: "Merchant123456", role: "merchant_admin" }
+      });
+      const merchantCookie = await login(app, "tutorial@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://tutorial-a2c.test/api/openapi",
+          a2cAppId: "tutorial-app",
+          a2cAppSecret: "tutorial-secret",
+          strictScriptFlowEnabled: true,
+          registrationTutorialImageUrl: "https://cdn.example/register-tutorial.jpg"
+        }
+      });
+      const sync = await app.inject({ method: "POST", url: "/api/merchant/a2c/accounts/sync", headers: { cookie: merchantCookie } });
+      const accountId = sync.json().rows[0].id as number;
+      await app.inject({
+        method: "POST",
+        url: `/api/merchant/a2c/accounts/${accountId}/invite-codes/import`,
+        headers: { cookie: merchantCookie },
+        payload: { codes: "TUTORIAL-1", registerUrl: "https://register.example/?code={code}" }
+      });
+
+      for (const [index, content] of ["你好", "是", "是", "我不会，有教程吗"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `tutorial-event-${index}`,
+            timestamp: Math.floor(Date.now() / 1000) + index,
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `tutorial-message-${index}`,
+              content,
+              from: "tutorial-customer",
+              to: "tutorial-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000) + index
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+      }
+
+      expect(sentMessages).toHaveLength(5);
+      expect(String(sentMessages[3].content)).toContain("注册步骤");
+      expect(String(sentMessages[3].content)).toContain("TUTORIAL-1");
+      expect(sentMessages[4]).toMatchObject({
+        type: 2,
+        url: "https://cdn.example/register-tutorial.jpg"
+      });
+      expect(String(sentMessages[4].caption)).toContain("注册教程图片");
+      const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+      const conversationId = conversations.json().rows[0].id as string;
+      const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
+      const tutorialOutbound = messages.json().rows.find((row: { msgType: string; rawPayload: Record<string, unknown> }) => row.msgType === "image" && row.rawPayload.registrationTutorialImage);
+      expect(tutorialOutbound.rawPayload.mediaUrl).toBe("https://cdn.example/register-tutorial.jpg");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("never tells customers invite codes are unnecessary when invite codes are required", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];

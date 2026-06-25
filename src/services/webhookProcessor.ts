@@ -57,7 +57,7 @@ export class WebhookProcessor {
     const imageAnalysis = msgType === "image" && mediaUrl
       ? await analyzeGeminiImage(runtimeConfig, mediaUrl)
       : { text: "", status: "skipped" as const };
-    const customerTextForAi = analysisText || imageAnalysis.text || content;
+    const customerTextForAi = analysisText || (imageAnalysis.text ? `${content} ${imageAnalysis.text}` : content);
     let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
     if (msgType === "image" && !analysisText && !imageAnalysis.text) {
       analysis = { ...analysis, language: conversation.language || analysis.language, intent: "need_help", stage: "need_platform_register" };
@@ -333,6 +333,9 @@ export class WebhookProcessor {
           } : null
         }
       });
+      if (strictReply.tutorialImageRequested) {
+        await this.sendRegistrationTutorialImage(conversation, data, strictReply.language, runtimeConfig.REGISTRATION_TUTORIAL_IMAGE_URL, a2c);
+      }
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
       this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: strictReply.reply, direction: "outbound" });
@@ -582,6 +585,54 @@ export class WebhookProcessor {
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
       recentHistory: input.history
+    });
+  }
+
+  private async sendRegistrationTutorialImage(
+    conversation: Parameters<Repositories["updateConversation"]>[0],
+    data: A2CWebhookPayload["data"],
+    language: string,
+    tutorialImageUrl: string,
+    a2c: A2CClient
+  ): Promise<void> {
+    if (!tutorialImageUrl) return;
+    const caption = registrationTutorialCaption(language);
+    let externalId = "";
+    let a2cSendStatus: "sent" | "failed" = "sent";
+    let a2cSendError = "";
+    try {
+      externalId = await a2c.sendMessage({
+        to: data.from,
+        senderPhoneNumber: data.to,
+        type: "image",
+        url: tutorialImageUrl,
+        caption,
+        fileName: "registration-tutorial.jpg"
+      });
+      if (!externalId) externalId = `tutorial_image:${data.messageId || Date.now()}`;
+    } catch (error) {
+      a2cSendStatus = "failed";
+      a2cSendError = error instanceof Error ? error.message : "unknown";
+      externalId = `tutorial_image_failed:${data.messageId || Date.now()}:${a2cSendError.slice(0, 120)}`;
+    }
+    this.repos.insertMessage({
+      conversationId: conversation.id,
+      direction: "outbound",
+      externalId,
+      content: caption,
+      msgType: "image",
+      language,
+      intent: "unknown",
+      rawPayload: {
+        replyMode: "strict_flow",
+        strictFlow: true,
+        strictFlowStep: conversation.flowStep || "wait_registration",
+        registrationTutorialImage: true,
+        mediaUrl: tutorialImageUrl,
+        caption,
+        a2cSendStatus,
+        a2cSendError
+      }
     });
   }
 
@@ -1099,7 +1150,8 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
     PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
-    TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL
+    TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL,
+    REGISTRATION_TUTORIAL_IMAGE_URL: merchantConfig.registrationTutorialImageUrl || config.REGISTRATION_TUTORIAL_IMAGE_URL
   };
 }
 
@@ -1263,4 +1315,10 @@ function verificationReply(language: string): string {
   if (language === "ms") return "Kami sedang menyemak maklumat anda. Sila tunggu sebentar.";
   if (language === "id") return "Kami sedang memverifikasi informasi Anda. Mohon tunggu sebentar.";
   return "我们正在核实，请稍后。";
+}
+
+function registrationTutorialCaption(language: string): string {
+  if (language === "en") return "Here is the registration tutorial image. Follow it step by step, and send me the registered phone number after you finish.";
+  if (language === "pt-BR") return "Esta é a imagem do tutorial de cadastro. Siga passo a passo e, quando terminar, envie o telefone usado no cadastro.";
+  return "这是注册教程图片。您按图片步骤操作，完成后把注册手机号发给我就可以。";
 }
