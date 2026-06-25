@@ -899,9 +899,10 @@ describe("strict Aston Brazil flow", () => {
 
   it("continues proactively after help requests but pauses on explicit refusal", () => {
     const help = reply("我不会操作，你帮我", { language: "zh", flowStep: "wait_registration" });
-    expect(help.reply).toContain("开户链接");
-    expect(help.reply).toContain("邀请码");
-    expect(help.reply).toContain("注册步骤");
+    expect(help.reply).toContain("卡在");
+    expect(help.reply).toContain("打开链接");
+    expect(help.reply).not.toContain("开户链接");
+    expect(help.reply).not.toContain("ABC123");
     expect(help.nextFlowStep).toBe("wait_registration");
 
     const telegramHelp = reply("怎么下载", { language: "zh", flowStep: "telegram_download", extractedPhone: "99228822881" });
@@ -938,6 +939,29 @@ describe("strict Aston Brazil flow", () => {
     expect(cannotOpen.reply).toContain("截图");
     expect(cannotOpen.reply).not.toContain("正在确认您的专属邀请码");
     expect(cannotOpen.nextFlowStep).toBe("wait_registration");
+  });
+
+  it("answers generic questions and look-at-this prompts without resending the registration package", () => {
+    const question = reply("我有个问题你可以帮我解答吗", { language: "zh", flowStep: "wait_registration" });
+    expect(question.reply).toContain("直接问");
+    expect(question.reply).toContain("当前开户注册");
+    expect(question.reply).not.toContain("开户链接");
+    expect(question.reply).not.toContain("邀请码");
+    expect(question.tutorialImageRequested).toBe(false);
+
+    const look = reply("你看看", { language: "zh", flowStep: "wait_registration" });
+    expect(look.reply).toContain("截图");
+    expect(look.reply).toContain("卡");
+    expect(look.reply).not.toContain("开户链接");
+    expect(look.reply).not.toContain("邀请码");
+    expect(look.tutorialImageRequested).toBe(false);
+
+    const link = reply("链接无法打开", { language: "zh", flowStep: "wait_registration" });
+    expect(link.reply).toContain("浏览器");
+    expect(link.reply).toContain("截图");
+    expect(link.reply).not.toContain("register.example");
+    expect(link.reply).not.toContain("ABC123");
+    expect(link.tutorialImageRequested).toBe(false);
   });
 
   it("treats inbound registration screenshots as a registration blocker instead of missing invite", () => {

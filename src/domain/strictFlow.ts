@@ -117,9 +117,6 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
     return input.inferredIntent === "ask_link" ||
       asksForInviteOrLink(input.customerText, input.analysis.intent) ||
       asksForRegistrationSteps(input.customerText) ||
-      asksForOperationHelp(input.customerText) ||
-      input.inferredIntent === "need_help" ||
-      input.analysis.intent === "need_help" ||
       isReadyToStartRegistration(input.customerText);
   }
   return false;
@@ -311,6 +308,12 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (reportsRegistrationBlocker(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_blocker_ack", language));
     }
+    if (asksGenericQuestionPermission(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_question_prompt", language));
+    }
+    if (asksLookAtCurrentProblem(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "look_at_problem_ack", language));
+    }
     if (asksToAnswerPreviousQuestion(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_question_retry_ack", language));
     }
@@ -337,7 +340,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "wait_registration", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "wait_registration", language), "wait_registration", "telegram_explain", line));
     }
     if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
-      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language, "help"), true);
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_help_ack", language));
     }
     if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
       if (!(input.analysis.phone || input.conversation.extractedPhone)) {
@@ -895,7 +898,17 @@ function asksToAnswerPreviousQuestion(text: string): boolean {
 function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
-  return /(链接.*怎么.*打开|链接.*打不开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+}
+
+function asksGenericQuestionPermission(text: string): boolean {
+  return /(我有(个|個)?问题.*(可以|能|帮|幫).*?(解答|回答|问|問)|可以.*(问|問).*问题|能.*(问|問).*问题|我想问.*问题|i have.*question|can i ask|posso perguntar|tenho uma pergunta)/i.test(text);
+}
+
+function asksLookAtCurrentProblem(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  return /^(你看看|帮我看看|幫我看看|看一下|帮我看一下|幫我看一下|看看这个|看看這個|看这个|看這個|你帮我看|你幫我看)$/i.test(normalized) ||
+    /(你看看.*(页面|頁面|截图|截圖|图片|圖片|问题|問題)|帮我看看.*(页面|截图|图片|问题)|幫我看看.*(頁面|截圖|圖片|問題))/i.test(text);
 }
 
 function asksVerificationCodeProblem(text: string): boolean {
@@ -957,8 +970,7 @@ function asksForRegistrationSteps(text: string): boolean {
 function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {
   if (!tutorialUrl || step !== "wait_registration") return false;
   return asksForRegistrationSteps(text) ||
-    asksForOperationHelp(text) ||
-    (needsInviteCode && /(教程|步骤|流程|不会|不懂|怎么|如何|help|how to|passo|como)/i.test(text));
+    /(教程|图文|圖片教程|图片教程|步骤图|流程图|不会注册|不會註冊|不懂注册|不懂註冊|注册.*不会|註冊.*不會|注册.*不懂|註冊.*不懂|怎么注册|怎麼註冊|如何注册|如何註冊|how.*register|registration.*tutorial|passo.*cadastro|como.*cadastrar)/i.test(text);
 }
 
 function isReadyToStartRegistration(text: string): boolean {
@@ -1123,7 +1135,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     unknown_question_ack: "这个细节要以后续页面或人工确认为准，我先帮您把当前步骤走顺。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
     registration_help_before_ready: "可以，我会一步步带您。您先确认现在方便操作吗？方便的话我再把注册入口和专属码发给您。",
-    registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
+    registration_help_ack: "可以，我继续带您处理。您告诉我卡在打开链接、填写手机号、设置账号，还是输入邀请码，我就按那一步帮您。",
+    ask_question_prompt: "当然可以，您直接问我就行。我会先按您当前开户注册这一步帮您处理。",
+    look_at_problem_ack: "可以，您把页面截图或提示文字发我，我帮您看具体卡在哪里；如果是链接打不开，也可以告诉我是打不开还是页面报错。",
     registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
     registration_screenshot_ack: "我看到您发的截图了。您先别急，我帮您看注册页面卡在哪一步；如果页面上有报错文字，也可以直接把提示发我。",
     image_recognition_ack: "可以，我能看到您发的是图片或截图。如果页面字比较小，您也可以把提示文字发我；我先帮您按注册问题处理，看看卡在哪一步。",
@@ -1176,7 +1190,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     unknown_question_ack: "This needs to follow the page display or later confirmation. I will first help you complete the current registration step.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
     registration_help_before_ready: "Yes, I can guide you step by step. Please confirm whether you are free to operate now; if yes, I will send the registration entry and dedicated code.",
-    registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
+    registration_help_ack: "Yes, I will keep guiding you. Tell me whether you are stuck opening the link, filling the phone number, setting the account, or entering the invitation code.",
+    ask_question_prompt: "Of course. Ask me directly, and I will answer based on the current registration step.",
+    look_at_problem_ack: "Sure, send me the page screenshot or prompt text and I will check where it is stuck. If the link does not open, tell me whether it cannot open or shows an error.",
     registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
     registration_screenshot_ack: "I saw the screenshot you sent. Do not rush; I will help check where the registration page is stuck. If there is an error message on the page, you can also send me that text.",
     image_recognition_ack: "Yes, I can see that you sent an image or screenshot. If the text on it is small, you can also type the page prompt here, and I will help check the registration issue.",
@@ -1229,7 +1245,9 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     unknown_question_ack: "Isso precisa seguir a página ou a confirmação posterior. Primeiro vou ajudar você a concluir a etapa atual do cadastro.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
     registration_help_before_ready: "Sim, posso orientar você passo a passo. Primeiro confirme se você tem tempo para operar agora; se tiver, envio a entrada de cadastro e o código exclusivo.",
-    registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
+    registration_help_ack: "Sim, vou continuar orientando você. Me diga se travou ao abrir o link, preencher o telefone, criar a conta ou inserir o código de convite.",
+    ask_question_prompt: "Claro, pode me perguntar diretamente. Vou responder considerando esta etapa atual do cadastro.",
+    look_at_problem_ack: "Claro, envie a captura de tela ou a mensagem da página e eu verifico onde travou. Se o link não abrir, me diga se não abre ou se aparece erro.",
     registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
     registration_screenshot_ack: "Vi a captura de tela que você enviou. Não precisa ter pressa; vou ajudar a verificar onde a página de cadastro travou. Se aparecer alguma mensagem de erro, pode me enviar o texto também.",
     image_recognition_ack: "Sim, consigo ver que você enviou uma imagem ou captura de tela. Se o texto estiver pequeno, envie também a mensagem da página, e eu ajudo a verificar o problema do cadastro.",
