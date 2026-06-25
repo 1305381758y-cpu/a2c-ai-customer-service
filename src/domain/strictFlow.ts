@@ -265,7 +265,11 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (asksForMoreJobInfo(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
     }
-    if (contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) {
+    if ((contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) &&
+      !(asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text))) {
+      return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "registration_help_before_ready", language));
+    }
+    if (asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
     }
     if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
@@ -287,6 +291,15 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     }
     if (contextualLabel === "registration_field_question" || asksRegistrationFieldQuestion(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", registrationFieldQuestionReply(input, language, text));
+    }
+    if (asksVerificationCodeProblem(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "verification_code_ack", language));
+    }
+    if (asksHowToOpenLink(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "link_open_ack", language));
+    }
+    if (reportsRegistrationBlocker(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_blocker_ack", language));
     }
     if (asksToAnswerPreviousQuestion(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_question_retry_ack", language));
@@ -868,7 +881,15 @@ function asksToAnswerPreviousQuestion(text: string): boolean {
 }
 
 function asksHowToOpenLink(text: string): boolean {
-  return /(链接.*怎么.*打开|链接.*打不开|打不.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+  return /(链接.*怎么.*打开|链接.*打不开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+}
+
+function asksVerificationCodeProblem(text: string): boolean {
+  return /(验证码.*(没收到|收不到|没有收到|不来|不到账|不显示)|驗證碼.*(沒收到|收不到|沒有收到|不來|不顯示)|收不到.*验证码|收不到.*驗證碼|没有.*验证码|沒有.*驗證碼|verification code.*(not received|not arrive|didn'?t receive)|code.*(not received|not arrive|didn'?t receive))/i.test(text);
+}
+
+function reportsRegistrationBlocker(text: string): boolean {
+  return /(卡住|卡在|过不去|過不去|提交不了|提交失败|提交失敗|页面报错|頁面報錯|页面错误|頁面錯誤|不能注册|無法注册|无法注册|不能註冊|注册不了|註冊不了|打不开页面|打不開頁面|页面打不开|頁面打不開|stuck|cannot register|can'?t register|registration failed|page error|erro na página|erro na pagina|não consigo cadastrar|nao consigo cadastrar)/i.test(text);
 }
 
 function asksNextStep(text: string): boolean {
@@ -919,7 +940,9 @@ function helpLineForStep(input: StrictFlowInput, step: StrictFlowStep | "", lang
     return flowScriptLine(input, "telegram_help_ack", language);
   }
   if (step === "wait_registration" || step === "send_register_link" || step === "registration_intent") {
-    return flowScriptLine(input, "registration_help_ack", language);
+    return step === "registration_intent"
+      ? flowScriptLine(input, "registration_help_before_ready", language)
+      : flowScriptLine(input, "registration_help_ack", language);
   }
   return flowScriptLine(input, "general_help_ack", language);
 }
@@ -1054,12 +1077,15 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "收益不是我这边口头固定承诺的，会按实际任务和平台规则核算，后面会再确认。",
     identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
     phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",
-    link_open_ack: "您可以复制开户链接到手机浏览器里打开，建议使用 Chrome 或 Safari；打开后按页面提示填写资料。",
+    link_open_ack: "您可以复制开户链接到手机浏览器里打开，建议使用 Chrome 或 Safari；如果还是打不开，把页面提示或截图发我看一下。",
     next_step_ack: "可以，我按当前进度带您继续下一步。",
     sensitive_info_ack: "这些敏感信息不用发给我，也不要给任何人。我这里只需要按流程核对开户注册所需的信息。",
     unknown_question_ack: "这个细节要以后续页面或人工确认为准，我先帮您把当前步骤走顺。",
     general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
+    registration_help_before_ready: "可以，我会一步步带您。您先确认现在方便操作吗？方便的话我再把注册入口和专属码发给您。",
     registration_help_ack: "可以，我来带您处理注册步骤。您先按当前步骤操作，遇到问题直接告诉我。",
+    registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
+    verification_code_ack: "验证码收不到的话，先确认手机号填对、网络正常，再等一会儿重试。页面如果有提示，截图发我看一下。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
     refusal_ack: "好的，我先不继续打扰您。如果您之后还想了解或继续注册，随时联系我就可以。",
     platform_explain: "这是用于开始兼职在线工作的开户注册平台。您可以先了解工作内容，确认愿意继续后，我再给您开户链接。",
@@ -1102,12 +1128,15 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "The income is not a fixed verbal promise from me. It is calculated by actual tasks and platform rules, subject to later confirmation.",
     identity_ack: "I handle the registration and contact verification steps here, and I will guide you according to the current step.",
     phone_reason_ack: "The phone number is used to verify the platform account you registered, so the follow-up information can match correctly.",
-    link_open_ack: "You can copy the registration link and open it in your phone browser. Chrome or Safari is recommended, then follow the page instructions.",
+    link_open_ack: "You can copy the registration link and open it in your phone browser. Chrome or Safari is recommended. If it still does not open, send me the page prompt or a screenshot.",
     next_step_ack: "Yes, I will continue guiding you from the current step.",
     sensitive_info_ack: "You do not need to send sensitive information like passwords, verification codes, payment details, or ID documents. I only need the information required by the current registration flow.",
     unknown_question_ack: "This needs to follow the page display or later confirmation. I will first help you complete the current registration step.",
     general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
+    registration_help_before_ready: "Yes, I can guide you step by step. Please confirm whether you are free to operate now; if yes, I will send the registration entry and dedicated code.",
     registration_help_ack: "Yes, I will guide you through the registration step. Follow the current step first, and tell me directly if anything is unclear.",
+    registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
+    verification_code_ack: "If the verification code does not arrive, first check that the phone number is correct and the network is stable, then retry after a moment. If the page shows a prompt, send me a screenshot.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
     refusal_ack: "Okay, I will not disturb you further for now. If you want to learn more or continue registration later, you can contact me anytime.",
     platform_explain: "This is the registration platform used to start the part-time online job. You can learn about the job first. If you decide to continue, I will send the registration entry.",
@@ -1150,12 +1179,15 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "O ganho não é uma promessa fixa minha; é calculado conforme as tarefas e regras da plataforma, sujeito à confirmação posterior.",
     identity_ack: "Eu acompanho as etapas de cadastro e verificação de contato aqui, e vou orientar você conforme a etapa atual.",
     phone_reason_ack: "O telefone é usado para verificar a conta que você cadastrou na plataforma, para que as informações sejam confirmadas corretamente depois.",
-    link_open_ack: "Você pode copiar o link de cadastro e abrir no navegador do celular. Recomendo Chrome ou Safari; depois siga as instruções da página.",
+    link_open_ack: "Você pode copiar o link de cadastro e abrir no navegador do celular. Recomendo Chrome ou Safari. Se ainda não abrir, envie o aviso da página ou uma captura de tela.",
     next_step_ack: "Sim, vou continuar orientando você a partir da etapa atual.",
     sensitive_info_ack: "Você não precisa enviar informações sensíveis como senha, código de verificação, dados de pagamento ou documentos. Só preciso das informações necessárias para esta etapa do cadastro.",
     unknown_question_ack: "Isso precisa seguir a página ou a confirmação posterior. Primeiro vou ajudar você a concluir a etapa atual do cadastro.",
     general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
+    registration_help_before_ready: "Sim, posso orientar você passo a passo. Primeiro confirme se você tem tempo para operar agora; se tiver, envio a entrada de cadastro e o código exclusivo.",
     registration_help_ack: "Sim, vou orientar você no cadastro. Siga primeiro a etapa atual e me diga diretamente se tiver alguma dúvida.",
+    registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
+    verification_code_ack: "Se o código de verificação não chegar, confirme primeiro se o telefone está correto e se a rede está estável, depois tente novamente. Se a página mostrar algum aviso, envie uma captura de tela.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
     refusal_ack: "Tudo bem, não vou incomodar você agora. Se quiser saber mais ou continuar o cadastro depois, pode me chamar a qualquer momento.",
     platform_explain: "Esta é a plataforma de cadastro usada para iniciar o trabalho online de meio período. Você pode conhecer o trabalho primeiro. Se decidir continuar, eu envio a entrada de cadastro.",

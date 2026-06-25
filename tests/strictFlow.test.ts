@@ -727,6 +727,7 @@ describe("strict Aston Brazil flow", () => {
       "你好",
       "是的",
       "怎么弄",
+      "方便",
       "好了",
       "99228822881",
       "我没有 Telegram",
@@ -734,14 +735,17 @@ describe("strict Aston Brazil flow", () => {
       "@customer_help"
     ]);
     const replies = turns.map((turn) => turn.result.reply);
-    expect(turns[2].flowStep).toBe("wait_registration");
-    expect(replies[2]).toContain("https://register.example/?code=ABC123");
-    expect(replies[2]).toContain("邀请码");
+    expect(turns[2].flowStep).toBe("registration_intent");
+    expect(replies[2]).toContain("方便操作");
+    expect(replies[2]).not.toContain("https://register.example/?code=ABC123");
     expect(turns[3].flowStep).toBe("wait_registration");
-    expect(turns[5].flowStep).toBe("telegram_download");
-    expect(turns[6].flowStep).toBe("collect_telegram");
-    expect(replies[6]).toContain("@");
-    expect(replies[6]).not.toContain("WhatsApp");
+    expect(replies[3]).toContain("https://register.example/?code=ABC123");
+    expect(replies[3]).toContain("邀请码");
+    expect(turns[4].flowStep).toBe("wait_registration");
+    expect(turns[6].flowStep).toBe("telegram_download");
+    expect(turns[7].flowStep).toBe("collect_telegram");
+    expect(replies[7]).toContain("@");
+    expect(replies[7]).not.toContain("WhatsApp");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
@@ -1115,6 +1119,16 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("邀请码");
   });
 
+  it("does not prematurely send link or invite when registration help is requested before the customer is ready", () => {
+    const result = reply("我不太会注册，你可以教我吗", { language: "zh", flowStep: "registration_intent" });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("现在方便操作");
+    expect(result.reply).not.toContain("开户链接");
+    expect(result.reply).not.toContain("邀请码");
+    expect(result.needsInviteCode).toBe(false);
+  });
+
   it("resends full registration steps while waiting for registration", () => {
     const stepQuestion = reply("注册流程是什么", { language: "zh", flowStep: "wait_registration" });
     expect(stepQuestion.nextFlowStep).toBe("wait_registration");
@@ -1132,6 +1146,26 @@ describe("strict Aston Brazil flow", () => {
     expect(walkthrough.reply).toContain("开户链接");
     expect(walkthrough.reply).toContain("邀请码");
     expect(walkthrough.reply).toContain("注册步骤");
+  });
+
+  it("answers registration blockers before pushing the customer to the next flow step", () => {
+    const linkProblem = reply("链接打不开怎么办", { language: "zh", flowStep: "wait_registration" });
+    expect(linkProblem.nextFlowStep).toBe("wait_registration");
+    expect(linkProblem.reply).toContain("浏览器");
+    expect(linkProblem.reply).toContain("截图");
+    expect(linkProblem.reply).not.toContain("请告知我您是否已完成注册");
+
+    const codeProblem = reply("验证码收不到", { language: "zh", flowStep: "wait_registration" });
+    expect(codeProblem.nextFlowStep).toBe("wait_registration");
+    expect(codeProblem.reply).toContain("验证码");
+    expect(codeProblem.reply).toContain("截图");
+    expect(codeProblem.reply).not.toContain("开户注册");
+
+    const pageProblem = reply("页面报错提交不了", { language: "zh", flowStep: "wait_registration" });
+    expect(pageProblem.nextFlowStep).toBe("wait_registration");
+    expect(pageProblem.reply).toContain("页面提示");
+    expect(pageProblem.reply).toContain("不要乱点");
+    expect(pageProblem.reply).not.toContain("Telegram");
   });
 
   it("resends the same full registration package when invite code or steps are missing to the customer", () => {
