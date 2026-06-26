@@ -2045,6 +2045,73 @@ tbody tr:hover td {
   gap: 8px;
 }
 
+.simulator-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 420px) minmax(640px, 1fr);
+  gap: 16px;
+  min-height: calc(100vh - 132px);
+}
+.simulator-panel {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+}
+.simulator-panel textarea {
+  resize: vertical;
+}
+.simulator-chat {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+.simulator-messages {
+  min-height: 520px;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+}
+.sim-message {
+  width: min(680px, 86%);
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
+}
+.sim-message.outbound {
+  margin-left: auto;
+  border-color: #bfd4ff;
+  background: #eaf2ff;
+}
+.sim-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+.sim-message p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.sim-message small {
+  display: inline-flex;
+  margin-right: 6px;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, .08);
+  color: #35527c;
+  font-size: 12px;
+}
+
 @media (max-width: 1320px) {
   .account-grid { grid-template-columns: 1fr; }
   .invite-manager { grid-template-columns: 1fr; }
@@ -2054,7 +2121,8 @@ tbody tr:hover td {
   }
   .script-flow-page,
   .script-flow-columns,
-  .intent-learning-page {
+  .intent-learning-page,
+  .simulator-layout {
     grid-template-columns: 1fr;
   }
   .learning-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -56,6 +56,67 @@ function csvUploadPayload(csv: string) {
 }
 
 describe("portal api", () => {
+  it("runs merchant training simulator through webhook logic without sending to A2C", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: {
+        name: "阿斯顿",
+        country: {
+          code: "br",
+          name: "巴西",
+          defaultLanguage: "zh",
+          platformRegisterUrl: "https://register.example",
+          requirePlatformAccount: true,
+          requirePhone: true,
+          requireTelegram: true,
+          requireWhatsApp: false
+        },
+        adminUser: {
+          email: "merchant-sim@test.local",
+          name: "模拟商户",
+          password: "Merchant123456"
+        }
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const merchantCookie = await login(app, "merchant-sim@test.local", "Merchant123456");
+    const patchConfig = await app.inject({
+      method: "PATCH",
+      url: "/api/merchant/config",
+      headers: { cookie: merchantCookie },
+      payload: {
+        smartReplyEnabled: false,
+        strictScriptFlowEnabled: true
+      }
+    });
+    expect(patchConfig.statusCode).toBe(200);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-simulator/messages",
+      headers: { cookie: merchantCookie },
+      payload: {
+        customerPhone: "sim-customer-001",
+        a2cAccountPhone: "18507251675",
+        nickname: "模拟客户",
+        content: "你好"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { status: string; rows: Array<{ direction: string; content: string; rawPayload?: Record<string, unknown> }> };
+    expect(body.status).toBe("strict_flow_simulated");
+    const outbound = body.rows.find((row) => row.direction === "outbound");
+    expect(outbound?.content).toContain("兼职");
+    expect(outbound?.rawPayload?.a2cSendStatus).toBe("simulated");
+    expect(outbound?.rawPayload?.simulation).toBe(true);
+    await app.close();
+  });
+
   it("creates editable script flows, enables one active flow, and protects referenced steps", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

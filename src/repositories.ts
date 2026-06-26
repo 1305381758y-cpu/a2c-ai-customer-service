@@ -53,6 +53,7 @@ export interface MerchantConfigRecord {
   a2cAccessToken: string;
   a2cTokenExpiresAt: number;
   smartReplyEnabled: boolean;
+  trainingSimulationEnabled: boolean;
   strictScriptFlowEnabled: boolean;
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
@@ -2097,6 +2098,7 @@ export class Repositories {
       telegramHandoffChatStatus: "telegram_handoff_chat_status",
       telegramHandoffChatError: "telegram_handoff_chat_error",
       smartReplyEnabled: "smart_reply_enabled",
+      trainingSimulationEnabled: "training_simulation_enabled",
       strictScriptFlowEnabled: "strict_script_flow_enabled",
       platformRegisterUrl: "platform_register_url",
       tgRegisterGuideUrl: "tg_register_guide_url",
@@ -2108,6 +2110,7 @@ export class Repositories {
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
       this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([key, value]) => {
         if (key === "smartReplyEnabled") return booleanPatchValue(value, true);
+        if (key === "trainingSimulationEnabled") return booleanPatchValue(value, false);
         if (key === "strictScriptFlowEnabled") return booleanPatchValue(value, false);
         return value as string;
       }), merchantId);
@@ -2713,6 +2716,7 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     a2cAccessToken: String(row.a2c_access_token ?? ""),
     a2cTokenExpiresAt: Number(row.a2c_token_expires_at ?? 0),
     smartReplyEnabled: Boolean(Number(row.smart_reply_enabled ?? 1)),
+    trainingSimulationEnabled: Boolean(Number(row.training_simulation_enabled ?? 0)),
     strictScriptFlowEnabled: Boolean(Number(row.strict_script_flow_enabled ?? 0)),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? ""),

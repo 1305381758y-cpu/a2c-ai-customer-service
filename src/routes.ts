@@ -650,6 +650,53 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!result.deleted) return reply.code(404).send({ error: "customer not found" });
     return { ok: true, ...result };
   });
+  app.post<{ Body: { customerPhone?: string; a2cAccountPhone?: string; nickname?: string; content?: string; msgType?: string; url?: string; caption?: string; fileName?: string } }>("/api/merchant/training-simulator/messages", { preHandler: merchantRoles }, async (request, reply) => {
+    const merchantId = scopedMerchantId(request);
+    const body = z.object({
+      customerPhone: z.string().trim().min(1).optional(),
+      a2cAccountPhone: z.string().trim().min(1).optional(),
+      nickname: z.string().trim().optional(),
+      content: z.string().optional(),
+      msgType: z.enum(["text", "image", "video", "audio", "document"]).optional(),
+      url: z.string().optional(),
+      caption: z.string().optional(),
+      fileName: z.string().optional()
+    }).parse(request.body ?? {});
+    const config = deps.repos.getMerchantConfig(merchantId);
+    const accounts = deps.repos.listMerchantA2CAccounts({ merchantId, enabled: true });
+    const configuredAccount = config.a2cAccountPhone.split(",").map((item) => item.trim()).find(Boolean);
+    const a2cAccountPhone = body.a2cAccountPhone || accounts[0]?.apiPhone || configuredAccount || "simulation-a2c";
+    const customerPhone = body.customerPhone || `sim-customer-${Date.now()}`;
+    const msgType = body.msgType || (body.url ? "image" : "text");
+    const content = body.content || body.caption || "";
+    if (msgType === "text" && !content.trim()) return reply.code(400).send({ error: "请输入客户消息" });
+    if (msgType !== "text" && !body.url && !content.trim()) return reply.code(400).send({ error: "请输入媒体链接或说明" });
+    const now = Math.floor(Date.now() / 1000);
+    const messageId = `sim_in:${merchantId}:${customerPhone}:${Date.now()}:${randomUUID().slice(0, 8)}`;
+    const result = await deps.processor.process({
+      id: `sim:${messageId}`,
+      timestamp: now,
+      type: "CUSTOMER_MESSAGE",
+      data: {
+        messageId,
+        content,
+        from: customerPhone,
+        to: a2cAccountPhone,
+        msgType,
+        timestamp: now,
+        nickname: body.nickname || "模拟客户",
+        url: body.url,
+        caption: body.caption,
+        fileName: body.fileName
+      }
+    }, merchantId, { simulation: true });
+    const conversation = result.conversationId ? deps.repos.getConversation(result.conversationId) : undefined;
+    return {
+      ...result,
+      conversation,
+      rows: result.conversationId ? deps.repos.listConversationMessages(result.conversationId, 80) : []
+    };
+  });
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/merchant/conversations/:id/messages", { preHandler: merchantRoles }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
