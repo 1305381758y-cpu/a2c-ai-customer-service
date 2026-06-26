@@ -935,8 +935,8 @@ describe("strict Aston Brazil flow", () => {
     expect(tutorial.reply).not.toContain("正在确认您的专属邀请码");
 
     const cannotOpen = reply("打不开", { language: "zh", flowStep: "wait_registration" });
-    expect(cannotOpen.reply).toContain("浏览器");
-    expect(cannotOpen.reply).toContain("截图");
+    expect(cannotOpen.reply).toContain("链接页面加载不出来");
+    expect(cannotOpen.reply).toContain("切换一下网络");
     expect(cannotOpen.reply).not.toContain("正在确认您的专属邀请码");
     expect(cannotOpen.nextFlowStep).toBe("wait_registration");
   });
@@ -958,28 +958,37 @@ describe("strict Aston Brazil flow", () => {
 
     const link = reply("链接无法打开", { language: "zh", flowStep: "wait_registration" });
     expect(link.reply).toContain("浏览器");
-    expect(link.reply).toContain("截图");
+    expect(link.reply).toContain("完整链接");
     expect(link.reply).not.toContain("register.example");
     expect(link.reply).not.toContain("ABC123");
     expect(link.tutorialImageRequested).toBe(false);
 
     const stillCannotOpen = reply("还是打不开", { language: "zh", flowStep: "wait_registration" });
-    expect(stillCannotOpen.reply).toContain("浏览器");
-    expect(stillCannotOpen.reply).toContain("截图");
+    expect(stillCannotOpen.reply).toContain("链接页面加载不出来");
+    expect(stillCannotOpen.reply).toContain("切换一下网络");
     expect(stillCannotOpen.reply).not.toContain("注册步骤");
 
     const stuckOpening = reply("卡在打开链接", { language: "zh", flowStep: "wait_registration" });
     expect(stuckOpening.reply).toContain("浏览器");
-    expect(stuckOpening.reply).toContain("截图");
+    expect(stuckOpening.reply).toContain("完整链接");
     expect(stuckOpening.reply).not.toContain("注册步骤");
+
+    const noErrorBlank = reply("没有报错就是打不开", { language: "zh", flowStep: "wait_registration" });
+    expect(noErrorBlank.reply).toContain("链接页面加载不出来");
+    expect(noErrorBlank.reply).toContain("核对开户链接");
+
+    const cannotLoadContent = reply("我说我打不开链接无法加载内容", { language: "zh", flowStep: "wait_registration" });
+    expect(cannotLoadContent.reply).toContain("链接页面加载不出来");
+    expect(cannotLoadContent.reply).not.toContain("卡在打开链接、填写手机号");
   });
 
   it("treats inbound registration screenshots as a registration blocker instead of missing invite", () => {
     const screenshot = reply("[图片]", { language: "zh", flowStep: "wait_registration" });
     expect(screenshot.reply).toContain("看到您发的截图");
-    expect(screenshot.reply).toContain("卡在哪一步");
+    expect(screenshot.reply).toContain("打开或加载");
+    expect(screenshot.reply).toContain("核对开户链接");
     expect(screenshot.reply).not.toContain("正在确认您的专属邀请码");
-    expect(screenshot.reply).not.toContain("开户链接");
+    expect(screenshot.reply).not.toContain("register.example");
     expect(screenshot.nextFlowStep).toBe("wait_registration");
 
     const conv = conversation({ language: "zh", flowStep: "wait_registration" });
@@ -1261,7 +1270,7 @@ describe("strict Aston Brazil flow", () => {
     const linkProblem = reply("链接打不开怎么办", { language: "zh", flowStep: "wait_registration" });
     expect(linkProblem.nextFlowStep).toBe("wait_registration");
     expect(linkProblem.reply).toContain("浏览器");
-    expect(linkProblem.reply).toContain("截图");
+    expect(linkProblem.reply).toContain("完整链接");
     expect(linkProblem.reply).not.toContain("请告知我您是否已完成注册");
 
     const codeProblem = reply("验证码收不到", { language: "zh", flowStep: "wait_registration" });
@@ -1394,7 +1403,7 @@ describe("strict Aston Brazil flow", () => {
 
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("截图");
-    expect(result.reply).toContain("注册页面");
+    expect(result.reply).toContain("打开或加载");
     expect(result.reply).not.toContain("正在确认您的专属邀请码");
   });
 

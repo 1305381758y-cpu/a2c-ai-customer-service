@@ -305,6 +305,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     if (asksVerificationCodeProblem(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "verification_code_ack", language));
     }
+    if (reportsLinkLoadFailure(text)) {
+      return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "link_load_failure_ack", language));
+    }
     if (asksHowToOpenLink(text)) {
       return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "link_open_ack", language));
     }
@@ -483,6 +486,9 @@ function controlledQuestionAnswer(input: StrictFlowInput, step: StrictFlowStep |
   }
   if (asksWhyPhone(normalized)) {
     return { content: flowScriptLine(input, "phone_reason_ack", language), type: "phone_reason" };
+  }
+  if (reportsLinkLoadFailure(normalized)) {
+    return { content: flowScriptLine(input, "link_load_failure_ack", language), type: "link_open" };
   }
   if (asksHowToOpenLink(normalized)) {
     return { content: flowScriptLine(input, "link_open_ack", language), type: "link_open" };
@@ -916,7 +922,13 @@ function asksToAnswerPreviousQuestion(text: string): boolean {
 function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
-  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|打不.*链接|打不开.*链接|无法.*打开.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+}
+
+function reportsLinkLoadFailure(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
+  return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|没内容|沒有內容)|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load)/i.test(text);
 }
 
 function asksGenericQuestionPermission(text: string): boolean {
@@ -1148,7 +1160,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "收益不是我这边口头固定承诺的，会按实际任务和平台规则核算，后面会再确认。",
     identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
     phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",
-    link_open_ack: "您可以复制开户链接到手机浏览器里打开，建议使用 Chrome 或 Safari；如果还是打不开，把页面提示或截图发我看一下。",
+    link_open_ack: "您可以先把开户链接完整复制到手机浏览器里打开，建议用 Chrome 或 Safari。注意不要只点聊天里的预览链接，先复制完整链接试一下。",
+    link_load_failure_ack: "明白，是链接页面加载不出来，不是您不会操作。您先试这几步：换 Chrome 或 Safari 打开、切换一下网络、关闭 VPN/代理后重试。还是空白或加载不出来的话，我这边就需要帮您核对开户链接。",
     next_step_ack: "可以，我按当前进度带您继续下一步。",
     sensitive_info_ack: "这些敏感信息不用发给我，也不要给任何人。我这里只需要按流程核对开户注册所需的信息。",
     unknown_question_ack: "这个细节要以后续页面或人工确认为准，我先帮您把当前步骤走顺。",
@@ -1159,7 +1172,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     ask_question_prompt_tg: "当然可以，您直接问我就行。问完我再继续带您处理 Telegram 用户名这一步。",
     look_at_problem_ack: "可以，您把页面截图或提示文字发我，我帮您看具体卡在哪里；如果是链接打不开，也可以告诉我是打不开还是页面报错。",
     registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
-    registration_screenshot_ack: "我看到您发的截图了。您先别急，我帮您看注册页面卡在哪一步；如果页面上有报错文字，也可以直接把提示发我。",
+    registration_screenshot_ack: "我看到您发的截图了。看起来是注册页打开或加载这一步有问题，您先试试换浏览器、切换网络再打开；如果页面还是空白或一直加载，我这边帮您核对开户链接。",
     image_recognition_ack: "可以，我能看到您发的是图片或截图。如果页面字比较小，您也可以把提示文字发我；我先帮您按注册问题处理，看看卡在哪一步。",
     verification_code_ack: "验证码收不到的话，先确认手机号填对、网络正常，再等一会儿重试。页面如果有提示，截图发我看一下。",
     telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
@@ -1205,7 +1218,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "The income is not a fixed verbal promise from me. It is calculated by actual tasks and platform rules, subject to later confirmation.",
     identity_ack: "I handle the registration and contact verification steps here, and I will guide you according to the current step.",
     phone_reason_ack: "The phone number is used to verify the platform account you registered, so the follow-up information can match correctly.",
-    link_open_ack: "You can copy the registration link and open it in your phone browser. Chrome or Safari is recommended. If it still does not open, send me the page prompt or a screenshot.",
+    link_open_ack: "Please copy the full registration link and open it in your phone browser, preferably Chrome or Safari. Do not only tap the preview in chat; try pasting the full link first.",
+    link_load_failure_ack: "Understood, the link page is not loading, not that you are doing it wrong. Please try Chrome or Safari, switch the network, and turn off VPN/proxy if there is one. If it is still blank or cannot load, I will help verify the registration link.",
     next_step_ack: "Yes, I will continue guiding you from the current step.",
     sensitive_info_ack: "You do not need to send sensitive information like passwords, verification codes, payment details, or ID documents. I only need the information required by the current registration flow.",
     unknown_question_ack: "This needs to follow the page display or later confirmation. I will first help you complete the current registration step.",
@@ -1216,7 +1230,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     ask_question_prompt_tg: "Of course. Ask me directly. After that, I will continue guiding you through the Telegram username step.",
     look_at_problem_ack: "Sure, send me the page screenshot or prompt text and I will check where it is stuck. If the link does not open, tell me whether it cannot open or shows an error.",
     registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
-    registration_screenshot_ack: "I saw the screenshot you sent. Do not rush; I will help check where the registration page is stuck. If there is an error message on the page, you can also send me that text.",
+    registration_screenshot_ack: "I saw the screenshot you sent. It looks like the registration page is having an opening or loading issue. Please try another browser and switch the network first. If it is still blank or keeps loading, I will help verify the registration link.",
     image_recognition_ack: "Yes, I can see that you sent an image or screenshot. If the text on it is small, you can also type the page prompt here, and I will help check the registration issue.",
     verification_code_ack: "If the verification code does not arrive, first check that the phone number is correct and the network is stable, then retry after a moment. If the page shows a prompt, send me a screenshot.",
     telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
@@ -1262,7 +1276,8 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     earning_concern_ack: "O ganho não é uma promessa fixa minha; é calculado conforme as tarefas e regras da plataforma, sujeito à confirmação posterior.",
     identity_ack: "Eu acompanho as etapas de cadastro e verificação de contato aqui, e vou orientar você conforme a etapa atual.",
     phone_reason_ack: "O telefone é usado para verificar a conta que você cadastrou na plataforma, para que as informações sejam confirmadas corretamente depois.",
-    link_open_ack: "Você pode copiar o link de cadastro e abrir no navegador do celular. Recomendo Chrome ou Safari. Se ainda não abrir, envie o aviso da página ou uma captura de tela.",
+    link_open_ack: "Copie o link completo de cadastro e abra no navegador do celular, de preferência Chrome ou Safari. Não toque apenas na prévia do chat; primeiro cole o link completo no navegador.",
+    link_load_failure_ack: "Entendi, a página do link não está carregando; não é erro seu. Tente abrir no Chrome ou Safari, trocar a rede e desligar VPN/proxy se estiver usando. Se continuar em branco ou sem carregar, eu ajudo a verificar o link de cadastro.",
     next_step_ack: "Sim, vou continuar orientando você a partir da etapa atual.",
     sensitive_info_ack: "Você não precisa enviar informações sensíveis como senha, código de verificação, dados de pagamento ou documentos. Só preciso das informações necessárias para esta etapa do cadastro.",
     unknown_question_ack: "Isso precisa seguir a página ou a confirmação posterior. Primeiro vou ajudar você a concluir a etapa atual do cadastro.",
@@ -1273,7 +1288,7 @@ function scriptLine(key: string, language: string, fallback = ""): string {
     ask_question_prompt_tg: "Claro, pode me perguntar diretamente. Depois eu continuo orientando você na etapa do nome de usuário do Telegram.",
     look_at_problem_ack: "Claro, envie a captura de tela ou a mensagem da página e eu verifico onde travou. Se o link não abrir, me diga se não abre ou se aparece erro.",
     registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
-    registration_screenshot_ack: "Vi a captura de tela que você enviou. Não precisa ter pressa; vou ajudar a verificar onde a página de cadastro travou. Se aparecer alguma mensagem de erro, pode me enviar o texto também.",
+    registration_screenshot_ack: "Vi a captura de tela que você enviou. Parece ser um problema ao abrir ou carregar a página de cadastro. Tente trocar o navegador e a rede primeiro; se continuar em branco ou carregando, eu ajudo a verificar o link de cadastro.",
     image_recognition_ack: "Sim, consigo ver que você enviou uma imagem ou captura de tela. Se o texto estiver pequeno, envie também a mensagem da página, e eu ajudo a verificar o problema do cadastro.",
     verification_code_ack: "Se o código de verificação não chegar, confirme primeiro se o telefone está correto e se a rede está estável, depois tente novamente. Se a página mostrar algum aviso, envie uma captura de tela.",
     telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
