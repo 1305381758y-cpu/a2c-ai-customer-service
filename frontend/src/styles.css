@@ -2208,3 +2208,222 @@ tbody tr:hover td {
   .account-grid { grid-template-columns: 1fr; }
   .chat-bubble { width: 94%; }
 }
+
+/* 2026-06 UI fit pass: keep operator pages usable without hidden right-side panels. */
+main {
+  overflow-x: hidden;
+}
+
+.work-panel,
+.detail-panel,
+.memory,
+.table-wrap,
+.script-flow-list,
+.script-flow-detail,
+.intent-learning-page > *,
+.simulator-panel,
+.simulator-chat {
+  min-width: 0;
+}
+
+.conversation-workspace {
+  grid-template-columns: minmax(190px, 230px) minmax(260px, 320px) minmax(0, 1fr);
+  height: calc(100dvh - 112px);
+  min-height: 560px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.conversation-workspace.customers-collapsed {
+  grid-template-columns: minmax(190px, 230px) 46px minmax(0, 1fr);
+}
+
+.conversation-workspace section {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chat-pane,
+.conversation-detail {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.conversation-detail {
+  height: 100%;
+  gap: 8px;
+}
+
+.chat-header,
+.chat-actions,
+.send.chat-composer,
+.compact-memory,
+.conversation-workspace .review-card {
+  flex: 0 0 auto;
+}
+
+.chat-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.chat-header h3 {
+  overflow-wrap: anywhere;
+}
+
+.header-meta {
+  max-height: 58px;
+  overflow: auto;
+  padding-bottom: 2px;
+}
+
+.compact-memory {
+  max-height: 112px;
+  overflow: auto;
+}
+
+.conversation-workspace .review-card {
+  max-height: 142px;
+  overflow: auto;
+}
+
+.conversation-workspace .review-head {
+  align-items: center;
+}
+
+.conversation-workspace .review-grid,
+.conversation-workspace .review-items {
+  gap: 8px;
+}
+
+.conversation-workspace .review-grid > div,
+.conversation-workspace .review-items article {
+  padding: 9px;
+}
+
+.chat-window {
+  min-height: 220px;
+  overflow: auto;
+}
+
+.send.chat-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.send.chat-composer select {
+  flex: 0 0 88px;
+}
+
+.send.chat-composer input {
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+
+.send.chat-composer button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.conversation-list {
+  min-height: 0;
+  overflow: auto;
+}
+
+.conversation-row {
+  min-height: 74px;
+  padding: 8px 10px;
+}
+
+.conversation-row-main strong,
+.conversation-row-main span,
+.conversation-row-meta {
+  min-width: 0;
+}
+
+.conversation-row-meta {
+  max-height: 46px;
+  overflow: hidden;
+}
+
+.script-flow-page {
+  grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr);
+}
+
+.script-flow-columns {
+  grid-template-columns: minmax(240px, .75fr) minmax(0, 1.25fr);
+}
+
+.intent-learning-page {
+  grid-template-columns: minmax(360px, 1fr) minmax(0, .9fr);
+}
+
+.simulator-layout {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+}
+
+.agent-profile-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.agent-profile-grid label:nth-child(n + 4) {
+  grid-column: span 2;
+}
+
+.invite-console,
+.invite-manager,
+.invite-editor-grid {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .conversation-workspace,
+  .conversation-workspace.customers-collapsed {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .conversation-workspace section,
+  .chat-pane,
+  .conversation-detail {
+    overflow: visible;
+  }
+
+  .chat-window {
+    max-height: 56vh;
+  }
+
+  .script-flow-page,
+  .script-flow-columns,
+  .intent-learning-page,
+  .simulator-layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .agent-profile-grid label:nth-child(n + 4) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .send.chat-composer select,
+  .send.chat-composer button {
+    flex: 1 1 100%;
+  }
+
+  .send.chat-composer input {
+    flex-basis: 100%;
+  }
+
+  .learning-metrics,
+  .review-grid,
+  .learning-facts {
+    grid-template-columns: 1fr;
+  }
+}
