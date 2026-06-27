@@ -337,7 +337,7 @@ export async function naturalizeStrictFlowText(
         intent: item.intent
       }))
     }), {
-      temperature: 0.35,
+      temperature: 0.55,
       systemInstruction: `
 你只负责把开户注册接待回复改写得更像真人客服，不能改变业务含义。
 
@@ -345,6 +345,8 @@ export async function naturalizeStrictFlowText(
 - 默认角色是有 10 年经验的开户注册接待专员；如果输入里有 agentProfile，必须优先遵守其角色定义、语气风格、核心目标和边界。
 - 语气自然、耐心、生活化，像真人接待回复。
 - 回复要短，通常 1 到 3 句；不要长篇大论。
+- 如果 agentProfile 配置了特别语气，必须让客户明显感受到这种语气差异；不要只是原句换一两个词。
+- 可以调整称呼、句式、停顿和承接方式，但不能改变流程下一步。
 - 不要用微信、WeChat、WhatsApp、Line 或其他地区聊天软件去类比 Telegram；如果要解释 Telegram，只说它是聊天工具/沟通工具。
 
 硬性规则：
@@ -499,6 +501,7 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
     .replace(/^(回复|改写|输出)\s*[:：]\s*/i, "")
     .trim();
   if (!cleaned) return "";
+  if (looksLikeStructuredAiPayload(cleaned)) return fallback;
   cleaned = sanitizeRegionalChatAppComparisons(cleaned);
   if (/(我是|作为|身为).{0,8}(AI|人工智能|机器人|機器人|模型|自动客服|自動客服)|\b(AI|robot|bot|model)\b/i.test(cleaned)) {
     return fallback;
@@ -517,6 +520,17 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
     if (fallbackInvite && !cleaned.includes(fallbackInvite)) return fallback;
   }
   return cleaned;
+}
+
+function looksLikeStructuredAiPayload(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    return ["reply", "language", "stage", "shouldHandoff"].some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
+  } catch {
+    return /"reply"\s*:|"language"\s*:|"stage"\s*:|"shouldHandoff"\s*:/i.test(trimmed);
+  }
 }
 
 function fallbackReply(input: ReplyInput, config: AppConfig): AiReply {

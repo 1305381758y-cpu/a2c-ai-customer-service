@@ -992,10 +992,10 @@ async function naturalizeStrictReply(
     agentProfile?: MerchantAgentProfileRecord;
   }
 ): Promise<{ reply: string; used: boolean; error?: string }> {
-  if (!input.customerText.trim() || input.allowLinkOrInvite) {
+  if (!input.customerText.trim()) {
     return { reply: input.draftReply, used: false };
   }
-  if (input.questionType === "none" && input.draftReply.length <= 90) {
+  if (input.questionType === "none" && input.draftReply.length <= 90 && !input.agentProfile?.enabled) {
     return { reply: input.draftReply, used: false };
   }
   const result = await naturalizeStrictFlowText(config, {

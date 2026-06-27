@@ -2836,6 +2836,7 @@ export class Repositories {
           AND lm.created_at <= datetime('now', '-2 minutes')
           AND COALESCE(c.flow_step, '') NOT IN ('', 'human_handoff', 'ended')
           AND lm.raw_payload NOT LIKE '%"a2cSendStatus":"failed"%'
+          AND lm.raw_payload NOT LIKE '%"simulation":true%'
           AND f.id IS NULL
         ORDER BY lm.created_at ASC
         LIMIT ?
