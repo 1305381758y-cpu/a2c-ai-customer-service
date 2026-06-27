@@ -1133,12 +1133,25 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const [draftCustomer, setDraftCustomer] = useState<{ customerPhone: string; nickname: string } | null>(null);
   const [newCustomer, setNewCustomer] = useState({ customerPhone: "", nickname: "" });
   const [customerCollapsed, setCustomerCollapsed] = useState(false);
+  const [accountKeyword, setAccountKeyword] = useState("");
+  const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
   const rowsUrl = selectedAccount
     ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
     : "";
   const [rows, setRows] = useRows<Conversation>(rowsUrl || "/api/merchant/conversations?limit=1&a2cAccountPhone=__none__");
   const pager = useClientPagination(rows, 20);
+  const filteredAccounts = useMemo(() => {
+    const keyword = accountKeyword.trim().toLowerCase();
+    return accounts.filter((account) => {
+      const text = [account.verifiedName, account.apiPhone, account.countryName, account.countryCode, account.wabaId].join(" ").toLowerCase();
+      if (keyword && !text.includes(keyword)) return false;
+      if (accountStatus === "enabled" && !account.enabled) return false;
+      if (accountStatus === "disabled" && account.enabled) return false;
+      return true;
+    });
+  }, [accounts, accountKeyword, accountStatus]);
+  const accountPager = useClientPagination(filteredAccounts, 10);
 
   useEffect(() => {
     if (!selectedAccount && accounts.length) setSelectedAccount(accounts.find((account) => account.enabled) || accounts[0]);
@@ -1155,7 +1168,10 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setDraftCustomer(null);
   }, [selectedAccount?.apiPhone]);
 
-  const reloadAccounts = async () => setAccounts(await loadRows("/api/merchant/a2c/accounts"));
+  const reloadAccounts = async () => {
+    setAccounts(await loadRows("/api/merchant/a2c/accounts"));
+    accountPager.setPage(1);
+  };
   const reloadRows = async () => {
     if (!selectedAccount) return;
     setRows(await loadRows(rowsUrl));
@@ -1177,13 +1193,29 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     <section className="account-list">
       <div className="panel-title">
         <h3>客服账号</h3>
+        <span>{accounts.length ? `共 ${accounts.length} 个` : "未同步"}</span>
         <AsyncButton busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>同步账号</AsyncButton>
       </div>
-      {accounts.length ? accounts.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}>
-        <strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong>
-        <span title={account.apiPhone}>{account.apiPhone}</span>
-        <small>{countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</small>
-      </button>) : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}
+      {accounts.length ? <>
+        <div className="account-list-filter">
+          <input value={accountKeyword} onChange={(e) => { setAccountKeyword(e.target.value); accountPager.setPage(1); }} placeholder="搜索账号/名称" />
+          <select value={accountStatus} onChange={(e) => { setAccountStatus(e.target.value); accountPager.setPage(1); }}>
+            <option value="">全部</option>
+            <option value="enabled">启用</option>
+            <option value="disabled">停用</option>
+          </select>
+        </div>
+        <div className="account-list-meta">筛选 {filteredAccounts.length} 个，当前第 {accountPager.page} / {accountPager.totalPages} 页</div>
+        <div className="stack-list account-scroll-list">
+          {accountPager.rows.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}>
+            <strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong>
+            <span title={account.apiPhone}>{account.apiPhone}</span>
+            <small>{countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</small>
+          </button>)}
+          {!filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号。</div>}
+        </div>
+        <Pagination pager={accountPager} />
+      </> : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}
     </section>
     <section className="customer-list">
       <div className="panel-title">

@@ -1011,6 +1011,34 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 }
 .conversation-workspace section { min-width: 0; padding: 12px; overflow: hidden; }
 .account-list, .customer-list { display: flex; flex-direction: column; gap: 10px; }
+.account-list .pagination {
+  justify-content: flex-start;
+  padding-top: 0;
+}
+.account-list .pagination span {
+  width: 100%;
+  font-size: 12px;
+}
+.account-list .pagination select {
+  flex: 1 1 92px;
+  min-width: 92px;
+}
+.account-list-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+  gap: 8px;
+}
+.account-list-filter input,
+.account-list-filter select {
+  min-height: 38px;
+  height: 38px;
+  padding: 7px 9px;
+}
+.account-scroll-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
 .customers-collapsed .customer-list {
   padding: 10px 7px;
   align-items: center;
