@@ -10,7 +10,7 @@ import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
 import { parseTrainingMaterial } from "./import/trainingMaterials.js";
-import { parseScriptFlowWorkbook } from "./import/scriptFlows.js";
+import { parseScriptFlowFile } from "./import/scriptFlows.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
@@ -1375,11 +1375,11 @@ async function importScriptFlow(request: FastifyRequest, reply: FastifyReply, de
   const fields = (file as unknown as { fields?: Record<string, { value?: string }> }).fields || {};
   const merchantId = scopedMerchantId || query.merchantId || fields.merchantId?.value || "default";
   const countryId = query.countryId || fields.countryId?.value || deps.repos.defaultCountryId(merchantId);
-  const name = query.name || fields.name?.value || file.filename.replace(/\.(xlsx|xls)$/i, "") || "话本流程";
+  const name = query.name || fields.name?.value || file.filename.replace(/\.(xlsx|xls|docx)$/i, "") || "话本流程";
   const buffer = await file.toBuffer().catch(() => null);
   if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
   try {
-    const steps = await parseScriptFlowWorkbook(buffer);
+    const steps = await parseScriptFlowFile(buffer, file.filename, file.mimetype);
     const result = deps.repos.createScriptFlow(merchantId, {
       name,
       countryId,

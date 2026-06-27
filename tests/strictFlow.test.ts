@@ -328,9 +328,8 @@ describe("strict Aston Brazil flow", () => {
     const result = reply("兼职?你介绍下", { language: "zh", flowStep: "interest_screening" });
 
     expect(result.nextFlowStep).toBe("registration_intent");
-    expect(result.reply).toContain("300 至 800");
+    expect(result.reply).toContain("页面规则");
     expect(result.reply).toContain("空闲时间");
-    expect(result.reply).not.toContain("话本");
     expect(result.reply).not.toContain("您如果感兴趣，我可以先简单介绍");
     expect(result.reply).not.toContain("开户链接");
     expect(result.reply).not.toContain("邀请码");
@@ -371,7 +370,8 @@ describe("strict Aston Brazil flow", () => {
     const result = reply("是的", { language: "zh", flowStep: "interest_screening" });
 
     expect(result.nextFlowStep).toBe("registration_intent");
-    expect(result.reply).toContain("300 至 800");
+    expect(result.reply).toContain("页面规则");
+    expect(result.reply).not.toMatch(/雷亚尔|reais/i);
     expect(result.reply).not.toMatch(/话本|脚本|模板|严格流程|自动客服|机器人|AI/i);
   });
 
@@ -561,7 +561,7 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[1]).toContain("开户注册平台");
     expect(replies[1]).not.toContain("邀请码");
 
-    expect(replies[2]).toContain("每天可以赚取");
+    expect(replies[2]).toContain("页面规则");
     expect(replies[2]).toContain("空闲时间");
     expect(replies[2]).not.toContain("如果您觉得可以继续");
 
@@ -594,7 +594,7 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[1].analysis.intent).not.toBe("irrelevant_or_spam");
     expect(turns[1].flowStep).toBe("registration_intent");
     expect(turns[1].result.reply).toContain("简单介绍");
-    expect(turns[1].result.reply).toContain("每天可以赚取");
+    expect(turns[1].result.reply).toContain("页面规则");
     expect(turns[1].result.reply).toContain("空闲时间");
     expect(turns[1].result.reply).not.toContain("register.example");
     expect(turns[1].result.reply).not.toBe("好的，我继续协助您。");
@@ -634,7 +634,7 @@ describe("strict Aston Brazil flow", () => {
 
     expect(result.nextFlowStep).toBe("registration_intent");
     expect(result.reply).toContain("简单介绍");
-    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("页面规则");
     expect(result.reply).toContain("空闲时间");
     expect(result.reply).not.toContain("register.example");
     expect(result.reply).not.toBe("好的，我继续协助您。");
@@ -646,7 +646,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("registration_intent");
     expect(result.reply).toContain("理解您的顾虑");
     expect(result.reply).toContain("简单介绍");
-    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("页面规则");
     expect(result.reply).toContain("空闲时间");
     expect(result.reply).not.toContain("register.example");
     expect(result.reply).not.toBe("好的，我继续协助您。");
@@ -657,7 +657,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.enabled).toBe(true);
     expect(result.nextFlowStep).toBe("registration_intent");
     expect(result.reply).toContain("简单介绍");
-    expect(result.reply).toContain("每天可以赚取");
+    expect(result.reply).toContain("页面规则");
     expect(result.reply).toContain("空闲时间");
     expect(result.reply).not.toContain("register.example");
   });

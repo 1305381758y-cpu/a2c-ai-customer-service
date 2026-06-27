@@ -130,6 +130,7 @@ const COUNTRY_PRESETS: Array<{ names: string[]; code: string; defaultLanguage: s
   { names: ["中国", "china", "cn"], code: "cn", defaultLanguage: "zh" },
   { names: ["美国", "united states", "usa", "us", "america"], code: "us", defaultLanguage: "en" },
   { names: ["墨西哥", "mexico", "mx"], code: "mx", defaultLanguage: "es" },
+  { names: ["玻利维亚", "bolivia", "bo"], code: "bo", defaultLanguage: "es" },
   { names: ["西班牙", "spain", "es"], code: "es", defaultLanguage: "es" }
 ];
 

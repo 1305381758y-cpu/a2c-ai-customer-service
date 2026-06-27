@@ -54,6 +54,7 @@ const COUNTRY_PRESETS = [
   { name: "马来西亚", aliases: ["malaysia", "my"], code: "my", defaultLanguage: "ms" },
   { name: "中国", aliases: ["china", "cn"], code: "cn", defaultLanguage: "zh" },
   { name: "美国", aliases: ["united states", "usa", "us", "america"], code: "us", defaultLanguage: "en" },
+  { name: "玻利维亚", aliases: ["bolivia", "bo"], code: "bo", defaultLanguage: "es" },
   { name: "墨西哥", aliases: ["mexico", "mx"], code: "mx", defaultLanguage: "es" },
   { name: "西班牙", aliases: ["spain", "es"], code: "es", defaultLanguage: "es" }
 ];
@@ -822,16 +823,16 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   return <div className="script-flow-page work-split">
     <section className="script-flow-list work-panel">
       <div className="training-center-hero compact">
-        <div><h3>话本流程</h3><p>这里维护“客户下一步该怎么走”。上传 Excel 后可直接编辑节点，启用后客户会话优先按该流程推进。</p></div>
+        <div><h3>话本流程</h3><p>这里维护“客户下一步该怎么走”。上传 Excel 或 Word 后可直接编辑节点，启用后客户会话优先按该流程推进。</p></div>
       </div>
       <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status"] : ["countryId", "status"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "draft", "active", "disabled"] }} onApply={reload} />
       <div className="material-uploader compact-uploader">
         <div className="toolbar wrap">
           <input placeholder="话本名称，可选" value={flowName} onChange={(event) => setFlowName(event.target.value)} />
-          <input type="file" accept=".xlsx,.xls" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          <input type="file" accept=".xlsx,.xls,.docx" onChange={(event) => setFile(event.target.files?.[0] || null)} />
           <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="导入中..." onClick={upload}><Upload size={16}/>导入话本流程</AsyncButton>
         </div>
-        <small>Excel 表头需包含“客服标准话术”；建议使用“流程编号、流程名称、客户常见表达、是否发链接、是否发邀请码、下一流程编号”等列。</small>
+        <small>Excel 表头需包含“客服标准话术”；Word 会按段落自动拆成流程节点，导入后可在右侧继续编辑。</small>
       </div>
       <Table rows={rows} columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]} onRow={loadDetail} selectedKey={selected?.id} rowKey={(row) => row.id} />
     </section>
@@ -1508,6 +1509,8 @@ function countryLabel(value: unknown) {
     "united states": "美国",
     "usa": "美国",
     "us": "美国",
+    "bolivia": "玻利维亚",
+    "bo": "玻利维亚",
     "mexico": "墨西哥",
     "mx": "墨西哥",
     "spain": "西班牙",
