@@ -2179,6 +2179,73 @@ tbody tr:hover td {
   color: var(--muted-strong);
 }
 
+.review-card-collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.review-card-collapsible[open] {
+  overflow: auto;
+}
+
+.review-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.review-summary::-webkit-details-marker {
+  display: none;
+}
+
+.review-summary::before {
+  content: "展开";
+  justify-self: start;
+  width: fit-content;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #2f64d6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-card-collapsible[open] .review-summary::before {
+  content: "收起";
+}
+
+.review-summary h3,
+.review-summary p {
+  margin: 0;
+}
+
+.review-summary p {
+  color: var(--muted-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-score.compact {
+  min-width: 74px;
+  min-height: 48px;
+  border-radius: 12px;
+}
+
+.review-score.compact strong {
+  font-size: 22px;
+}
+
+.review-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
 @media (max-width: 1320px) {
   .account-grid { grid-template-columns: 1fr; }
   .invite-manager { grid-template-columns: 1fr; }
@@ -2283,8 +2350,12 @@ main {
 }
 
 .conversation-workspace .review-card {
-  max-height: 142px;
+  max-height: 74px;
   overflow: auto;
+}
+
+.conversation-workspace .review-card[open] {
+  max-height: 260px;
 }
 
 .conversation-workspace .review-head {
