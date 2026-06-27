@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
 import "./styles.css";
@@ -453,6 +453,9 @@ function Config({ platform }: { platform: boolean }) {
   const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
+  const [accountKeyword, setAccountKeyword] = useState("");
+  const [accountStatus, setAccountStatus] = useState("");
+  const [accountCountryId, setAccountCountryId] = useState("");
   const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
   useEffect(() => { reloadConfig().catch(() => null); }, [url]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
@@ -473,9 +476,24 @@ function Config({ platform }: { platform: boolean }) {
       requireWhatsApp: String(country.requireWhatsApp)
     });
   }, [countries]);
+  const filteredA2CAccounts = useMemo(() => {
+    const keyword = accountKeyword.trim().toLowerCase();
+    return a2cAccounts.filter((account) => {
+      const haystack = [account.apiPhone, account.verifiedName, account.countryName, account.countryCode, account.wabaId].join(" ").toLowerCase();
+      if (keyword && !haystack.includes(keyword)) return false;
+      if (accountStatus === "enabled" && !account.enabled) return false;
+      if (accountStatus === "disabled" && account.enabled) return false;
+      if (accountCountryId && account.countryId !== accountCountryId) return false;
+      return true;
+    });
+  }, [a2cAccounts, accountKeyword, accountStatus, accountCountryId]);
+  const accountPager = useClientPagination(filteredA2CAccounts, 12);
   const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
-  const reloadA2CAccounts = async () => setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+  const reloadA2CAccounts = async () => {
+    setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+    accountPager.setPage(1);
+  };
   const uploadTutorialImage = async () => {
     if (!tutorialImageFile) return;
     setMessage("");
@@ -528,6 +546,7 @@ function Config({ platform }: { platform: boolean }) {
       if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
       const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean>; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
+      accountPager.setPage(1);
       setForm(result.config);
       setMessage(result.stale ? result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。" : `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
     } catch (err) {
@@ -602,7 +621,7 @@ function Config({ platform }: { platform: boolean }) {
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
     <div className="memory"><h3>商户国家/市场</h3><p>商户只需要填写国家，国家代码和默认语言会自动带入。当前版本每个商户只维护一个国家。</p><div className="toolbar wrap"><CountryPresetDatalist /><label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：巴西" value={countryDraft.name} onChange={(e) => updateCountryDraftName(e.target.value)} /></label><label className="inline-field">国家代码<input readOnly value={countryDraft.code} /></label><label className="inline-field">默认语言<input readOnly value={languageName(countryDraft.defaultLanguage)} /></label><input placeholder={label("platformRegisterUrl")} value={countryDraft.platformRegisterUrl} onChange={(e) => setCountryDraft({ ...countryDraft, platformRegisterUrl: e.target.value })} /><input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(e) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: e.target.value })} /><select value={countryDraft.requirePlatformAccount} onChange={(e) => setCountryDraft({ ...countryDraft, requirePlatformAccount: e.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select><select value={countryDraft.requirePhone} onChange={(e) => setCountryDraft({ ...countryDraft, requirePhone: e.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select><select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select><select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select><AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton></div><Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} /></div>
-    <div className="memory"><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p><div className="account-grid">{a2cAccounts.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => toggleA2CAccount(row)} onCountry={async () => undefined} />)}{!a2cAccounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}</div></div>
+    <div className="memory"><div className="account-section-head"><div><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p></div><span>已保存 {a2cAccounts.length} 个账号</span></div><div className="account-filter-bar"><label>搜索账号<input value={accountKeyword} onChange={(e) => { setAccountKeyword(e.target.value); accountPager.setPage(1); }} placeholder="手机号、名称、WABA ID" /></label><label>状态<select value={accountStatus} onChange={(e) => { setAccountStatus(e.target.value); accountPager.setPage(1); }}><option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option></select></label><label>国家<select value={accountCountryId} onChange={(e) => { setAccountCountryId(e.target.value); accountPager.setPage(1); }}><option value="">全部国家</option>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select></label></div><div className="account-list-meta">当前筛选 {filteredA2CAccounts.length} 个账号，显示第 {(accountPager.page - 1) * accountPager.pageSize + (accountPager.total ? 1 : 0)} - {Math.min(accountPager.page * accountPager.pageSize, accountPager.total)} 个。</div><div className="account-grid">{accountPager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => toggleA2CAccount(row)} onCountry={async () => undefined} />)}{!a2cAccounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}{a2cAccounts.length > 0 && !filteredA2CAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}</div><Pagination pager={accountPager} /></div>
     <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
   </section>;
 }

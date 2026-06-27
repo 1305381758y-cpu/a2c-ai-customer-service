@@ -713,6 +713,54 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 .account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .account-actions button { background: #344054; }
 .account-actions button:hover { background: #1f2937; box-shadow: none; }
+.account-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.account-section-head h3 {
+  margin: 0 0 4px;
+}
+.account-section-head p {
+  margin: 0;
+}
+.account-section-head > span {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+.account-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(140px, .7fr) minmax(180px, .9fr);
+  gap: 10px;
+  margin: 14px 0 8px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.account-filter-bar label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+.account-list-meta {
+  margin: 2px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
 .account-bind {
   display: inline-flex;
   gap: 8px;
@@ -1733,6 +1781,12 @@ tbody tr:hover td {
 .account-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 12px;
+}
+.account-filter-bar {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.account-section-head {
+  flex-wrap: wrap;
 }
 .account-panel {
   border-radius: 12px;
