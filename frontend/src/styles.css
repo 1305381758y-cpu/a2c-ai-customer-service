@@ -1001,31 +1001,50 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 
 .conversation-workspace {
   display: grid;
-  grid-template-columns: 240px 370px minmax(520px, 1fr);
+  grid-template-columns: minmax(280px, 300px) minmax(340px, 370px) minmax(520px, 1fr);
   gap: 12px;
   height: calc(100vh - 128px);
   min-height: 650px;
 }
 .conversation-workspace.customers-collapsed {
-  grid-template-columns: 240px 52px minmax(700px, 1fr);
+  grid-template-columns: minmax(280px, 300px) 52px minmax(700px, 1fr);
 }
 .conversation-workspace section { min-width: 0; padding: 12px; overflow: hidden; }
 .account-list, .customer-list { display: flex; flex-direction: column; gap: 10px; }
-.account-list .pagination {
-  justify-content: flex-start;
-  padding-top: 0;
+.account-list-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
 }
-.account-list .pagination span {
-  width: 100%;
+.account-list-head h3,
+.account-list-head span {
+  margin: 0;
+}
+.account-list-head h3 {
+  font-size: 18px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.account-list-head span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
   font-size: 12px;
+  font-weight: 800;
 }
-.account-list .pagination select {
-  flex: 1 1 92px;
-  min-width: 92px;
+.sync-compact-button {
+  min-height: 34px;
+  height: 34px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 .account-list-filter {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 78px;
+  grid-template-columns: minmax(0, 1fr) 86px;
   gap: 8px;
 }
 .account-list-filter input,
@@ -1038,6 +1057,35 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+.account-list-meta {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.account-mini-pager {
+  display: grid;
+  grid-template-columns: minmax(68px, 1fr) 78px minmax(68px, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.account-mini-pager.single {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.account-mini-pager button,
+.account-mini-pager select {
+  width: 100%;
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .customers-collapsed .customer-list {
   padding: 10px 7px;
@@ -1101,8 +1149,23 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   white-space: nowrap;
 }
 .list-item span, .list-item small { color: var(--muted); }
-.account-card { min-height: 70px; }
-.account-card strong { font-size: 15px; }
+.account-card {
+  min-height: 62px;
+  padding: 8px 10px;
+  gap: 2px;
+}
+.account-card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.account-card > span,
+.account-card small {
+  font-size: 12px;
+  line-height: 1.25;
+}
 .conversation-card {
   min-height: 82px;
   max-height: 82px;
@@ -1875,13 +1938,13 @@ tbody tr:hover td {
 }
 
 .conversation-workspace {
-  grid-template-columns: 230px 360px minmax(560px, 1fr);
+  grid-template-columns: minmax(280px, 300px) minmax(330px, 360px) minmax(560px, 1fr);
   gap: 10px;
   height: calc(100vh - 114px);
   min-height: 620px;
 }
 .conversation-workspace.customers-collapsed {
-  grid-template-columns: 230px 48px minmax(720px, 1fr);
+  grid-template-columns: minmax(280px, 300px) 48px minmax(720px, 1fr);
 }
 .conversation-workspace section {
   border-radius: 12px;
@@ -1892,6 +1955,9 @@ tbody tr:hover td {
 }
 .panel-title h3 {
   font-size: 15px;
+}
+.account-list-head h3 {
+  font-size: 17px;
 }
 .list-item,
 .conversation-row {

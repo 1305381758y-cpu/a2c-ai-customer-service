@@ -1191,10 +1191,12 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
 
   return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}>
     <section className="account-list">
-      <div className="panel-title">
-        <h3>客服账号</h3>
-        <span>{accounts.length ? `共 ${accounts.length} 个` : "未同步"}</span>
-        <AsyncButton busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>同步账号</AsyncButton>
+      <div className="account-list-head">
+        <div>
+          <h3>客服账号</h3>
+          <span>{accounts.length ? `共 ${accounts.length} 个` : "未同步"}</span>
+        </div>
+        <AsyncButton className="sync-compact-button" busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}><RefreshCw size={14}/>同步</AsyncButton>
       </div>
       {accounts.length ? <>
         <div className="account-list-filter">
@@ -1205,7 +1207,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
             <option value="disabled">停用</option>
           </select>
         </div>
-        <div className="account-list-meta">筛选 {filteredAccounts.length} 个，当前第 {accountPager.page} / {accountPager.totalPages} 页</div>
+        <div className="account-list-meta">筛选 {filteredAccounts.length} 个 · 第 {accountPager.page}/{accountPager.totalPages} 页</div>
         <div className="stack-list account-scroll-list">
           {accountPager.rows.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}>
             <strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong>
@@ -1214,7 +1216,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
           </button>)}
           {!filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号。</div>}
         </div>
-        <Pagination pager={accountPager} />
+        <AccountPagination pager={accountPager} />
       </> : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}
     </section>
     <section className="customer-list">
@@ -1403,6 +1405,17 @@ function Pagination({ pager }: { pager: { page: number; pageSize: number; total:
       {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size} 条/页</option>)}
     </select>
     <button className="ghost" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>上一页</button>
+    <button className="ghost" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>下一页</button>
+  </div>;
+}
+
+function AccountPagination({ pager }: { pager: { page: number; pageSize: number; total: number; totalPages: number; setPage: (page: number) => void; setPageSize: (pageSize: number) => void } }) {
+  if (pager.total <= pager.pageSize && pager.page === 1) return <div className="account-mini-pager single">共 {pager.total} 个账号</div>;
+  return <div className="account-mini-pager">
+    <button className="ghost" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>上一页</button>
+    <select aria-label="每页客服账号数量" value={pager.pageSize} onChange={(e) => pager.setPageSize(Number(e.target.value))}>
+      {[10, 20, 50].map((size) => <option key={size} value={size}>{size}/页</option>)}
+    </select>
     <button className="ghost" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>下一页</button>
   </div>;
 }
