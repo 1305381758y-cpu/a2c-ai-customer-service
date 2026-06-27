@@ -3347,17 +3347,17 @@ describe("portal api", () => {
         method: "POST",
         url: "/api/merchant/countries",
         headers: { cookie: merchantCookie },
-        payload: { code: "br", name: "Brazil", defaultLanguage: "pt-BR", platformRegisterUrl: "https://br.example/register" }
+        payload: { name: "巴西", platformRegisterUrl: "https://br.example/register" }
       });
       const ph = await app.inject({
         method: "POST",
         url: "/api/merchant/countries",
         headers: { cookie: merchantCookie },
-        payload: { code: "ph", name: "Philippines", defaultLanguage: "en", requireTelegram: false, requireWhatsApp: true }
+        payload: { name: "菲律宾", requireTelegram: false, requireWhatsApp: true }
       });
       const countries = await app.inject({ method: "GET", url: "/api/merchant/countries", headers: { cookie: merchantCookie } });
       expect(countries.json().rows).toHaveLength(1);
-      expect(countries.json().rows[0]).toMatchObject({ code: "ph", name: "Philippines" });
+      expect(countries.json().rows[0]).toMatchObject({ code: "ph", name: "菲律宾", defaultLanguage: "en" });
 
       await app.inject({
         method: "PATCH",

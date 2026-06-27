@@ -119,6 +119,34 @@ export interface MerchantCountryRecord {
   status: "active" | "disabled";
 }
 
+const COUNTRY_PRESETS: Array<{ names: string[]; code: string; defaultLanguage: string }> = [
+  { names: ["巴西", "brazil", "br"], code: "br", defaultLanguage: "pt-BR" },
+  { names: ["菲律宾", "philippines", "ph"], code: "ph", defaultLanguage: "en" },
+  { names: ["日本", "japan", "jp"], code: "jp", defaultLanguage: "ja" },
+  { names: ["泰国", "thailand", "th"], code: "th", defaultLanguage: "th" },
+  { names: ["越南", "vietnam", "vn"], code: "vn", defaultLanguage: "vi" },
+  { names: ["印尼", "印度尼西亚", "indonesia", "id"], code: "id", defaultLanguage: "id" },
+  { names: ["马来西亚", "malaysia", "my"], code: "my", defaultLanguage: "ms" },
+  { names: ["中国", "china", "cn"], code: "cn", defaultLanguage: "zh" },
+  { names: ["美国", "united states", "usa", "us", "america"], code: "us", defaultLanguage: "en" },
+  { names: ["墨西哥", "mexico", "mx"], code: "mx", defaultLanguage: "es" },
+  { names: ["西班牙", "spain", "es"], code: "es", defaultLanguage: "es" }
+];
+
+function inferCountryProfile(input: Record<string, unknown>, current?: MerchantCountryRecord) {
+  const rawName = String(input.name || current?.name || "").trim();
+  const rawCode = String(input.code || "").trim().toLowerCase();
+  const rawLanguage = String(input.defaultLanguage || "").trim();
+  const normalizedName = rawName.toLowerCase();
+  const preset = COUNTRY_PRESETS.find((item) => item.names.some((name) => {
+    const normalized = name.toLowerCase();
+    return normalized === normalizedName || normalized === rawCode;
+  }));
+  const code = rawCode || preset?.code || current?.code || normalizedName.replace(/[^a-z]/g, "").slice(0, 2) || "default";
+  const defaultLanguage = rawLanguage || preset?.defaultLanguage || current?.defaultLanguage || "en";
+  return { code, name: rawName || current?.name || code, defaultLanguage };
+}
+
 export interface UserRecord {
   id: string;
   merchantId: string | null;
@@ -2248,7 +2276,8 @@ export class Repositories {
 
   createMerchantCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
     const current = this.ensurePrimaryCountry(merchantId);
-    const code = String(input.code || current.code || "default").trim() || "default";
+    const profile = inferCountryProfile(input, current);
+    const code = profile.code;
     const id = current.id;
     this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, code, id);
     this.db.sqlite.prepare(`
@@ -2267,8 +2296,8 @@ export class Repositories {
       WHERE id = ? AND merchant_id = ?
     `).run(
       code,
-      String(input.name || current.name || code),
-      String(input.defaultLanguage || current.defaultLanguage || "unknown"),
+      profile.name,
+      profile.defaultLanguage,
       String(input.platformRegisterUrl ?? current.platformRegisterUrl ?? ""),
       String(input.tgRegisterGuideUrl ?? current.tgRegisterGuideUrl ?? ""),
       booleanPatchValue(input.requirePlatformAccount, current.requirePlatformAccount),
@@ -2297,11 +2326,20 @@ export class Repositories {
     };
     const entries = Object.entries(patch).filter(([key]) => key in allowed);
     if (entries.length) {
-      if (typeof patch.code === "string" && patch.code.trim()) {
-        this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, patch.code.trim(), id);
+      const current = this.getMerchantCountry(id);
+      const normalizedPatch = { ...patch };
+      if (current && ("name" in patch || "code" in patch || "defaultLanguage" in patch)) {
+        const profile = inferCountryProfile(patch, current);
+        normalizedPatch.code = profile.code;
+        normalizedPatch.name = profile.name;
+        normalizedPatch.defaultLanguage = profile.defaultLanguage;
       }
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      const values = entries.map(([key, value]) => {
+      if (typeof normalizedPatch.code === "string" && normalizedPatch.code.trim()) {
+        this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, normalizedPatch.code.trim(), id);
+      }
+      const normalizedEntries = Object.entries(normalizedPatch).filter(([key]) => key in allowed);
+      const assignments = normalizedEntries.map(([key]) => `${allowed[key]} = ?`).join(", ");
+      const values = normalizedEntries.map(([key, value]) => {
         if (key.startsWith("require")) return value ? 1 : 0;
         return String(value ?? "");
       }) as Array<string | number>;

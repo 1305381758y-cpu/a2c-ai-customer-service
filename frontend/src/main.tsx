@@ -44,6 +44,20 @@ const MESSAGE_TYPE_OPTIONS = [
   { value: "document", label: "文件" }
 ];
 
+const COUNTRY_PRESETS = [
+  { name: "巴西", aliases: ["brazil", "br"], code: "br", defaultLanguage: "pt-BR" },
+  { name: "菲律宾", aliases: ["philippines", "ph"], code: "ph", defaultLanguage: "en" },
+  { name: "日本", aliases: ["japan", "jp"], code: "jp", defaultLanguage: "ja" },
+  { name: "泰国", aliases: ["thailand", "th"], code: "th", defaultLanguage: "th" },
+  { name: "越南", aliases: ["vietnam", "vn"], code: "vn", defaultLanguage: "vi" },
+  { name: "印尼", aliases: ["indonesia", "id", "印度尼西亚"], code: "id", defaultLanguage: "id" },
+  { name: "马来西亚", aliases: ["malaysia", "my"], code: "my", defaultLanguage: "ms" },
+  { name: "中国", aliases: ["china", "cn"], code: "cn", defaultLanguage: "zh" },
+  { name: "美国", aliases: ["united states", "usa", "us", "america"], code: "us", defaultLanguage: "en" },
+  { name: "墨西哥", aliases: ["mexico", "mx"], code: "mx", defaultLanguage: "es" },
+  { name: "西班牙", aliases: ["spain", "es"], code: "es", defaultLanguage: "es" }
+];
+
 const STRICT_STEP_OPTIONS = [
   "interest_screening",
   "registration_intent",
@@ -264,6 +278,10 @@ function Merchants() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
   const update = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
+  const updateCountryName = (value: string) => {
+    const inferred = inferCountryProfile(value);
+    setForm({ ...form, countryName: value, countryCode: inferred.code, defaultLanguage: inferred.defaultLanguage });
+  };
   const reloadMerchantDetail = async (merchantId = selected?.id) => {
     if (!merchantId) {
       setCountries([]);
@@ -323,9 +341,9 @@ function Merchants() {
         <div className="form-section">
           <h4>国家 / 市场</h4>
           <div className="form-grid compact-fields">
-            <label>国家代码<input placeholder="br" value={form.countryCode} onChange={(e) => update("countryCode", e.target.value)} /></label>
-            <label>国家名称<input placeholder="巴西" value={form.countryName} onChange={(e) => update("countryName", e.target.value)} /></label>
-            <label>默认语言<select value={form.defaultLanguage} onChange={(e) => update("defaultLanguage", e.target.value)}>{["pt-BR", "zh", "en", "es", "ja", "th", "vi", "id", "ms"].map((item) => <option key={item} value={item}>{languageName(item)}</option>)}</select></label>
+            <label>国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：巴西" value={form.countryName} onChange={(e) => updateCountryName(e.target.value)} /><datalist id="merchant-country-presets">{COUNTRY_PRESETS.map((item) => <option key={item.code} value={item.name} />)}</datalist></label>
+            <label>国家代码<input readOnly value={form.countryCode} /></label>
+            <label>默认语言<input readOnly value={languageName(form.defaultLanguage)} /></label>
             <label>开户链接<input placeholder="开户链接，可后续在配置页修改" value={form.platformRegisterUrl} onChange={(e) => update("platformRegisterUrl", e.target.value)} /></label>
             <label>TG注册说明<input placeholder="Telegram 下载或注册说明链接" value={form.tgRegisterGuideUrl} onChange={(e) => update("tgRegisterGuideUrl", e.target.value)} /></label>
           </div>
@@ -527,6 +545,10 @@ function Config({ platform }: { platform: boolean }) {
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
   };
+  const updateCountryDraftName = (value: string) => {
+    const inferred = inferCountryProfile(value);
+    setCountryDraft({ ...countryDraft, name: value, code: inferred.code, defaultLanguage: inferred.defaultLanguage });
+  };
   const setupTelegram = async () => {
     setMessage("");
     setError("");
@@ -577,7 +599,7 @@ function Config({ platform }: { platform: boolean }) {
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
-    <div className="memory"><h3>商户国家/市场</h3><p>当前版本每个商户只维护一个国家，所有客服账号、样本、知识库、客户记忆都会使用这一套配置。</p><div className="toolbar wrap">{["code","name","defaultLanguage","platformRegisterUrl","tgRegisterGuideUrl"].map((key) => <input key={key} placeholder={label(key)} value={(countryDraft as any)[key]} onChange={(e) => setCountryDraft({ ...countryDraft, [key]: e.target.value })} />)}<select value={countryDraft.requirePlatformAccount} onChange={(e) => setCountryDraft({ ...countryDraft, requirePlatformAccount: e.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select><select value={countryDraft.requirePhone} onChange={(e) => setCountryDraft({ ...countryDraft, requirePhone: e.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select><select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select><select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select><AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton></div><Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} /></div>
+    <div className="memory"><h3>商户国家/市场</h3><p>商户只需要填写国家，国家代码和默认语言会自动带入。当前版本每个商户只维护一个国家。</p><div className="toolbar wrap"><label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：巴西" value={countryDraft.name} onChange={(e) => updateCountryDraftName(e.target.value)} /></label><label className="inline-field">国家代码<input readOnly value={countryDraft.code} /></label><label className="inline-field">默认语言<input readOnly value={languageName(countryDraft.defaultLanguage)} /></label><input placeholder={label("platformRegisterUrl")} value={countryDraft.platformRegisterUrl} onChange={(e) => setCountryDraft({ ...countryDraft, platformRegisterUrl: e.target.value })} /><input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(e) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: e.target.value })} /><select value={countryDraft.requirePlatformAccount} onChange={(e) => setCountryDraft({ ...countryDraft, requirePlatformAccount: e.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select><select value={countryDraft.requirePhone} onChange={(e) => setCountryDraft({ ...countryDraft, requirePhone: e.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select><select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select><select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select><AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton></div><Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} /></div>
     <div className="memory"><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p><div className="account-grid">{a2cAccounts.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => toggleA2CAccount(row)} onCountry={async () => undefined} />)}{!a2cAccounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}</div></div>
     <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
   </section>;
@@ -1454,9 +1476,27 @@ function countryLabel(value: unknown) {
     "thailand": "泰国",
     "th": "泰国",
     "vietnam": "越南",
-    "vn": "越南"
+    "vn": "越南",
+    "china": "中国",
+    "cn": "中国",
+    "united states": "美国",
+    "usa": "美国",
+    "us": "美国",
+    "mexico": "墨西哥",
+    "mx": "墨西哥",
+    "spain": "西班牙",
+    "es": "西班牙"
   };
   return dictionary[normalized] || text;
+}
+
+function inferCountryProfile(value: string) {
+  const text = value.trim();
+  const normalized = text.toLowerCase();
+  const preset = COUNTRY_PRESETS.find((item) => item.name === text || item.code === normalized || item.aliases.includes(normalized));
+  if (preset) return { code: preset.code, defaultLanguage: preset.defaultLanguage };
+  const ascii = normalized.replace(/[^a-z]/g, "").slice(0, 2);
+  return { code: ascii || "default", defaultLanguage: "en" };
 }
 
 function localizeSystemText(value: unknown) {
@@ -1549,6 +1589,7 @@ function languageName(code: unknown) {
     ja: "日语",
     "pt-BR": "葡语",
     pt: "葡语",
+    es: "西语",
     ms: "马来语",
     id: "印尼语",
     th: "泰语",
