@@ -14,6 +14,7 @@ import { parseScriptFlowWorkbook } from "./import/scriptFlows.js";
 import type { AppConfig } from "./config.js";
 import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
+import { generateConversationReview } from "./services/conversationReview.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: WebhookProcessor }): void {
@@ -98,6 +99,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.getMerchantConfig(request.params.id)));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile", { preHandler: adminOnly }, async (request) => deps.repos.getMerchantAgentProfile(request.params.id));
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: adminOnly }, async (request) => ({ rows: deps.repos.listMerchantCountries(request.params.id) }));
@@ -356,6 +359,18 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!memory) return reply.code(404).send({ error: "memory not found" });
     return memory;
   });
+  app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/review", { preHandler: adminOnly }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
+    return deps.repos.getConversationReview(request.params.id) ?? { review: null, items: [] };
+  });
+  app.post<{ Params: { id: string } }>("/api/admin/conversations/:id/review", { preHandler: adminOnly }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
+    const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg, deps.repos.getMerchantCountry(conversation.countryId));
+    return generateConversationReview(deps.repos, runtimeConfig, conversation.id);
+  });
   app.post("/api/admin/users", { preHandler: adminOnly }, async (request) => {
     const body = z.object({
       merchantId: z.string().nullable().optional(),
@@ -407,6 +422,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.get("/api/merchant/config", { preHandler: merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
+  app.get("/api/merchant/agent-profile", { preHandler: merchantRoles }, async (request) => deps.repos.getMerchantAgentProfile(scopedMerchantId(request)));
+  app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: merchantAdmins }, async (request) => deps.repos.patchMerchantAgentProfile(scopedMerchantId(request), cleanAgentProfilePatch(request.body ?? {})));
   app.post("/api/merchant/config/registration-tutorial-image", { preHandler: merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/config/check", { preHandler: merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
 	  app.get("/api/merchant/countries", { preHandler: merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
@@ -726,11 +743,36 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!memory) return reply.code(404).send({ error: "memory not found" });
     return memory;
   });
+  app.get<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: merchantRoles }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
+    return deps.repos.getConversationReview(request.params.id, conversation.merchantId) ?? { review: null, items: [] };
+  });
+  app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: merchantRoles }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
+    const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
+    const runtimeConfig = appConfigForMerchant(deps.config, cfg, deps.repos.getMerchantCountry(conversation.countryId));
+    return generateConversationReview(deps.repos, runtimeConfig, conversation.id);
+  });
+  app.post<{ Params: { id: string }; Body: { itemId?: number; itemIds?: number[] } }>("/api/merchant/conversations/:id/review/apply", { preHandler: merchantAdmins }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    const merchantId = scopedMerchantId(request);
+    if (!conversation || conversation.merchantId !== merchantId) return reply.code(404).send({ error: "conversation not found" });
+    const itemIds = Array.isArray(request.body?.itemIds) ? request.body.itemIds : request.body?.itemId ? [request.body.itemId] : [];
+    if (!itemIds.length) return reply.code(400).send({ error: "itemId required" });
+    const rows = itemIds.map((id) => deps.repos.applyConversationReviewItem(Number(id), merchantId)).filter(Boolean);
+    return { rows };
+  });
   app.patch<{ Params: { conversationId: string }; Body: { handoffStatus?: "pending" | "processing" | "done" } }>("/api/merchant/handoffs/:conversationId", { preHandler: merchantRoles }, async (request, reply) => {
     const status = request.body?.handoffStatus;
     if (status !== "pending" && status !== "processing" && status !== "done") return reply.code(400).send({ error: "invalid handoffStatus" });
     const row = deps.repos.updateHandoffStatus(request.params.conversationId, scopedMerchantId(request), status);
     if (!row) return reply.code(404).send({ error: "conversation not found" });
+    if (status === "done") {
+      const cfg = deps.repos.getMerchantConfig(row.merchantId);
+      await generateConversationReview(deps.repos, appConfigForMerchant(deps.config, cfg, deps.repos.getMerchantCountry(row.countryId)), row.id).catch((error) => app.log.warn({ err: error }, "conversation review generation failed"));
+    }
     return row;
   });
   app.post<{ Params: { id: string }; Body: { type?: "text" | "image" | "video" | "audio" | "document"; content?: string; url?: string; caption?: string; fileName?: string } }>("/api/merchant/conversations/:id/send", { preHandler: merchantRoles }, async (request, reply) => {
@@ -1378,6 +1420,26 @@ function cleanConfigPatch(patch: Record<string, unknown>): Record<string, unknow
   for (const [key, value] of Object.entries(patch)) {
     if (typeof value === "string" && value.includes("••••")) continue;
     cleaned[key] = value;
+  }
+  return cleaned;
+}
+
+function cleanAgentProfilePatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const allowed = new Set([
+    "agentName",
+    "roleDefinition",
+    "toneStyle",
+    "coreGoal",
+    "mustFollow",
+    "forbidden",
+    "uncertaintyPolicy",
+    "handoffPolicy",
+    "enabled"
+  ]);
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (!allowed.has(key)) continue;
+    cleaned[key] = key === "enabled" ? Boolean(value) : String(value ?? "").trim();
   }
   return cleaned;
 }

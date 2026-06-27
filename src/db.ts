@@ -394,6 +394,57 @@ export function migrate(db: DatabaseSync): void {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(merchant_id, country_id, candidate_key)
     );
+
+    CREATE TABLE IF NOT EXISTS merchant_agent_profiles (
+      merchant_id TEXT PRIMARY KEY,
+      agent_name TEXT NOT NULL DEFAULT '开户注册接待专员',
+      role_definition TEXT NOT NULL DEFAULT '拥有10年开户注册接待经验的客户引导专员，负责自然、耐心地引导客户完成开户注册。',
+      tone_style TEXT NOT NULL DEFAULT '简短、口语化、耐心、像真人客服，不长篇大论。',
+      core_goal TEXT NOT NULL DEFAULT '引导客户了解工作、完成平台开户、提交注册手机号、注册或提交 Telegram 用户名，并在资料齐全后转交人工。',
+      must_follow TEXT NOT NULL DEFAULT '客户提问时先简短回答，再轻轻拉回当前流程；每次只处理当前最需要的一步。',
+      forbidden TEXT NOT NULL DEFAULT '不能暴露 AI、机器人、模型、自动客服身份；不能承诺固定收益；不能要求私下转账；不能收集密码、验证码、银行卡或证件敏感信息。',
+      uncertainty_policy TEXT NOT NULL DEFAULT '不确定的业务规则、收益、充值、任务细节，以页面说明或人工确认为准。',
+      handoff_policy TEXT NOT NULL DEFAULT '客户提交手机号和 Telegram 后回复正在核实并转人工；客户强烈要求人工或连续无法解决时也可转人工。',
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL UNIQUE,
+      score INTEGER DEFAULT 0,
+      goal_completed INTEGER DEFAULT 0,
+      summary TEXT DEFAULT '',
+      main_concerns_json TEXT DEFAULT '[]',
+      mistakes_json TEXT DEFAULT '[]',
+      good_replies_json TEXT DEFAULT '[]',
+      suggested_samples_json TEXT DEFAULT '[]',
+      suggested_knowledge_json TEXT DEFAULT '[]',
+      improvement_actions_json TEXT DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'generated',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_review_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      review_id INTEGER NOT NULL,
+      merchant_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      content TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'candidate',
+      applied_target_type TEXT DEFAULT '',
+      applied_target_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(review_id) REFERENCES conversation_reviews(id) ON DELETE CASCADE
+    );
 	  `);
 
   db.exec("DROP TABLE IF EXISTS vector_documents;");
@@ -463,6 +514,10 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "intent_learning_events", "display_name", "TEXT DEFAULT ''");
   ensureColumn(db, "intent_learning_events", "description", "TEXT DEFAULT ''");
   ensureColumn(db, "intent_learning_events", "examples_json", "TEXT DEFAULT '[]'");
+  ensureColumn(db, "merchant_agent_profiles", "enabled", "INTEGER DEFAULT 1");
+  ensureColumn(db, "conversation_reviews", "status", "TEXT DEFAULT 'generated'");
+  ensureColumn(db, "conversation_review_items", "applied_target_type", "TEXT DEFAULT ''");
+  ensureColumn(db, "conversation_review_items", "applied_target_id", "INTEGER");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();
@@ -482,6 +537,9 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE script_flows SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE script_flow_steps SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE script_flow_versions SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE merchant_agent_profiles SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE conversation_reviews SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
+  db.prepare("UPDATE conversation_review_items SET merchant_id = 'default' WHERE merchant_id IS NULL OR merchant_id = ''").run();
   db.prepare("UPDATE training_samples SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE conversations SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE merchant_a2c_accounts SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();

@@ -275,6 +275,66 @@ export interface ScriptFlowRuntime {
   steps: ScriptFlowStepRecord[];
 }
 
+export interface MerchantAgentProfileRecord {
+  merchantId: string;
+  agentName: string;
+  roleDefinition: string;
+  toneStyle: string;
+  coreGoal: string;
+  mustFollow: string;
+  forbidden: string;
+  uncertaintyPolicy: string;
+  handoffPolicy: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationReviewRecord {
+  id: number;
+  merchantId: string;
+  conversationId: string;
+  score: number;
+  goalCompleted: boolean;
+  summary: string;
+  mainConcerns: string[];
+  mistakes: string[];
+  goodReplies: string[];
+  suggestedSamples: Array<Record<string, unknown>>;
+  suggestedKnowledge: Array<Record<string, unknown>>;
+  improvementActions: string[];
+  status: "draft" | "ready" | "applied";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationReviewItemRecord {
+  id: number;
+  reviewId: number;
+  merchantId: string;
+  conversationId: string;
+  itemType: "sample" | "knowledge";
+  title: string;
+  content: string;
+  status: "candidate" | "applied" | "ignored";
+  appliedTargetType: string;
+  appliedTargetId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationReviewInput {
+  score: number;
+  goalCompleted: boolean;
+  summary: string;
+  mainConcerns: string[];
+  mistakes: string[];
+  goodReplies: string[];
+  suggestedSamples: Array<Record<string, unknown>>;
+  suggestedKnowledge: Array<Record<string, unknown>>;
+  improvementActions: string[];
+}
+
 export interface MessageInput {
   conversationId: string;
   direction: "inbound" | "outbound";
@@ -392,6 +452,8 @@ export class Repositories {
       const trainingSamples = this.db.sqlite.prepare("DELETE FROM training_samples").run();
       const knowledgeItems = this.db.sqlite.prepare("DELETE FROM knowledge_items").run();
       const intentLearningEvents = this.db.sqlite.prepare("DELETE FROM intent_learning_events").run();
+      this.db.sqlite.prepare("DELETE FROM conversation_review_items").run();
+      this.db.sqlite.prepare("DELETE FROM conversation_reviews").run();
       this.db.sqlite.prepare("DELETE FROM conversation_followups").run();
       this.db.sqlite.prepare("DELETE FROM conversation_script_state").run();
       this.db.sqlite.prepare("DELETE FROM script_flow_versions").run();
@@ -629,6 +691,8 @@ export class Repositories {
         const conversationSampleMarkers = conversations.map((id) => `conversation_sample:${id}:%`);
         messagesDeleted = Number(this.db.sqlite.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...conversations).changes ?? 0);
         this.db.sqlite.prepare(`DELETE FROM intent_learning_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM conversation_review_items WHERE conversation_id IN (${placeholders})`).run(...conversations);
+        this.db.sqlite.prepare(`DELETE FROM conversation_reviews WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM conversation_followups WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversations);
         this.db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversations);
@@ -1145,6 +1209,8 @@ export class Repositories {
           .run(mapped.merchantId, mapped.countryId, mapped.customerPhone);
       }
       this.db.sqlite.prepare("DELETE FROM customer_memories WHERE conversation_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM conversation_review_items WHERE conversation_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM conversation_reviews WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM conversation_followups WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
@@ -1864,6 +1930,172 @@ export class Repositories {
       .run(conversationId, conversationId, telegramMessage, sent ? 1 : 0, error);
   }
 
+  getMerchantAgentProfile(merchantId: string): MerchantAgentProfileRecord {
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_agent_profiles (merchant_id) VALUES (?)").run(merchantId);
+    const row = this.db.sqlite.prepare("SELECT * FROM merchant_agent_profiles WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
+    return mapMerchantAgentProfile(row);
+  }
+
+  patchMerchantAgentProfile(merchantId: string, patch: Record<string, unknown>): MerchantAgentProfileRecord {
+    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_agent_profiles (merchant_id) VALUES (?)").run(merchantId);
+    const allowed: Record<string, string> = {
+      agentName: "agent_name",
+      roleDefinition: "role_definition",
+      toneStyle: "tone_style",
+      coreGoal: "core_goal",
+      mustFollow: "must_follow",
+      forbidden: "forbidden",
+      uncertaintyPolicy: "uncertainty_policy",
+      handoffPolicy: "handoff_policy",
+      enabled: "enabled"
+    };
+    const entries = Object.entries(patch).filter(([key]) => key in allowed);
+    if (entries.length) {
+      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
+      const values = entries.map(([key, value]) => key === "enabled" ? booleanPatchValue(value, true) : String(value ?? ""));
+      this.db.sqlite
+        .prepare(`UPDATE merchant_agent_profiles SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`)
+        .run(...values, merchantId);
+    }
+    return this.getMerchantAgentProfile(merchantId);
+  }
+
+  getConversationReview(conversationId: string, merchantId?: string): { review: ConversationReviewRecord; items: ConversationReviewItemRecord[] } | undefined {
+    const where = merchantId ? "WHERE conversation_id = ? AND merchant_id = ?" : "WHERE conversation_id = ?";
+    const row = this.db.sqlite.prepare(`SELECT * FROM conversation_reviews ${where}`).get(conversationId, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    const review = mapConversationReview(row);
+    return { review, items: this.listConversationReviewItems(review.id, merchantId) };
+  }
+
+  upsertConversationReview(conversationId: string, merchantId: string, input: ConversationReviewInput): { review: ConversationReviewRecord; items: ConversationReviewItemRecord[] } {
+    const existing = this.db.sqlite
+      .prepare("SELECT id FROM conversation_reviews WHERE conversation_id = ? AND merchant_id = ?")
+      .get(conversationId, merchantId) as { id: number } | undefined;
+    const params = [
+      Math.max(0, Math.min(100, Math.round(input.score || 0))),
+      input.goalCompleted ? 1 : 0,
+      clipText(input.summary || "", 1200),
+      JSON.stringify(input.mainConcerns || []),
+      JSON.stringify(input.mistakes || []),
+      JSON.stringify(input.goodReplies || []),
+      JSON.stringify(input.suggestedSamples || []),
+      JSON.stringify(input.suggestedKnowledge || []),
+      JSON.stringify(input.improvementActions || []),
+      "ready"
+    ];
+    this.db.sqlite.exec("BEGIN");
+    try {
+      let reviewId = existing?.id;
+      if (reviewId) {
+        this.db.sqlite
+          .prepare(`
+            UPDATE conversation_reviews
+            SET score = ?, goal_completed = ?, summary = ?, main_concerns_json = ?, mistakes_json = ?,
+                good_replies_json = ?, suggested_samples_json = ?, suggested_knowledge_json = ?,
+                improvement_actions_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `)
+          .run(...params, reviewId);
+        this.db.sqlite.prepare("DELETE FROM conversation_review_items WHERE review_id = ? AND status = 'candidate'").run(reviewId);
+      } else {
+        const result = this.db.sqlite
+          .prepare(`
+            INSERT INTO conversation_reviews
+              (merchant_id, conversation_id, score, goal_completed, summary, main_concerns_json, mistakes_json,
+               good_replies_json, suggested_samples_json, suggested_knowledge_json, improvement_actions_json, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+          .run(merchantId, conversationId, ...params);
+        reviewId = Number(result.lastInsertRowid ?? 0);
+      }
+      this.insertReviewSuggestionItems(reviewId, merchantId, conversationId, input);
+      this.db.sqlite.exec("COMMIT");
+      const current = this.getConversationReview(conversationId, merchantId);
+      if (!current) throw new Error("review not found after save");
+      return current;
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  listConversationReviewItems(reviewId: number, merchantId?: string): ConversationReviewItemRecord[] {
+    const where = merchantId ? "WHERE review_id = ? AND merchant_id = ?" : "WHERE review_id = ?";
+    return this.db.sqlite
+      .prepare(`SELECT * FROM conversation_review_items ${where} ORDER BY id ASC`)
+      .all(reviewId, ...(merchantId ? [merchantId] : []))
+      .map((row) => mapConversationReviewItem(row as Record<string, unknown>));
+  }
+
+  applyConversationReviewItem(itemId: number, merchantId: string): ConversationReviewItemRecord | undefined {
+    const row = this.db.sqlite
+      .prepare("SELECT * FROM conversation_review_items WHERE id = ? AND merchant_id = ?")
+      .get(itemId, merchantId) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    const item = mapConversationReviewItem(row);
+    if (item.status === "applied") return item;
+    const payload = parseJsonObject(item.content);
+    let targetType = "";
+    let targetId = "";
+    if (item.itemType === "sample") {
+      const created = this.createTrainingSample(merchantId, {
+        customerMessage: String(payload.customerMessage || item.title || "客户问题"),
+        standardReply: String(payload.standardReply || payload.reply || item.content || ""),
+        stage: normalizeReviewSampleStage(payload.stage),
+        intent: String(payload.intent || "unknown") as IntentLabel,
+        language: String(payload.language || "zh"),
+        keywords: String(payload.keywords || "复盘候选,人工确认"),
+        priority: Number(payload.priority || 0),
+        enabled: true
+      }, this.defaultCountryId(merchantId));
+      targetType = "training_sample";
+      targetId = String(created.id);
+    } else {
+      const created = this.createKnowledgeItem(merchantId, {
+        title: String(payload.title || item.title || "复盘知识建议"),
+        content: String(payload.content || payload.answer || item.content || ""),
+        type: String(payload.type || "faq"),
+        language: String(payload.language || "zh"),
+        priority: Number(payload.priority || 0),
+        enabled: true
+      });
+      targetType = "knowledge_item";
+      targetId = String(created.id);
+    }
+    this.db.sqlite
+      .prepare(`
+        UPDATE conversation_review_items
+        SET status = 'applied', applied_target_type = ?, applied_target_id = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND merchant_id = ?
+      `)
+      .run(targetType, targetId, itemId, merchantId);
+    return mapConversationReviewItem(this.db.sqlite.prepare("SELECT * FROM conversation_review_items WHERE id = ?").get(itemId) as Record<string, unknown>);
+  }
+
+  private insertReviewSuggestionItems(reviewId: number, merchantId: string, conversationId: string, input: ConversationReviewInput): void {
+    for (const sample of input.suggestedSamples || []) {
+      const title = clipText(String(sample.customerMessage || sample.title || "候选优秀回复样本"), 120);
+      this.db.sqlite
+        .prepare(`
+          INSERT INTO conversation_review_items
+            (review_id, merchant_id, conversation_id, item_type, title, content, status)
+          VALUES (?, ?, ?, 'sample', ?, ?, 'candidate')
+        `)
+        .run(reviewId, merchantId, conversationId, title, JSON.stringify(sample));
+    }
+    for (const knowledge of input.suggestedKnowledge || []) {
+      const title = clipText(String(knowledge.title || "候选知识补充"), 120);
+      this.db.sqlite
+        .prepare(`
+          INSERT INTO conversation_review_items
+            (review_id, merchant_id, conversation_id, item_type, title, content, status)
+          VALUES (?, ?, ?, 'knowledge', ?, ?, 'candidate')
+        `)
+        .run(reviewId, merchantId, conversationId, title, JSON.stringify(knowledge));
+    }
+  }
+
   listMerchants(): MerchantRecord[] {
     return this.db.sqlite.prepare("SELECT id, name, status FROM merchants ORDER BY created_at DESC").all().map(mapMerchant);
   }
@@ -1899,6 +2131,9 @@ export class Repositories {
     this.db.sqlite.exec("BEGIN");
     try {
       this.db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM conversation_review_items WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM conversation_reviews WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM merchant_agent_profiles WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM training_material_items WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM training_materials WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM training_samples WHERE merchant_id = ?").run(id);
@@ -2724,6 +2959,60 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
   };
 }
 
+function mapMerchantAgentProfile(row: Record<string, unknown>): MerchantAgentProfileRecord {
+  return {
+    merchantId: String(row.merchant_id ?? "default"),
+    agentName: String(row.agent_name ?? "开户注册接待专员"),
+    roleDefinition: String(row.role_definition ?? "拥有10年开户注册接待经验的客户引导专员，负责自然、耐心地引导客户完成开户注册。"),
+    toneStyle: String(row.tone_style ?? "简短、口语化、耐心、像真人客服，不长篇大论。"),
+    coreGoal: String(row.core_goal ?? "引导客户完成开户注册并提交手机号和 Telegram。"),
+    mustFollow: String(row.must_follow ?? "客户提问时先简短回答，再轻轻拉回当前流程；每次只处理当前最需要的一步。"),
+    forbidden: String(row.forbidden ?? "不能暴露 AI、机器人、模型、自动客服身份；不能承诺固定收益；不能要求私下转账；不能收集密码、验证码、银行卡或证件敏感信息。"),
+    uncertaintyPolicy: String(row.uncertainty_policy ?? "不确定的业务规则、收益、充值、任务细节，以页面说明或人工确认为准。"),
+    handoffPolicy: String(row.handoff_policy ?? "客户提交手机号和 Telegram 后回复正在核实并转人工；客户强烈要求人工或连续无法解决时也可转人工。"),
+    enabled: Boolean(Number(row.enabled ?? 1)),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
+function mapConversationReview(row: Record<string, unknown>): ConversationReviewRecord {
+  return {
+    id: Number(row.id ?? 0),
+    merchantId: String(row.merchant_id ?? "default"),
+    conversationId: String(row.conversation_id ?? ""),
+    score: Number(row.score ?? 0),
+    goalCompleted: Boolean(Number(row.goal_completed ?? 0)),
+    summary: String(row.summary ?? ""),
+    mainConcerns: parseJsonArray(row.main_concerns_json),
+    mistakes: parseJsonArray(row.mistakes_json),
+    goodReplies: parseJsonArray(row.good_replies_json),
+    suggestedSamples: parseJsonRecordArray(row.suggested_samples_json),
+    suggestedKnowledge: parseJsonRecordArray(row.suggested_knowledge_json),
+    improvementActions: parseJsonArray(row.improvement_actions_json),
+    status: normalizeConversationReviewStatus(row.status),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
+function mapConversationReviewItem(row: Record<string, unknown>): ConversationReviewItemRecord {
+  return {
+    id: Number(row.id ?? 0),
+    reviewId: Number(row.review_id ?? 0),
+    merchantId: String(row.merchant_id ?? "default"),
+    conversationId: String(row.conversation_id ?? ""),
+    itemType: normalizeConversationReviewItemType(row.item_type),
+    title: String(row.title ?? ""),
+    content: String(row.content ?? ""),
+    status: normalizeConversationReviewItemStatus(row.status),
+    appliedTargetType: String(row.applied_target_type ?? ""),
+    appliedTargetId: String(row.applied_target_id ?? ""),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  };
+}
+
 function mapMerchantA2CAccount(row: Record<string, unknown>): MerchantA2CAccountRecord {
   const merchantId = String(row.merchant_id ?? "default");
   return {
@@ -3024,6 +3313,24 @@ function normalizeTelegramBindingStatus(value: unknown): MerchantConfigRecord["t
 
 function normalizeInviteCodeStatus(value: unknown, fallback: A2CInviteCodeRecord["status"]): A2CInviteCodeRecord["status"] {
   return value === "available" || value === "reserved" || value === "used" || value === "disabled" ? value : fallback;
+}
+
+function normalizeConversationReviewStatus(value: unknown): ConversationReviewRecord["status"] {
+  return value === "draft" || value === "ready" || value === "applied" ? value : "ready";
+}
+
+function normalizeConversationReviewItemType(value: unknown): ConversationReviewItemRecord["itemType"] {
+  return value === "sample" || value === "knowledge" ? value : "knowledge";
+}
+
+function normalizeConversationReviewItemStatus(value: unknown): ConversationReviewItemRecord["status"] {
+  return value === "applied" || value === "ignored" || value === "candidate" ? value : "candidate";
+}
+
+function normalizeReviewSampleStage(value: unknown): ConversationStage {
+  const text = String(value || "");
+  if (text === "need_tg_register" || text === "need_phone_or_tg" || text === "ready_for_handoff" || text === "need_platform_register") return text;
+  return "need_platform_register";
 }
 
 function booleanPatchValue(value: unknown, fallback: boolean): number {

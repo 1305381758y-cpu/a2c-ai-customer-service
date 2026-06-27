@@ -5,8 +5,9 @@ import { A2CClient } from "../clients/a2c.js";
 import { analyzeGeminiImage, classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
-import type { IntentLearningEventRecord, MerchantConfigRecord } from "../repositories.js";
+import type { IntentLearningEventRecord, MerchantAgentProfileRecord, MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
+import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { translateForCustomer, translateForOperator } from "./translation.js";
 
@@ -48,6 +49,7 @@ export class WebhookProcessor {
     const content = msgType === "text" ? analysisText : data.caption || mediaLabel(msgType);
     const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
+    const agentProfile = this.repos.getMerchantAgentProfile(merchant.id);
     const simulation = Boolean(options.simulation || merchantConfig.trainingSimulationEnabled);
     const country = this.repos.ensurePrimaryCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
@@ -208,6 +210,7 @@ export class WebhookProcessor {
       }
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
+      await this.generateReviewSafe(conversation.id, runtimeConfig);
       return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
     }
 
@@ -255,7 +258,8 @@ export class WebhookProcessor {
         flowStep: strictReply.nextFlowStep,
         questionType: strictReply.controlledQuestionType || "none",
         history: historyForIntent,
-        allowLinkOrInvite: strictReply.needsInviteCode
+        allowLinkOrInvite: strictReply.needsInviteCode,
+        agentProfile
       });
       strictReply.reply = naturalized.reply;
       const languageGuard = await ensureReplyCustomerLanguage(runtimeConfig, {
@@ -304,6 +308,7 @@ export class WebhookProcessor {
           controlledQuestionType: strictReply.controlledQuestionType || "none",
           controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
           strictQuestionType: strictReply.controlledQuestionType || "none",
+          agentProfileName: agentProfile.agentName,
           contextualIntent: strictReply.contextualIntent,
           learnedIntent: learnedIntent ? {
             id: learnedIntent.event.id,
@@ -367,7 +372,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode });
+    const aiReply = await ai.generateReply({ customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode, agentProfile });
     if (!shouldIncludeRegistrationDetails) {
       aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
     }
@@ -386,6 +391,7 @@ export class WebhookProcessor {
       }
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
+      await this.generateReviewSafe(conversation.id, runtimeConfig);
       return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
     }
 
@@ -422,6 +428,7 @@ export class WebhookProcessor {
       rawPayload: {
         replyMode: aiReply.fallback ? "fallback" : "gemini",
         strictFlowEnabled,
+        agentProfileName: agentProfile.agentName,
         learnedIntent: learnedIntent ? {
           id: learnedIntent.event.id,
           suggestedIntent: learnedIntent.event.suggestedIntent,
@@ -456,6 +463,14 @@ export class WebhookProcessor {
 
     if (a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
     return { status: a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
+  }
+
+  private async generateReviewSafe(conversationId: string, runtimeConfig: AppConfig): Promise<void> {
+    try {
+      await generateConversationReview(this.repos, runtimeConfig, conversationId);
+    } catch (error) {
+      console.warn("conversation review generation failed", error);
+    }
   }
 
   async processDueFollowUps(limit = 50): Promise<{ scanned: number; sent: number; skipped: number; failed: number }> {
@@ -974,6 +989,7 @@ async function naturalizeStrictReply(
     questionType: string;
     history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
     allowLinkOrInvite: boolean;
+    agentProfile?: MerchantAgentProfileRecord;
   }
 ): Promise<{ reply: string; used: boolean; error?: string }> {
   if (!input.customerText.trim() || input.allowLinkOrInvite) {
@@ -989,7 +1005,8 @@ async function naturalizeStrictReply(
     flowStep: input.flowStep,
     questionType: input.questionType,
     recentHistory: input.history,
-    allowLinkOrInvite: input.allowLinkOrInvite
+    allowLinkOrInvite: input.allowLinkOrInvite,
+    agentProfile: input.agentProfile
   });
   return { reply: result.text, used: result.used, error: result.error };
 }

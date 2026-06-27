@@ -117,6 +117,93 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("keeps agent profiles isolated per merchant and applies review candidates after approval", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+    const createA = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: {
+        name: "Agent商户A",
+        country: { code: "br", name: "巴西", defaultLanguage: "zh", platformRegisterUrl: "https://register.example" },
+        adminUser: { email: "agent-a@test.local", name: "Agent A", password: "Merchant123456" }
+      }
+    });
+    const createB = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: {
+        name: "Agent商户B",
+        country: { code: "ph", name: "菲律宾", defaultLanguage: "en", platformRegisterUrl: "https://register-b.example" },
+        adminUser: { email: "agent-b@test.local", name: "Agent B", password: "Merchant123456" }
+      }
+    });
+    expect(createA.statusCode).toBe(200);
+    expect(createB.statusCode).toBe(200);
+    const merchantA = createA.json().merchant as { id: string };
+    const merchantB = createB.json().merchant as { id: string };
+    const cookieA = await login(app, "agent-a@test.local", "Merchant123456");
+    const cookieB = await login(app, "agent-b@test.local", "Merchant123456");
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: "/api/merchant/agent-profile",
+      headers: { cookie: cookieA },
+      payload: { agentName: "十年接待专员A", toneStyle: "更像真人，短句回答", enabled: true }
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().agentName).toBe("十年接待专员A");
+    const profileB = await app.inject({ method: "GET", url: "/api/merchant/agent-profile", headers: { cookie: cookieB } });
+    expect(profileB.statusCode).toBe(200);
+    expect(profileB.json().agentName).not.toBe("十年接待专员A");
+    const adminProfile = await app.inject({ method: "GET", url: `/api/admin/merchants/${merchantA.id}/agent-profile`, headers: { cookie: adminCookie } });
+    expect(adminProfile.json().agentName).toBe("十年接待专员A");
+    const adminProfileB = await app.inject({ method: "GET", url: `/api/admin/merchants/${merchantB.id}/agent-profile`, headers: { cookie: adminCookie } });
+    expect(adminProfileB.json().merchantId).toBe(merchantB.id);
+
+    await app.inject({
+      method: "PATCH",
+      url: "/api/merchant/config",
+      headers: { cookie: cookieA },
+      payload: { trainingSimulationEnabled: true, strictScriptFlowEnabled: true, smartReplyEnabled: true }
+    });
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-simulator/messages",
+      headers: { cookie: cookieA },
+      payload: { customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "你好" }
+    });
+    expect(first.statusCode).toBe(200);
+    const conversation = first.json().conversation as { id: string };
+    await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-simulator/messages",
+      headers: { cookie: cookieA },
+      payload: { customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "这个安全吗" }
+    });
+
+    const review = await app.inject({ method: "POST", url: `/api/merchant/conversations/${conversation.id}/review`, headers: { cookie: cookieA } });
+    expect(review.statusCode).toBe(200);
+    expect(review.json().review.score).toBeGreaterThanOrEqual(0);
+    expect(review.json().items.length).toBeGreaterThan(0);
+    const candidate = review.json().items.find((item: { itemType: string; status: string }) => item.itemType === "sample" && item.status === "candidate") ?? review.json().items[0];
+    const applied = await app.inject({
+      method: "POST",
+      url: `/api/merchant/conversations/${conversation.id}/review/apply`,
+      headers: { cookie: cookieA },
+      payload: { itemId: candidate.id }
+    });
+    expect(applied.statusCode).toBe(200);
+    expect(applied.json().rows[0].status).toBe("applied");
+    const samplesA = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: cookieA } });
+    const samplesB = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: cookieB } });
+    expect(samplesA.json().rows.length).toBeGreaterThan(0);
+    expect(samplesB.json().rows.length).toBe(0);
+    await app.close();
+  });
+
   it("creates editable script flows, enables one active flow, and protects referenced steps", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

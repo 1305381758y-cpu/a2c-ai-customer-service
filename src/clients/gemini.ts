@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import type { AppConfig } from "../config.js";
-import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
+import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantAgentProfileRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 import { isContextualIntentLabel, isInternalIntentLabel, type ContextualIntentLabel, type InternalIntentLabel } from "../domain/analyzer.js";
 
@@ -14,6 +14,7 @@ export interface ReplyInput {
   memory?: CustomerMemoryRecord;
   country?: MerchantCountryRecord;
   inviteCode?: A2CInviteCodeRecord;
+  agentProfile?: MerchantAgentProfileRecord;
 }
 
 export interface AiReply {
@@ -70,6 +71,7 @@ export class GeminiReplyClient {
           trainingMaterials: input.trainingMaterials ?? [],
           customerMemory: input.memory ?? null,
           country: input.country ?? null,
+          agentProfile: safeAgentProfile(input.agentProfile),
           assignedInviteCode: input.inviteCode ? {
             code: input.inviteCode.code,
             registerUrl: inviteRegisterUrl(input.inviteCode, fallbackRegisterUrl(input, this.config)),
@@ -80,7 +82,7 @@ export class GeminiReplyClient {
         config: {
           abortSignal: timeoutSignal(),
           httpOptions: { timeout: GEMINI_TIMEOUT_MS },
-          systemInstruction: buildSystemPrompt(this.config),
+          systemInstruction: buildSystemPrompt(this.config, input.agentProfile),
           responseMimeType: "application/json",
           responseSchema: replySchema,
           temperature: 0.45,
@@ -315,6 +317,7 @@ export async function naturalizeStrictFlowText(
     questionType: string;
     recentHistory: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
     allowLinkOrInvite: boolean;
+    agentProfile?: MerchantAgentProfileRecord;
   }
 ): Promise<{ text: string; used: boolean; error?: string }> {
   if (!geminiApiKey(config)) return { text: input.draftReply, used: false, error: "Google AI Studio Key 未配置" };
@@ -327,6 +330,7 @@ export async function naturalizeStrictFlowText(
       flowStep: input.flowStep,
       questionType: input.questionType,
       allowLinkOrInvite: input.allowLinkOrInvite,
+      agentProfile: safeAgentProfile(input.agentProfile),
       recentHistory: input.recentHistory.slice(-6).map((item) => ({
         direction: item.direction,
         content: item.content,
@@ -338,8 +342,8 @@ export async function naturalizeStrictFlowText(
 你只负责把开户注册接待回复改写得更像真人客服，不能改变业务含义。
 
 角色：
-- 你是有 10 年经验的开户注册接待专员。
-- 语气自然、耐心、生活化，像 WhatsApp/Telegram 里真人回复。
+- 默认角色是有 10 年经验的开户注册接待专员；如果输入里有 agentProfile，必须优先遵守其角色定义、语气风格、核心目标和边界。
+- 语气自然、耐心、生活化，像真人接待回复。
 - 回复要短，通常 1 到 3 句；不要长篇大论。
 - 不要用微信、WeChat、WhatsApp、Line 或其他地区聊天软件去类比 Telegram；如果要解释 Telegram，只说它是聊天工具/沟通工具。
 
@@ -389,9 +393,46 @@ function stripJsonFence(text: string): string {
   return text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
 
-function buildSystemPrompt(config: AppConfig): string {
+function safeAgentProfile(profile?: MerchantAgentProfileRecord): Record<string, string | boolean> | null {
+  if (!profile || !profile.enabled) return null;
+  return {
+    agentName: profile.agentName,
+    roleDefinition: profile.roleDefinition,
+    toneStyle: profile.toneStyle,
+    coreGoal: profile.coreGoal,
+    mustFollow: profile.mustFollow,
+    forbidden: profile.forbidden,
+    uncertaintyPolicy: profile.uncertaintyPolicy,
+    handoffPolicy: profile.handoffPolicy,
+    enabled: profile.enabled
+  };
+}
+
+function agentProfileBlock(profile?: MerchantAgentProfileRecord): string {
+  if (!profile || !profile.enabled) {
+    return `
+Agent 默认设定：
+- 角色：拥有10年开户注册接待经验的客户引导专员。
+- 语气：简短、口语化、耐心，像真人客服。
+- 边界：不确定内容以页面或人工确认为准。`;
+  }
+  return `
+商户 Agent 设定：
+- Agent 名称：${profile.agentName}
+- 角色定义：${profile.roleDefinition}
+- 语气风格：${profile.toneStyle}
+- 核心目标：${profile.coreGoal}
+- 必须遵守：${profile.mustFollow}
+- 禁止事项：${profile.forbidden}
+- 不确定问题口径：${profile.uncertaintyPolicy}
+- 转人工条件：${profile.handoffPolicy}`;
+}
+
+function buildSystemPrompt(config: AppConfig, agentProfile?: MerchantAgentProfileRecord): string {
   return `
 你是甲方配置的真人客服口吻助手。你必须根据甲方上传的对话资料、话本、客户历史聊天记录和客户当前语言回复。
+
+${agentProfileBlock(agentProfile)}
 
 目标：
 1. 引导客户完成平台开户。

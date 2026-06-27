@@ -2111,6 +2111,73 @@ tbody tr:hover td {
   color: #35527c;
   font-size: 12px;
 }
+.agent-profile-grid textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+.agent-profile-grid small {
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+.review-card {
+  display: grid;
+  gap: 12px;
+}
+.review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.review-score {
+  min-width: 72px;
+  min-height: 62px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fbff;
+  color: var(--ink);
+}
+.review-score strong {
+  font-size: 28px;
+  line-height: 1;
+}
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.review-grid > div,
+.review-items article {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+.review-grid ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted-strong);
+}
+.review-grid p {
+  color: var(--muted-strong);
+}
+.review-items {
+  display: grid;
+  gap: 8px;
+}
+.review-items article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.review-items small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-strong);
+}
 
 @media (max-width: 1320px) {
   .account-grid { grid-template-columns: 1fr; }
@@ -2126,6 +2193,7 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
   .learning-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1520px) {
