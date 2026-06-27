@@ -46,7 +46,7 @@ describe("buildHandoffMessage", () => {
 - 客户语言：中文
 - 国家/市场：巴西
 - A2C客服账号：18507251675
-- 最近消息时间：2026-06-13T10:00:00.000Z`);
+- 最近消息时间：2026-06-13 18:00:00`);
     expect(message).not.toContain("A2C消息ID");
     expect(message).not.toContain("会话ID");
     expect(message).not.toContain("最近聊天摘要");

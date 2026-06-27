@@ -18,7 +18,7 @@ export function buildHandoffMessage(input: {
 - 客户语言：${languageName(conversation.language)}
 - 国家/市场：${conversation.countryName || conversation.countryCode || "默认国家"}
 - A2C客服账号：${displayValue(conversation.a2cAccountPhone)}
-- 最近消息时间：${input.lastMessageTime || "未识别"}`;
+- 最近消息时间：${formatBeijingDateTime(input.lastMessageTime)}`;
 }
 
 function displayValue(value: string): string {
@@ -45,4 +45,22 @@ function languageName(language: string): string {
     unknown: "未知"
   };
   return names[normalized] || language.trim() || "未知";
+}
+
+function formatBeijingDateTime(value: string): string {
+  if (!value?.trim()) return "未识别";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`;
 }
