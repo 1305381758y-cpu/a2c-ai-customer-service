@@ -247,10 +247,12 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
-      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+      const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
     }
     if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      return reply(input, language, "registration_intent", "need_platform_register", buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+      const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
     }
     if (asksLink) {
       return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
@@ -274,19 +276,22 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "registration_help_before_ready", language));
     }
     if (asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text)) {
-      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+      const nextStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
     }
     if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
       return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
     }
     if (positive || asksLink || inferredIntent === "ask_link" || inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+      const nextStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
     }
     return reply(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
   }
 
   if (step === "send_register_link") {
-    return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
+    const nextStep = configuredNextFlowStep(input, "send_register_link", "wait_registration");
+    return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
   }
 
   if (step === "wait_registration") {
@@ -353,9 +358,11 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
         return reply(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_registered_phone", language));
       }
       if (negativeTelegram) {
-        return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
+        const nextStep = configuredNextFlowStep(input, "telegram_confirm", "telegram_download");
+        return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_download", language));
       }
-      return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
+      const nextStep = configuredNextFlowStep(input, "wait_registration", "telegram_confirm");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, input.analysis.phone || input.conversation.extractedPhone ? "telegram_confirm" : "ask_registered_phone", language));
     }
     if (asksLink || inferredIntent === "ask_link") {
       return reply(input, language, "wait_registration", "need_platform_register", registerInstruction(input, language), true);
@@ -369,13 +376,15 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
     if (negativeTelegram) {
-      return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
+      const nextStep = configuredNextFlowStep(input, "telegram_confirm", "telegram_download");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_download", language));
     }
     if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
       return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (positive || contextualLabel === "telegram_installed" || contextualLabel === "ask_tg_register" || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
-      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram", language));
+      const nextStep = configuredNextFlowStep(input, "telegram_confirm", "collect_telegram");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "collect_telegram", language));
     }
     return reply(input, language, "telegram_confirm", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_confirm_question", language), "telegram_confirm", input.analysis.intent));
   }
@@ -389,7 +398,8 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
       return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
     }
     if (contextualLabel === "telegram_installed" || contextualLabel === "acknowledgement" || positive) {
-      return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "telegram_installed_ack", language));
+      const nextStep = configuredNextFlowStep(input, "telegram_download", "collect_telegram");
+      return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_installed_ack", language));
     }
     return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram", language), "collect_telegram", input.analysis.intent));
   }
@@ -1109,6 +1119,11 @@ function activeScriptStep(input: StrictFlowInput, key: string) {
   }
 
   return undefined;
+}
+
+function configuredNextFlowStep(input: StrictFlowInput, currentKey: string, fallback: StrictFlowStep): StrictFlowStep {
+  const configured = normalizeFlowStep(activeScriptStep(input, currentKey)?.nextFlowStep || "");
+  return configured || fallback;
 }
 
 function applyScriptVariables(content: string, input: StrictFlowInput, language: string, display: string): string {

@@ -324,6 +324,26 @@ describe("strict Aston Brazil flow", () => {
     expect(second.reply).toContain("ABC123");
   });
 
+  it("uses script flow next system step when a node configures custom routing", () => {
+    const routedFlow: ScriptFlowRuntime = {
+      ...scriptFlow,
+      steps: scriptFlow.steps.map((step) => step.flowStep === "wait_registration" ? { ...step, nextFlowStep: "collect_telegram" } : step)
+    };
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ flowStep: "wait_registration", language: "zh" }),
+      analysis: analyzeMessage("918273718271 注册好了", "zh"),
+      customerText: "918273718271 注册好了",
+      inviteCode,
+      config,
+      scriptFlow: routedFlow
+    });
+
+    expect(result.nextFlowStep).toBe("collect_telegram");
+    expect(result.stage).toBe("need_tg_register");
+  });
+
   it("moves from interest screening to project intro when the customer asks for an introduction", () => {
     const result = reply("兼职?你介绍下", { language: "zh", flowStep: "interest_screening" });
 
