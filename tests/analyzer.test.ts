@@ -88,6 +88,21 @@ describe("message analyzer", () => {
     expect(analyzeMessage("@asfasf", "pt-BR").language).toBe("pt-BR");
   });
 
+  it("keeps the conversation language stable for short and mixed-language messages", () => {
+    expect(analyzeMessage("sí", "zh").language).toBe("zh");
+    expect(analyzeMessage("你好 hello, I need job", "zh").language).toBe("zh");
+    expect(analyzeMessage("Telegram 是什么 and how to use it?", "zh").language).toBe("zh");
+    expect(analyzeMessage("I opened it 但是打不开", "en").language).toBe("en");
+    expect(analyzeMessage("hola, quero cadastro 你好", "pt-BR").language).toBe("pt-BR");
+    expect(analyzeMessage("Hola 你好, quiero registrarme", "es").language).toBe("es");
+  });
+
+  it("can still detect a clear dominant language when there is no conversation language", () => {
+    expect(detectLanguage("Hola, quiero registrarme en la plataforma")).toBe("es");
+    expect(detectLanguage("Hello, I need help with registration")).toBe("en");
+    expect(detectLanguage("我想注册 hello")).toBe("zh");
+  });
+
   it("treats short registration completion messages as registration done", () => {
     for (const text of ["好了", "完成了", "注册好了", "注册完了", "已注册", "done", "finished", "registered", "pronto"]) {
       const result = analyzeMessage(text);

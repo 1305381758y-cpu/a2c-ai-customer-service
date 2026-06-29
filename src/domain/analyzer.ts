@@ -95,25 +95,28 @@ export function extractWhatsApp(text: string): string {
 
 export function detectLanguage(text: string, fallback = "unknown"): string {
   text = stripUrls(text);
-  if (/[\u0E00-\u0E7F]/.test(text)) return "th";
-  if (/[\u3040-\u30FF]/.test(text)) return "ja";
-  if (/[\u0600-\u06FF]/.test(text)) return "ar";
-  if (/[А-Яа-яЁё]/.test(text)) return "ru";
-  if (/[가-힣]/.test(text)) return "ko";
-  if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) return "ja";
-  if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
+  const trimmed = text.trim();
+  if (!trimmed) return fallback;
+  if (fallback !== "unknown" && shouldKeepPreviousLanguage(trimmed)) return fallback;
+
+  const signals = detectLanguageSignals(trimmed);
+  const dominant = signals[0];
+  if (fallback !== "unknown" && dominant && dominant.language !== fallback) {
+    const runnerUp = signals[1];
+    const dominantRatio = dominant.score / Math.max(1, signals.reduce((sum, item) => sum + item.score, 0));
+    const hasMultipleSignals = Boolean(runnerUp && runnerUp.score >= 2);
+    const shouldSwitch =
+      dominant.strong &&
+      dominant.score >= 8 &&
+      dominantRatio >= 0.7 &&
+      !hasMultipleSignals;
+    if (!shouldSwitch) return fallback;
+  }
+
+  if (dominant) return dominant.language;
   const lower = text.toLowerCase();
-  if (/\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo)\b/.test(lower)) return "es";
-  if (/\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail)\b/.test(lower)) return "fr";
-  if (/\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih)\b/.test(lower)) return "ms";
-  if (/\b(saya|kamu|daftar|akun|nomor|terima kasih|bisa)\b/.test(lower)) return "id";
-  if (/\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại)\b/.test(lower)) return "vi";
-  if (/(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco)(\s|$|[,.!?;:])/i.test(lower)) return "pt-BR";
-  if (fallback !== "unknown" && isShortContextualReply(text)) return fallback;
-  if (fallback !== "unknown" && /^@[A-Za-z0-9_]{5,32}$/.test(text.trim())) return fallback;
-  if (fallback !== "unknown" && /^\+?\d[\d\s-]{5,18}$/.test(text.trim())) return fallback;
   if (/[A-Za-z]/.test(text)) return "en";
-  return fallback;
+  return lower ? fallback : "unknown";
 }
 
 export function analyzeMessage(text: string, previousLanguage = "unknown"): MessageAnalysis {
@@ -130,6 +133,80 @@ export function analyzeMessage(text: string, previousLanguage = "unknown"): Mess
 
 function stripUrls(text: string): string {
   return text.replace(/https?:\/\/\S+/gi, " ");
+}
+
+function shouldKeepPreviousLanguage(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .trim();
+  return isShortContextualReply(normalized) ||
+    isGreeting(normalized) ||
+    /^@[A-Za-z0-9_]{5,32}$/.test(normalized) ||
+    /^\+?\d[\d\s-]{5,18}$/.test(normalized);
+}
+
+function detectLanguageSignals(text: string): Array<{ language: string; score: number; strong: boolean }> {
+  const scores = new Map<string, { score: number; strong: boolean }>();
+  const add = (language: string, score: number, strong = false) => {
+    if (score <= 0) return;
+    const previous = scores.get(language) ?? { score: 0, strong: false };
+    scores.set(language, { score: previous.score + score, strong: previous.strong || strong });
+  };
+  const count = (regex: RegExp) => text.match(regex)?.length ?? 0;
+
+  const kana = count(/[\u3040-\u30FF]/g);
+  const han = count(/[\u4E00-\u9FFF]/g);
+  add("th", count(/[\u0E00-\u0E7F]/g) * 4, count(/[\u0E00-\u0E7F]/g) > 0);
+  add("ja", kana * 5, kana > 0);
+  add("ar", count(/[\u0600-\u06FF]/g) * 4, count(/[\u0600-\u06FF]/g) > 0);
+  add("ru", count(/[А-Яа-яЁё]/g) * 4, count(/[А-Яа-яЁё]/g) > 0);
+  add("ko", count(/[가-힣]/g) * 4, count(/[가-힣]/g) > 0);
+  if (kana === 0) add("zh", han * 3, han >= 2);
+  if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) add("ja", 6, true);
+
+  const lower = text.toLowerCase();
+  addKeywordScore(lower, add, "es", [
+    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí)\b/g
+  ]);
+  addKeywordScore(lower, add, "fr", [
+    /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g
+  ]);
+  addKeywordScore(lower, add, "ms", [
+    /\b(saya|anda|boleh|daftar|akaun|telefon|terima kasih|mahu)\b/g
+  ]);
+  addKeywordScore(lower, add, "id", [
+    /\b(saya|kamu|daftar|akun|nomor|terima kasih|bisa)\b/g
+  ]);
+  addKeywordScore(lower, add, "vi", [
+    /\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại|cảm ơn)\b/g
+  ]);
+  addKeywordScore(lower, add, "pt-BR", [
+    /(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco|sim|quero)(\s|$|[,.!?;:])/g
+  ]);
+  addKeywordScore(lower, add, "en", [
+    /\b(hello|hi|hey|good morning|good afternoon|good evening|register|registration|phone|number|work|job|link|help|how|yes|ok|telegram|account)\b/g
+  ], 2);
+  if (/[A-Za-z]/.test(text)) add("en", 2, false);
+
+  return [...scores.entries()]
+    .map(([language, value]) => ({ language, ...value }))
+    .filter((item) => item.score >= 2)
+    .sort((a, b) => b.score - a.score);
+}
+
+function addKeywordScore(
+  text: string,
+  add: (language: string, score: number, strong?: boolean) => void,
+  language: string,
+  patterns: RegExp[],
+  weight = 3
+): void {
+  let hits = 0;
+  for (const pattern of patterns) {
+    hits += text.match(pattern)?.length ?? 0;
+  }
+  add(language, hits * weight, hits >= 2);
 }
 
 function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): IntentLabel {
