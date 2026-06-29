@@ -2,7 +2,7 @@ import { analyzeMessage, isContextualIntentLabel, isInternalIntentLabel, type Co
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { analyzeGeminiImage, classifyGeminiContextualIntent, classifyGeminiIntent, GeminiReplyClient, naturalizeStrictFlowText } from "../clients/gemini.js";
+import { AiReplyClient, analyzeAiImage, classifyAiContextualIntent, classifyAiIntent, naturalizeStrictFlowText } from "../clients/aiProvider.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { IntentLearningEventRecord, MerchantAgentProfileRecord, MerchantConfigRecord } from "../repositories.js";
@@ -33,7 +33,7 @@ export interface A2CWebhookPayload {
 export class WebhookProcessor {
   constructor(
     private readonly repos: Repositories,
-    private readonly ai: GeminiReplyClient,
+    private readonly ai: AiReplyClient,
     private readonly a2c: A2CClient,
     private readonly telegram: TelegramClient,
     private readonly config: AppConfig
@@ -53,12 +53,12 @@ export class WebhookProcessor {
     const simulation = Boolean(options.simulation || merchantConfig.trainingSimulationEnabled);
     const country = this.repos.ensurePrimaryCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-    const ai = new GeminiReplyClient(runtimeConfig);
+    const ai = new AiReplyClient(runtimeConfig);
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     const imageAnalysis = msgType === "image" && mediaUrl
-      ? await analyzeGeminiImage(runtimeConfig, mediaUrl)
+      ? await analyzeAiImage(runtimeConfig, mediaUrl)
       : { text: "", status: "skipped" as const };
     const customerTextForAi = analysisText || (imageAnalysis.text ? `${content} ${imageAnalysis.text}` : content);
     let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
@@ -320,7 +320,7 @@ export class WebhookProcessor {
           answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
           questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
           nextAction: strictReply.contextualIntent?.nextAction || "",
-          usedGeminiNaturalizer: naturalized.used,
+          usedAiNaturalizer: naturalized.used,
           naturalizerError: naturalized.error || "",
           languageGuardTarget: languageGuard.targetLanguage,
           languageGuardStatus: languageGuard.status,
@@ -619,7 +619,7 @@ export class WebhookProcessor {
     if (!input.strictFlowEnabled) return "unknown";
     if (!input.conversation.flowStep) return "unknown";
     if (input.analysis.intent !== "unknown" && input.analysis.intent !== "irrelevant_or_spam") return "unknown";
-    return classifyGeminiIntent(input.runtimeConfig, {
+    return classifyAiIntent(input.runtimeConfig, {
       customerText: input.customerText,
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
@@ -696,10 +696,10 @@ export class WebhookProcessor {
       customerText: input.customerText,
       inferredIntent: input.inferredIntent
     }, input.history);
-    if (!input.strictFlowEnabled || !input.conversation.flowStep || !shouldAskGeminiForContext(rule, input.customerText, input.analysis.intent)) {
+    if (!input.strictFlowEnabled || !input.conversation.flowStep || !shouldAskAiForContext(rule, input.customerText, input.analysis.intent)) {
       return rule;
     }
-    const gemini = await classifyGeminiContextualIntent(input.runtimeConfig, {
+    const gemini = await classifyAiContextualIntent(input.runtimeConfig, {
       customerText: input.customerText,
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
@@ -723,7 +723,7 @@ export class WebhookProcessor {
   }
 }
 
-function shouldAskGeminiForContext(rule: StrictContextualIntent, text: string, intent: MessageAnalysis["intent"]): boolean {
+function shouldAskAiForContext(rule: StrictContextualIntent, text: string, intent: MessageAnalysis["intent"]): boolean {
   if (rule.source === "rule" && rule.intent !== "unknown" && rule.intent !== "unknown_question") return false;
   const normalized = text.trim();
   if (!normalized) return false;
@@ -919,7 +919,7 @@ function intentDisplayName(intent: string): string {
 }
 
 function intentDescription(intent: string, input: { detectedIntent: string; inferredIntent: string; contextualIntent: string; flowStep: string }): string {
-  return `客户表达可能需要沉淀为“${intentDisplayName(intent)}”。原始识别=${input.detectedIntent}，Gemini意图=${input.inferredIntent}，上下文意图=${input.contextualIntent}，流程=${input.flowStep || "未进入流程"}。`;
+  return `客户表达可能需要沉淀为“${intentDisplayName(intent)}”。原始识别=${input.detectedIntent}，AI意图=${input.inferredIntent}，上下文意图=${input.contextualIntent}，流程=${input.flowStep || "未进入流程"}。`;
 }
 
 function signatureForIntent(text: string): string {
@@ -1192,6 +1192,10 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
     OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
+    AI_PROVIDER: merchantConfig.aiProvider || config.AI_PROVIDER,
+    MINIMAX_API_KEY: merchantConfig.minimaxApiKey || config.MINIMAX_API_KEY,
+    MINIMAX_MODEL: merchantConfig.minimaxModel || config.MINIMAX_MODEL,
+    MINIMAX_BASE_URL: config.MINIMAX_BASE_URL,
     GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
     GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,

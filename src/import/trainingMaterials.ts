@@ -1,6 +1,5 @@
-import type { Part } from "@google/genai";
 import mammoth from "mammoth";
-import { generateGeminiText } from "../clients/gemini.js";
+import { generateAiText, type AiTextPart } from "../clients/aiProvider.js";
 import { looksLikeConversationPackage, parseConversationPackage } from "./conversationPackage.js";
 import { parseTrainingSamples, type ImportedTrainingSample } from "./trainingSamples.js";
 
@@ -25,6 +24,10 @@ export async function parseTrainingMaterial(input: {
   buffer: Buffer;
   filename: string;
   mimeType?: string;
+  aiProvider?: "minimax" | "gemini";
+  minimaxApiKey?: string;
+  minimaxModel?: string;
+  minimaxBaseUrl?: string;
   googleAiApiKey?: string;
   googleAiModel?: string;
 }): Promise<ParsedTrainingMaterial> {
@@ -59,7 +62,14 @@ export async function parseTrainingMaterial(input: {
   }
 
   if (sourceType === "image") {
-    const text = await extractImageText(input.buffer, input.filename, input.mimeType, input.googleAiApiKey, input.googleAiModel, warnings);
+    const text = await extractImageText(input.buffer, input.filename, input.mimeType, {
+      aiProvider: input.aiProvider,
+      minimaxApiKey: input.minimaxApiKey,
+      minimaxModel: input.minimaxModel,
+      minimaxBaseUrl: input.minimaxBaseUrl,
+      googleAiApiKey: input.googleAiApiKey,
+      googleAiModel: input.googleAiModel
+    }, warnings);
     return buildTextMaterial(sourceType, input.filename, text, warnings);
   }
 
@@ -145,8 +155,14 @@ async function extractImageText(
   buffer: Buffer,
   filename: string,
   mimeType = "",
-  googleAiApiKey = "",
-  googleAiModel = "gemini-2.5-flash",
+  aiConfig: {
+    aiProvider?: "minimax" | "gemini";
+    minimaxApiKey?: string;
+    minimaxModel?: string;
+    minimaxBaseUrl?: string;
+    googleAiApiKey?: string;
+    googleAiModel?: string;
+  },
   warnings: string[]
 ): Promise<string> {
   const name = filename.toLowerCase();
@@ -165,17 +181,26 @@ async function extractImageText(
     if (text) return text;
   }
 
-  if (!googleAiApiKey) {
-    warnings.push("图片 OCR 需要配置商户 Google AI Studio Key；当前图片未提取到文字");
+  const hasMiniMax = Boolean(aiConfig.minimaxApiKey);
+  const hasGemini = Boolean(aiConfig.googleAiApiKey);
+  if (!hasMiniMax && !hasGemini) {
+    warnings.push("图片 OCR 需要配置商户 MiniMax Key；当前图片未提取到文字");
     return "";
   }
 
   const mediaType = mimeType || guessImageMime(filename);
-  const contents: Part[] = [
+  const contents: AiTextPart[] = [
     { inlineData: { mimeType: mediaType, data: buffer.toString("base64") } },
     { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
   ];
-  return generateGeminiText({ GOOGLE_AI_API_KEY: googleAiApiKey, GOOGLE_AI_MODEL: googleAiModel }, contents);
+  return generateAiText({
+    AI_PROVIDER: aiConfig.aiProvider || "minimax",
+    MINIMAX_API_KEY: aiConfig.minimaxApiKey || "",
+    MINIMAX_MODEL: aiConfig.minimaxModel || "MiniMax-M3",
+    MINIMAX_BASE_URL: aiConfig.minimaxBaseUrl || "https://api.minimax.io",
+    GOOGLE_AI_API_KEY: aiConfig.googleAiApiKey || "",
+    GOOGLE_AI_MODEL: aiConfig.googleAiModel || "gemini-2.5-flash"
+  } as Parameters<typeof generateAiText>[0], contents);
 }
 
 function guessImageMime(filename: string): string {

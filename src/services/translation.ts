@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import { generateGeminiText, geminiApiKey } from "../clients/gemini.js";
+import { aiProviderLabel, generateAiText, hasUsableAiKey } from "../clients/aiProvider.js";
 
 export interface TranslationResult {
   originalText: string;
@@ -37,26 +37,26 @@ export async function translateForOperator(config: AppConfig, text: string, sour
 async function translateText(config: AppConfig, text: string, targetLanguage: string, systemPrompt: string): Promise<TranslationResult> {
   const originalText = text.trim();
   const language = targetLanguage || "unknown";
-  const apiKey = geminiApiKey(config);
-  if (!originalText || !apiKey || language === "unknown") {
+  const hasKey = hasUsableAiKey(config);
+  if (!originalText || !hasKey || language === "unknown") {
     return {
       originalText,
       translatedText: originalText,
       targetLanguage: language,
       status: "skipped",
-      error: !apiKey ? "Google AI Studio Key 未配置，无法生成译文" : language === "unknown" ? "客户语言未知，无法确定翻译目标语言" : "内容为空"
+      error: !hasKey ? `${aiProviderLabel(config)} Key 未配置，无法生成译文` : language === "unknown" ? "客户语言未知，无法确定翻译目标语言" : "内容为空"
     };
   }
 
   try {
-    const translatedText = (await generateGeminiText(config, JSON.stringify({ targetLanguage: language, text: originalText }), { systemInstruction: systemPrompt })).trim() || originalText;
+    const translatedText = (await generateAiText(config, JSON.stringify({ targetLanguage: language, text: originalText }), { systemInstruction: systemPrompt })).trim() || originalText;
     const sameAsOriginal = normalizeForCompare(translatedText) === normalizeForCompare(originalText);
     return {
       originalText,
       translatedText,
       targetLanguage: language,
       status: sameAsOriginal ? "failed" : "translated",
-      error: sameAsOriginal ? "译文与原文相同，请检查 Google AI Studio Key、Gemini 模型或翻译能力" : undefined
+      error: sameAsOriginal ? `译文与原文相同，请检查 ${aiProviderLabel(config)} Key、模型或翻译能力` : undefined
     };
   } catch (error) {
     return {

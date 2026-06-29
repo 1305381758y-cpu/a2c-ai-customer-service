@@ -47,6 +47,9 @@ export function migrate(db: DatabaseSync): void {
       a2c_account_phone TEXT DEFAULT '',
       openai_api_key TEXT DEFAULT '',
       openai_model TEXT DEFAULT 'gpt-5-mini',
+      ai_provider TEXT DEFAULT 'minimax',
+      minimax_api_key TEXT DEFAULT '',
+      minimax_model TEXT DEFAULT 'MiniMax-M3',
       google_ai_api_key TEXT DEFAULT '',
       google_ai_model TEXT DEFAULT 'gemini-2.5-flash',
       telegram_bot_token TEXT DEFAULT '',
@@ -484,6 +487,9 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "a2c_token_cache_key", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "a2c_access_token", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "a2c_token_expires_at", "INTEGER DEFAULT 0");
+  ensureColumn(db, "merchant_configs", "ai_provider", "TEXT DEFAULT 'minimax'");
+  ensureColumn(db, "merchant_configs", "minimax_api_key", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_configs", "minimax_model", "TEXT DEFAULT 'MiniMax-M3'");
   ensureColumn(db, "merchant_configs", "google_ai_api_key", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "google_ai_model", "TEXT DEFAULT 'gemini-2.5-flash'");
   ensureColumn(db, "merchant_configs", "smart_reply_enabled", "INTEGER DEFAULT 1");

@@ -422,7 +422,7 @@ function Merchants() {
           notify("success", "账号已删除");
         }} />}
       </div>
-      <div className="notice">A2C、Gemini 和 TG 密钥仍在“配置”页维护；这里负责商户、国家和登录账号的增删改查。</div>
+      <div className="notice">A2C、AI供应商 和 TG 密钥仍在“配置”页维护；这里负责商户、国家和登录账号的增删改查。</div>
     </div> : <div className="empty-state">选择商户后可修改名称和状态。新增商户时可以同时创建国家和商户端登录账号。</div>}</section>
   </div>;
 }
@@ -488,7 +488,7 @@ function Config({ platform }: { platform: boolean }) {
     });
   }, [a2cAccounts, accountKeyword, accountStatus, accountCountryId]);
   const accountPager = useClientPagination(filteredA2CAccounts, 12);
-  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "googleAiApiKey", "googleAiModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
+  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "aiProvider", "minimaxApiKey", "minimaxModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
   const reloadA2CAccounts = async () => {
     setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
@@ -586,7 +586,7 @@ function Config({ platform }: { platform: boolean }) {
   };
   return <section>
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
-    <div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / Gemini / TG</small></div><div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div><div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div>
+    <div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / MiniMax / TG</small></div><div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div><div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div>
     <div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div>
     <div className={`smart-reply-card ${form.smartReplyEnabled === false ? "off" : "on"}`}>
       <div><h3>智能自动回复</h3><p>{form.smartReplyEnabled === false ? "已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。" : "已开启：客户消息会自动调用 AI，并通过当前 A2C 客服账号回复。"}</p></div>
@@ -600,7 +600,7 @@ function Config({ platform }: { platform: boolean }) {
       <div><h3>严格话本流程</h3><p>{form.strictScriptFlowEnabled ? "已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。" : "已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"}</p></div>
       <button className={form.strictScriptFlowEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, strictScriptFlowEnabled: !form.strictScriptFlowEnabled })}>{form.strictScriptFlowEnabled ? "关闭严格流程" : "开启严格流程"}</button>
     </div>
-    <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}<input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></label>)}</div>
+    <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
     <div className="memory tutorial-upload-card">
       <div>
         <h3>注册教程图片</h3>
@@ -1382,7 +1382,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   const operatorTranslated = payload.operatorTranslatedContent || "";
   const translationStatus = payload.translationStatus || (original && translated && normalizeText(original) !== normalizeText(translated) ? "translated" : undefined);
   const canShowTranslation = Boolean(original && translated && translationStatus === "translated" && normalizeText(original) !== normalizeText(translated));
-  const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查 Google AI Studio 配置") : "";
+  const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查 AI 供应商配置") : "";
   const isOutbound = message.direction === "outbound";
   const operatorTranslationStatus = payload.operatorTranslationStatus || (operatorTranslated && normalizeText(operatorTranslated) !== normalizeText(message.content) ? "translated" : undefined);
   const canShowOperatorTranslation = Boolean(isOutbound && operatorTranslated && operatorTranslationStatus === "translated" && normalizeText(operatorTranslated) !== normalizeText(message.content));
@@ -1751,7 +1751,7 @@ function label(key: string) {
     name: "名称", status: "状态", id: "ID", email: "邮箱", role: "角色", merchantId: "商户ID", customerPhone: "客户", customerKey: "客户", nickname: "昵称",
     language: "语言", stage: "阶段", handoffStatus: "接管状态", customerMessage: "客户问题", standardReply: "标准回复", intent: "意图",
     priority: "优先级", a2cBaseUrl: "A2C地址", a2cAppId: "A2C应用ID", a2cAppSecret: "A2C密钥", a2cAccountPhone: "A2C接收账号", a2cWebhookUrl: "A2C回调地址",
-    googleAiApiKey: "谷歌AI密钥", googleAiModel: "谷歌AI模型", smartReplyEnabled: "智能回复", strictScriptFlowEnabled: "严格话本流程", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
+    aiProvider: "AI供应商", minimaxApiKey: "MiniMax密钥", minimaxModel: "MiniMax模型", googleAiApiKey: "兼容Gemini密钥", googleAiModel: "兼容Gemini模型", smartReplyEnabled: "智能回复", strictScriptFlowEnabled: "严格话本流程", openaiApiKey: "旧版AI密钥", openaiModel: "旧版AI模型", telegramBotToken: "TG机器人", telegramHandoffChatId: "TG群ID",
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", registrationTutorialImageUrl: "注册教程图片", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
     candidateKey: "候选键", suggestedIntent: "建议意图", displayName: "意图名称", description: "说明", customerText: "客户表达", detectedIntent: "原始意图", inferredIntent: "推断意图", contextualIntent: "上下文意图", occurrenceCount: "出现次数",

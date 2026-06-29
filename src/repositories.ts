@@ -42,6 +42,9 @@ export interface MerchantConfigRecord {
   a2cAccountPhone: string;
   openaiApiKey: string;
   openaiModel: string;
+  aiProvider: "minimax" | "gemini";
+  minimaxApiKey: string;
+  minimaxModel: string;
   googleAiApiKey: string;
   googleAiModel: string;
   telegramBotToken: string;
@@ -2502,6 +2505,9 @@ export class Repositories {
       a2cAccountPhone: "a2c_account_phone",
       openaiApiKey: "openai_api_key",
       openaiModel: "openai_model",
+      aiProvider: "ai_provider",
+      minimaxApiKey: "minimax_api_key",
+      minimaxModel: "minimax_model",
       googleAiApiKey: "google_ai_api_key",
       googleAiModel: "google_ai_model",
       telegramBotToken: "telegram_bot_token",
@@ -2524,6 +2530,7 @@ export class Repositories {
         if (key === "smartReplyEnabled") return booleanPatchValue(value, true);
         if (key === "trainingSimulationEnabled") return booleanPatchValue(value, false);
         if (key === "strictScriptFlowEnabled") return booleanPatchValue(value, false);
+        if (key === "aiProvider") return value === "gemini" ? "gemini" : "minimax";
         return value as string;
       }), merchantId);
     }
@@ -3159,6 +3166,9 @@ function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigRecord {
     a2cAccountPhone: String(row.a2c_account_phone ?? ""),
     openaiApiKey: String(row.openai_api_key ?? ""),
     openaiModel: String(row.openai_model ?? "gpt-5-mini"),
+    aiProvider: row.ai_provider === "gemini" ? "gemini" : "minimax",
+    minimaxApiKey: String(row.minimax_api_key ?? ""),
+    minimaxModel: String(row.minimax_model ?? "MiniMax-M3"),
     googleAiApiKey: String(row.google_ai_api_key ?? ""),
     googleAiModel: String(row.google_ai_model ?? "gemini-2.5-flash"),
     telegramBotToken: String(row.telegram_bot_token ?? ""),

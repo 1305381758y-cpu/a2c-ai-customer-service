@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
-import { generateGeminiText, geminiApiKey, geminiModel } from "./clients/gemini.js";
+import { aiProviderLabel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "./clients/aiProvider.js";
 import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
@@ -1068,7 +1068,7 @@ async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfi
   const checks: ConfigCheckItem[] = [];
 
   checks.push(await checkA2C(runtimeConfig, deps.repos, merchantId));
-  checks.push(await checkGemini(runtimeConfig));
+  checks.push(await checkAiProvider(runtimeConfig));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push({
     key: "platformRegisterUrl",
@@ -1118,14 +1118,15 @@ function isA2CRateLimitMessage(message: string): boolean {
   return /(visit too frequently|too frequent|rate limit|too many requests|请求.*频繁|访问.*频繁|稍后再试|频繁)/i.test(message);
 }
 
-async function checkGemini(config: AppConfig): Promise<ConfigCheckItem> {
-  const apiKey = geminiApiKey(config);
-  if (!apiKey) return { key: "gemini", label: "Google AI Studio / Gemini", ok: false, status: "missing", detail: "缺少 Google AI Studio Key，客户消息会降级使用样本/默认话术" };
+async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
+  if (!hasUsableAiKey(config)) return { key: "ai", label: "AI供应商", ok: false, status: "missing", detail: "缺少 MiniMax Key，客户消息会降级使用样本/默认话术" };
   try {
-    await generateGeminiText(config, "Reply with OK only.");
-    return { key: "gemini", label: "Google AI Studio / Gemini", ok: true, status: "ok", detail: `模型 ${geminiModel(config)} 可用，客户消息会优先调用 AI 回复` };
+    await generateAiText(config, "Reply with OK only.");
+    const provider = selectedAiProvider(config);
+    const model = provider === "minimax" ? minimaxModel(config) : config.GOOGLE_AI_MODEL;
+    return { key: "ai", label: "AI供应商", ok: true, status: "ok", detail: `${aiProviderLabel(config)} 可用，当前模型 ${model}；客户消息会优先调用 AI 回复` };
   } catch (error) {
-    return { key: "gemini", label: "Google AI Studio / Gemini", ok: false, status: "error", detail: error instanceof Error ? error.message : "Gemini 检测失败" };
+    return { key: "ai", label: "AI供应商", ok: false, status: "error", detail: error instanceof Error ? error.message : "AI供应商检测失败" };
   }
 }
 
@@ -1269,6 +1270,10 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
       buffer,
       filename: file.filename,
       mimeType: file.mimetype,
+      aiProvider: merchantConfig.aiProvider || deps.config.AI_PROVIDER,
+      minimaxApiKey: merchantConfig.minimaxApiKey || deps.config.MINIMAX_API_KEY,
+      minimaxModel: merchantConfig.minimaxModel || deps.config.MINIMAX_MODEL,
+      minimaxBaseUrl: deps.config.MINIMAX_BASE_URL,
       googleAiApiKey: merchantConfig.googleAiApiKey || deps.config.GOOGLE_AI_API_KEY,
       googleAiModel: merchantConfig.googleAiModel || deps.config.GOOGLE_AI_MODEL
     });
@@ -1415,6 +1420,7 @@ function maskConfig(config: MerchantConfigRecord) {
     ...safeConfig,
     a2cAppSecret: maskSecret(config.a2cAppSecret),
     openaiApiKey: maskSecret(config.openaiApiKey),
+    minimaxApiKey: maskSecret(config.minimaxApiKey),
     googleAiApiKey: maskSecret(config.googleAiApiKey),
     telegramBotToken: maskSecret(config.telegramBotToken)
   };
@@ -1575,6 +1581,10 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
     OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
     OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
+    AI_PROVIDER: merchantConfig.aiProvider || config.AI_PROVIDER,
+    MINIMAX_API_KEY: merchantConfig.minimaxApiKey || config.MINIMAX_API_KEY,
+    MINIMAX_MODEL: merchantConfig.minimaxModel || config.MINIMAX_MODEL,
+    MINIMAX_BASE_URL: config.MINIMAX_BASE_URL,
     GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
     GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,

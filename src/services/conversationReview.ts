@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import { generateGeminiText } from "../clients/gemini.js";
+import { generateAiText } from "../clients/aiProvider.js";
 import type { ConversationMessageRecord, ConversationReviewInput, MerchantAgentProfileRecord, Repositories } from "../repositories.js";
 
 export async function generateConversationReview(
@@ -11,17 +11,17 @@ export async function generateConversationReview(
   if (!conversation) throw new Error("conversation not found");
   const messages = repos.listConversationMessages(conversationId, 120);
   const agentProfile = repos.getMerchantAgentProfile(conversation.merchantId);
-  const generated = await generateWithGemini(config, agentProfile, messages).catch(() => fallbackReview(messages, conversation));
+  const generated = await generateWithAiProvider(config, agentProfile, messages).catch(() => fallbackReview(messages, conversation));
   const review = normalizeReview(generated, messages, conversation);
   return repos.upsertConversationReview(conversation.id, conversation.merchantId, review);
 }
 
-async function generateWithGemini(
+async function generateWithAiProvider(
   config: AppConfig,
   agentProfile: MerchantAgentProfileRecord,
   messages: ConversationMessageRecord[]
 ): Promise<ConversationReviewInput> {
-  const text = await generateGeminiText(config, JSON.stringify({
+  const text = await generateAiText(config, JSON.stringify({
     agentProfile,
     messages: messages.map((message) => ({
       direction: message.direction,

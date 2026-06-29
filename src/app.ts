@@ -4,7 +4,7 @@ import fastifyStatic from "@fastify/static";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { A2CClient } from "./clients/a2c.js";
-import { GeminiReplyClient } from "./clients/gemini.js";
+import { AiReplyClient } from "./clients/aiProvider.js";
 import { TelegramClient } from "./clients/telegram.js";
 import type { AppConfig } from "./config.js";
 import { openDb } from "./db.js";
@@ -25,7 +25,7 @@ export function buildApp(config: AppConfig) {
   });
   const processor = new WebhookProcessor(
     repos,
-    new GeminiReplyClient(config),
+    new AiReplyClient(config),
     new A2CClient(config),
     new TelegramClient(config),
     config
