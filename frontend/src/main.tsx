@@ -1114,17 +1114,33 @@ function Conversations({ platform = false, handoffs = false }: { platform?: bool
   return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} />;
 }
 
-function ConversationExportTools({ base, filters, title }: { base: string; filters: Filters; title: string }) {
-  return <details className="conversation-tools">
-    <summary>{title}</summary>
-    <div className="export-panel">
-      <p>导出会话消息、译文、意图、流程步骤、客户资料和发送错误。CSV 适合 Excel 查看，JSONL 适合后续训练脚本处理。</p>
-      <div className="toolbar wrap">
-        <button onClick={() => downloadExport(base, filters, "csv")}><FileText size={15}/>下载 CSV</button>
-        <button onClick={() => downloadExport(base, filters, "jsonl")}><FileText size={15}/>下载 JSONL</button>
-      </div>
+const EXPORT_ALL_FILTERS: Filters = { limit: "50000" };
+
+function ConversationExportBar({
+  base,
+  allFilters = EXPORT_ALL_FILTERS,
+  scopedFilters,
+  scopedLabel = "当前筛选",
+  compact = false,
+}: {
+  base: string;
+  allFilters?: Filters;
+  scopedFilters?: Filters;
+  scopedLabel?: string;
+  compact?: boolean;
+}) {
+  return <div className={`conversation-export-bar ${compact ? "compact" : ""}`}>
+    <div className="conversation-export-copy">
+      <strong>对话数据导出</strong>
+      <span>导出客户消息、客服回复、译文、意图、流程步骤、发送状态和客户资料。</span>
     </div>
-  </details>;
+    <div className="conversation-export-actions">
+      <button className="export-primary" onClick={() => downloadExport(base, allFilters, "csv")}><FileText size={15}/>一键导出全部对话</button>
+      {scopedFilters && <button onClick={() => downloadExport(base, scopedFilters, "csv")}><FileText size={15}/>{scopedLabel} CSV</button>}
+      <button onClick={() => downloadExport(base, allFilters, "jsonl")}><FileText size={15}/>全部 JSONL</button>
+      {scopedFilters && <button onClick={() => downloadExport(base, scopedFilters, "jsonl")}><FileText size={15}/>{scopedLabel} JSONL</button>}
+    </div>
+  </div>;
 }
 
 function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
@@ -1135,7 +1151,7 @@ function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const reload = async () => { setRows(await loadRows(rowsUrl)); pager.setPage(1); };
-  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportTools base="/api/admin/conversations/export" filters={filters} title="导出当前筛选消息" /><FilterBar filters={filters} setFilters={setFilters} fields={["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
+  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" /><FilterBar filters={filters} setFilters={setFilters} fields={["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
 }
 
 function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
@@ -1244,18 +1260,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
           <summary>筛选客户</summary>
           <FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
         </details>
-        <details className="conversation-tools">
-          <summary>导出对话数据</summary>
-          <div className="export-panel">
-            <p>导出真实客户消息、客服回复、译文、意图、流程步骤和发送错误，用于复盘或训练分析。</p>
-            <div className="toolbar wrap">
-              <button disabled={!selectedAccount} onClick={() => selectedAccount && downloadExport("/api/merchant/conversations/export", { ...filters, a2cAccountPhone: selectedAccount.apiPhone }, "csv")}><FileText size={15}/>当前账号 CSV</button>
-              <button disabled={!selectedAccount} onClick={() => selectedAccount && downloadExport("/api/merchant/conversations/export", { ...filters, a2cAccountPhone: selectedAccount.apiPhone }, "jsonl")}><FileText size={15}/>当前账号 JSONL</button>
-              <button onClick={() => downloadExport("/api/merchant/conversations/export", filters, "csv")}><FileText size={15}/>全部账号 CSV</button>
-              <button onClick={() => downloadExport("/api/merchant/conversations/export", filters, "jsonl")}><FileText size={15}/>全部账号 JSONL</button>
-            </div>
-          </div>
-        </details>
+        <ConversationExportBar base="/api/merchant/conversations/export" scopedFilters={selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined} scopedLabel="当前账号" compact />
         <details className="conversation-tools">
           <summary>主动新建对话</summary>
           <div className="proactive-panel compact">
@@ -1287,7 +1292,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         <Pagination pager={pager} />
       </>}
     </section>
-    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以填写新客户号码后主动发送第一条消息。</p></div>}</section>
+    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以先一键导出全部线上对话用于复盘、训练或交给同事分析。</p><ConversationExportBar base="/api/merchant/conversations/export" scopedFilters={selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined} scopedLabel="当前账号" /></div>}</section>
   </div>;
 }
 
