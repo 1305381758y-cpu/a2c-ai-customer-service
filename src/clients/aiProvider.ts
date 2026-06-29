@@ -367,8 +367,9 @@ async function generateMiniMaxText(config: AppConfig, contents: string | AiTextP
     signal: AbortSignal.timeout(AI_TIMEOUT_MS)
   });
   const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(`MiniMax 调用失败：${extractProviderError(payload) || response.statusText}`);
+  const providerError = extractProviderError(payload);
+  if (!response.ok || providerError) {
+    throw new Error(`MiniMax 调用失败：${providerError || response.statusText}`);
   }
   const text = extractTextFromChatCompletion(payload).trim();
   if (!text) throw new Error("MiniMax 返回内容为空");
@@ -434,6 +435,14 @@ function extractTextFromChatCompletion(payload: Record<string, unknown>): string
 }
 
 function extractProviderError(payload: Record<string, unknown>): string {
+  const baseResp = payload.base_resp;
+  if (baseResp && typeof baseResp === "object") {
+    const statusCode = (baseResp as { status_code?: unknown }).status_code;
+    const statusMsg = (baseResp as { status_msg?: unknown }).status_msg;
+    if (statusCode !== undefined && String(statusCode) !== "0") {
+      return normalizeProviderError(String(statusMsg || "MiniMax 业务层返回错误"), { code: statusCode });
+    }
+  }
   const error = payload.error;
   const raw = typeof error === "string"
     ? error
