@@ -356,6 +356,7 @@ export function hasUsableAiKey(config: AppConfig): boolean {
 async function generateMiniMaxText(config: AppConfig, contents: string | AiTextPart[], options: AiTextOptions): Promise<string> {
   const apiKey = minimaxApiKey(config);
   if (!apiKey) throw new Error("MiniMax Key 未配置");
+  if (isMiniMaxTokenPlanKey(apiKey)) return generateMiniMaxAnthropicText(config, contents, options, apiKey);
   const endpoint = hasImagePart(contents) ? "/v1/chat/completions" : "/v1/text/chatcompletion_v2";
   const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}${endpoint}`, {
     method: "POST",
@@ -372,6 +373,34 @@ async function generateMiniMaxText(config: AppConfig, contents: string | AiTextP
     throw new Error(`MiniMax 调用失败：${providerError || response.statusText}`);
   }
   const text = extractTextFromChatCompletion(payload).trim();
+  if (!text) throw new Error("MiniMax 返回内容为空");
+  return text;
+}
+
+async function generateMiniMaxAnthropicText(
+  config: AppConfig,
+  contents: string | AiTextPart[],
+  options: AiTextOptions,
+  apiKey: string
+): Promise<string> {
+  const body = buildMiniMaxAnthropicRequestBody(config, contents, options);
+  const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}/anthropic/v1/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+  });
+  const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
+  const providerError = extractProviderError(payload);
+  if (!response.ok || providerError) {
+    throw new Error(`MiniMax 调用失败：${providerError || response.statusText}`);
+  }
+  const text = extractTextFromAnthropicMessage(payload).trim();
   if (!text) throw new Error("MiniMax 返回内容为空");
   return text;
 }
@@ -399,8 +428,29 @@ function buildMiniMaxRequestBody(
   return body;
 }
 
+function buildMiniMaxAnthropicRequestBody(
+  config: AppConfig,
+  contents: string | AiTextPart[],
+  options: AiTextOptions
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: minimaxModel(config),
+    max_tokens: options.maxOutputTokens ?? 1200,
+    temperature: options.temperature ?? 0.2,
+    messages: [
+      { role: "user", content: toMiniMaxAnthropicContent(contents) }
+    ]
+  };
+  if (options.systemInstruction) body.system = options.systemInstruction;
+  return body;
+}
+
 function hasImagePart(contents: string | AiTextPart[]): boolean {
   return Array.isArray(contents) && contents.some((part) => Boolean(part.inlineData));
+}
+
+function isMiniMaxTokenPlanKey(apiKey: string): boolean {
+  return /^sk-cp-/i.test(apiKey.trim());
 }
 
 function toMiniMaxContent(contents: string | AiTextPart[]): unknown {
@@ -413,6 +463,22 @@ function toMiniMaxContent(contents: string | AiTextPart[]): unknown {
         ? part.inlineData.data
         : `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       parts.push({ type: "image_url", image_url: { url } });
+    }
+  }
+  return parts.length ? parts : "";
+}
+
+function toMiniMaxAnthropicContent(contents: string | AiTextPart[]): unknown {
+  if (typeof contents === "string") return contents;
+  const parts: unknown[] = [];
+  for (const part of contents) {
+    if (part.text) parts.push({ type: "text", text: part.text });
+    if (part.inlineData) {
+      if (/^https?:\/\//i.test(part.inlineData.data)) {
+        parts.push({ type: "image", source: { type: "url", url: part.inlineData.data } });
+      } else {
+        parts.push({ type: "image", source: { type: "base64", media_type: part.inlineData.mimeType, data: part.inlineData.data } });
+      }
     }
   }
   return parts.length ? parts : "";
@@ -431,6 +497,20 @@ function extractTextFromChatCompletion(payload: Record<string, unknown>): string
       return "";
     }).join("").trim();
   }
+  return "";
+}
+
+function extractTextFromAnthropicMessage(payload: Record<string, unknown>): string {
+  const content = payload.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "text" in item) return String((item as { text?: unknown }).text ?? "");
+      return "";
+    }).join("").trim();
+  }
+  if (typeof payload.completion === "string") return payload.completion;
   return "";
 }
 
@@ -458,7 +538,7 @@ function normalizeProviderError(raw: string, payload: Record<string, unknown>): 
   const code = typeof payload.code === "number" || typeof payload.code === "string" ? String(payload.code) : "";
   const text = raw || (code ? `错误码 ${code}` : "");
   if (/invalid api key/i.test(text) || code === "2049") {
-    return "invalid api key (2049)。请确认填写的是 MiniMax API Platform 的 API Key；Token Plan/订阅套餐 Key 可能不能直接调用 Open Platform API，或需要 MiniMax 指定的 OAuth/MCP/兼容入口。";
+    return "invalid api key (2049)。如果使用 sk-cp- 开头的 Token Plan/订阅套餐 Key，请确认该 Key 在 MiniMax Token Plan 中仍有效、套餐有额度且已授权 Claude/Anthropic 兼容 API；否则请填写 MiniMax Open Platform 的 API Key。";
   }
   return text;
 }
