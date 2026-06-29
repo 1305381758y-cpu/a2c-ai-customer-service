@@ -358,7 +358,7 @@ async function generateMiniMaxText(config: AppConfig, contents: string | AiTextP
   if (!apiKey) throw new Error("MiniMax Key 未配置");
   if (isMiniMaxTokenPlanKey(apiKey)) return generateMiniMaxAnthropicText(config, contents, options, apiKey);
   const endpoint = hasImagePart(contents) ? "/v1/chat/completions" : "/v1/text/chatcompletion_v2";
-  const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}${endpoint}`, {
+  const response = await fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}${endpoint}`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -384,7 +384,7 @@ async function generateMiniMaxAnthropicText(
   apiKey: string
 ): Promise<string> {
   const body = buildMiniMaxAnthropicRequestBody(config, contents, options);
-  const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}/anthropic/v1/messages`, {
+  const response = await fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}/anthropic/v1/messages`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -545,6 +545,14 @@ function normalizeProviderError(raw: string, payload: Record<string, unknown>): 
 
 function normalizeBaseUrl(url: string): string {
   return (url || "https://api.minimax.io").replace(/\/+$/, "");
+}
+
+function normalizeMiniMaxBaseUrl(config: AppConfig, apiKey: string): string {
+  const configured = normalizeBaseUrl(config.MINIMAX_BASE_URL);
+  if (isMiniMaxTokenPlanKey(apiKey) && (!config.MINIMAX_BASE_URL || configured === "https://api.minimax.io")) {
+    return "https://api.minimaxi.com";
+  }
+  return configured;
 }
 
 function normalizeAiReply(value: Partial<AiReply>, input: ReplyInput, config: AppConfig): AiReply {
