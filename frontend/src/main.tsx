@@ -1557,16 +1557,24 @@ function roleName(role: string) {
 
 function formatTime(value: string) {
   if (!value) return "";
-  const date = new Date(value);
+  const date = parseServerDate(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleTimeString("zh-CN", { timeZone: BEIJING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function formatDateTime(value: string) {
   if (!value) return "";
-  const date = new Date(value);
+  const date = parseServerDate(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { timeZone: BEIJING_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-");
+}
+
+function parseServerDate(value: string) {
+  const trimmed = value.trim();
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)
+    ? `${trimmed.replace(" ", "T")}Z`
+    : trimmed;
+  return new Date(normalized);
 }
 
 function normalizeText(value: string) {

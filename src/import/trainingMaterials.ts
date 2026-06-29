@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
 import { generateAiText, type AiTextPart } from "../clients/aiProvider.js";
+import { detectLanguage } from "../domain/analyzer.js";
 import { looksLikeConversationPackage, parseConversationPackage } from "./conversationPackage.js";
 import { parseTrainingSamples, type ImportedTrainingSample } from "./trainingSamples.js";
 
@@ -219,14 +220,6 @@ function splitParagraphs(text: string): string[] {
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter((part) => part.length >= 8)
     .slice(0, 300);
-}
-
-function detectLanguage(text: string): string {
-  if (/[ãõçáéíóúâêô]/i.test(text)) return "pt-BR";
-  if (/[\u0E00-\u0E7F]/.test(text)) return "th";
-  if (/[àạảãáâầấậẩẫăằắặẳẵèẹẻẽéêềếệểễìịỉĩíòọỏõóôồốộổỗơờớợởỡùụủũúưừứựửữỳỵỷỹýđ]/i.test(text)) return "vi";
-  if (/[\u4e00-\u9fa5]/.test(text)) return "zh";
-  return "en";
 }
 
 function clipRawText(text: string): string {

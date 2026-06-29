@@ -102,12 +102,15 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   const signals = detectLanguageSignals(trimmed);
   const dominant = signals[0];
   if (fallback !== "unknown" && dominant && dominant.language !== fallback) {
-    const runnerUp = signals[1];
+    const fallbackSignal = signals.find((item) => item.language === fallback);
+    if (fallbackSignal && fallbackSignal.score >= 4) return fallback;
+    const competingSignals = signals.filter((item) => !(item.language === "en" && item.score <= 2 && !item.strong));
+    const runnerUp = competingSignals.find((item) => item.language !== dominant.language);
     const dominantRatio = dominant.score / Math.max(1, signals.reduce((sum, item) => sum + item.score, 0));
     const hasMultipleSignals = Boolean(runnerUp && runnerUp.score >= 2);
     const shouldSwitch =
       dominant.strong &&
-      dominant.score >= 8 &&
+      dominant.score >= 6 &&
       dominantRatio >= 0.7 &&
       !hasMultipleSignals;
     if (!shouldSwitch) return fallback;
@@ -167,7 +170,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
 
   const lower = text.toLowerCase();
   addKeywordScore(lower, add, "es", [
-    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí)\b/g
+    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|necesito|ayuda)\b/g
   ]);
   addKeywordScore(lower, add, "fr", [
     /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g
@@ -185,7 +188,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
     /(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco|sim|quero)(\s|$|[,.!?;:])/g
   ]);
   addKeywordScore(lower, add, "en", [
-    /\b(hello|hi|hey|good morning|good afternoon|good evening|register|registration|phone|number|work|job|link|help|how|yes|ok|telegram|account)\b/g
+    /\b(hello|hi|hey|good morning|good afternoon|good evening|register|registration|phone|number|work|job|link|help|how|yes|ok|telegram|account|open|opened|cannot|can't|failed|error)\b/g
   ], 2);
   if (/[A-Za-z]/.test(text)) add("en", 2, false);
 

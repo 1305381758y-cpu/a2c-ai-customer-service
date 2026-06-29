@@ -1,4 +1,5 @@
 import { parse } from "csv-parse/sync";
+import { detectLanguage } from "../domain/analyzer.js";
 import type { ImportedTrainingSample } from "./trainingSamples.js";
 
 export interface ParsedConversationPackage {
@@ -186,14 +187,6 @@ function isAgentKnowledge(text: string): boolean {
 
 function isProfane(text: string): boolean {
   return /\b(cu|porra|puta|foda|caralho|fuck|shit)\b/i.test(text);
-}
-
-function detectLanguage(text: string): string {
-  const lower = text.toLowerCase();
-  if (/[\u4e00-\u9fff]/.test(text)) return "zh";
-  if (/[áàâãéêíóôõúç]/i.test(text) || /\b(sim|você|voce|não|nao|olá|ola|bom dia|boa noite|cadastro|cadastrar|trabalho|obrigad[ao]|quero|tenho|posso|preciso|fazer|pronto|interesse|interessad[ao]|enviei|meu|minha|certo)\b/i.test(lower)) return "pt";
-  if (/\b(hello|good|please|register|registration|job|account|send|screenshot|time|work|earn|interested|joining|platform|complete|commission|reward)\b/i.test(lower)) return "en";
-  return "unknown";
 }
 
 function classifyIntent(text: string): ImportedTrainingSample["intent"] {

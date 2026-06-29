@@ -1465,9 +1465,10 @@ function cleanQueryValue(value?: string): string | undefined {
 }
 
 function sendConversationExport(reply: FastifyReply, rows: ConversationExportRecord[], format: string | undefined, prefix: string) {
-  const safeDate = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const safeDate = formatBeijingDateTimeForFile(new Date());
+  const beijingRows = rows.map((row) => ({ ...row, createdAt: formatBeijingDateTime(row.createdAt) }));
   if (format === "jsonl") {
-    const body = rows.map((row) => JSON.stringify(row)).join("\n");
+    const body = beijingRows.map((row) => JSON.stringify(row)).join("\n");
     return reply
       .header("Content-Type", "application/x-ndjson; charset=utf-8")
       .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.jsonl"`)
@@ -1476,7 +1477,37 @@ function sendConversationExport(reply: FastifyReply, rows: ConversationExportRec
   return reply
     .header("Content-Type", "text/csv; charset=utf-8")
     .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.csv"`)
-    .send(`\uFEFF${conversationExportCsv(rows)}`);
+    .send(`\uFEFF${conversationExportCsv(beijingRows)}`);
+}
+
+function formatBeijingDateTime(value: string | Date): string {
+  const date = normalizeDate(value);
+  if (!date) return typeof value === "string" ? value : "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(date).replace(/\//g, "-");
+}
+
+function formatBeijingDateTimeForFile(value: Date): string {
+  return formatBeijingDateTime(value).replace(/[ :]/g, "-");
+}
+
+function normalizeDate(value: string | Date): Date | undefined {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)
+    ? `${trimmed.replace(" ", "T")}Z`
+    : trimmed;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 const CONVERSATION_EXPORT_COLUMNS: Array<{ key: keyof ConversationExportRecord; label: string }> = [

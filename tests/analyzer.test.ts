@@ -103,6 +103,11 @@ describe("message analyzer", () => {
     expect(detectLanguage("我想注册 hello")).toBe("zh");
   });
 
+  it("switches back from a stale English language when the new Spanish signal is clear", () => {
+    expect(analyzeMessage("Hola, quiero registrarme en la plataforma", "en").language).toBe("es");
+    expect(analyzeMessage("Necesito ayuda con el registro y teléfono", "en").language).toBe("es");
+  });
+
   it("treats short registration completion messages as registration done", () => {
     for (const text of ["好了", "完成了", "注册好了", "注册完了", "已注册", "done", "finished", "registered", "pronto"]) {
       const result = analyzeMessage(text);
