@@ -356,21 +356,14 @@ export function hasUsableAiKey(config: AppConfig): boolean {
 async function generateMiniMaxText(config: AppConfig, contents: string | AiTextPart[], options: AiTextOptions): Promise<string> {
   const apiKey = minimaxApiKey(config);
   if (!apiKey) throw new Error("MiniMax Key 未配置");
-  const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}/v1/chat/completions`, {
+  const endpoint = hasImagePart(contents) ? "/v1/chat/completions" : "/v1/text/chatcompletion_v2";
+  const response = await fetch(`${normalizeBaseUrl(config.MINIMAX_BASE_URL)}${endpoint}`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model: minimaxModel(config),
-      messages: [
-        ...(options.systemInstruction ? [{ role: "system", content: options.systemInstruction }] : []),
-        { role: "user", content: toMiniMaxContent(contents) }
-      ],
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxOutputTokens ?? 1200
-    }),
+    body: JSON.stringify(buildMiniMaxRequestBody(config, contents, options, endpoint)),
     signal: AbortSignal.timeout(AI_TIMEOUT_MS)
   });
   const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
@@ -380,6 +373,33 @@ async function generateMiniMaxText(config: AppConfig, contents: string | AiTextP
   const text = extractTextFromChatCompletion(payload).trim();
   if (!text) throw new Error("MiniMax 返回内容为空");
   return text;
+}
+
+function buildMiniMaxRequestBody(
+  config: AppConfig,
+  contents: string | AiTextPart[],
+  options: AiTextOptions,
+  endpoint: "/v1/text/chatcompletion_v2" | "/v1/chat/completions"
+): Record<string, unknown> {
+  const messages = [
+    ...(options.systemInstruction ? [{ role: "system", content: options.systemInstruction, name: "system" }] : []),
+    { role: "user", content: toMiniMaxContent(contents), name: "user" }
+  ];
+  const body: Record<string, unknown> = {
+    model: minimaxModel(config),
+    messages,
+    temperature: options.temperature ?? 0.2
+  };
+  if (endpoint === "/v1/chat/completions") {
+    body.max_completion_tokens = options.maxOutputTokens ?? 1200;
+  } else {
+    body.tokens_to_generate = options.maxOutputTokens ?? 1200;
+  }
+  return body;
+}
+
+function hasImagePart(contents: string | AiTextPart[]): boolean {
+  return Array.isArray(contents) && contents.some((part) => Boolean(part.inlineData));
 }
 
 function toMiniMaxContent(contents: string | AiTextPart[]): unknown {
@@ -415,10 +435,23 @@ function extractTextFromChatCompletion(payload: Record<string, unknown>): string
 
 function extractProviderError(payload: Record<string, unknown>): string {
   const error = payload.error;
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message ?? "");
-  if (typeof payload.message === "string") return payload.message;
-  return "";
+  const raw = typeof error === "string"
+    ? error
+    : error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : typeof payload.message === "string"
+        ? payload.message
+        : "";
+  return normalizeProviderError(raw, payload);
+}
+
+function normalizeProviderError(raw: string, payload: Record<string, unknown>): string {
+  const code = typeof payload.code === "number" || typeof payload.code === "string" ? String(payload.code) : "";
+  const text = raw || (code ? `错误码 ${code}` : "");
+  if (/invalid api key/i.test(text) || code === "2049") {
+    return "invalid api key (2049)。请确认填写的是 MiniMax API Platform 的 API Key；Token Plan/订阅套餐 Key 可能不能直接调用 Open Platform API，或需要 MiniMax 指定的 OAuth/MCP/兼容入口。";
+  }
+  return text;
 }
 
 function normalizeBaseUrl(url: string): string {
