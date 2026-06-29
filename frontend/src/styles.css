@@ -1315,6 +1315,11 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 .conversation-export-bar.compact .conversation-export-actions button.export-primary {
   grid-column: 1 / -1;
 }
+.customer-export-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
 .proactive-panel.compact {
   padding: 10px;
   background: #fff;
