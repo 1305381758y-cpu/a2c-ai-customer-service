@@ -12,7 +12,7 @@ import { parseTrainingSamples } from "./import/trainingSamples.js";
 import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import { parseScriptFlowFile } from "./import/scriptFlows.js";
 import type { AppConfig } from "./config.js";
-import type { MerchantConfigRecord, Repositories } from "./repositories.js";
+import type { ConversationExportRecord, MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { WebhookProcessor } from "./services/webhookProcessor.js";
 import { generateConversationReview } from "./services/conversationReview.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
@@ -308,6 +308,10 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.get<{ Querystring: ConversationExportQuery }>("/api/admin/conversations/export", { preHandler: adminOnly }, async (request, reply) => {
+    const rows = deps.repos.exportConversationMessages(normalizeConversationExportQuery(request.query));
+    return sendConversationExport(reply, rows, request.query.format, "admin-conversations");
+  });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; language?: string; limit?: string } }>("/api/admin/customers", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listCustomers({
       merchantId: request.query.merchantId,
@@ -637,6 +641,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
+  app.get<{ Querystring: ConversationExportQuery }>("/api/merchant/conversations/export", { preHandler: merchantRoles }, async (request, reply) => {
+    const rows = deps.repos.exportConversationMessages({
+      ...normalizeConversationExportQuery(request.query),
+      merchantId: scopedMerchantId(request)
+    });
+    return sendConversationExport(reply, rows, request.query.format, "merchant-conversations");
+  });
   app.get<{ Querystring: { countryId?: string; status?: string; language?: string; limit?: string } }>("/api/merchant/customers", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listCustomers({
       merchantId: scopedMerchantId(request),
@@ -1407,6 +1418,105 @@ function maskConfig(config: MerchantConfigRecord) {
     googleAiApiKey: maskSecret(config.googleAiApiKey),
     telegramBotToken: maskSecret(config.telegramBotToken)
   };
+}
+
+type ConversationExportQuery = {
+  merchantId?: string;
+  countryId?: string;
+  status?: string;
+  handoffStatus?: string;
+  language?: string;
+  a2cAccountPhone?: string;
+  customerPhone?: string;
+  direction?: string;
+  startAt?: string;
+  endAt?: string;
+  limit?: string;
+  format?: "csv" | "jsonl";
+};
+
+function normalizeConversationExportQuery(query: ConversationExportQuery) {
+  const direction = query.direction === "inbound" || query.direction === "outbound" ? query.direction : undefined;
+  const limit = query.limit ? Number(query.limit) : undefined;
+  return {
+    merchantId: cleanQueryValue(query.merchantId),
+    countryId: cleanQueryValue(query.countryId),
+    status: query.status === "active" || query.status === "human_handoff" ? query.status : undefined,
+    handoffStatus: query.handoffStatus === "pending" || query.handoffStatus === "processing" || query.handoffStatus === "done" ? query.handoffStatus : undefined,
+    language: cleanQueryValue(query.language),
+    a2cAccountPhone: cleanQueryValue(query.a2cAccountPhone),
+    customerPhone: cleanQueryValue(query.customerPhone),
+    direction,
+    startAt: cleanQueryValue(query.startAt),
+    endAt: cleanQueryValue(query.endAt),
+    limit: Number.isFinite(limit) ? limit : undefined
+  };
+}
+
+function cleanQueryValue(value?: string): string | undefined {
+  const trimmed = String(value || "").trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function sendConversationExport(reply: FastifyReply, rows: ConversationExportRecord[], format: string | undefined, prefix: string) {
+  const safeDate = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  if (format === "jsonl") {
+    const body = rows.map((row) => JSON.stringify(row)).join("\n");
+    return reply
+      .header("Content-Type", "application/x-ndjson; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.jsonl"`)
+      .send(body ? `${body}\n` : "");
+  }
+  return reply
+    .header("Content-Type", "text/csv; charset=utf-8")
+    .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.csv"`)
+    .send(`\uFEFF${conversationExportCsv(rows)}`);
+}
+
+const CONVERSATION_EXPORT_COLUMNS: Array<{ key: keyof ConversationExportRecord; label: string }> = [
+  { key: "createdAt", label: "消息时间" },
+  { key: "merchantId", label: "商户ID" },
+  { key: "countryName", label: "国家/市场" },
+  { key: "countryCode", label: "国家代码" },
+  { key: "conversationId", label: "会话ID" },
+  { key: "customerPhone", label: "客户发送账号号码" },
+  { key: "nickname", label: "客户昵称" },
+  { key: "a2cAccountPhone", label: "A2C客服账号" },
+  { key: "direction", label: "方向" },
+  { key: "msgType", label: "消息类型" },
+  { key: "content", label: "系统内容" },
+  { key: "originalContent", label: "原文" },
+  { key: "translatedContent", label: "中文译文" },
+  { key: "operatorTranslatedContent", label: "客服译文" },
+  { key: "messageLanguage", label: "消息语言" },
+  { key: "intent", label: "意图" },
+  { key: "conversationStage", label: "会话阶段" },
+  { key: "flowStep", label: "流程步骤" },
+  { key: "replyMode", label: "回复模式" },
+  { key: "strictFlowStep", label: "严格流程步骤" },
+  { key: "a2cSendStatus", label: "A2C发送状态" },
+  { key: "a2cSendError", label: "A2C失败原因" },
+  { key: "extractedPhone", label: "已识别手机号" },
+  { key: "extractedTelegram", label: "已识别Telegram" },
+  { key: "extractedWhatsApp", label: "已识别WhatsApp" },
+  { key: "phoneDetected", label: "本条手机号" },
+  { key: "telegramDetected", label: "本条Telegram" },
+  { key: "whatsappDetected", label: "本条WhatsApp" },
+  { key: "conversationStatus", label: "会话状态" },
+  { key: "handoffStatus", label: "接管状态" },
+  { key: "externalId", label: "外部消息ID" }
+];
+
+function conversationExportCsv(rows: ConversationExportRecord[]): string {
+  return [
+    CONVERSATION_EXPORT_COLUMNS.map((column) => csvCell(column.label)).join(","),
+    ...rows.map((row) => CONVERSATION_EXPORT_COLUMNS.map((column) => csvCell(String(row[column.key] ?? ""))).join(","))
+  ].join("\n");
+}
+
+function csvCell(value: string): string {
+  const normalized = value.replace(/\r?\n/g, " ").replace(/\t/g, " ").trim();
+  return `"${normalized.replaceAll("\"", "\"\"")}"`;
 }
 
 function maskSecret(value: string): string {

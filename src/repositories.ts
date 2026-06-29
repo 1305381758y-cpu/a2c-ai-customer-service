@@ -395,6 +395,44 @@ export interface ConversationMessageRecord {
   createdAt: string;
 }
 
+export interface ConversationExportRecord {
+  merchantId: string;
+  countryId: string;
+  countryCode: string;
+  countryName: string;
+  conversationId: string;
+  customerPhone: string;
+  nickname: string;
+  a2cAccountPhone: string;
+  conversationLanguage: string;
+  conversationStage: string;
+  flowStep: string;
+  conversationStatus: string;
+  handoffStatus: string;
+  extractedPhone: string;
+  extractedTelegram: string;
+  extractedWhatsApp: string;
+  messageId: number;
+  direction: string;
+  msgType: string;
+  messageLanguage: string;
+  intent: string;
+  content: string;
+  originalContent: string;
+  translatedContent: string;
+  targetLanguage: string;
+  operatorTranslatedContent: string;
+  replyMode: string;
+  strictFlowStep: string;
+  a2cSendStatus: string;
+  a2cSendError: string;
+  phoneDetected: string;
+  telegramDetected: string;
+  whatsappDetected: string;
+  externalId: string;
+  createdAt: string;
+}
+
 export interface IntentLearningEventRecord {
   id: number;
   merchantId: string;
@@ -1065,6 +1103,106 @@ export class Repositories {
       .all(conversationId, limit)
       .reverse()
       .map((row) => mapConversationMessage(row as Record<string, unknown>));
+  }
+
+  exportConversationMessages(filters: {
+    merchantId?: string;
+    countryId?: string;
+    status?: string;
+    handoffStatus?: string;
+    language?: string;
+    a2cAccountPhone?: string;
+    customerPhone?: string;
+    direction?: string;
+    startAt?: string;
+    endAt?: string;
+    limit?: number;
+  } = {}): ConversationExportRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("c.merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.countryId) {
+      clauses.push("c.country_id = ?");
+      params.push(filters.countryId);
+    }
+    if (filters.status) {
+      clauses.push("c.status = ?");
+      params.push(filters.status);
+    }
+    if (filters.handoffStatus) {
+      clauses.push("c.handoff_status = ?");
+      params.push(filters.handoffStatus);
+    }
+    if (filters.language) {
+      clauses.push("c.language = ?");
+      params.push(filters.language);
+    }
+    if (filters.a2cAccountPhone) {
+      clauses.push("c.a2c_account_phone = ?");
+      params.push(filters.a2cAccountPhone);
+    }
+    if (filters.customerPhone) {
+      clauses.push("c.customer_phone = ?");
+      params.push(filters.customerPhone);
+    }
+    if (filters.direction) {
+      clauses.push("m.direction = ?");
+      params.push(filters.direction);
+    }
+    if (filters.startAt) {
+      clauses.push("m.created_at >= ?");
+      params.push(filters.startAt);
+    }
+    if (filters.endAt) {
+      clauses.push("m.created_at <= ?");
+      params.push(filters.endAt);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(filters.limit ?? 5000, 1), 50000);
+    params.push(limit);
+
+    return this.db.sqlite
+      .prepare(`
+        SELECT
+          c.merchant_id,
+          c.country_id,
+          co.code AS country_code,
+          co.name AS country_name,
+          c.id AS conversation_id,
+          c.customer_phone,
+          c.nickname,
+          c.a2c_account_phone,
+          c.language AS conversation_language,
+          c.stage AS conversation_stage,
+          c.flow_step,
+          c.status AS conversation_status,
+          c.handoff_status,
+          c.extracted_phone,
+          c.extracted_telegram,
+          c.extracted_whatsapp,
+          m.id AS message_id,
+          m.direction,
+          m.external_id,
+          m.content,
+          m.msg_type,
+          m.language AS message_language,
+          m.intent,
+          m.phone_detected,
+          m.telegram_detected,
+          m.raw_payload,
+          m.created_at
+        FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id
+        LEFT JOIN merchant_countries co ON co.id = c.country_id
+        ${where}
+        ORDER BY m.id ASC
+        LIMIT ?
+      `)
+      .all(...params)
+      .map((row) => mapConversationExportRecord(row as Record<string, unknown>));
   }
 
   getCustomerMemoryByConversation(conversationId: string): CustomerMemoryRecord | undefined {
@@ -2937,6 +3075,47 @@ function mapConversationMessage(row: Record<string, unknown>): ConversationMessa
     language: String(row.language ?? "unknown"),
     intent: String(row.intent ?? "unknown"),
     rawPayload: parseJsonObject(row.raw_payload),
+    createdAt: String(row.created_at ?? "")
+  };
+}
+
+function mapConversationExportRecord(row: Record<string, unknown>): ConversationExportRecord {
+  const rawPayload = parseJsonObject(row.raw_payload);
+  return {
+    merchantId: String(row.merchant_id ?? "default"),
+    countryId: String(row.country_id ?? ""),
+    countryCode: String(row.country_code ?? "default"),
+    countryName: String(row.country_name ?? "默认国家"),
+    conversationId: String(row.conversation_id ?? ""),
+    customerPhone: String(row.customer_phone ?? ""),
+    nickname: String(row.nickname ?? ""),
+    a2cAccountPhone: String(row.a2c_account_phone ?? ""),
+    conversationLanguage: String(row.conversation_language ?? "unknown"),
+    conversationStage: String(row.conversation_stage ?? ""),
+    flowStep: String(row.flow_step ?? ""),
+    conversationStatus: String(row.conversation_status ?? ""),
+    handoffStatus: String(row.handoff_status ?? ""),
+    extractedPhone: String(row.extracted_phone ?? ""),
+    extractedTelegram: String(row.extracted_telegram ?? ""),
+    extractedWhatsApp: String(row.extracted_whatsapp ?? ""),
+    messageId: Number(row.message_id ?? 0),
+    direction: String(row.direction ?? ""),
+    msgType: String(row.msg_type ?? "text"),
+    messageLanguage: String(row.message_language ?? "unknown"),
+    intent: String(row.intent ?? "unknown"),
+    content: String(row.content ?? ""),
+    originalContent: String(rawPayload.originalContent ?? row.content ?? ""),
+    translatedContent: String(rawPayload.translatedContent ?? ""),
+    targetLanguage: String(rawPayload.targetLanguage ?? ""),
+    operatorTranslatedContent: String(rawPayload.operatorTranslatedContent ?? ""),
+    replyMode: String(rawPayload.replyMode ?? ""),
+    strictFlowStep: String(rawPayload.strictFlowStep ?? ""),
+    a2cSendStatus: String(rawPayload.a2cSendStatus ?? ""),
+    a2cSendError: String(rawPayload.a2cSendError ?? ""),
+    phoneDetected: String(row.phone_detected ?? ""),
+    telegramDetected: String(row.telegram_detected ?? ""),
+    whatsappDetected: String(rawPayload.whatsappDetected ?? ""),
+    externalId: String(row.external_id ?? ""),
     createdAt: String(row.created_at ?? "")
   };
 }

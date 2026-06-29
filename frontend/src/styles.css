@@ -1238,6 +1238,24 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   border-radius: 0;
   box-shadow: none;
 }
+.conversation-tools .export-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  background: #fff;
+}
+.conversation-tools .export-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.conversation-tools .export-panel .toolbar {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .proactive-panel.compact {
   padding: 10px;
   background: #fff;
