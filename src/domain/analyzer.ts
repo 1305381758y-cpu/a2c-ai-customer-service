@@ -97,7 +97,7 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
   text = stripUrls(text);
   const trimmed = text.trim();
   if (!trimmed) return fallback;
-  if (fallback !== "unknown" && shouldKeepPreviousLanguage(trimmed)) return fallback;
+  if (fallback !== "unknown" && shouldKeepPreviousLanguage(trimmed, fallback)) return fallback;
 
   const signals = detectLanguageSignals(trimmed);
   const dominant = signals[0];
@@ -138,15 +138,20 @@ function stripUrls(text: string): string {
   return text.replace(/https?:\/\/\S+/gi, " ");
 }
 
-function shouldKeepPreviousLanguage(text: string): boolean {
+function shouldKeepPreviousLanguage(text: string, fallback: string): boolean {
   const normalized = text
     .toLowerCase()
     .replace(/[。.!?！？,，;；:：]+$/g, "")
     .trim();
+  if (normalizeLanguageCode(fallback) === "en" && isSpanishShortSignal(normalized)) return false;
   return isShortContextualReply(normalized) ||
     isGreeting(normalized) ||
     /^@[A-Za-z0-9_]{5,32}$/.test(normalized) ||
     /^\+?\d[\d\s-]{5,18}$/.test(normalized);
+}
+
+function isSpanishShortSignal(text: string): boolean {
+  return /^(hola|buenos dias|buenos días|buenas tardes|buenas noches|si|sí|x favor|por favor|informacion|información|info)$/i.test(text);
 }
 
 function detectLanguageSignals(text: string): Array<{ language: string; score: number; strong: boolean }> {
@@ -169,8 +174,9 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
   if (/(こんにちは|こんばんは|おはよう|登録|電話番号|アカウント|テレグラム|よろしく)/.test(text)) add("ja", 6, true);
 
   const lower = text.toLowerCase();
+  if (isSpanishShortSignal(lower)) add("es", 7, true);
   addKeywordScore(lower, add, "es", [
-    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|necesito|ayuda)\b/g
+    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor)\b/g
   ]);
   addKeywordScore(lower, add, "fr", [
     /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g
@@ -196,6 +202,15 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
     .map(([language, value]) => ({ language, ...value }))
     .filter((item) => item.score >= 2)
     .sort((a, b) => b.score - a.score);
+}
+
+function normalizeLanguageCode(language: string): string {
+  const normalized = language.trim().toLowerCase();
+  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt-BR";
+  if (normalized === "en" || normalized.startsWith("en-")) return "en";
+  if (normalized === "es" || normalized.startsWith("es-")) return "es";
+  if (normalized === "zh" || normalized.startsWith("zh-") || normalized === "cn") return "zh";
+  return normalized;
 }
 
 function addKeywordScore(

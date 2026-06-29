@@ -106,6 +106,10 @@ describe("message analyzer", () => {
   it("switches back from a stale English language when the new Spanish signal is clear", () => {
     expect(analyzeMessage("Hola, quiero registrarme en la plataforma", "en").language).toBe("es");
     expect(analyzeMessage("Necesito ayuda con el registro y teléfono", "en").language).toBe("es");
+    expect(analyzeMessage("Información", "en").language).toBe("es");
+    expect(analyzeMessage("X favor", "en").language).toBe("es");
+    expect(analyzeMessage("Si", "en").language).toBe("es");
+    expect(analyzeMessage("Hola", "en").language).toBe("es");
   });
 
   it("treats short registration completion messages as registration done", () => {

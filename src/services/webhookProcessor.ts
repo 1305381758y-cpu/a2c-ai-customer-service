@@ -2,7 +2,7 @@ import { analyzeMessage, isContextualIntentLabel, isInternalIntentLabel, type Co
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { AiReplyClient, analyzeAiImage, classifyAiContextualIntent, classifyAiIntent, naturalizeStrictFlowText } from "../clients/aiProvider.js";
+import { AiReplyClient, analyzeAiImage, classifyAiContextualIntent, classifyAiIntent, detectAiLanguage, naturalizeStrictFlowText } from "../clients/aiProvider.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { IntentLearningEventRecord, MerchantAgentProfileRecord, MerchantConfigRecord } from "../repositories.js";
@@ -66,6 +66,14 @@ export class WebhookProcessor {
       analysis = { ...analysis, language: conversation.language || analysis.language, intent: "need_help", stage: "need_platform_register" };
     }
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
+    analysis = await this.refineMessageLanguage({
+      runtimeConfig,
+      country,
+      conversation,
+      analysis,
+      customerText: customerTextForAi,
+      history: historyForIntent
+    });
     const scriptFlow = this.repos.getActiveScriptFlow(merchant.id, country.id);
     const strictFlowEnabled = Boolean(scriptFlow) || isStrictFlowEnabled(merchant, country, merchantConfig);
     const effectiveStrictFlowStep = strictFlowEnabled
@@ -627,6 +635,29 @@ export class WebhookProcessor {
     });
   }
 
+  private async refineMessageLanguage(input: {
+    runtimeConfig: AppConfig;
+    country: { defaultLanguage: string };
+    conversation: Parameters<Repositories["updateConversation"]>[0];
+    analysis: MessageAnalysis;
+    customerText: string;
+    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
+  }): Promise<MessageAnalysis> {
+    const countryLanguage = normalizeCustomerLanguage(input.country.defaultLanguage || "");
+    const currentLanguage = normalizeCustomerLanguage(input.analysis.language || "");
+    if (!shouldAskAiForLanguage(input.customerText, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
+      return input.analysis;
+    }
+    const aiLanguage = normalizeCustomerLanguage(await detectAiLanguage(input.runtimeConfig, {
+      customerText: input.customerText,
+      previousLanguage: input.conversation.language || "unknown",
+      countryDefaultLanguage: input.country.defaultLanguage || "unknown",
+      recentHistory: input.history
+    }));
+    if (aiLanguage === "unknown" || aiLanguage === currentLanguage) return input.analysis;
+    return { ...input.analysis, language: aiLanguage };
+  }
+
   private async sendRegistrationTutorialImage(
     conversation: Parameters<Repositories["updateConversation"]>[0],
     data: A2CWebhookPayload["data"],
@@ -733,6 +764,17 @@ function shouldAskAiForContext(rule: StrictContextualIntent, text: string, inten
     (intent === "greeting" && !/^(你好|您好|早上好|下午好|晚上好|hi|hello|hey)$/i.test(normalized)) ||
     normalized.length <= 16 ||
     /[?？为什么為什麼怎么怎麼如何什么什麼]/.test(normalized);
+}
+
+function shouldAskAiForLanguage(text: string, currentLanguage: string, previousLanguage: string, countryLanguage: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  if (/^https?:\/\//i.test(normalized) || /^@[A-Za-z0-9_]{5,32}$/.test(normalized) || /^\+?\d[\d\s-]{5,18}$/.test(normalized)) return false;
+  if (!/[A-Za-zÀ-ÿ]/.test(normalized) || /[\u3400-\u9fff\u3040-\u30ff\u0e00-\u0e7f]/.test(normalized)) return false;
+  if (countryLanguage !== "unknown" && countryLanguage !== "en" && currentLanguage === "en") return true;
+  if (previousLanguage === "en" && currentLanguage === "en" && /^(si|sí|x favor|por favor|informaci[oó]n|info|dale|claro)$/i.test(normalized)) return true;
+  if (normalized.length <= 24 && (currentLanguage === "unknown" || currentLanguage === "en") && countryLanguage !== "unknown" && countryLanguage !== currentLanguage) return true;
+  return false;
 }
 
 interface LearnedIntentMatch {
@@ -1073,7 +1115,7 @@ function replyLooksLikeCustomerLanguage(reply: string, targetLanguage: string): 
   const cjkCount = countMatches(naturalText, /[\u3400-\u9fff]/g);
   const latinCount = countMatches(naturalText, /[a-zA-ZÀ-ÿ]/g);
   if (targetLanguage === "zh") return cjkCount >= 2 || cjkCount >= latinCount;
-  if (targetLanguage === "en" || targetLanguage === "pt-BR") return cjkCount === 0 && latinCount > 0;
+  if (targetLanguage === "en" || targetLanguage === "pt-BR" || targetLanguage === "es") return cjkCount === 0 && latinCount > 0;
   return cjkCount === 0 || latinCount === 0;
 }
 
@@ -1085,6 +1127,7 @@ function stripNonLanguagePayload(reply: string): string {
     .replace(/邀请码[:：]?\s*\S*/g, " ")
     .replace(/invitation code[:：]?\s*\S*/gi, " ")
     .replace(/c[oó]digo de convite[:：]?\s*\S*/gi, " ")
+    .replace(/c[oó]digo de invitaci[oó]n[:：]?\s*\S*/gi, " ")
     .trim();
 }
 
@@ -1096,6 +1139,7 @@ function strictLanguageFallback(flowStep: string, language: string, originalRepl
   if (allowLinkOrInvite) return registrationFallback(language, originalReply);
   if (language === "en") return englishStrictFallback(flowStep);
   if (language === "pt-BR") return portugueseStrictFallback(flowStep);
+  if (language === "es") return spanishStrictFallback(flowStep);
   return chineseStrictFallback(flowStep);
 }
 
@@ -1130,11 +1174,25 @@ function registrationFallback(language: string, originalReply: string): string {
       "Depois de concluir o cadastro, me avise."
     ].filter(Boolean).join("\n");
   }
+  if (language === "es") {
+    return [
+      "De acuerdo, ahora le envío el enlace de registro y el código de invitación.",
+      url ? `Enlace de registro: ${url}` : "",
+      code ? `Código de invitación: ${code}` : "",
+      "Pasos de registro:",
+      "1. Abra el enlace en el navegador.",
+      "2. Complete su número de teléfono.",
+      "3. Cree su usuario y contraseña.",
+      "4. Ingrese el código de invitación.",
+      "5. Envíe el registro.",
+      "Cuando termine el registro, avíseme."
+    ].filter(Boolean).join("\n");
+  }
   return chineseStrictFallback("wait_registration");
 }
 
 function extractInviteCode(value: string): string {
-  return value.match(/(?:邀请码|invitation code|c[oó]digo de convite)[:：]?\s*([A-Za-z0-9_-]+)/i)?.[1] || "";
+  return value.match(/(?:邀请码|invitation code|c[oó]digo de convite|c[oó]digo de invitaci[oó]n)[:：]?\s*([A-Za-z0-9_-]+)/i)?.[1] || "";
 }
 
 function englishStrictFallback(flowStep: string): string {
@@ -1159,6 +1217,19 @@ function portugueseStrictFallback(flowStep: string): string {
     telegram_download: "Sem problema. Procure Telegram na Play Store ou App Store, instale e crie uma conta. Depois envie seu nome de usuário começando com @.",
     collect_telegram: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
     human_handoff: "Estamos verificando suas informações. Aguarde um momento."
+  };
+  return map[flowStep] ?? map.registration_intent;
+}
+
+function spanishStrictFallback(flowStep: string): string {
+  const map: Record<string, string> = {
+    interest_screening: "Hola, ¿le gustaría conocer un trabajo de medio tiempo en línea?",
+    registration_intent: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento, y la comisión depende de las tareas. Las ganancias siguen las reglas de la plataforma. ¿Tiene tiempo para continuar con el registro ahora?",
+    wait_registration: "De acuerdo, siga primero los pasos de la página. Cuando termine el registro, envíeme el teléfono usado. Si se queda trabado en alguna parte, dígame dónde.",
+    telegram_confirm: "Felicidades, el registro está listo. Guarde su usuario y contraseña. Para el siguiente paso necesita Telegram. ¿Tiene la aplicación Telegram?",
+    telegram_download: "No hay problema. Busque Telegram en Play Store o App Store, instálelo y cree una cuenta. Después envíeme su usuario que empieza con @.",
+    collect_telegram: "Por favor envíeme su usuario de Telegram. Debe empezar con @.",
+    human_handoff: "Estamos verificando su información. Espere un momento, por favor."
   };
   return map[flowStep] ?? map.registration_intent;
 }
