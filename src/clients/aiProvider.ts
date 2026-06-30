@@ -673,6 +673,7 @@ function defaultReply(input: ReplyInput, config: AppConfig): string {
   const registration = input.inviteCode ? inviteDisplayText(input.inviteCode, language, fallbackRegisterUrl(input, config)) : fallbackRegisterUrl(input, config);
   const link = registration ? ` ${registration}` : "";
   if (language === "en") return `Please complete the platform registration first, then send us your phone number and Telegram account.${link}`;
+  if (language === "es") return `Primero complete el registro en la plataforma y luego envíeme su número de teléfono y su cuenta de Telegram.${link}`;
   if (language === "pt-BR") return `Conclua primeiro o cadastro na plataforma. Depois, envie seu número de telefone e sua conta do Telegram.${link}`;
   return `请先完成平台开户，完成后把您的手机号和 Telegram 账号发给我。${link}`;
 }
@@ -684,6 +685,7 @@ function contextualFallbackReply(input: ReplyInput, config: AppConfig): string {
     if (input.inviteCode) {
       const display = inviteDisplayText(input.inviteCode, language, fallbackRegisterUrl(input, config));
       if (language === "en") return `Yes, registration requires an invitation code. Please use this registration link and invitation code: ${display}`;
+      if (language === "es") return `Sí, el registro necesita un código de invitación. Use este enlace de registro y este código: ${display}`;
       if (language === "pt-BR") return `Sim, o cadastro precisa de código de convite. Use este link de cadastro e código: ${display}`;
       return `需要邀请码才能注册。请使用这个开户链接和邀请码：${display}`;
     }
@@ -692,6 +694,7 @@ function contextualFallbackReply(input: ReplyInput, config: AppConfig): string {
   if (/(发我链接|注册链接|开户链接|注册入口|link please|register link|registration link)/i.test(text) && input.inviteCode) {
     const display = inviteDisplayText(input.inviteCode, language, fallbackRegisterUrl(input, config));
     if (language === "en") return `Please use this registration link and invitation code: ${display}`;
+    if (language === "es") return `Use este enlace de registro y este código de invitación: ${display}`;
     if (language === "pt-BR") return `Use este link de cadastro e código de convite: ${display}`;
     return `请使用这个开户链接和邀请码：${display}`;
   }
@@ -709,6 +712,7 @@ function ensureInviteInReply(reply: string, input: ReplyInput, config: AppConfig
   if (!/(注册链接|开户链接|register|cadastro|link|邀请码|invite|convite)/i.test(input.customerText + "\n" + reply)) return reply;
   const language = input.conversation.language === "unknown" ? "zh" : input.conversation.language;
   if (language === "en") return `${reply}\nRegistration link and invitation code: ${display}`;
+  if (language === "es") return `${reply}\nEnlace de registro y código de invitación: ${display}`;
   if (language === "pt-BR") return `${reply}\nLink de cadastro e código de convite: ${display}`;
   return `${reply}\n开户链接和邀请码：${display}`;
 }
@@ -724,6 +728,7 @@ function inviteDisplayText(inviteCode: A2CInviteCodeRecord, language: string, fa
   const url = inviteRegisterUrl(inviteCode, fallbackUrl);
   if (template.includes("{code}")) return url;
   if (language === "en") return `${url} Invitation code: ${inviteCode.code}`;
+  if (language === "es") return `${url} Código de invitación: ${inviteCode.code}`;
   if (language === "pt-BR") return `${url} Código de convite: ${inviteCode.code}`;
   return `${url} 邀请码：${inviteCode.code}`;
 }
@@ -735,6 +740,7 @@ function fallbackRegisterUrl(input: ReplyInput, config: AppConfig): string {
 function missingInviteReply(language: string, input: ReplyInput, config: AppConfig): string {
   const suffix = fallbackRegisterUrl(input, config) ? ` ${fallbackRegisterUrl(input, config)}` : "";
   if (language === "en") return `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${suffix}`;
+  if (language === "es") return `El registro necesita un código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.${suffix}`;
   if (language === "pt-BR") return `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${suffix}`;
   return `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${suffix}`;
 }
