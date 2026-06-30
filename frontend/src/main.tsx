@@ -1209,10 +1209,31 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setAccounts(await loadRows("/api/merchant/a2c/accounts"));
     accountPager.setPage(1);
   };
+  const reloadUnread = async () => {
+    const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary");
+    setUnread(res.rows);
+  };
   const reloadRows = async () => {
     if (!selectedAccount) return;
-    setRows(await loadRows(rowsUrl));
+    const nextRows = await loadRows<Conversation>(rowsUrl);
+    setRows(nextRows);
+    setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
   };
+  useEffect(() => {
+    if (!selectedAccount) return;
+    let cancelled = false;
+    const pollRows = async () => {
+      const nextRows = await loadRows<Conversation>(rowsUrl).catch(() => null);
+      if (!nextRows || cancelled) return;
+      setRows(nextRows);
+      setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
+    };
+    const timer = window.setInterval(() => void pollRows(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [rowsUrl, selectedAccount?.apiPhone]);
   const markAllRead = async () => {
     if (!selectedAccount) return;
     const result = await api<{ updated: number }>("/api/merchant/conversations/read-all", {
@@ -1221,8 +1242,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     });
     notify("success", "已全部标为已读", `已处理 ${result.updated} 个未读会话`);
     await reloadRows();
-    const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary");
-    setUnread(res.rows);
+    await reloadUnread();
   };
   const togglePin = async (conversation: Conversation) => {
     const pinned = !conversation.pinnedAt;
@@ -1232,6 +1252,23 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   };
   const accountUnread = (apiPhone: string) => unread.find((item) => item.a2cAccountPhone === apiPhone)?.unreadCount || 0;
   const conversationUnread = (conversationId: string) => unread.flatMap((item) => item.conversations).find((item) => item.conversationId === conversationId)?.unreadCount || 0;
+  const markConversationRead = async (conversationId: string) => {
+    await api(`/api/merchant/conversations/${conversationId}/read`, { method: "POST" });
+    await reloadRows();
+    await reloadUnread();
+  };
+  const openConversation = (conversation: Conversation) => {
+    setSelected(conversation);
+    setDraftCustomer(null);
+    if (conversationUnread(conversation.id) > 0 || conversation.unreadCount > 0) {
+      void markConversationRead(conversation.id).catch(() => null);
+    }
+  };
+  const selectedUnread = selected ? conversationUnread(selected.id) : 0;
+  useEffect(() => {
+    if (!selected?.id || selectedUnread <= 0) return;
+    void markConversationRead(selected.id).catch(() => null);
+  }, [selected?.id, selectedUnread]);
   const openNewCustomer = () => {
     setError("");
     const customerPhone = newCustomer.customerPhone.trim();
@@ -1312,7 +1349,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         <div className="stack-list conversation-list">
           {pager.rows.map((row) => {
             const unreadCount = conversationUnread(row.id);
-            return <div key={row.id} role="button" tabIndex={0} className={`conversation-row ${row.pinnedAt ? "pinned" : ""} ${unreadCount > 0 ? "unread" : ""} ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }} onKeyDown={(event) => { if (event.key === "Enter") { setSelected(row); setDraftCustomer(null); } }}>
+            return <div key={row.id} role="button" tabIndex={0} className={`conversation-row ${row.pinnedAt ? "pinned" : ""} ${unreadCount > 0 ? "unread" : ""} ${selected?.id === row.id ? "active" : ""}`} onClick={() => openConversation(row)} onKeyDown={(event) => { if (event.key === "Enter") openConversation(row); }}>
               <span className="conversation-row-main">
                 <strong title={row.nickname || row.customerPhone}>{row.pinnedAt && <Pin size={13}/>} {row.nickname || row.customerPhone}</strong>
                 {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
@@ -1333,7 +1370,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         <Pagination pager={pager} />
       </>}
     </section>
-    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
+    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;
 }
 
