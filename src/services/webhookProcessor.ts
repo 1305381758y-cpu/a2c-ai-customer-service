@@ -1,4 +1,4 @@
-import { analyzeMessage, isContextualIntentLabel, isInternalIntentLabel, type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
+import { analyzeMessage, detectLanguage, isContextualIntentLabel, isInternalIntentLabel, type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
@@ -1115,8 +1115,25 @@ function replyLooksLikeCustomerLanguage(reply: string, targetLanguage: string): 
   const cjkCount = countMatches(naturalText, /[\u3400-\u9fff]/g);
   const latinCount = countMatches(naturalText, /[a-zA-ZÀ-ÿ]/g);
   if (targetLanguage === "zh") return cjkCount >= 2 || cjkCount >= latinCount;
-  if (targetLanguage === "en" || targetLanguage === "pt-BR" || targetLanguage === "es") return cjkCount === 0 && latinCount > 0;
+  if (targetLanguage === "en" || targetLanguage === "pt-BR" || targetLanguage === "es") {
+    if (cjkCount > 0 || latinCount === 0) return false;
+    const detected = normalizeCustomerLanguage(detectLanguage(naturalText, "unknown"));
+    if (detected === targetLanguage) return true;
+    if (targetLanguage === "es") return looksSpanish(naturalText);
+    if (targetLanguage === "pt-BR") return looksPortuguese(naturalText);
+    return detected === "unknown" || detected === "en";
+  }
   return cjkCount === 0 || latinCount === 0;
+}
+
+function looksSpanish(text: string): boolean {
+  return /[¿¡ñáéíóúü]/i.test(text) ||
+    /\b(hola|claro|usted|registro|registrarse|enlace|c[oó]digo|invitaci[oó]n|trabajo|ganancia|comisi[oó]n|plataforma|tel[eé]fono|usuario|contrase[ñn]a|gracias|s[ií]|por favor)\b/i.test(text);
+}
+
+function looksPortuguese(text: string): boolean {
+  return /[ãõç]/i.test(text) ||
+    /\b(ol[aá]|voc[eê]|cadastro|cadastrar|link|convite|trabalho|ganho|comiss[aã]o|plataforma|telefone|usu[aá]rio|senha|obrigad[oa]|sim|por favor)\b/i.test(text);
 }
 
 function stripNonLanguagePayload(reply: string): string {

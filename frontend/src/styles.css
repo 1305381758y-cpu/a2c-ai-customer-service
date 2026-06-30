@@ -898,7 +898,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   border-bottom: 1px solid var(--line-soft);
   background: transparent;
   text-align: left;
-  color: var(--ink);
+  color: var(--text);
 }
 .invite-list-head {
   position: sticky;
@@ -1308,8 +1308,8 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   box-shadow: none;
 }
 .conversation-export-actions button.export-primary {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--brand);
+  border-color: var(--brand);
   color: #fff;
 }
 .conversation-export-bar.compact .conversation-export-actions button.export-primary {
@@ -1586,7 +1586,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   color: var(--muted-strong);
 }
 .file-preview a {
-  color: var(--primary);
+  color: var(--brand);
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -2376,7 +2376,7 @@ tbody tr:hover td {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #f8fbff;
-  color: var(--ink);
+  color: var(--text);
 }
 .review-score strong {
   font-size: 28px;
@@ -2533,7 +2533,7 @@ main {
 }
 
 .conversation-workspace {
-  grid-template-columns: minmax(190px, 230px) minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(236px, 280px) minmax(292px, 360px) minmax(0, 1fr);
   height: calc(100dvh - 112px);
   min-height: 560px;
   max-width: 100%;
@@ -2541,7 +2541,7 @@ main {
 }
 
 .conversation-workspace.customers-collapsed {
-  grid-template-columns: minmax(190px, 230px) 46px minmax(0, 1fr);
+  grid-template-columns: minmax(236px, 280px) 46px minmax(0, 1fr);
 }
 
 .conversation-workspace section {
@@ -2589,12 +2589,12 @@ main {
 }
 
 .conversation-workspace .review-card {
-  max-height: 74px;
+  max-height: 62px;
   overflow: auto;
 }
 
 .conversation-workspace .review-card[open] {
-  max-height: 260px;
+  max-height: 230px;
 }
 
 .conversation-workspace .review-head {
@@ -2657,6 +2657,92 @@ main {
 .conversation-row-meta {
   max-height: 46px;
   overflow: hidden;
+}
+
+.account-list,
+.customer-list {
+  min-height: 0;
+}
+
+.account-list-filter {
+  grid-template-columns: minmax(0, 1fr) minmax(78px, 96px);
+}
+
+.account-scroll-list,
+.conversation-list {
+  scrollbar-gutter: stable;
+}
+
+.account-mini-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.account-mini-pager button,
+.account-mini-pager select {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  min-height: 34px;
+  padding: 4px 6px;
+}
+
+.account-mini-pager button {
+  font-size: 0;
+}
+
+.account-mini-pager button::before {
+  content: "上页";
+  font-size: 12px;
+}
+
+.account-mini-pager button:last-child::before {
+  content: "下页";
+}
+
+.conversation-tools {
+  flex: 0 0 auto;
+}
+
+.conversation-tools.export-tool .conversation-export-bar {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.conversation-tools.export-tool .conversation-export-copy span {
+  display: none;
+}
+
+.conversation-tools.export-tool .conversation-export-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.conversation-tools.export-tool .conversation-export-actions button {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.conversation-tools.export-tool .conversation-export-actions .export-primary {
+  grid-column: 1 / -1;
+}
+
+.conversation-export-bar {
+  min-width: 0;
+}
+
+.conversation-export-actions {
+  min-width: 0;
+}
+
+.conversation-export-actions button {
+  min-width: 0;
 }
 
 .script-flow-page {

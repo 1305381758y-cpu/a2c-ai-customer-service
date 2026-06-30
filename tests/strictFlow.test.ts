@@ -829,6 +829,25 @@ describe("strict Aston Brazil flow", () => {
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
+  it("keeps Spanish flow language for short Spanish customer messages", () => {
+    const info = reply("Información", { language: "unknown" });
+    expect(info.language).toBe("es");
+    expect(info.reply).toContain("Hola");
+    expect(info.reply).not.toContain("Hello");
+
+    const favor = reply("X favor", { language: "en", flowStep: "interest_screening" });
+    expect(favor.language).toBe("es");
+    expect(favor.reply).toContain("explic");
+    expect(favor.reply).not.toContain("Got it");
+
+    const turns = simulateStrictFlow(["Información", "Si"]);
+    const secondReply = turns[1].result.reply;
+    expect("language" in turns[1].result ? turns[1].result.language : "").toBe("es");
+    expect(secondReply).toContain("trabajo");
+    expect(secondReply).toContain("registro");
+    expect(secondReply).not.toContain("online part-time job");
+  });
+
   it("keeps every major strict-flow step actionable for common customer replies", () => {
     const cases: Array<{ step: Conversation["flowStep"]; text: string; extra?: Partial<Conversation> }> = [
       { step: "interest_screening", text: "是的" },

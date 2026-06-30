@@ -437,7 +437,7 @@ function UsersPage() {
 }
 
 function Config({ platform }: { platform: boolean }) {
-  const [merchants] = useRows<Merchant>("/api/admin/merchants");
+  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [message, setMessage] = useState("");
@@ -627,7 +627,7 @@ function Config({ platform }: { platform: boolean }) {
 }
 
 function AgentProfilePage({ platform, canEdit }: { platform: boolean; canEdit: boolean }) {
-  const [merchants] = useRows<Merchant>("/api/admin/merchants");
+  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<AgentProfile | null>(null);
   const [message, setMessage] = useState("");
@@ -1273,6 +1273,10 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
             {error && <div className="error">{error}</div>}
           </div>
         </details>
+        <details className="conversation-tools export-tool">
+          <summary>导出对话数据</summary>
+          <ConversationExportBar compact base="/api/merchant/conversations/export" scopedFilters={selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined} scopedLabel="当前账号" />
+        </details>
         <div className="stack-list conversation-list">
           {pager.rows.map((row) => {
             const unreadCount = conversationUnread(row.id);
@@ -1519,7 +1523,13 @@ function coercePatch(input: Record<string, any>) {
 
 function useRows<T>(url: string): [T[], (rows: T[]) => void] {
   const [rows, setRows] = useState<T[]>([]);
-  useEffect(() => { loadRows<T>(url).then(setRows).catch(() => setRows([])); }, [url]);
+  useEffect(() => {
+    if (!url) {
+      setRows([]);
+      return;
+    }
+    loadRows<T>(url).then(setRows).catch(() => setRows([]));
+  }, [url]);
   return [rows, setRows];
 }
 
