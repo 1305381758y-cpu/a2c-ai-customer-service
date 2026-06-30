@@ -1223,7 +1223,12 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
   };
 
+  const exportFilters = selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined;
+
   return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}>
+    <div className="conversation-topbar">
+      <ConversationExportBar base="/api/merchant/conversations/export" scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} />
+    </div>
     <section className="account-list">
       <div className="account-list-head">
         <div>
@@ -1275,7 +1280,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         </details>
         <details className="conversation-tools export-tool">
           <summary>导出对话数据</summary>
-          <ConversationExportBar compact base="/api/merchant/conversations/export" scopedFilters={selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined} scopedLabel="当前账号" />
+          <ConversationExportBar compact base="/api/merchant/conversations/export" scopedFilters={exportFilters} scopedLabel="当前账号" />
         </details>
         <div className="stack-list conversation-list">
           {pager.rows.map((row) => {
@@ -1299,7 +1304,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         <Pagination pager={pager} />
       </>}
     </section>
-    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以先一键导出全部线上对话用于复盘、训练或交给同事分析。</p><ConversationExportBar base="/api/merchant/conversations/export" scopedFilters={selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined} scopedLabel="当前账号" /></div>}</section>
+    <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} onDeleted={async () => { setSelected(null); await reloadRows(); const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary"); setUnread(res.rows); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;
 }
 
@@ -1451,6 +1456,7 @@ function AccountPagination({ pager }: { pager: { page: number; pageSize: number;
   if (pager.total <= pager.pageSize && pager.page === 1) return <div className="account-mini-pager single">共 {pager.total} 个账号</div>;
   return <div className="account-mini-pager">
     <button className="ghost" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>上一页</button>
+    <span className="account-page-indicator">{pager.page}/{pager.totalPages}</span>
     <select aria-label="每页客服账号数量" value={pager.pageSize} onChange={(e) => pager.setPageSize(Number(e.target.value))}>
       {[10, 20, 50].map((size) => <option key={size} value={size}>{size}/页</option>)}
     </select>

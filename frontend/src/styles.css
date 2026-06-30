@@ -2535,6 +2535,7 @@ main {
 }
 
 .conversation-workspace {
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(236px, 280px) minmax(292px, 360px) minmax(0, 1fr);
   height: calc(100dvh - 112px);
   min-height: 560px;
@@ -2549,6 +2550,24 @@ main {
 .conversation-workspace section {
   min-width: 0;
   overflow: hidden;
+}
+
+.conversation-topbar {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.conversation-topbar .conversation-export-bar {
+  min-height: 66px;
+  padding: 10px 12px;
+}
+
+.conversation-topbar .conversation-export-actions {
+  flex-wrap: nowrap;
+}
+
+.conversation-topbar .conversation-export-actions button {
+  min-height: 34px;
 }
 
 .chat-pane,
@@ -2664,6 +2683,7 @@ main {
 .account-list,
 .customer-list {
   min-height: 0;
+  height: 100%;
 }
 
 .account-list-filter {
@@ -2676,7 +2696,8 @@ main {
 }
 
 .account-mini-pager {
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px auto minmax(76px, 1fr) 48px;
   align-items: center;
   gap: 6px;
   padding-top: 6px;
@@ -2684,7 +2705,6 @@ main {
 
 .account-mini-pager button,
 .account-mini-pager select {
-  flex: 1 1 0;
   min-width: 0;
   height: 34px;
   min-height: 34px;
@@ -2702,6 +2722,14 @@ main {
 
 .account-mini-pager button:last-child::before {
   content: "下页";
+}
+
+.account-page-indicator {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .conversation-tools {
@@ -2781,6 +2809,7 @@ main {
   .conversation-workspace,
   .conversation-workspace.customers-collapsed {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
     height: auto;
     min-height: 0;
     overflow: visible;
@@ -2794,6 +2823,15 @@ main {
 
   .chat-window {
     max-height: 56vh;
+  }
+
+  .conversation-topbar .conversation-export-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-topbar .conversation-export-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .script-flow-page,
