@@ -646,6 +646,9 @@ export class WebhookProcessor {
     const countryLanguage = normalizeCustomerLanguage(input.country.defaultLanguage || "");
     const currentLanguage = normalizeCustomerLanguage(input.analysis.language || "");
     const directLanguage = normalizeCustomerLanguage(detectLanguage(input.customerText, "unknown"));
+    if (shouldTrustDirectLanguageFallback(directLanguage, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
+      return { ...input.analysis, language: directLanguage };
+    }
     if (!shouldAskAiForLanguage(input.customerText, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
       return input.analysis;
     }
@@ -656,9 +659,6 @@ export class WebhookProcessor {
       recentHistory: input.history
     }));
     if (aiLanguage === "unknown") {
-      if (shouldTrustDirectLanguageFallback(directLanguage, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
-        return { ...input.analysis, language: directLanguage };
-      }
       return input.analysis;
     }
     if (aiLanguage === currentLanguage) return input.analysis;

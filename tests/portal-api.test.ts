@@ -511,6 +511,103 @@ describe("portal api", () => {
     }
   });
 
+  it("trusts direct Spanish signals even when the AI language detector returns English", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "spanish-ai-language-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: `spanish-ai-language-sent-${Date.now()}` });
+      if (url.includes("/v1/text/chatcompletion_v2") || url.includes("/v1/chat/completions")) {
+        return Response.json({ choices: [{ message: { content: "en" } }] });
+      }
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: {
+          name: "西语供应商误判商户",
+          country: {
+            code: "bo",
+            name: "玻利维亚",
+            defaultLanguage: "en",
+            platformRegisterUrl: "https://register.example",
+            requirePlatformAccount: true,
+            requirePhone: true,
+            requireTelegram: true,
+            requireWhatsApp: false
+          },
+          adminUser: { email: "spanish-ai-language@test.local", name: "西语供应商误判", password: "Merchant123456" }
+        }
+      });
+      expect(merchant.statusCode).toBe(200);
+      const merchantId = (merchant.json().merchant?.id ?? merchant.json().id) as string;
+      const merchantCookie = await login(app, "spanish-ai-language@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://spanish-ai-language-a2c.test/api/openapi",
+          a2cAppId: "spanish-ai-language-app",
+          a2cAppSecret: "spanish-ai-language-secret",
+          aiProvider: "minimax",
+          minimaxApiKey: "sk-test",
+          minimaxModel: "MiniMax-M3",
+          strictScriptFlowEnabled: true
+        }
+      });
+
+      for (const [index, content] of ["Información", "X favor", "Si"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `spanish-ai-language-event-${index}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `spanish-ai-language-message-${index}`,
+              content,
+              from: "spanish-ai-language-customer",
+              to: "spanish-ai-language-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000)
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+      }
+
+      const conversations = await app.inject({
+        method: "GET",
+        url: "/api/merchant/conversations",
+        headers: { cookie: merchantCookie }
+      });
+      const conversation = conversations.json().rows[0] as { id: string; language: string };
+      expect(conversation.language).toBe("es");
+      const messages = await app.inject({
+        method: "GET",
+        url: `/api/merchant/conversations/${conversation.id}/messages?limit=20`,
+        headers: { cookie: merchantCookie }
+      });
+      const rows = messages.json().rows as Array<{ direction: string; content: string; language: string }>;
+      const inboundRows = rows.filter((row) => row.direction === "inbound");
+      expect(inboundRows.map((row) => row.language)).toEqual(["es", "es", "es"]);
+      const outboundRows = rows.filter((row) => row.direction === "outbound");
+      expect(outboundRows.at(-1)?.language).toBe("es");
+      expect(outboundRows.at(-1)?.content).not.toMatch(/Hello|online part-time job|Got it/i);
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  }, 15000);
+
   it("clears all training samples through the internal maintenance endpoint", async () => {
     const app = buildApp(testConfig());
     try {
