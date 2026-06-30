@@ -108,11 +108,17 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
     const runnerUp = competingSignals.find((item) => item.language !== dominant.language);
     const dominantRatio = dominant.score / Math.max(1, signals.reduce((sum, item) => sum + item.score, 0));
     const hasMultipleSignals = Boolean(runnerUp && runnerUp.score >= 2);
+    const shouldTrustLatinSignalOverStaleEnglish =
+      normalizeLanguageCode(fallback) === "en" &&
+      (dominant.language === "es" || dominant.language === "pt-BR") &&
+      dominant.score >= 3 &&
+      (!fallbackSignal || fallbackSignal.score <= 2);
     const shouldSwitch =
+      shouldTrustLatinSignalOverStaleEnglish ||
       dominant.strong &&
-      dominant.score >= 6 &&
-      dominantRatio >= 0.7 &&
-      !hasMultipleSignals;
+        dominant.score >= 6 &&
+        dominantRatio >= 0.7 &&
+        !hasMultipleSignals;
     if (!shouldSwitch) return fallback;
   }
 
@@ -151,7 +157,7 @@ function shouldKeepPreviousLanguage(text: string, fallback: string): boolean {
 }
 
 function isSpanishShortSignal(text: string): boolean {
-  return /^(hola|buenos dias|buenos días|buenas tardes|buenas noches|si|sí|x favor|por favor|informacion|información|info)$/i.test(text);
+  return /^(hola|buenos dias|buenos días|buenas tardes|buenas noches|si|sí|x favor|x fa|xfa|porfa|por favor|informacion|información|info|quiero informaci[oó]n|necesito informaci[oó]n)$/i.test(text);
 }
 
 function detectLanguageSignals(text: string): Array<{ language: string; score: number; strong: boolean }> {
@@ -176,7 +182,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
   const lower = text.toLowerCase();
   if (isSpanishShortSignal(lower)) add("es", 7, true);
   addKeywordScore(lower, add, "es", [
-    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor)\b/g
+    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor|porfa|xfa|claro|dale)\b/g
   ]);
   addKeywordScore(lower, add, "fr", [
     /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g

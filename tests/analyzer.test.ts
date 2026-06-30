@@ -110,6 +110,8 @@ describe("message analyzer", () => {
     expect(analyzeMessage("X favor", "en").language).toBe("es");
     expect(analyzeMessage("Si", "en").language).toBe("es");
     expect(analyzeMessage("Hola", "en").language).toBe("es");
+    expect(analyzeMessage("Por favor", "en").language).toBe("es");
+    expect(analyzeMessage("Quiero información", "en").language).toBe("es");
   });
 
   it("treats short registration completion messages as registration done", () => {

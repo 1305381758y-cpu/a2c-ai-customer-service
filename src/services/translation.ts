@@ -26,6 +26,10 @@ export async function translateForOperator(config: AppConfig, text: string, sour
     const originalText = text.trim();
     return { originalText, translatedText: originalText, targetLanguage: OPERATOR_LANGUAGE, status: "skipped", error: "客户消息已经是中文" };
   }
+  const local = localOperatorTranslation(text, language);
+  if (local) {
+    return { originalText: text.trim(), translatedText: local, targetLanguage: OPERATOR_LANGUAGE, status: "translated" };
+  }
   return translateText(
     config,
     text,
@@ -71,4 +75,35 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
 
 function normalizeForCompare(value: string): string {
   return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function localOperatorTranslation(text: string, sourceLanguage: string): string {
+  const originalText = text.trim();
+  const normalized = originalText
+    .toLocaleLowerCase()
+    .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const language = sourceLanguage.trim().toLocaleLowerCase();
+  if (language === "es" || language.startsWith("es-")) {
+    const dictionary: Record<string, string> = {
+      "hola": "你好",
+      "informacion": "信息",
+      "información": "信息",
+      "info": "信息",
+      "x favor": "请问",
+      "x fa": "请问",
+      "xfa": "请问",
+      "porfa": "请问",
+      "por favor": "请问",
+      "si": "是的",
+      "sí": "是的",
+      "claro": "当然",
+      "dale": "好的",
+      "ok": "好的",
+      "gracias": "谢谢"
+    };
+    if (dictionary[normalized]) return dictionary[normalized];
+  }
+  return "";
 }
