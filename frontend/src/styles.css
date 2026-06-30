@@ -862,6 +862,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 .invite-import label {
   display: grid;
   gap: 5px;
+  min-width: 0;
   color: var(--muted-strong);
   font-size: 12px;
   font-weight: 850;
@@ -942,6 +943,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .invite-editor-title div {
   display: flex;
@@ -2821,5 +2823,32 @@ main {
   .review-grid,
   .learning-facts {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .invite-console,
+  .invite-import,
+  .invite-manager,
+  .invite-list,
+  .invite-detail,
+  .invite-editor {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .invite-import {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .invite-import button,
+  .invite-editor-actions button {
+    width: 100%;
+  }
+
+  .invite-list-head,
+  .invite-list button {
+    grid-template-columns: minmax(0, 1fr) 72px minmax(0, .9fr);
   }
 }
