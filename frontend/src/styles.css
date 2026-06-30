@@ -2535,7 +2535,6 @@ main {
 }
 
 .conversation-workspace {
-  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(236px, 280px) minmax(292px, 360px) minmax(0, 1fr);
   height: calc(100dvh - 112px);
   min-height: 560px;
@@ -2550,24 +2549,6 @@ main {
 .conversation-workspace section {
   min-width: 0;
   overflow: hidden;
-}
-
-.conversation-topbar {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-
-.conversation-topbar .conversation-export-bar {
-  min-height: 66px;
-  padding: 10px 12px;
-}
-
-.conversation-topbar .conversation-export-actions {
-  flex-wrap: nowrap;
-}
-
-.conversation-topbar .conversation-export-actions button {
-  min-height: 34px;
 }
 
 .chat-pane,
@@ -2664,6 +2645,33 @@ main {
   overflow: auto;
 }
 
+.conversation-list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.conversation-list-toolbar button {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.conversation-list-toolbar .compact-action {
+  flex: 1 1 124px;
+  min-width: 0;
+}
+
+.conversation-list-toolbar .export-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
 .conversation-row {
   min-height: 74px;
   padding: 8px 10px;
@@ -2697,10 +2705,17 @@ main {
 
 .account-mini-pager {
   display: grid;
-  grid-template-columns: 48px auto minmax(76px, 1fr) 48px;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 6px;
-  padding-top: 6px;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+.account-mini-pager.single {
+  display: block;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .account-mini-pager button,
@@ -2711,25 +2726,23 @@ main {
   padding: 4px 6px;
 }
 
-.account-mini-pager button {
-  font-size: 0;
+.account-page-buttons {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.account-mini-pager button::before {
-  content: "上页";
+.account-page-buttons button {
   font-size: 12px;
-}
-
-.account-mini-pager button:last-child::before {
-  content: "下页";
 }
 
 .account-page-indicator {
   color: var(--muted-strong);
   font-size: 12px;
   font-weight: 850;
-  white-space: nowrap;
-  text-align: center;
+  line-height: 1.35;
+  min-width: 0;
 }
 
 .conversation-tools {
@@ -2740,6 +2753,8 @@ main {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  background: #fff;
+  padding: 10px;
 }
 
 .conversation-tools.export-tool .conversation-export-copy span {

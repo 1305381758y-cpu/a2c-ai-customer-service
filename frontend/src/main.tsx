@@ -1162,7 +1162,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const [accounts, setAccounts] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
-  const [filters, setFilters] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
+  const [filters, setFiltersState] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [draftCustomer, setDraftCustomer] = useState<{ customerPhone: string; nickname: string } | null>(null);
   const [newCustomer, setNewCustomer] = useState({ customerPhone: "", nickname: "" });
@@ -1241,11 +1241,12 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   };
 
   const exportFilters = selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined;
+  const setFilters = (next: Filters) => {
+    setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
+  };
+  const exportBase = "/api/merchant/conversations/export";
 
   return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}>
-    <div className="conversation-topbar">
-      <ConversationExportBar base="/api/merchant/conversations/export" scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} />
-    </div>
     <section className="account-list">
       <div className="account-list-head">
         <div>
@@ -1283,12 +1284,18 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       </div>
       {!customerCollapsed && <>
         <div className="conversation-list-toolbar">
+          <button className="export-primary compact-action" onClick={() => downloadExport(exportBase, EXPORT_ALL_FILTERS, "csv")}><FileText size={15}/>导出全部</button>
+          {exportFilters && <button className="ghost compact-action" onClick={() => downloadExport(exportBase, exportFilters, "csv")}><FileText size={15}/>导出当前账号</button>}
           <button className="ghost" disabled={!selectedAccount || !accountUnread(selectedAccount.apiPhone)} onClick={markAllRead}><CheckCheck size={15}/>一键已读</button>
           {handoffs && <span className="status-pill warning">只显示待接管</span>}
         </div>
+        <details className="conversation-tools export-tool">
+          <summary>更多导出格式</summary>
+          <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact />
+        </details>
         <details className="conversation-tools">
           <summary>筛选客户</summary>
-          <FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
+          <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
         </details>
         <details className="conversation-tools">
           <summary>主动新建对话</summary>
@@ -1487,12 +1494,14 @@ function Pagination({ pager }: { pager: { page: number; pageSize: number; total:
 function AccountPagination({ pager }: { pager: { page: number; pageSize: number; total: number; totalPages: number; setPage: (page: number) => void; setPageSize: (pageSize: number) => void } }) {
   if (pager.total <= pager.pageSize && pager.page === 1) return <div className="account-mini-pager single">共 {pager.total} 个账号</div>;
   return <div className="account-mini-pager">
-    <button className="ghost" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>上一页</button>
-    <span className="account-page-indicator">{pager.page}/{pager.totalPages}</span>
+    <span className="account-page-indicator">共 {pager.total} 个 · 第 {pager.page}/{pager.totalPages} 页</span>
     <select aria-label="每页客服账号数量" value={pager.pageSize} onChange={(e) => pager.setPageSize(Number(e.target.value))}>
       {[10, 20, 50].map((size) => <option key={size} value={size}>{size}/页</option>)}
     </select>
-    <button className="ghost" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>下一页</button>
+    <div className="account-page-buttons">
+      <button className="ghost" disabled={pager.page <= 1} onClick={() => pager.setPage(pager.page - 1)}>上一页</button>
+      <button className="ghost" disabled={pager.page >= pager.totalPages} onClick={() => pager.setPage(pager.page + 1)}>下一页</button>
+    </div>
   </div>;
 }
 
@@ -1615,6 +1624,29 @@ function formatDateTime(value: string) {
   const date = parseServerDate(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { timeZone: BEIJING_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).replace(/\//g, "-");
+}
+
+function formatConversationDate(value: string) {
+  if (!value) return "";
+  const date = parseServerDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const day = beijingDateKey(date);
+  const today = beijingDateKey(new Date());
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = beijingDateKey(yesterdayDate);
+  if (day === today) return "今天";
+  if (day === yesterday) return "昨天";
+  return day;
+}
+
+function beijingDateKey(date: Date) {
+  return date.toLocaleDateString("zh-CN", {
+    timeZone: BEIJING_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).replace(/\//g, "-");
 }
 
 function parseServerDate(value: string) {
