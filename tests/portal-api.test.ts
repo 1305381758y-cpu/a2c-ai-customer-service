@@ -318,7 +318,7 @@ describe("portal api", () => {
         headers: { cookie: adminCookie },
         payload: { name: "意图学习商户" }
       });
-      const merchantId = merchant.json().id as string;
+      const merchantId = (merchant.json().merchant?.id ?? merchant.json().id) as string;
       await app.inject({
         method: "POST",
         url: "/api/admin/users",
@@ -412,6 +412,99 @@ describe("portal api", () => {
       const outbound = [...messages.json().rows].reverse().find((item: { direction: string }) => item.direction === "outbound") as { rawPayload: Record<string, any> };
       expect(outbound.rawPayload.learnedIntent?.suggestedIntent).toBe("investment_concern");
       expect(outbound.rawPayload.contextualIntent?.intent).toBe("investment_concern");
+    } finally {
+      await app.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("keeps webhook replies in Spanish for short Spanish customer messages even when the market default is English", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/open/auth/token")) return Response.json({ code: 200, data: { accessToken: "spanish-language-token", expireIn: 3600 } });
+      if (url.endsWith("/v1/messages")) return Response.json({ code: 200, data: `spanish-language-sent-${Date.now()}` });
+      return Response.json({ code: 200, data: "ok" });
+    }) as typeof fetch;
+
+    const app = buildApp(testConfig());
+    try {
+      const adminCookie = await login(app, "admin@test.local", "Admin123456");
+      const merchant = await app.inject({
+        method: "POST",
+        url: "/api/admin/merchants",
+        headers: { cookie: adminCookie },
+        payload: {
+          name: "西语短句商户",
+          country: {
+            code: "bo",
+            name: "玻利维亚",
+            defaultLanguage: "en",
+            platformRegisterUrl: "https://register.example",
+            requirePlatformAccount: true,
+            requirePhone: true,
+            requireTelegram: true,
+            requireWhatsApp: false
+          },
+          adminUser: { email: "spanish-language@test.local", name: "西语短句", password: "Merchant123456" }
+        }
+      });
+      expect(merchant.statusCode).toBe(200);
+      const merchantId = (merchant.json().merchant?.id ?? merchant.json().id) as string;
+      const merchantCookie = await login(app, "spanish-language@test.local", "Merchant123456");
+      await app.inject({
+        method: "PATCH",
+        url: "/api/merchant/config",
+        headers: { cookie: merchantCookie },
+        payload: {
+          a2cBaseUrl: "https://spanish-language-a2c.test/api/openapi",
+          a2cAppId: "spanish-language-app",
+          a2cAppSecret: "spanish-language-secret",
+          strictScriptFlowEnabled: true
+        }
+      });
+
+      for (const [index, content] of ["Información", "X favor", "Si"].entries()) {
+        const webhook = await app.inject({
+          method: "POST",
+          url: `/webhooks/a2c/${merchantId}`,
+          payload: {
+            id: `spanish-language-event-${index}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            type: "CUSTOMER_MESSAGE",
+            data: {
+              messageId: `spanish-language-message-${index}`,
+              content,
+              from: "spanish-language-customer",
+              to: "spanish-language-a2c",
+              msgType: "text",
+              timestamp: Math.floor(Date.now() / 1000)
+            }
+          }
+        });
+        expect(webhook.statusCode).toBe(200);
+      }
+
+      const conversations = await app.inject({
+        method: "GET",
+        url: "/api/merchant/conversations",
+        headers: { cookie: merchantCookie }
+      });
+      const conversation = conversations.json().rows[0] as { id: string; language: string };
+      expect(conversation.language).toBe("es");
+      const messages = await app.inject({
+        method: "GET",
+        url: `/api/merchant/conversations/${conversation.id}/messages?limit=20`,
+        headers: { cookie: merchantCookie }
+      });
+      const rows = messages.json().rows as Array<{ direction: string; content: string; language: string }>;
+      const inboundRows = rows.filter((row) => row.direction === "inbound");
+      expect(inboundRows.map((row) => row.language)).toEqual(["es", "es", "es"]);
+      const outboundRows = rows.filter((row) => row.direction === "outbound");
+      expect(outboundRows.length).toBeGreaterThanOrEqual(2);
+      expect(outboundRows.at(-1)?.language).toBe("es");
+      expect(outboundRows.at(-1)?.content).toMatch(/registro|trabajo|plataforma/i);
+      expect(outboundRows.at(-1)?.content).not.toMatch(/Hello|online part-time job|Got it/i);
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;
