@@ -85,25 +85,25 @@ function localOperatorTranslation(text: string, sourceLanguage: string): string 
     .replace(/\s+/g, " ")
     .trim();
   const language = sourceLanguage.trim().toLocaleLowerCase();
-  if (language === "es" || language.startsWith("es-")) {
-    const dictionary: Record<string, string> = {
-      "hola": "你好",
-      "informacion": "信息",
-      "información": "信息",
-      "info": "信息",
-      "x favor": "请问",
-      "x fa": "请问",
-      "xfa": "请问",
-      "porfa": "请问",
-      "por favor": "请问",
-      "si": "是的",
-      "sí": "是的",
-      "claro": "当然",
-      "dale": "好的",
-      "ok": "好的",
-      "gracias": "谢谢"
-    };
-    if (dictionary[normalized]) return dictionary[normalized];
+  const spanishDictionary: Record<string, string> = {
+    "hola": "你好",
+    "informacion": "信息",
+    "información": "信息",
+    "info": "信息",
+    "x favor": "请问",
+    "x fa": "请问",
+    "xfa": "请问",
+    "porfa": "请问",
+    "por favor": "请问",
+    "si": "是的",
+    "sí": "是的",
+    "claro": "当然",
+    "dale": "好的",
+    "ok": "好的",
+    "gracias": "谢谢"
+  };
+  if (language === "es" || language.startsWith("es-") || spanishDictionary[normalized]) {
+    if (spanishDictionary[normalized]) return spanishDictionary[normalized];
   }
   return "";
 }

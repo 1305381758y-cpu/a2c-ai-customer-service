@@ -645,6 +645,7 @@ export class WebhookProcessor {
   }): Promise<MessageAnalysis> {
     const countryLanguage = normalizeCustomerLanguage(input.country.defaultLanguage || "");
     const currentLanguage = normalizeCustomerLanguage(input.analysis.language || "");
+    const directLanguage = normalizeCustomerLanguage(detectLanguage(input.customerText, "unknown"));
     if (!shouldAskAiForLanguage(input.customerText, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
       return input.analysis;
     }
@@ -654,7 +655,13 @@ export class WebhookProcessor {
       countryDefaultLanguage: input.country.defaultLanguage || "unknown",
       recentHistory: input.history
     }));
-    if (aiLanguage === "unknown" || aiLanguage === currentLanguage) return input.analysis;
+    if (aiLanguage === "unknown") {
+      if (shouldTrustDirectLanguageFallback(directLanguage, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
+        return { ...input.analysis, language: directLanguage };
+      }
+      return input.analysis;
+    }
+    if (aiLanguage === currentLanguage) return input.analysis;
     return { ...input.analysis, language: aiLanguage };
   }
 
@@ -771,9 +778,19 @@ function shouldAskAiForLanguage(text: string, currentLanguage: string, previousL
   if (!normalized) return false;
   if (/^https?:\/\//i.test(normalized) || /^@[A-Za-z0-9_]{5,32}$/.test(normalized) || /^\+?\d[\d\s-]{5,18}$/.test(normalized)) return false;
   if (!/[A-Za-zÀ-ÿ]/.test(normalized) || /[\u3400-\u9fff\u3040-\u30ff\u0e00-\u0e7f]/.test(normalized)) return false;
+  const directLanguage = normalizeCustomerLanguage(detectLanguage(normalized, "unknown"));
+  if (currentLanguage === "en" && directLanguage !== "unknown" && directLanguage !== "en") return true;
   if (countryLanguage !== "unknown" && countryLanguage !== "en" && currentLanguage === "en") return true;
   if (previousLanguage === "en" && currentLanguage === "en" && /^(si|sí|x favor|por favor|informaci[oó]n|info|dale|claro)$/i.test(normalized)) return true;
   if (normalized.length <= 24 && (currentLanguage === "unknown" || currentLanguage === "en") && countryLanguage !== "unknown" && countryLanguage !== currentLanguage) return true;
+  return false;
+}
+
+function shouldTrustDirectLanguageFallback(directLanguage: string, currentLanguage: string, previousLanguage: string, countryLanguage: string): boolean {
+  if (directLanguage === "unknown" || directLanguage === currentLanguage) return false;
+  if (currentLanguage === "en" && (directLanguage === "es" || directLanguage === "pt-BR")) return true;
+  if (previousLanguage === "en" && directLanguage !== "en") return true;
+  if (countryLanguage !== "unknown" && directLanguage === countryLanguage) return true;
   return false;
 }
 

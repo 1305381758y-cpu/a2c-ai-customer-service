@@ -26,6 +26,8 @@ export interface Conversation {
   handoffStatus: "pending" | "processing" | "done";
   handoffNotified: number;
   unreadCount: number;
+  pinnedAt?: string;
+  updatedAt?: string;
 }
 
 export interface MerchantRecord {
@@ -1072,6 +1074,26 @@ export class Repositories {
     return this.getConversation(conversationId);
   }
 
+  markConversationsRead(merchantId: string, filters: { a2cAccountPhone?: string } = {}): { updated: number } {
+    const clauses = ["merchant_id = ?", "unread_count > 0"];
+    const params: Array<string | number> = [merchantId];
+    if (filters.a2cAccountPhone) {
+      clauses.push("a2c_account_phone = ?");
+      params.push(filters.a2cAccountPhone);
+    }
+    const result = this.db.sqlite
+      .prepare(`UPDATE conversations SET unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE ${clauses.join(" AND ")}`)
+      .run(...params);
+    return { updated: Number(result.changes ?? 0) };
+  }
+
+  pinConversation(conversationId: string, merchantId: string, pinned: boolean): Conversation | undefined {
+    this.db.sqlite
+      .prepare("UPDATE conversations SET pinned_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?")
+      .run(pinned ? new Date().toISOString() : "", conversationId, merchantId);
+    return this.getConversation(conversationId);
+  }
+
   unreadSummary(merchantId: string): UnreadSummaryRecord[] {
     const rows = this.db.sqlite.prepare(`
       SELECT a2c_account_phone, id AS conversation_id, customer_phone, unread_count
@@ -1342,7 +1364,10 @@ export class Repositories {
         FROM conversations c
         LEFT JOIN merchant_countries co ON co.id = c.country_id
         ${where}
-        ORDER BY c.updated_at DESC
+        ORDER BY CASE WHEN COALESCE(c.pinned_at, '') != '' THEN 0 ELSE 1 END,
+                 c.pinned_at DESC,
+                 CASE WHEN c.unread_count > 0 THEN 0 ELSE 1 END,
+                 c.updated_at DESC
         LIMIT ?
       `)
       .all(...params)
@@ -3069,7 +3094,9 @@ function mapConversation(row: Record<string, unknown>): Conversation {
     status: String(row.status ?? "active") as "active" | "human_handoff",
     handoffStatus: String(row.handoff_status ?? "pending") as "pending" | "processing" | "done",
     handoffNotified: Number(row.handoff_notified ?? 0),
-    unreadCount: Number(row.unread_count ?? 0)
+    unreadCount: Number(row.unread_count ?? 0),
+    pinnedAt: String(row.pinned_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
   };
 }
 

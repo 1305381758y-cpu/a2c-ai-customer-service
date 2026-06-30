@@ -353,6 +353,13 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (!ok) return reply.code(404).send({ error: "conversation not found" });
     return { ok: true };
   });
+  app.post<{ Params: { id: string }; Body: { pinned?: boolean } }>("/api/admin/conversations/:id/pin", { preHandler: adminOnly }, async (request, reply) => {
+    const conversation = deps.repos.getConversation(request.params.id);
+    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
+    const row = deps.repos.pinConversation(request.params.id, conversation.merchantId, Boolean(request.body?.pinned));
+    if (!row) return reply.code(404).send({ error: "conversation not found" });
+    return row;
+  });
   app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
     const memory = deps.repos.getCustomerMemoryByConversation(request.params.id);
     if (!memory) return reply.code(404).send({ error: "memory not found" });
@@ -740,6 +747,16 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   }));
   app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/read", { preHandler: merchantRoles }, async (request, reply) => {
     const row = deps.repos.markConversationRead(request.params.id, scopedMerchantId(request));
+    if (!row || row.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
+    return row;
+  });
+  app.post<{ Body: { a2cAccountPhone?: string } }>("/api/merchant/conversations/read-all", { preHandler: merchantRoles }, async (request) => {
+    return deps.repos.markConversationsRead(scopedMerchantId(request), {
+      a2cAccountPhone: String(request.body?.a2cAccountPhone || "").trim() || undefined
+    });
+  });
+  app.post<{ Params: { id: string }; Body: { pinned?: boolean } }>("/api/merchant/conversations/:id/pin", { preHandler: merchantRoles }, async (request, reply) => {
+    const row = deps.repos.pinConversation(request.params.id, scopedMerchantId(request), Boolean(request.body?.pinned));
     if (!row || row.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
     return row;
   });

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { Bot, Building2, CheckCheck, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Pin, PinOff, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
 import "./styles.css";
 
 type User = { id: string; email: string; name: string; role: "platform_admin" | "merchant_admin" | "merchant_operator"; merchantId: string | null };
 type Merchant = { id: string; name: string; status: string };
-type Conversation = { id: string; merchantId: string; countryId: string; countryCode: string; countryName: string; customerPhone: string; a2cAccountPhone: string; nickname: string; language: string; stage: string; flowStep?: string; extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string; status: string; handoffStatus: string; unreadCount: number };
+type Conversation = { id: string; merchantId: string; countryId: string; countryCode: string; countryName: string; customerPhone: string; a2cAccountPhone: string; nickname: string; language: string; stage: string; flowStep?: string; extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string; status: string; handoffStatus: string; unreadCount: number; pinnedAt?: string; updatedAt?: string };
 type Customer = { id: number; merchantId: string; countryId: string; countryCode: string; countryName: string; customerKey: string; nickname: string; firstA2CAccountPhone: string; lastA2CAccountPhone: string; language: string; stage: string; extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string; status: string; conversationCount: number; lastConversationId: string; firstSeenAt: string; lastSeenAt: string };
 type Sample = { id: number; customerMessage: string; standardReply: string; stage: string; intent: string; language: string; keywords: string; priority: number; enabled?: boolean };
 type Knowledge = { id: number; merchantId: string; type: string; title: string; content: string; language: string; priority: number; enabled: boolean };
@@ -1149,7 +1149,7 @@ function ConversationExportBar({
 
 function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const base = "/api/admin/conversations";
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: "", language: "", limit: "100" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
   const rowsUrl = withQuery(base, filters);
   const [rows, setRows] = useRows<Conversation>(rowsUrl);
   const pager = useClientPagination(rows, 20);
@@ -1162,7 +1162,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const [accounts, setAccounts] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
-  const [filters, setFilters] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: "", language: "", limit: "100" });
+  const [filters, setFilters] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [draftCustomer, setDraftCustomer] = useState<{ customerPhone: string; nickname: string } | null>(null);
   const [newCustomer, setNewCustomer] = useState({ customerPhone: "", nickname: "" });
@@ -1209,6 +1209,23 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const reloadRows = async () => {
     if (!selectedAccount) return;
     setRows(await loadRows(rowsUrl));
+  };
+  const markAllRead = async () => {
+    if (!selectedAccount) return;
+    const result = await api<{ updated: number }>("/api/merchant/conversations/read-all", {
+      method: "POST",
+      body: JSON.stringify({ a2cAccountPhone: selectedAccount.apiPhone })
+    });
+    notify("success", "已全部标为已读", `已处理 ${result.updated} 个未读会话`);
+    await reloadRows();
+    const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary");
+    setUnread(res.rows);
+  };
+  const togglePin = async (conversation: Conversation) => {
+    const pinned = !conversation.pinnedAt;
+    await api(`/api/merchant/conversations/${conversation.id}/pin`, { method: "POST", body: JSON.stringify({ pinned }) });
+    notify("success", pinned ? "会话已置顶" : "已取消置顶");
+    await reloadRows();
   };
   const accountUnread = (apiPhone: string) => unread.find((item) => item.a2cAccountPhone === apiPhone)?.unreadCount || 0;
   const conversationUnread = (conversationId: string) => unread.flatMap((item) => item.conversations).find((item) => item.conversationId === conversationId)?.unreadCount || 0;
@@ -1265,6 +1282,10 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
         <button className="ghost icon-only" title={customerCollapsed ? "展开客户列表" : "收起客户列表"} onClick={() => setCustomerCollapsed(!customerCollapsed)}>{customerCollapsed ? <ChevronsRight size={16}/> : <ChevronsLeft size={16}/>}</button>
       </div>
       {!customerCollapsed && <>
+        <div className="conversation-list-toolbar">
+          <button className="ghost" disabled={!selectedAccount || !accountUnread(selectedAccount.apiPhone)} onClick={markAllRead}><CheckCheck size={15}/>一键已读</button>
+          {handoffs && <span className="status-pill warning">只显示待接管</span>}
+        </div>
         <details className="conversation-tools">
           <summary>筛选客户</summary>
           <FilterBar filters={filters} setFilters={setFilters} fields={["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
@@ -1278,17 +1299,14 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
             {error && <div className="error">{error}</div>}
           </div>
         </details>
-        <details className="conversation-tools export-tool">
-          <summary>导出对话数据</summary>
-          <ConversationExportBar compact base="/api/merchant/conversations/export" scopedFilters={exportFilters} scopedLabel="当前账号" />
-        </details>
         <div className="stack-list conversation-list">
           {pager.rows.map((row) => {
             const unreadCount = conversationUnread(row.id);
-            return <button key={row.id} className={`conversation-row ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }}>
+            return <div key={row.id} role="button" tabIndex={0} className={`conversation-row ${row.pinnedAt ? "pinned" : ""} ${unreadCount > 0 ? "unread" : ""} ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setSelected(row); setDraftCustomer(null); }} onKeyDown={(event) => { if (event.key === "Enter") { setSelected(row); setDraftCustomer(null); } }}>
               <span className="conversation-row-main">
-                <strong title={row.nickname || row.customerPhone}>{row.nickname || row.customerPhone}</strong>
+                <strong title={row.nickname || row.customerPhone}>{row.pinnedAt && <Pin size={13}/>} {row.nickname || row.customerPhone}</strong>
                 {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+                <button className="ghost icon-only pin-button" title={row.pinnedAt ? "取消置顶" : "置顶会话"} onClick={(event) => { event.stopPropagation(); void togglePin(row); }}>{row.pinnedAt ? <PinOff size={13}/> : <Pin size={13}/>}</button>
               </span>
               <span className="conversation-row-phone" title={row.customerPhone}>{row.customerPhone || "未记录客户号"}</span>
               <span className="conversation-row-meta">
@@ -1296,8 +1314,9 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
                 <span>{languageName(row.language)}</span>
                 <span>{label(row.stage)}</span>
                 <span>{label(row.handoffStatus)}</span>
+                {row.updatedAt && <span>{formatConversationDate(row.updatedAt)}</span>}
               </span>
-            </button>;
+            </div>;
           })}
           {!rows.length && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}
         </div>
@@ -1345,7 +1364,20 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
   const lastOutboundPayload = [...messages].reverse().find((item) => item.direction === "outbound")?.rawPayload || {};
   const strictEnabled = lastOutboundPayload.strictFlowEnabled;
   const flowStep = conversation.flowStep || lastOutboundPayload.strictFlowStep || "未识别";
-  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.nickname || conversation.customerPhone}</h3><div className="header-meta"><span>{countryLabel(conversation.countryName)}</span><span>{languageName(conversation.language)}</span><span>客服账号：{conversation.a2cAccountPhone || "未识别"}</span><span>流程：{label(flowStep)}</span><span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span><span>{strictEnabled === true ? "严格流程已命中" : strictEnabled === false ? "未启用严格流程" : "严格流程待判断"}</span><span>手机：{conversation.extractedPhone || "未识别"}</span><span>TG：{conversation.extractedTelegram || "未识别"}</span><span>WS：{conversation.extractedWhatsApp || "未识别"}</span></div>{strictEnabled === false && <div className="warning compact">当前会话未启用严格话本流程，可能走普通回复。</div>}</div><div className="chat-actions">{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); await loadReview().catch(() => null); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}<AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton></div></div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<div className="memory compact-memory"><h3>客户记忆文件</h3><p>{localizeSystemText(memory?.summary || "暂无记忆，收到客户消息后会自动生成。")}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></div><ConversationReviewCard platform={platform} conversationId={conversation.id} data={review} reload={loadReview} setStatusMessage={setStatusMessage} setError={setError} /><div className="chat-window" ref={messagesRef}>{messages.length ? messages.map((m, i) => <ChatBubble key={`${m.id || m.createdAt}-${i}`} message={m} />) : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton disabled={!canSendMessage(send)} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
+  return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.nickname || conversation.customerPhone}</h3><div className="header-meta"><span>{countryLabel(conversation.countryName)}</span><span>{languageName(conversation.language)}</span><span>客服账号：{conversation.a2cAccountPhone || "未识别"}</span><span>流程：{label(flowStep)}</span><span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span><span>{strictEnabled === true ? "严格流程已命中" : strictEnabled === false ? "未启用严格流程" : "严格流程待判断"}</span><span>手机：{conversation.extractedPhone || "未识别"}</span><span>TG：{conversation.extractedTelegram || "未识别"}</span><span>WS：{conversation.extractedWhatsApp || "未识别"}</span></div>{strictEnabled === false && <div className="warning compact">当前会话未启用严格话本流程，可能走普通回复。</div>}</div><div className="chat-actions">{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); await loadReview().catch(() => null); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}<AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton></div></div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<details className="memory compact-memory"><summary>客户记忆文件</summary><p>{localizeSystemText(memory?.summary || "暂无记忆，收到客户消息后会自动生成。")}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></details><ConversationReviewCard platform={platform} conversationId={conversation.id} data={review} reload={loadReview} setStatusMessage={setStatusMessage} setError={setError} /><div className="chat-window" ref={messagesRef}>{messages.length ? renderMessagesWithDateGroups(messages) : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton disabled={!canSendMessage(send)} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
+}
+
+function renderMessagesWithDateGroups(messages: ChatMessage[]) {
+  let lastLabel = "";
+  return messages.map((message, index) => {
+    const dateLabel = formatConversationDate(message.createdAt);
+    const showDate = dateLabel && dateLabel !== lastLabel;
+    lastLabel = dateLabel || lastLabel;
+    return <React.Fragment key={`${message.id || message.createdAt}-${index}`}>
+      {showDate && <div className="chat-date-divider">{dateLabel}</div>}
+      <ChatBubble message={message} />
+    </React.Fragment>;
+  });
 }
 
 function ConversationReviewCard({ platform, conversationId, data, reload, setStatusMessage, setError }: { platform: boolean; conversationId: string; data: ConversationReviewResponse; reload: () => Promise<void>; setStatusMessage: (value: string) => void; setError: (value: string) => void }) {

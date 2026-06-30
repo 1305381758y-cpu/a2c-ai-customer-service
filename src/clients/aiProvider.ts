@@ -52,6 +52,10 @@ export interface AiReply {
 }
 
 const AI_TIMEOUT_MS = 15_000;
+const MINIMAX_QUEUE_GAP_MS = Number(process.env.MINIMAX_QUEUE_GAP_MS || 900);
+const MINIMAX_RATE_LIMIT_RETRY_MS = Number(process.env.MINIMAX_RATE_LIMIT_RETRY_MS || 2200);
+let miniMaxQueue: Promise<unknown> = Promise.resolve();
+let lastMiniMaxRequestAt = 0;
 
 export class AiReplyClient {
   constructor(private readonly config: AppConfig) {}
@@ -431,17 +435,28 @@ async function generateMiniMaxText(config: AppConfig, contents: string | AiTextP
   if (!apiKey) throw new Error("MiniMax Key 未配置");
   if (isMiniMaxTokenPlanKey(apiKey)) return generateMiniMaxAnthropicText(config, contents, options, apiKey);
   const endpoint = hasImagePart(contents) ? "/v1/chat/completions" : "/v1/text/chatcompletion_v2";
-  const response = await fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}${endpoint}`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(buildMiniMaxRequestBody(config, contents, options, endpoint)),
-    signal: AbortSignal.timeout(AI_TIMEOUT_MS)
-  });
+  const request = () => fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(buildMiniMaxRequestBody(config, contents, options, endpoint)),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+    });
+  const response = await enqueueMiniMaxRequest(request);
   const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
   const providerError = extractProviderError(payload);
+  if (isMiniMaxRateLimited(response, providerError)) {
+    await sleep(MINIMAX_RATE_LIMIT_RETRY_MS);
+    const retryResponse = await enqueueMiniMaxRequest(request);
+    const retryPayload = await retryResponse.json().catch(async () => ({ error: { message: await retryResponse.text().catch(() => retryResponse.statusText) } })) as Record<string, unknown>;
+    const retryProviderError = extractProviderError(retryPayload);
+    if (!retryResponse.ok || retryProviderError) throw new Error(`MiniMax 调用失败：${retryProviderError || retryResponse.statusText}`);
+    const retryText = extractTextFromChatCompletion(retryPayload).trim();
+    if (!retryText) throw new Error("MiniMax 返回内容为空");
+    return retryText;
+  }
   if (!response.ok || providerError) {
     throw new Error(`MiniMax 调用失败：${providerError || response.statusText}`);
   }
@@ -457,25 +472,56 @@ async function generateMiniMaxAnthropicText(
   apiKey: string
 ): Promise<string> {
   const body = buildMiniMaxAnthropicRequestBody(config, contents, options);
-  const response = await fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}/anthropic/v1/messages`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(AI_TIMEOUT_MS)
-  });
+  const request = () => fetch(`${normalizeMiniMaxBaseUrl(config, apiKey)}/anthropic/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+    });
+  const response = await enqueueMiniMaxRequest(request);
   const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
   const providerError = extractProviderError(payload);
+  if (isMiniMaxRateLimited(response, providerError)) {
+    await sleep(MINIMAX_RATE_LIMIT_RETRY_MS);
+    const retryResponse = await enqueueMiniMaxRequest(request);
+    const retryPayload = await retryResponse.json().catch(async () => ({ error: { message: await retryResponse.text().catch(() => retryResponse.statusText) } })) as Record<string, unknown>;
+    const retryProviderError = extractProviderError(retryPayload);
+    if (!retryResponse.ok || retryProviderError) throw new Error(`MiniMax 调用失败：${retryProviderError || retryResponse.statusText}`);
+    const retryText = extractTextFromAnthropicMessage(retryPayload).trim();
+    if (!retryText) throw new Error("MiniMax 返回内容为空");
+    return retryText;
+  }
   if (!response.ok || providerError) {
     throw new Error(`MiniMax 调用失败：${providerError || response.statusText}`);
   }
   const text = extractTextFromAnthropicMessage(payload).trim();
   if (!text) throw new Error("MiniMax 返回内容为空");
   return text;
+}
+
+function enqueueMiniMaxRequest<T>(task: () => Promise<T>): Promise<T> {
+  const run = async () => {
+    const waitMs = Math.max(0, MINIMAX_QUEUE_GAP_MS - (Date.now() - lastMiniMaxRequestAt));
+    if (waitMs > 0) await sleep(waitMs);
+    lastMiniMaxRequestAt = Date.now();
+    return task();
+  };
+  const next = miniMaxQueue.then(run, run);
+  miniMaxQueue = next.catch(() => undefined);
+  return next;
+}
+
+function isMiniMaxRateLimited(response: Response, providerError: string): boolean {
+  return response.status === 429 || /(rate limit|too many|频率|限流|稍后|繁忙|quota|qps|rpm)/i.test(providerError);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildMiniMaxRequestBody(

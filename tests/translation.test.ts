@@ -19,4 +19,15 @@ describe("operator translation", () => {
       status: "translated"
     });
   });
+
+  it("does not mistranslate short Spanish phrases when the source language was stale English", async () => {
+    await expect(translateForOperator(config, "X favor", "en")).resolves.toMatchObject({
+      translatedText: "请问",
+      status: "translated"
+    });
+    await expect(translateForOperator(config, "Información", "en")).resolves.toMatchObject({
+      translatedText: "信息",
+      status: "translated"
+    });
+  });
 });

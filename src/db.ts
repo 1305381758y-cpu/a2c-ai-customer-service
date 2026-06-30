@@ -121,6 +121,7 @@ export function migrate(db: DatabaseSync): void {
       status TEXT DEFAULT 'active',
       handoff_notified INTEGER DEFAULT 0,
       unread_count INTEGER DEFAULT 0,
+      pinned_at TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(merchant_id, customer_phone, a2c_account_phone)
@@ -466,6 +467,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "extracted_whatsapp", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "unread_count", "INTEGER DEFAULT 0");
+  ensureColumn(db, "conversations", "pinned_at", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "merchant_a2c_accounts", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "a2c_invite_codes", "merchant_id", "TEXT DEFAULT 'default'");
