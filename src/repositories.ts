@@ -734,7 +734,7 @@ export class Repositories {
       params.push(filters.language);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
     params.push(limit);
     return this.db.sqlite
       .prepare(`
@@ -1329,7 +1329,7 @@ export class Repositories {
     return this.getCustomerMemory(conversation.merchantId, conversation.countryId, conversation.customerPhone);
   }
 
-  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; limit?: number } = {}): Conversation[] {
+  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: number } = {}): Conversation[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -1356,8 +1356,12 @@ export class Repositories {
       clauses.push("c.a2c_account_phone = ?");
       params.push(filters.a2cAccountPhone);
     }
+    if (filters.customerPhone) {
+      clauses.push("c.customer_phone = ?");
+      params.push(filters.customerPhone);
+    }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
     params.push(limit);
 
     return this.db.sqlite

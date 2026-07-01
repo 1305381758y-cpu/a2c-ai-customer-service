@@ -1170,6 +1170,88 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("lists all conversations for one customer across service accounts", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+
+    const merchant = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "客户会话查看测试" }
+    });
+    const merchantId = merchant.json().id as string;
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie: adminCookie },
+      payload: { a2cAccountPhone: "customer-history-a2c-1,customer-history-a2c-2,customer-history-a2c-3" }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: {
+        merchantId,
+        email: "customer-history@test.local",
+        name: "客户会话查看管理员",
+        password: "Merchant123456",
+        role: "merchant_admin"
+      }
+    });
+    const merchantCookie = await login(app, "customer-history@test.local", "Merchant123456");
+
+    for (const [index, data] of [
+      { from: "customer-history-001", to: "customer-history-a2c-1" },
+      { from: "customer-history-001", to: "customer-history-a2c-2" },
+      { from: "customer-history-002", to: "customer-history-a2c-3" }
+    ].entries()) {
+      const webhook = await app.inject({
+        method: "POST",
+        url: "/webhooks/a2c",
+        payload: {
+          id: `customer-history-event-${index}`,
+          timestamp: Math.floor(Date.now() / 1000),
+          type: "CUSTOMER_MESSAGE",
+          data: {
+            messageId: `customer-history-message-${index}`,
+            content: "hello",
+            from: data.from,
+            to: data.to,
+            msgType: "text",
+            timestamp: Math.floor(Date.now() / 1000),
+            nickname: "历史客户"
+          }
+        }
+      });
+      expect(webhook.statusCode).toBe(200);
+    }
+
+    const conversations = await app.inject({
+      method: "GET",
+      url: "/api/merchant/conversations?customerPhone=customer-history-001&limit=50000",
+      headers: { cookie: merchantCookie }
+    });
+    expect(conversations.statusCode).toBe(200);
+    expect(conversations.json().rows).toHaveLength(2);
+    expect(new Set(conversations.json().rows.map((row: { customerPhone: string }) => row.customerPhone))).toEqual(new Set(["customer-history-001"]));
+    expect(new Set(conversations.json().rows.map((row: { a2cAccountPhone: string }) => row.a2cAccountPhone))).toEqual(new Set(["customer-history-a2c-1", "customer-history-a2c-2"]));
+
+    await app.close();
+  });
+
+  it("does not cap customer list requests at 500 rows", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("客户分页测试");
+    for (let index = 0; index < 501; index += 1) {
+      const conversation = repos.getOrCreateConversation(`bulk-customer-${index}`, `bulk-a2c-${index}`, "", merchant.id);
+      repos.upsertCustomerFromConversation(conversation);
+    }
+
+    expect(repos.listCustomers({ merchantId: merchant.id, limit: 600 })).toHaveLength(501);
+  });
+
   it("hard deletes legacy customer memories that still point to the removed conversation", async () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

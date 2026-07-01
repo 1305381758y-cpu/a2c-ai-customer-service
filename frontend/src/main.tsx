@@ -1107,7 +1107,7 @@ function TrainingMaterials({ platform = false, simple = false }: { platform?: bo
 function Customers({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", limit: "100" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", limit: "50000" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: filters.limit });
   const [rows, setRows] = useRows<Customer>(rowsUrl);
   const pager = useClientPagination(rows, 20);
@@ -1131,7 +1131,42 @@ function Customers({ platform = false }: { platform?: boolean }) {
   const scopedExportFilters = platform
     ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" }
     : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" };
-  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div></section>}</div>;
+  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel customer-detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div><CustomerConversationHistory platform={platform} customer={selected} /></section>}</div>;
+}
+
+function CustomerConversationHistory({ platform, customer }: { platform: boolean; customer: Customer }) {
+  const base = platform ? "/api/admin/conversations" : "/api/merchant/conversations";
+  const filters = platform
+    ? { merchantId: customer.merchantId, customerPhone: customer.customerKey, limit: "50000" }
+    : { customerPhone: customer.customerKey, limit: "50000" };
+  const rowsUrl = withQuery(base, filters);
+  const [rows, setRows] = useRows<Conversation>(rowsUrl);
+  const [selected, setSelected] = useState<Conversation | null>(null);
+  const pager = useClientPagination(rows, 10);
+  useEffect(() => {
+    setSelected(null);
+  }, [customer.customerKey, customer.merchantId]);
+  useEffect(() => {
+    if (!selected && rows.length) setSelected(rows[0]);
+    if (selected && !rows.some((row) => row.id === selected.id)) setSelected(rows[0] || null);
+  }, [rows, selected]);
+  const reload = async () => {
+    setRows(await loadRows(rowsUrl));
+    pager.setPage(1);
+  };
+  return <div className="customer-conversation-history">
+    <div className="section-title-row">
+      <div><h3>该客户全部会话</h3><p>按最近消息排序，包含这个客户在不同客服账号下产生的所有对话。</p></div>
+      <span className="status-pill neutral">共 {rows.length} 条</span>
+    </div>
+    <div className={`customer-conversation-grid ${selected ? "" : "single"}`}>
+      <div className="conversation-mini-list">
+        <Table rows={pager.rows} columns={["a2cAccountPhone", "countryName", "language", "stage", "status", "handoffStatus", "updatedAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+        <Pagination pager={pager} />
+      </div>
+      {selected ? <ConversationDetail platform={platform} conversation={selected} refresh={reload} onDeleted={async () => { await reload(); }} /> : <div className="empty-state">该客户暂无会话记录</div>}
+    </div>
+  </div>;
 }
 
 function KnowledgePage({ platform }: { platform: boolean }) {

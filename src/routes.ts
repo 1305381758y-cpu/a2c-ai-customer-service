@@ -297,7 +297,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       return reply.code(400).send({ error: error instanceof Error ? error.message : "delete failed" });
     }
   });
-  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
+  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: request.query.merchantId,
       countryId: request.query.countryId,
@@ -305,6 +305,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
       a2cAccountPhone: request.query.a2cAccountPhone,
+      customerPhone: request.query.customerPhone,
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
@@ -637,7 +638,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { ok: true };
   });
 
-  app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listConversations({
       merchantId: scopedMerchantId(request),
       countryId: request.query.countryId,
@@ -645,6 +646,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
       handoffStatus: request.query.handoffStatus,
       language: request.query.language,
       a2cAccountPhone: request.query.a2cAccountPhone,
+      customerPhone: request.query.customerPhone,
       limit: request.query.limit ? Number(request.query.limit) : undefined
     })
   }));
