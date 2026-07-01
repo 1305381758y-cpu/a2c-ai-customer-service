@@ -56,7 +56,7 @@ export function buildApp(config: AppConfig) {
     prefix: "/uploads/",
     decorateReply: false
   });
-  registerRoutes(app, { config, repos, processor: conversationEngine });
+  registerRoutes(app, { config, repos, conversationEngine });
 
   return app;
 }

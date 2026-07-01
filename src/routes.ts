@@ -16,8 +16,10 @@ import type { ConversationExportRecord, MerchantConfigRecord, Repositories } fro
 import type { ConversationEngine } from "./services/conversationEngine.js";
 import { generateConversationReview } from "./services/conversationReview.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
+import { registerConversationIngressRoutes } from "./http/conversationIngressRoutes.js";
+import { requireInternalApiKey as auth } from "./http/internalApiKeyAuth.js";
 
-export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: ConversationEngine }): void {
+export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
   const merchantRoles = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin", "merchant_operator"]);
   const merchantAdmins = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin"]);
@@ -710,7 +712,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (msgType !== "text" && !body.url && !content.trim()) return reply.code(400).send({ error: "请输入媒体链接或说明" });
     const now = Math.floor(Date.now() / 1000);
     const messageId = `sim_in:${merchantId}:${customerPhone}:${Date.now()}:${randomUUID().slice(0, 8)}`;
-    const result = await deps.processor.handleInboundMessage({
+    const result = await deps.conversationEngine.handleInboundMessage({
       merchantId,
       simulation: true,
       payload: {
@@ -972,28 +974,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
   });
 
-  app.post<{ Querystring: { limit?: string } }>("/internal/follow-ups/due", { preHandler: auth(deps.config) }, async (request) => {
-    const limit = request.query.limit ? Number(request.query.limit) : 50;
-    return deps.processor.processDueFollowUps(Number.isFinite(limit) ? limit : 50);
-  });
-
-  app.post("/webhooks/a2c", async (request, reply) => {
-    if (shouldProcessA2CWebhookAsync()) {
-      return reply.code(200).send(deps.processor.enqueueInboundMessage({ payload: request.body as never }));
-    }
-    const result = await deps.processor.handleInboundMessage({ payload: request.body as never });
-    return reply.code(200).send(result);
-  });
-
-  app.post<{ Params: { merchantId: string } }>("/webhooks/a2c/:merchantId", async (request, reply) => {
-    const merchant = deps.repos.getMerchant(request.params.merchantId);
-    if (!merchant || merchant.status !== "active") return reply.code(404).send({ error: "merchant not found" });
-    if (shouldProcessA2CWebhookAsync()) {
-      return reply.code(200).send(deps.processor.enqueueInboundMessage({ payload: request.body as never, merchantId: merchant.id }));
-    }
-    const result = await deps.processor.handleInboundMessage({ payload: request.body as never, merchantId: merchant.id });
-    return reply.code(200).send(result);
-  });
+  registerConversationIngressRoutes(app, deps);
 
   app.post<{ Params: { merchantId: string }; Body: TelegramUpdate }>("/webhooks/telegram/:merchantId", async (request, reply) => {
     const merchant = deps.repos.getMerchant(request.params.merchantId);
@@ -1666,18 +1647,4 @@ function a2cAccountAllowed(repos: Repositories, merchantId: string, config: Merc
   const enabledAccount = repos.listMerchantA2CAccounts({ merchantId, enabled: true }).some((account) => account.apiPhone === apiPhone);
   if (enabledAccount) return true;
   return config.a2cAccountPhone.split(",").map((item) => item.trim()).filter(Boolean).includes(apiPhone);
-}
-
-function shouldProcessA2CWebhookAsync(): boolean {
-  if (process.env.WEBHOOK_ASYNC_ENABLED === "false") return false;
-  if (process.env.WEBHOOK_ASYNC_ENABLED === "true") return true;
-  return process.env.NODE_ENV !== "test";
-}
-
-function auth(config: AppConfig) {
-  return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (request.headers["x-api-key"] !== config.INTERNAL_API_KEY) {
-      return reply.code(401).send({ error: "unauthorized" });
-    }
-  };
 }
