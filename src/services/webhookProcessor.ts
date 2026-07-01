@@ -2,11 +2,11 @@ import { analyzeMessage, detectLanguage, isContextualIntentLabel, isInternalInte
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
-import { AiReplyClient, analyzeAiImage, classifyAiContextualIntent, classifyAiIntent, detectAiLanguage, naturalizeStrictFlowText } from "../clients/aiProvider.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { IntentLearningEventRecord, MerchantAgentProfileRecord, MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
+import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { translateForCustomer, translateForOperator } from "./translation.js";
@@ -33,7 +33,7 @@ export interface A2CWebhookPayload {
 export class WebhookProcessor {
   constructor(
     private readonly repos: Repositories,
-    private readonly ai: AiReplyClient,
+    private readonly ai: AiTasks,
     private readonly a2c: A2CClient,
     private readonly telegram: TelegramClient,
     private readonly config: AppConfig
@@ -53,12 +53,11 @@ export class WebhookProcessor {
     const simulation = Boolean(options.simulation || merchantConfig.trainingSimulationEnabled);
     const country = this.repos.ensurePrimaryCountry(merchant.id);
     const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-    const ai = new AiReplyClient(runtimeConfig);
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
     const imageAnalysis = msgType === "image" && mediaUrl
-      ? await analyzeAiImage(runtimeConfig, mediaUrl)
+      ? await this.ai.analyzeImage(runtimeConfig, mediaUrl)
       : { text: "", status: "skipped" as const };
     const customerTextForAi = analysisText || (imageAnalysis.text ? `${content} ${imageAnalysis.text}` : content);
     let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
@@ -116,7 +115,7 @@ export class WebhookProcessor {
       history: historyForIntent,
       inferredIntent
     });
-    if (learnedIntent?.contextualIntent && (contextualIntent.intent === "unknown" || contextualIntent.intent === "unknown_question" || contextualIntent.source === "gemini")) {
+    if (learnedIntent?.contextualIntent && (contextualIntent.intent === "unknown" || contextualIntent.intent === "unknown_question" || contextualIntent.source === "ai")) {
       contextualIntent = {
         ...contextualIntent,
         intent: learnedIntent.contextualIntent,
@@ -259,7 +258,7 @@ export class WebhookProcessor {
       conversation.language = strictReply.language;
       conversation.stage = strictReply.stage;
       conversation.flowStep = strictReply.nextFlowStep;
-      const naturalized = await naturalizeStrictReply(runtimeConfig, {
+      const naturalized = await naturalizeStrictReply(this.ai, runtimeConfig, {
         customerText: customerTextForAi,
         draftReply: strictReply.reply,
         language: strictReply.language,
@@ -380,7 +379,7 @@ export class WebhookProcessor {
       stage: analysis.stage
     });
     const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await ai.generateReply({ customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode, agentProfile });
+    const aiReply = await this.ai.generateReply(runtimeConfig, { customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode, agentProfile });
     if (!shouldIncludeRegistrationDetails) {
       aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
     }
@@ -434,7 +433,7 @@ export class WebhookProcessor {
       language: aiReply.language || conversation.language,
       intent: "unknown",
       rawPayload: {
-        replyMode: aiReply.fallback ? "fallback" : "gemini",
+        replyMode: aiReply.fallback ? "fallback" : "ai",
         strictFlowEnabled,
         agentProfileName: agentProfile.agentName,
         learnedIntent: learnedIntent ? {
@@ -627,7 +626,7 @@ export class WebhookProcessor {
     if (!input.strictFlowEnabled) return "unknown";
     if (!input.conversation.flowStep) return "unknown";
     if (input.analysis.intent !== "unknown" && input.analysis.intent !== "irrelevant_or_spam") return "unknown";
-    return classifyAiIntent(input.runtimeConfig, {
+    return this.ai.classifyIntent(input.runtimeConfig, {
       customerText: input.customerText,
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
@@ -655,7 +654,7 @@ export class WebhookProcessor {
     if (!shouldAskAiForLanguage(input.customerText, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
       return input.analysis;
     }
-    const aiLanguage = normalizeCustomerLanguage(await detectAiLanguage(input.runtimeConfig, {
+    const aiLanguage = normalizeCustomerLanguage(await this.ai.detectLanguage(input.runtimeConfig, {
       customerText: input.customerText,
       previousLanguage: input.conversation.language || "unknown",
       countryDefaultLanguage: input.country.defaultLanguage || "unknown",
@@ -740,7 +739,7 @@ export class WebhookProcessor {
     if (!input.strictFlowEnabled || !input.conversation.flowStep || !shouldAskAiForContext(rule, input.customerText, input.analysis.intent)) {
       return rule;
     }
-    const gemini = await classifyAiContextualIntent(input.runtimeConfig, {
+    const aiIntent = await this.ai.classifyContextualIntent(input.runtimeConfig, {
       customerText: input.customerText,
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
@@ -749,17 +748,17 @@ export class WebhookProcessor {
       knownPhone: input.conversation.extractedPhone,
       knownTelegram: input.conversation.extractedTelegram
     });
-    if (gemini.intent === "unknown") return rule;
+    if (aiIntent.intent === "unknown") return rule;
     return {
-      intent: gemini.intent,
-      source: "gemini",
-      answeredPreviousQuestion: gemini.answeredPreviousQuestion,
-      isQuestion: gemini.isQuestion,
-      isSubmission: gemini.intent === "phone_submission" || gemini.intent === "telegram_submission",
-      shouldPause: gemini.shouldPause,
-      questionType: normalizeContextualQuestionType(gemini.questionType),
-      nextAction: gemini.nextAction,
-      reason: gemini.reason
+      intent: aiIntent.intent,
+      source: "ai",
+      answeredPreviousQuestion: aiIntent.answeredPreviousQuestion,
+      isQuestion: aiIntent.isQuestion,
+      isSubmission: aiIntent.intent === "phone_submission" || aiIntent.intent === "telegram_submission",
+      shouldPause: aiIntent.shouldPause,
+      questionType: normalizeContextualQuestionType(aiIntent.questionType),
+      nextAction: aiIntent.nextAction,
+      reason: aiIntent.reason
     };
   }
 }
@@ -907,7 +906,7 @@ function buildIntentLearningCandidate(input: {
     input.analysis.intent === "irrelevant_or_spam" ||
     contextual === "unknown" ||
     contextual === "unknown_question" ||
-    input.contextualIntent.source === "gemini" ||
+    input.contextualIntent.source === "ai" ||
     input.inferredIntent !== "unknown" ||
     looksMisclassifiedGreeting;
   if (!needsLearning) return undefined;
@@ -1042,6 +1041,7 @@ function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: Internal
 }
 
 async function naturalizeStrictReply(
+  ai: AiTasks,
   config: AppConfig,
   input: {
     customerText: string;
@@ -1060,7 +1060,7 @@ async function naturalizeStrictReply(
   if (input.questionType === "none" && input.draftReply.length <= 90 && !input.agentProfile?.enabled) {
     return { reply: input.draftReply, used: false };
   }
-  const result = await naturalizeStrictFlowText(config, {
+  const result = await ai.naturalizeStrictFlowText(config, {
     customerText: input.customerText,
     draftReply: input.draftReply,
     language: input.language,

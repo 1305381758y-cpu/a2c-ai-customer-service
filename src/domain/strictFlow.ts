@@ -48,7 +48,7 @@ export interface StrictFlowReply {
 
 export interface StrictContextualIntent {
   intent: ContextualIntentLabel;
-  source: "rule" | "gemini" | "none";
+  source: "rule" | "ai" | "none";
   answeredPreviousQuestion: boolean;
   isQuestion: boolean;
   isSubmission: boolean;

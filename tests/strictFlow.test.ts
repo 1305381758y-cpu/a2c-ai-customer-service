@@ -408,7 +408,7 @@ describe("strict Aston Brazil flow", () => {
       inferredIntent: "negative_refusal",
       contextualIntent: {
         intent: "negative_refusal",
-        source: "gemini",
+        source: "ai",
         answeredPreviousQuestion: true,
         isQuestion: false,
         isSubmission: false,
