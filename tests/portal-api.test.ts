@@ -418,7 +418,7 @@ describe("portal api", () => {
     }
   });
 
-  it("keeps webhook replies in Spanish for short Spanish customer messages even when the market default is English", async () => {
+  it("keeps webhook replies in the configured country language for short customer messages", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
@@ -439,7 +439,7 @@ describe("portal api", () => {
           country: {
             code: "bo",
             name: "玻利维亚",
-            defaultLanguage: "en",
+            defaultLanguage: "es",
             platformRegisterUrl: "https://register.example",
             requirePlatformAccount: true,
             requirePhone: true,
@@ -464,7 +464,7 @@ describe("portal api", () => {
         }
       });
 
-      for (const [index, content] of ["Información", "X favor", "Si"].entries()) {
+      for (const [index, content] of ["Information", "OK", "Yes"].entries()) {
         const webhook = await app.inject({
           method: "POST",
           url: `/webhooks/a2c/${merchantId}`,
@@ -511,7 +511,7 @@ describe("portal api", () => {
     }
   });
 
-  it("trusts direct Spanish signals even when the AI language detector returns English", async () => {
+  it("trusts the configured country language even when the AI language detector returns English", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
@@ -535,7 +535,7 @@ describe("portal api", () => {
           country: {
             code: "bo",
             name: "玻利维亚",
-            defaultLanguage: "en",
+            defaultLanguage: "es",
             platformRegisterUrl: "https://register.example",
             requirePlatformAccount: true,
             requirePhone: true,

@@ -680,6 +680,9 @@ export class WebhookProcessor {
     history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   }): Promise<MessageAnalysis> {
     const countryLanguage = normalizeCustomerLanguage(input.country.defaultLanguage || "");
+    if (countryLanguage !== "unknown") {
+      return { ...input.analysis, language: countryLanguage };
+    }
     const currentLanguage = normalizeCustomerLanguage(input.analysis.language || "");
     const directLanguage = normalizeCustomerLanguage(detectLanguage(input.customerText, "unknown"));
     if (shouldTrustDirectLanguageFallback(directLanguage, currentLanguage, normalizeCustomerLanguage(input.conversation.language || ""), countryLanguage)) {
