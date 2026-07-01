@@ -1177,7 +1177,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
     : "";
   const [rows, setRows] = useRows<Conversation>(rowsUrl || "/api/merchant/conversations?limit=1&a2cAccountPhone=__none__");
-  const pager = useClientPagination(rows, 20);
+  const pager = useClientPagination(rows, 10);
   const filteredAccounts = useMemo(() => {
     const keyword = accountKeyword.trim().toLowerCase();
     return accounts.filter((account) => {
