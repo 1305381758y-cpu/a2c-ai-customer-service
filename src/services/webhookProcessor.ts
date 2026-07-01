@@ -9,26 +9,8 @@ import type { Repositories } from "../repositories.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
+import { normalizeA2CWebhookPayload, type A2CWebhookPayload } from "./inboundMessage.js";
 import { translateForCustomer, translateForOperator } from "./translation.js";
-
-export interface A2CWebhookPayload {
-  id: string;
-  timestamp: number;
-  type: string;
-  data: {
-    messageId: string;
-    content?: string;
-    from: string;
-    to: string;
-    msgType: string;
-    timestamp: number;
-    nickname?: string;
-    headImg?: string;
-    fileName?: string;
-    url?: string;
-    caption?: string;
-  };
-}
 
 export class WebhookProcessor {
   constructor(
@@ -42,11 +24,7 @@ export class WebhookProcessor {
   async process(payload: A2CWebhookPayload, merchantId?: string, options: { simulation?: boolean } = {}): Promise<{ status: string; conversationId?: string }> {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };
 
-    const data = payload.data;
-    const msgType = normalizeMessageType(data.msgType, data.url);
-    const mediaUrl = data.url || (isUrl(data.content) ? data.content : "");
-    const analysisText = msgType === "text" ? data.content || data.caption || "" : data.caption || "";
-    const content = msgType === "text" ? analysisText : data.caption || mediaLabel(msgType);
+    const { data, msgType, mediaUrl, analysisText, content, shouldAnalyzeImage } = normalizeA2CWebhookPayload(payload);
     const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
     const merchantConfig = this.repos.getMerchantConfig(merchant.id);
     const agentProfile = this.repos.getMerchantAgentProfile(merchant.id);
@@ -56,7 +34,7 @@ export class WebhookProcessor {
     const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
     const telegram = new TelegramClient(runtimeConfig);
     const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
-    const imageAnalysis = msgType === "image" && mediaUrl
+    const imageAnalysis = shouldAnalyzeImage
       ? await this.ai.analyzeImage(runtimeConfig, mediaUrl)
       : { text: "", status: "skipped" as const };
     const customerTextForAi = analysisText || (imageAnalysis.text ? `${content} ${imageAnalysis.text}` : content);
@@ -1439,33 +1417,6 @@ function isLowSignalReply(value: string): boolean {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function normalizeMessageType(msgType = "", url = ""): "text" | "image" | "video" | "audio" | "document" {
-  const value = String(msgType || "").toLowerCase();
-  if (value === "text" || value === "image" || value === "video" || value === "audio" || value === "document") return value;
-  if (value === "1") return "text";
-  if (value === "2") return "image";
-  if (value === "3") return "video";
-  if (value === "4") return "audio";
-  if (value === "5") return "document";
-  if (/\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url)) return "image";
-  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) return "video";
-  if (/\.(mp3|wav|m4a|ogg)(\?|$)/i.test(url)) return "audio";
-  if (url) return "document";
-  return "text";
-}
-
-function mediaLabel(type: string): string {
-  if (type === "image") return "[图片]";
-  if (type === "video") return "[视频]";
-  if (type === "audio") return "[音频]";
-  if (type === "document") return "[文件]";
-  return "";
-}
-
-function isUrl(value = ""): boolean {
-  return /^https?:\/\//i.test(value.trim());
 }
 
 function verificationReply(language: string): string {

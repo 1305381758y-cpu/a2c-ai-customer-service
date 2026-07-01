@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConversationEngine } from "../src/services/conversationEngine.js";
-import type { A2CWebhookPayload } from "../src/services/webhookProcessor.js";
+import type { A2CWebhookPayload } from "../src/services/inboundMessage.js";
 
 function payload(type = "CUSTOMER_MESSAGE"): A2CWebhookPayload {
   return {

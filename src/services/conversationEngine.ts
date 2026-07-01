@@ -1,4 +1,5 @@
-import type { A2CWebhookPayload, WebhookProcessor } from "./webhookProcessor.js";
+import type { WebhookProcessor } from "./webhookProcessor.js";
+import type { A2CWebhookPayload } from "./inboundMessage.js";
 
 export interface InboundConversationMessage {
   payload: A2CWebhookPayload;
