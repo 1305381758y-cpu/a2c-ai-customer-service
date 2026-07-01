@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCheck, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Pin, PinOff, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
-import { ConversationExportBar, downloadConversationExport, EXPORT_ALL_FILTERS } from "./conversations/ConversationExport.js";
+import { Bot, Building2, CheckCircle2, Contact, Copy, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { ConversationExportBar } from "./conversations/ConversationExport.js";
 import { ConversationAccountList } from "./conversations/ConversationAccountList.js";
+import { ConversationCustomerList } from "./conversations/ConversationCustomerList.js";
 import { ConversationReviewCard } from "./conversations/ConversationReviewCard.js";
 import { MessageTimeline } from "./conversations/MessageTimeline.js";
 import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
@@ -1299,60 +1300,32 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       onSelectAccount={setSelectedAccount}
       renderSyncButton={(children) => <AsyncButton className="sync-compact-button" busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>{children}</AsyncButton>}
     />
-    <section className="customer-list">
-      <div className="panel-title">
-        <h3>客户</h3>
-        {!customerCollapsed && <span>{selectedAccount ? `${countryLabel(selectedAccount.countryName)} · ${selectedAccount.apiPhone}` : "未选择客服账号"}</span>}
-        <button className="ghost icon-only" title={customerCollapsed ? "展开客户列表" : "收起客户列表"} onClick={() => setCustomerCollapsed(!customerCollapsed)}>{customerCollapsed ? <ChevronsRight size={16}/> : <ChevronsLeft size={16}/>}</button>
-      </div>
-      {!customerCollapsed && <>
-        <div className="conversation-list-toolbar">
-          <button className="export-primary compact-action" onClick={() => downloadConversationExport(exportBase, EXPORT_ALL_FILTERS, "csv", notifyExportStarted)}><FileText size={15}/>导出全部</button>
-          {exportFilters && <button className="ghost compact-action" onClick={() => downloadConversationExport(exportBase, exportFilters, "csv", notifyExportStarted)}><FileText size={15}/>导出当前账号</button>}
-          <button className="ghost" disabled={!selectedAccount || !accountUnread(selectedAccount.apiPhone)} onClick={markAllRead}><CheckCheck size={15}/>一键已读</button>
-          {handoffs && <span className="status-pill warning">只显示待接管</span>}
-        </div>
-        <details className="conversation-tools export-tool">
-          <summary>更多导出格式</summary>
-          <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact onExportStarted={notifyExportStarted} />
-        </details>
-        <details className="conversation-tools">
-          <summary>筛选客户</summary>
-          <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />
-        </details>
-        <details className="conversation-tools">
-          <summary>主动新建对话</summary>
-          <div className="proactive-panel compact">
-            <input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(e) => setNewCustomer({ ...newCustomer, customerPhone: e.target.value })} />
-            <input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(e) => setNewCustomer({ ...newCustomer, nickname: e.target.value })} />
-            <button disabled={!selectedAccount} onClick={openNewCustomer}>打开对话框</button>
-            {error && <div className="error">{error}</div>}
-          </div>
-        </details>
-        <div className="stack-list conversation-list">
-          {pager.rows.map((row) => {
-            const unreadCount = conversationUnread(row.id);
-            return <div key={row.id} role="button" tabIndex={0} className={`conversation-row ${row.pinnedAt ? "pinned" : ""} ${unreadCount > 0 ? "unread" : ""} ${selected?.id === row.id ? "active" : ""}`} onClick={() => openConversation(row)} onKeyDown={(event) => { if (event.key === "Enter") openConversation(row); }}>
-              <span className="conversation-row-main">
-                <strong title={row.nickname || row.customerPhone}>{row.pinnedAt && <Pin size={13}/>} {row.nickname || row.customerPhone}</strong>
-                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
-                <button className="ghost icon-only pin-button" title={row.pinnedAt ? "取消置顶" : "置顶会话"} onClick={(event) => { event.stopPropagation(); void togglePin(row); }}>{row.pinnedAt ? <PinOff size={13}/> : <Pin size={13}/>}</button>
-              </span>
-              <span className="conversation-row-phone" title={row.customerPhone}>{row.customerPhone || "未记录客户号"}</span>
-              <span className="conversation-row-meta">
-                <span>{countryLabel(row.countryName)}</span>
-                <span>{languageName(row.language)}</span>
-                <span>{label(row.stage)}</span>
-                <span>{label(row.handoffStatus)}</span>
-                {row.updatedAt && <span>{formatConversationDate(row.updatedAt)}</span>}
-              </span>
-            </div>;
-          })}
-          {!rows.length && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}
-        </div>
-        <Pagination pager={pager} />
-      </>}
-    </section>
+    <ConversationCustomerList
+      handoffs={handoffs}
+      collapsed={customerCollapsed}
+      selectedAccount={selectedAccount}
+      selectedConversation={selected}
+      exportBase={exportBase}
+      exportFilters={exportFilters}
+      pager={pager}
+      totalRows={rows.length}
+      newCustomer={newCustomer}
+      error={error}
+      accountUnread={accountUnread}
+      conversationUnread={conversationUnread}
+      countryLabel={countryLabel}
+      languageName={languageName}
+      label={label}
+      formatConversationDate={formatConversationDate}
+      onToggleCollapsed={() => setCustomerCollapsed(!customerCollapsed)}
+      onMarkAllRead={markAllRead}
+      onTogglePin={togglePin}
+      onOpenConversation={openConversation}
+      onNewCustomerChange={setNewCustomer}
+      onOpenNewCustomer={openNewCustomer}
+      onExportStarted={notifyExportStarted}
+      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
+    />
     <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;
 }
