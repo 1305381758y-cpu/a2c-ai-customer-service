@@ -114,6 +114,37 @@ describe("message analyzer", () => {
     expect(analyzeMessage("Quiero información", "en").language).toBe("es");
   });
 
+  it("recognizes Spanish from real Bolivia conversation phrases instead of falling back to English", () => {
+    const cases = [
+      "Cómo puedo ganar dinero dando me gusta a los anuncios",
+      "Si tengo depósito en mi cuenta",
+      "Más información",
+      "Información por favor",
+      "Mas informacion",
+      "Necesito una ayuda",
+      "Puedo continuar",
+      "Esta bien como enpiezo",
+      "Como se llama la empresa,?  de donde son?",
+      "Buen día si",
+      "Si me interesa",
+      "Si por favor  quisiera trabajar",
+      "Tiene certificación legal",
+      "Si quiero",
+      "Si claro",
+      "Quiero ver cómo funciona",
+      "Si estoy lista",
+      "Si ya termine",
+      "Que hay que hacer?",
+      "Cuanto tengo que invertir",
+      "Me manda el link"
+    ];
+
+    for (const text of cases) {
+      expect(detectLanguage(text), text).toBe("es");
+      expect(analyzeMessage(text, "en").language, text).toBe("es");
+    }
+  });
+
   it("treats short registration completion messages as registration done", () => {
     for (const text of ["好了", "完成了", "注册好了", "注册完了", "已注册", "done", "finished", "registered", "pronto"]) {
       const result = analyzeMessage(text);

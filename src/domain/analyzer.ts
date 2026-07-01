@@ -112,7 +112,7 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
       normalizeLanguageCode(fallback) === "en" &&
       (dominant.language === "es" || dominant.language === "pt-BR") &&
       dominant.score >= 3 &&
-      (!fallbackSignal || fallbackSignal.score <= 2);
+      (!fallbackSignal || fallbackSignal.score <= 3 || dominant.score - fallbackSignal.score >= 4);
     const shouldSwitch =
       shouldTrustLatinSignalOverStaleEnglish ||
       dominant.strong &&
@@ -181,8 +181,10 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
 
   const lower = text.toLowerCase();
   if (isSpanishShortSignal(lower)) add("es", 7, true);
+  if (/\b(me|por favor|favor)\s+(manda|mande|envia|envía|pasa|pase)\b/.test(lower)) add("es", 6, true);
+  if (/\b(el|la|un|una)\s+link\b|\blink\s+(de|del|para)\b/.test(lower)) add("es", 4, true);
   addKeywordScore(lower, add, "es", [
-    /\b(hola|buenos dias|buenos días|buenas tardes|buenas noches|registrar|registro|telefono|teléfono|trabajo|quiero|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor|porfa|xfa|claro|dale)\b/g
+    /\b(hola|buenos dias|buenos días|buen dia|buen día|buenas tardes|buenas noches|registrar|registro|registrado|telefono|teléfono|trabajo|trabajar|quiero|quisiera|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor|porfa|xfa|claro|dale|como|cómo|que|qué|hay|hacer|funciona|funcionar|llama|empresa|donde|dónde|son|esta|está|bien|empiezo|enpiezo|certificacion|certificación|legal|tiene|pruebas|empleados|trabajaron|ustedes|cuanto|cuánto|invertir|inversion|inversión|inverción|debo|devo|ingresar|mande|manda|interesa|listo|lista|termine|terminé|hice|completo|complet[oó]|ahora|momento)\b/g
   ]);
   addKeywordScore(lower, add, "fr", [
     /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g
@@ -202,7 +204,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
   addKeywordScore(lower, add, "en", [
     /\b(hello|hi|hey|good morning|good afternoon|good evening|register|registration|phone|number|work|job|link|help|how|yes|ok|telegram|account|open|opened|cannot|can't|failed|error)\b/g
   ], 2);
-  if (/[A-Za-z]/.test(text)) add("en", 2, false);
+  if (/[A-Za-z]/.test(text)) add("en", 1, false);
 
   return [...scores.entries()]
     .map(([language, value]) => ({ language, ...value }))
