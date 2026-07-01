@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { sanitizeNaturalizedText } from "../src/clients/gemini.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
+import { suppressRegistrationDetailsForNonLinkStep } from "../src/domain/registrationPolicy.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
-import { shouldBypassStrictFlowForNaturalReply, suppressRegistrationDetailsForNonLinkStep } from "../src/services/webhookProcessor.js";
+import { shouldBypassStrictFlowForNaturalReply } from "../src/services/webhookProcessor.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../src/repositories.js";
 
