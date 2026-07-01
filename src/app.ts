@@ -10,6 +10,7 @@ import type { AppConfig } from "./config.js";
 import { openDb } from "./db.js";
 import { Repositories } from "./repositories.js";
 import { registerRoutes } from "./routes.js";
+import { ConversationEngine } from "./services/conversationEngine.js";
 import { WebhookProcessor } from "./services/webhookProcessor.js";
 import { hashPassword } from "./auth.js";
 
@@ -30,6 +31,7 @@ export function buildApp(config: AppConfig) {
     new TelegramClient(config),
     config
   );
+  const conversationEngine = new ConversationEngine(processor);
 
   app.register(multipart, {
     limits: {
@@ -54,7 +56,7 @@ export function buildApp(config: AppConfig) {
     prefix: "/uploads/",
     decorateReply: false
   });
-  registerRoutes(app, { config, repos, processor });
+  registerRoutes(app, { config, repos, processor: conversationEngine });
 
   return app;
 }

@@ -13,11 +13,11 @@ import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import { parseScriptFlowFile } from "./import/scriptFlows.js";
 import type { AppConfig } from "./config.js";
 import type { ConversationExportRecord, MerchantConfigRecord, Repositories } from "./repositories.js";
-import type { WebhookProcessor } from "./services/webhookProcessor.js";
+import type { ConversationEngine } from "./services/conversationEngine.js";
 import { generateConversationReview } from "./services/conversationReview.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
 
-export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: WebhookProcessor }): void {
+export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; processor: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
   const merchantRoles = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin", "merchant_operator"]);
   const merchantAdmins = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin"]);
@@ -710,23 +710,27 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (msgType !== "text" && !body.url && !content.trim()) return reply.code(400).send({ error: "请输入媒体链接或说明" });
     const now = Math.floor(Date.now() / 1000);
     const messageId = `sim_in:${merchantId}:${customerPhone}:${Date.now()}:${randomUUID().slice(0, 8)}`;
-    const result = await deps.processor.process({
-      id: `sim:${messageId}`,
-      timestamp: now,
-      type: "CUSTOMER_MESSAGE",
-      data: {
-        messageId,
-        content,
-        from: customerPhone,
-        to: a2cAccountPhone,
-        msgType,
+    const result = await deps.processor.handleInboundMessage({
+      merchantId,
+      simulation: true,
+      payload: {
+        id: `sim:${messageId}`,
         timestamp: now,
-        nickname: body.nickname || "模拟客户",
-        url: body.url,
-        caption: body.caption,
-        fileName: body.fileName
+        type: "CUSTOMER_MESSAGE",
+        data: {
+          messageId,
+          content,
+          from: customerPhone,
+          to: a2cAccountPhone,
+          msgType,
+          timestamp: now,
+          nickname: body.nickname || "模拟客户",
+          url: body.url,
+          caption: body.caption,
+          fileName: body.fileName
+        }
       }
-    }, merchantId, { simulation: true });
+    });
     const conversation = result.conversationId ? deps.repos.getConversation(result.conversationId) : undefined;
     return {
       ...result,
@@ -975,9 +979,9 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
 
   app.post("/webhooks/a2c", async (request, reply) => {
     if (shouldProcessA2CWebhookAsync()) {
-      return reply.code(200).send(deps.processor.enqueueProcess(request.body as never));
+      return reply.code(200).send(deps.processor.enqueueInboundMessage({ payload: request.body as never }));
     }
-    const result = await deps.processor.process(request.body as never);
+    const result = await deps.processor.handleInboundMessage({ payload: request.body as never });
     return reply.code(200).send(result);
   });
 
@@ -985,9 +989,9 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const merchant = deps.repos.getMerchant(request.params.merchantId);
     if (!merchant || merchant.status !== "active") return reply.code(404).send({ error: "merchant not found" });
     if (shouldProcessA2CWebhookAsync()) {
-      return reply.code(200).send(deps.processor.enqueueProcess(request.body as never, merchant.id));
+      return reply.code(200).send(deps.processor.enqueueInboundMessage({ payload: request.body as never, merchantId: merchant.id }));
     }
-    const result = await deps.processor.process(request.body as never, merchant.id);
+    const result = await deps.processor.handleInboundMessage({ payload: request.body as never, merchantId: merchant.id });
     return reply.code(200).send(result);
   });
 
