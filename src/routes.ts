@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { A2CClient } from "./clients/a2c.js";
-import { aiProviderLabel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "./clients/aiProvider.js";
+import { aiProviderLabel, deepseekModel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "./clients/aiProvider.js";
 import { TelegramClient } from "./clients/telegram.js";
 import { clearSessionCookie, createSessionToken, hashPassword, requireUser, requestUser, setSessionCookie, toSessionUser, verifyPassword } from "./auth.js";
 import { parseTrainingSamples } from "./import/trainingSamples.js";
@@ -1142,11 +1142,11 @@ function isA2CRateLimitMessage(message: string): boolean {
 }
 
 async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
-  if (!hasUsableAiKey(config)) return { key: "ai", label: "AI供应商", ok: false, status: "missing", detail: "缺少 MiniMax Key，客户消息会降级使用样本/默认话术" };
+  if (!hasUsableAiKey(config)) return { key: "ai", label: "AI供应商", ok: false, status: "missing", detail: `缺少 ${aiProviderLabel(config)} Key，客户消息会降级使用样本/默认话术` };
   try {
     await generateAiText(config, "Reply with OK only.");
     const provider = selectedAiProvider(config);
-    const model = provider === "minimax" ? minimaxModel(config) : config.GOOGLE_AI_MODEL;
+    const model = provider === "minimax" ? minimaxModel(config) : provider === "deepseek" ? deepseekModel(config) : config.GOOGLE_AI_MODEL;
     return { key: "ai", label: "AI供应商", ok: true, status: "ok", detail: `${aiProviderLabel(config)} 可用，当前模型 ${model}；客户消息会优先调用 AI 回复` };
   } catch (error) {
     return { key: "ai", label: "AI供应商", ok: false, status: "error", detail: error instanceof Error ? error.message : "AI供应商检测失败" };
@@ -1297,6 +1297,9 @@ async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps
       minimaxApiKey: merchantConfig.minimaxApiKey || deps.config.MINIMAX_API_KEY,
       minimaxModel: merchantConfig.minimaxModel || deps.config.MINIMAX_MODEL,
       minimaxBaseUrl: deps.config.MINIMAX_BASE_URL,
+      deepseekApiKey: merchantConfig.deepseekApiKey || deps.config.DEEPSEEK_API_KEY,
+      deepseekModel: merchantConfig.deepseekModel || deps.config.DEEPSEEK_MODEL,
+      deepseekBaseUrl: deps.config.DEEPSEEK_BASE_URL,
       googleAiApiKey: merchantConfig.googleAiApiKey || deps.config.GOOGLE_AI_API_KEY,
       googleAiModel: merchantConfig.googleAiModel || deps.config.GOOGLE_AI_MODEL
     });
@@ -1444,6 +1447,7 @@ function maskConfig(config: MerchantConfigRecord) {
     a2cAppSecret: maskSecret(config.a2cAppSecret),
     openaiApiKey: maskSecret(config.openaiApiKey),
     minimaxApiKey: maskSecret(config.minimaxApiKey),
+    deepseekApiKey: maskSecret(config.deepseekApiKey),
     googleAiApiKey: maskSecret(config.googleAiApiKey),
     telegramBotToken: maskSecret(config.telegramBotToken)
   };
@@ -1639,6 +1643,9 @@ function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigR
     MINIMAX_API_KEY: merchantConfig.minimaxApiKey || config.MINIMAX_API_KEY,
     MINIMAX_MODEL: merchantConfig.minimaxModel || config.MINIMAX_MODEL,
     MINIMAX_BASE_URL: config.MINIMAX_BASE_URL,
+    DEEPSEEK_API_KEY: merchantConfig.deepseekApiKey || config.DEEPSEEK_API_KEY,
+    DEEPSEEK_MODEL: merchantConfig.deepseekModel || config.DEEPSEEK_MODEL,
+    DEEPSEEK_BASE_URL: config.DEEPSEEK_BASE_URL,
     GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
     GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
     TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,

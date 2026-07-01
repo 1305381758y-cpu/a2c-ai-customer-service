@@ -73,3 +73,39 @@ describe("MiniMax request queue", () => {
     expect(Date.now() - startedAt).toBeLessThan(1200);
   });
 });
+
+describe("DeepSeek provider", () => {
+  it("calls the DeepSeek chat completions endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "DeepSeek OK"
+            }
+          }
+        ]
+      })
+    } as Response);
+
+    const text = await generateAiText(loadConfig({
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "sk-deepseek-test",
+      DEEPSEEK_MODEL: "deepseek-chat"
+    }), "hello", { systemInstruction: "reply briefly", maxOutputTokens: 32 });
+
+    expect(text).toBe("DeepSeek OK");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://api.deepseek.com/chat/completions");
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: "Bearer sk-deepseek-test" });
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.model).toBe("deepseek-chat");
+    expect(body.messages).toEqual([
+      { role: "system", content: "reply briefly" },
+      { role: "user", content: "hello" }
+    ]);
+    expect(body.max_tokens).toBe(32);
+  });
+});

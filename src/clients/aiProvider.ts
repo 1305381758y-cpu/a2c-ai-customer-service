@@ -4,7 +4,7 @@ import { isContextualIntentLabel, isInternalIntentLabel, type ContextualIntentLa
 import type { A2CInviteCodeRecord, Conversation, CustomerMemoryRecord, KnowledgeItemRecord, MerchantAgentProfileRecord, MerchantCountryRecord, TrainingMaterialItemRecord } from "../repositories.js";
 import type { TrainingSampleForSearch } from "../domain/sampleRetrieval.js";
 
-export type AiProviderName = "minimax" | "gemini";
+export type AiProviderName = "minimax" | "gemini" | "deepseek";
 
 export interface AiTextPart {
   text?: string;
@@ -97,15 +97,19 @@ export class AiReplyClient {
   }
 }
 
-export function selectedAiProvider(config: Pick<AppConfig, "AI_PROVIDER" | "MINIMAX_API_KEY" | "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">): AiProviderName {
+export function selectedAiProvider(config: Pick<AppConfig, "AI_PROVIDER" | "MINIMAX_API_KEY" | "DEEPSEEK_API_KEY" | "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">): AiProviderName {
   if (config.AI_PROVIDER === "gemini") return "gemini";
+  if (config.AI_PROVIDER === "deepseek") return "deepseek";
   if (minimaxApiKey(config)) return "minimax";
+  if (deepseekApiKey(config)) return "deepseek";
   if (geminiApiKey(config)) return "gemini";
   return "minimax";
 }
 
-export function aiProviderLabel(config: Pick<AppConfig, "AI_PROVIDER" | "MINIMAX_API_KEY" | "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">): string {
-  return selectedAiProvider(config) === "minimax" ? "MiniMax" : "Gemini 兼容";
+export function aiProviderLabel(config: Pick<AppConfig, "AI_PROVIDER" | "MINIMAX_API_KEY" | "DEEPSEEK_API_KEY" | "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">): string {
+  const provider = selectedAiProvider(config);
+  if (provider === "deepseek") return "DeepSeek";
+  return provider === "minimax" ? "MiniMax" : "Gemini 兼容";
 }
 
 export function minimaxApiKey(config: Pick<AppConfig, "MINIMAX_API_KEY">): string {
@@ -117,14 +121,25 @@ export function minimaxModel(config: Pick<AppConfig, "MINIMAX_MODEL">): string {
   return config.MINIMAX_MODEL || "MiniMax-M3";
 }
 
+export function deepseekApiKey(config: Pick<AppConfig, "DEEPSEEK_API_KEY">): string {
+  const value = config.DEEPSEEK_API_KEY || "";
+  return value === "CHANGE_ME" ? "" : value;
+}
+
+export function deepseekModel(config: Pick<AppConfig, "DEEPSEEK_MODEL">): string {
+  return config.DEEPSEEK_MODEL || "deepseek-chat";
+}
+
 export async function generateAiText(
   config: AppConfig,
   contents: string | AiTextPart[],
   options: AiTextOptions = {}
 ): Promise<string> {
-  if (selectedAiProvider(config) === "gemini") {
+  const provider = selectedAiProvider(config);
+  if (provider === "gemini") {
     return generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options);
   }
+  if (provider === "deepseek") return generateDeepSeekText(config, contents, options);
   return generateMiniMaxText(config, contents, options);
 }
 
@@ -139,7 +154,9 @@ export async function generateAiJson<T>(
 
 export async function analyzeAiImage(config: AppConfig, imageUrl: string): Promise<AiImageAnalysis> {
   if (!imageUrl) return { text: "", status: "skipped" };
-  if (selectedAiProvider(config) === "gemini") return analyzeGeminiImage(config, imageUrl);
+  const provider = selectedAiProvider(config);
+  if (provider === "gemini") return analyzeGeminiImage(config, imageUrl);
+  if (provider === "deepseek") return { text: "", status: "skipped", error: "DeepSeek 暂不支持图片理解，请切换 MiniMax/Gemini 或让客户补充文字说明" };
   if (!minimaxApiKey(config)) return { text: "", status: "skipped", error: "MiniMax Key 未配置" };
   try {
     const text = await generateMiniMaxText(config, [
@@ -429,7 +446,38 @@ export async function naturalizeStrictFlowText(
 }
 
 export function hasUsableAiKey(config: AppConfig): boolean {
-  return selectedAiProvider(config) === "minimax" ? Boolean(minimaxApiKey(config)) : Boolean(geminiApiKey(config));
+  const provider = selectedAiProvider(config);
+  if (provider === "deepseek") return Boolean(deepseekApiKey(config));
+  return provider === "minimax" ? Boolean(minimaxApiKey(config)) : Boolean(geminiApiKey(config));
+}
+
+async function generateDeepSeekText(config: AppConfig, contents: string | AiTextPart[], options: AiTextOptions): Promise<string> {
+  const apiKey = deepseekApiKey(config);
+  if (!apiKey) throw new Error("DeepSeek Key 未配置");
+  if (hasImagePart(contents)) throw new Error("DeepSeek 暂不支持图片输入，请切换 MiniMax/Gemini 处理图片");
+  const response = await fetch(`${normalizeDeepSeekBaseUrl(config)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: deepseekModel(config),
+      messages: [
+        ...(options.systemInstruction ? [{ role: "system", content: options.systemInstruction }] : []),
+        { role: "user", content: toPlainTextContent(contents) }
+      ],
+      temperature: options.temperature ?? 0.2,
+      max_tokens: options.maxOutputTokens ?? 1200
+    }),
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+  });
+  const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
+  const providerError = extractProviderError(payload);
+  if (!response.ok || providerError) throw new Error(`DeepSeek 调用失败：${providerError || response.statusText}`);
+  const text = extractTextFromChatCompletion(payload).trim();
+  if (!text) throw new Error("DeepSeek 返回内容为空");
+  return text;
 }
 
 async function generateMiniMaxText(config: AppConfig, contents: string | AiTextPart[], options: AiTextOptions): Promise<string> {
@@ -605,6 +653,11 @@ function toMiniMaxContent(contents: string | AiTextPart[]): unknown {
   return parts.length ? parts : "";
 }
 
+function toPlainTextContent(contents: string | AiTextPart[]): string {
+  if (typeof contents === "string") return contents;
+  return contents.map((part) => part.text || "").join("\n").trim();
+}
+
 function toMiniMaxAnthropicContent(contents: string | AiTextPart[]): unknown {
   if (typeof contents === "string") return contents;
   const parts: unknown[] = [];
@@ -682,6 +735,10 @@ function normalizeProviderError(raw: string, payload: Record<string, unknown>): 
 
 function normalizeBaseUrl(url: string): string {
   return (url || "https://api.minimax.io").replace(/\/+$/, "");
+}
+
+function normalizeDeepSeekBaseUrl(config: Pick<AppConfig, "DEEPSEEK_BASE_URL">): string {
+  return (config.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
 }
 
 function normalizeMiniMaxBaseUrl(config: AppConfig, apiKey: string): string {

@@ -25,10 +25,13 @@ export async function parseTrainingMaterial(input: {
   buffer: Buffer;
   filename: string;
   mimeType?: string;
-  aiProvider?: "minimax" | "gemini";
+  aiProvider?: "minimax" | "gemini" | "deepseek";
   minimaxApiKey?: string;
   minimaxModel?: string;
   minimaxBaseUrl?: string;
+  deepseekApiKey?: string;
+  deepseekModel?: string;
+  deepseekBaseUrl?: string;
   googleAiApiKey?: string;
   googleAiModel?: string;
 }): Promise<ParsedTrainingMaterial> {
@@ -68,6 +71,9 @@ export async function parseTrainingMaterial(input: {
       minimaxApiKey: input.minimaxApiKey,
       minimaxModel: input.minimaxModel,
       minimaxBaseUrl: input.minimaxBaseUrl,
+      deepseekApiKey: input.deepseekApiKey,
+      deepseekModel: input.deepseekModel,
+      deepseekBaseUrl: input.deepseekBaseUrl,
       googleAiApiKey: input.googleAiApiKey,
       googleAiModel: input.googleAiModel
     }, warnings);
@@ -157,10 +163,13 @@ async function extractImageText(
   filename: string,
   mimeType = "",
   aiConfig: {
-    aiProvider?: "minimax" | "gemini";
+    aiProvider?: "minimax" | "gemini" | "deepseek";
     minimaxApiKey?: string;
     minimaxModel?: string;
     minimaxBaseUrl?: string;
+    deepseekApiKey?: string;
+    deepseekModel?: string;
+    deepseekBaseUrl?: string;
     googleAiApiKey?: string;
     googleAiModel?: string;
   },
@@ -185,9 +194,10 @@ async function extractImageText(
   const hasMiniMax = Boolean(aiConfig.minimaxApiKey);
   const hasGemini = Boolean(aiConfig.googleAiApiKey);
   if (!hasMiniMax && !hasGemini) {
-    warnings.push("图片 OCR 需要配置商户 MiniMax Key；当前图片未提取到文字");
+    warnings.push("图片 OCR 需要配置支持图片的 MiniMax 或 Gemini Key；当前图片未提取到文字");
     return "";
   }
+  const imageProvider = aiConfig.aiProvider === "gemini" && hasGemini ? "gemini" : hasMiniMax ? "minimax" : "gemini";
 
   const mediaType = mimeType || guessImageMime(filename);
   const contents: AiTextPart[] = [
@@ -195,10 +205,13 @@ async function extractImageText(
     { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
   ];
   return generateAiText({
-    AI_PROVIDER: aiConfig.aiProvider || "minimax",
+    AI_PROVIDER: imageProvider,
     MINIMAX_API_KEY: aiConfig.minimaxApiKey || "",
     MINIMAX_MODEL: aiConfig.minimaxModel || "MiniMax-M3",
     MINIMAX_BASE_URL: aiConfig.minimaxBaseUrl || "https://api.minimax.io",
+    DEEPSEEK_API_KEY: aiConfig.deepseekApiKey || "",
+    DEEPSEEK_MODEL: aiConfig.deepseekModel || "deepseek-chat",
+    DEEPSEEK_BASE_URL: aiConfig.deepseekBaseUrl || "https://api.deepseek.com",
     GOOGLE_AI_API_KEY: aiConfig.googleAiApiKey || "",
     GOOGLE_AI_MODEL: aiConfig.googleAiModel || "gemini-2.5-flash"
   } as Parameters<typeof generateAiText>[0], contents);
