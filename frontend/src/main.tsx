@@ -4,8 +4,9 @@ import { Bot, Building2, CheckCheck, CheckCircle2, ChevronsLeft, ChevronsRight, 
 import { ConversationExportBar, downloadConversationExport, EXPORT_ALL_FILTERS } from "./conversations/ConversationExport.js";
 import { ConversationReviewCard } from "./conversations/ConversationReviewCard.js";
 import { MessageTimeline } from "./conversations/MessageTimeline.js";
+import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
 import type { A2CAccount, AgentProfile, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, SimulatorResponse, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
-import { AccountPagination, Pagination } from "./ui/Pagination.js";
+import { AccountPagination, Pagination, useClientPagination } from "./ui/Pagination.js";
 import "./styles.css";
 
 let emitToast: (toast: Omit<Toast, "id">) => void = () => undefined;
@@ -1117,54 +1118,7 @@ function Customers({ platform = false }: { platform?: boolean }) {
   const scopedExportFilters = platform
     ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" }
     : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" };
-  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel customer-list-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel customer-detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div><CustomerConversationHistory platform={platform} customer={selected} /></section>}</div>;
-}
-
-function CustomerConversationHistory({ platform, customer }: { platform: boolean; customer: Customer }) {
-  const base = platform ? "/api/admin/conversations" : "/api/merchant/conversations";
-  const filters = platform
-    ? { merchantId: customer.merchantId, customerPhone: customer.customerKey, limit: "50000" }
-    : { customerPhone: customer.customerKey, limit: "50000" };
-  const rowsUrl = withQuery(base, filters);
-  const [rows, setRows] = useRows<Conversation>(rowsUrl);
-  const [selected, setSelected] = useState<Conversation | null>(null);
-  const pager = useClientPagination(rows, 10);
-  useEffect(() => {
-    setSelected(null);
-  }, [customer.customerKey, customer.merchantId]);
-  useEffect(() => {
-    if (!selected && rows.length) setSelected(rows[0]);
-    if (selected && !rows.some((row) => row.id === selected.id)) setSelected(rows[0] || null);
-  }, [rows, selected]);
-  const reload = async () => {
-    setRows(await loadRows(rowsUrl));
-    pager.setPage(1);
-  };
-  return <div className="customer-conversation-history">
-    <div className="section-title-row">
-      <div><h3>该客户全部会话</h3><p>按最近消息排序，包含这个客户在不同客服账号下产生的所有对话。</p></div>
-      <span className="status-pill neutral">共 {rows.length} 条</span>
-    </div>
-    <div className="customer-conversation-grid">
-      <div className="customer-conversation-list">
-        {pager.rows.map((row) => <button key={row.id} type="button" className={`customer-conversation-item ${selected?.id === row.id ? "active" : ""}`} onClick={() => setSelected(row)}>
-          <span className="customer-conversation-item-main">
-            <strong>{row.a2cAccountPhone || "未识别客服账号"}</strong>
-            <small>{row.updatedAt ? formatConversationDate(row.updatedAt) : "未知时间"}</small>
-          </span>
-          <span className="customer-conversation-tags">
-            <span>{countryLabel(row.countryName)}</span>
-            <span>{languageName(row.language)}</span>
-            <span>{label(row.stage)}</span>
-            <span>{label(row.handoffStatus)}</span>
-          </span>
-        </button>)}
-        {!pager.rows.length && <div className="empty-state compact">该客户暂无会话记录</div>}
-        <Pagination pager={pager} />
-      </div>
-      {selected ? <ConversationDetail platform={platform} conversation={selected} refresh={reload} onDeleted={async () => { await reload(); }} /> : <div className="empty-state">选择一条会话查看完整聊天记录</div>}
-    </div>
-  </div>;
+  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel customer-list-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel customer-detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div><CustomerConversationHistory platform={platform} customer={selected} loadRows={loadRows} withQuery={withQuery} helpers={{ formatConversationDate, countryLabel, languageName, label }} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={platform} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} /></section>}</div>;
 }
 
 function KnowledgePage({ platform }: { platform: boolean }) {
@@ -1464,29 +1418,6 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
     notify("success", "已加入训练中心");
   };
   return <div className="conversation-detail"><div className="chat-header"><div><h3>{conversation.nickname || conversation.customerPhone}</h3><div className="header-meta"><span>{countryLabel(conversation.countryName)}</span><span>{languageName(conversation.language)}</span><span>客服账号：{conversation.a2cAccountPhone || "未识别"}</span><span>流程：{label(flowStep)}</span><span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span><span>{strictEnabled === true ? "严格流程已命中" : strictEnabled === false ? "未启用严格流程" : "严格流程待判断"}</span><span>手机：{conversation.extractedPhone || "未识别"}</span><span>TG：{conversation.extractedTelegram || "未识别"}</span><span>WS：{conversation.extractedWhatsApp || "未识别"}</span></div>{strictEnabled === false && <div className="warning compact">当前会话未启用严格话本流程，可能走普通回复。</div>}</div><div className="chat-actions">{!platform && <select value={conversation.handoffStatus} onChange={async (e) => { setError(""); setStatusMessage("正在更新接管状态..."); await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus: e.target.value }) }); setStatusMessage("接管状态已更新。"); await loadReview().catch(() => null); refresh(); }}><option value="pending">待处理</option><option value="processing">处理中</option><option value="done">已完成</option></select>}<AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton></div></div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<details className="memory compact-memory"><summary>客户记忆文件</summary><p>{localizeSystemText(memory?.summary || "暂无记忆，收到客户消息后会自动生成。")}</p><textarea placeholder="人工备注，会被 AI 作为客户记忆参考" value={notes} onChange={(e) => setNotes(e.target.value)} /><AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton></details><ConversationReviewCard platform={platform} data={review} onGenerate={generate} onApply={apply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} /><div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: formatConversationDate, formatTime, label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <div className="send chat-composer"><select value={send.type} onChange={(e) => setSend({ ...send, type: e.target.value })}>{MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input placeholder="客服原文" value={send.content} onChange={(e) => setSend({ ...send, content: e.target.value })} /><input placeholder="媒体链接" value={send.url} onChange={(e) => setSend({ ...send, url: e.target.value })} /><input placeholder="说明/文件名" value={send.caption} onChange={(e) => setSend({ ...send, caption: e.target.value })} /><AsyncButton disabled={!canSendMessage(send)} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}><Send size={16}/>发送</AsyncButton></div>}</div>;
-}
-
-function useClientPagination<T>(rows: T[], defaultPageSize = 20) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(defaultPageSize);
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
-  const start = (safePage - 1) * pageSize;
-  return {
-    rows: rows.slice(start, start + pageSize),
-    page: safePage,
-    pageSize,
-    total: rows.length,
-    totalPages,
-    setPage,
-    setPageSize: (next: number) => {
-      setPageSize(next);
-      setPage(1);
-    }
-  };
 }
 
 function Table<T extends Record<string, any>>({ rows, columns, onRow, selectedKey, rowKey }: { rows: T[]; columns: string[]; onRow?: (row: T) => void; selectedKey?: string | number; rowKey?: (row: T, index: number) => string | number }) {

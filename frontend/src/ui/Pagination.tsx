@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export type PagerState = {
   page: number;
   pageSize: number;
@@ -6,6 +8,29 @@ export type PagerState = {
   setPage: (page: number) => void;
   setPageSize: (pageSize: number) => void;
 };
+
+export function useClientPagination<T>(rows: T[], defaultPageSize = 20) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(defaultPageSize);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+  const start = (safePage - 1) * pageSize;
+  return {
+    rows: rows.slice(start, start + pageSize),
+    page: safePage,
+    pageSize,
+    total: rows.length,
+    totalPages,
+    setPage,
+    setPageSize: (next: number) => {
+      setPageSize(next);
+      setPage(1);
+    }
+  };
+}
 
 export function Pagination({ pager }: { pager: PagerState }) {
   if (pager.total <= pager.pageSize && pager.page === 1) return <div className="pagination compact">共 {pager.total} 条</div>;
