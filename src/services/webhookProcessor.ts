@@ -30,7 +30,18 @@ export interface A2CWebhookPayload {
   };
 }
 
+type QueuedWebhookJob = {
+  payload: A2CWebhookPayload;
+  merchantId?: string;
+  options?: { simulation?: boolean };
+};
+
+const WEBHOOK_WORKER_CONCURRENCY = Math.max(1, Number(process.env.WEBHOOK_WORKER_CONCURRENCY || 4));
+
 export class WebhookProcessor {
+  private readonly webhookQueue: QueuedWebhookJob[] = [];
+  private activeWebhookJobs = 0;
+
   constructor(
     private readonly repos: Repositories,
     private readonly ai: AiReplyClient,
@@ -38,6 +49,31 @@ export class WebhookProcessor {
     private readonly telegram: TelegramClient,
     private readonly config: AppConfig
   ) {}
+
+  enqueueProcess(payload: A2CWebhookPayload, merchantId?: string, options: { simulation?: boolean } = {}): { status: string; queueDepth: number } {
+    if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored", queueDepth: this.webhookQueue.length };
+    this.webhookQueue.push({ payload, merchantId, options });
+    this.drainWebhookQueue();
+    return { status: "queued", queueDepth: this.webhookQueue.length + this.activeWebhookJobs };
+  }
+
+  private drainWebhookQueue(): void {
+    while (this.activeWebhookJobs < WEBHOOK_WORKER_CONCURRENCY && this.webhookQueue.length) {
+      const job = this.webhookQueue.shift();
+      if (!job) return;
+      this.activeWebhookJobs += 1;
+      setImmediate(() => {
+        this.process(job.payload, job.merchantId, job.options)
+          .catch((error) => {
+            console.warn("queued webhook processing failed", error);
+          })
+          .finally(() => {
+            this.activeWebhookJobs -= 1;
+            this.drainWebhookQueue();
+          });
+      });
+    }
+  }
 
   async process(payload: A2CWebhookPayload, merchantId?: string, options: { simulation?: boolean } = {}): Promise<{ status: string; conversationId?: string }> {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };

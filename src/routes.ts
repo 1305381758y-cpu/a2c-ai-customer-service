@@ -972,6 +972,9 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
 
   app.post("/webhooks/a2c", async (request, reply) => {
+    if (shouldProcessA2CWebhookAsync()) {
+      return reply.code(200).send(deps.processor.enqueueProcess(request.body as never));
+    }
     const result = await deps.processor.process(request.body as never);
     return reply.code(200).send(result);
   });
@@ -979,6 +982,9 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.post<{ Params: { merchantId: string } }>("/webhooks/a2c/:merchantId", async (request, reply) => {
     const merchant = deps.repos.getMerchant(request.params.merchantId);
     if (!merchant || merchant.status !== "active") return reply.code(404).send({ error: "merchant not found" });
+    if (shouldProcessA2CWebhookAsync()) {
+      return reply.code(200).send(deps.processor.enqueueProcess(request.body as never, merchant.id));
+    }
     const result = await deps.processor.process(request.body as never, merchant.id);
     return reply.code(200).send(result);
   });
@@ -1647,6 +1653,12 @@ function a2cAccountAllowed(repos: Repositories, merchantId: string, config: Merc
   const enabledAccount = repos.listMerchantA2CAccounts({ merchantId, enabled: true }).some((account) => account.apiPhone === apiPhone);
   if (enabledAccount) return true;
   return config.a2cAccountPhone.split(",").map((item) => item.trim()).filter(Boolean).includes(apiPhone);
+}
+
+function shouldProcessA2CWebhookAsync(): boolean {
+  if (process.env.WEBHOOK_ASYNC_ENABLED === "false") return false;
+  if (process.env.WEBHOOK_ASYNC_ENABLED === "true") return true;
+  return process.env.NODE_ENV !== "test";
 }
 
 function auth(config: AppConfig) {
