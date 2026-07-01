@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCheck, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Pin, PinOff, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { ConversationExportBar, downloadConversationExport, EXPORT_ALL_FILTERS } from "./conversations/ConversationExport.js";
 import type { A2CAccount, AgentProfile, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, SimulatorResponse, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AccountPagination, Pagination } from "./ui/Pagination.js";
 import "./styles.css";
@@ -9,6 +10,10 @@ let emitToast: (toast: Omit<Toast, "id">) => void = () => undefined;
 
 function notify(type: Toast["type"], title: string, detail?: string) {
   emitToast({ type, title, detail });
+}
+
+function notifyExportStarted(format: "csv" | "jsonl") {
+  notify("success", format === "csv" ? "正在导出 CSV" : "正在导出 JSONL", "浏览器会开始下载对话数据文件。");
 }
 
 const MESSAGE_TYPE_OPTIONS = [
@@ -1110,7 +1115,7 @@ function Customers({ platform = false }: { platform?: boolean }) {
   const scopedExportFilters = platform
     ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" }
     : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" };
-  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel customer-list-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel customer-detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div><CustomerConversationHistory platform={platform} customer={selected} /></section>}</div>;
+  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel customer-list-panel"><div className="customer-export-top"><ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} /></div><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }} onApply={reload} /><Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel customer-detail-panel"><div><div className="detail-title-row"><div><h3>{selected.customerKey}</h3><p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p></div><AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton></div><div className="form-grid"><label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label><label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label><label>手机号<input readOnly value={selected.extractedPhone || ""} /></label><label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label><label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label><label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label><label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label></div><p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p></div><CustomerConversationHistory platform={platform} customer={selected} /></section>}</div>;
 }
 
 function CustomerConversationHistory({ platform, customer }: { platform: boolean; customer: Customer }) {
@@ -1177,35 +1182,6 @@ function Conversations({ platform = false, handoffs = false }: { platform?: bool
   return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} />;
 }
 
-const EXPORT_ALL_FILTERS: Filters = { limit: "50000" };
-
-function ConversationExportBar({
-  base,
-  allFilters = EXPORT_ALL_FILTERS,
-  scopedFilters,
-  scopedLabel = "当前筛选",
-  compact = false,
-}: {
-  base: string;
-  allFilters?: Filters;
-  scopedFilters?: Filters;
-  scopedLabel?: string;
-  compact?: boolean;
-}) {
-  return <div className={`conversation-export-bar ${compact ? "compact" : ""}`}>
-    <div className="conversation-export-copy">
-      <strong>对话数据导出</strong>
-      <span>导出客户消息、客服回复、译文、意图、流程步骤、发送状态和客户资料。</span>
-    </div>
-    <div className="conversation-export-actions">
-      <button className="export-primary" onClick={() => downloadExport(base, allFilters, "csv")}><FileText size={15}/>一键导出全部对话</button>
-      {scopedFilters && <button onClick={() => downloadExport(base, scopedFilters, "csv")}><FileText size={15}/>{scopedLabel} CSV</button>}
-      <button onClick={() => downloadExport(base, allFilters, "jsonl")}><FileText size={15}/>全部 JSONL</button>
-      {scopedFilters && <button onClick={() => downloadExport(base, scopedFilters, "jsonl")}><FileText size={15}/>{scopedLabel} JSONL</button>}
-    </div>
-  </div>;
-}
-
 function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const base = "/api/admin/conversations";
   const [filters, setFiltersState] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
@@ -1217,7 +1193,7 @@ function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
-  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "limit"] : ["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
+  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "limit"] : ["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
 }
 
 function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
@@ -1383,14 +1359,14 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       </div>
       {!customerCollapsed && <>
         <div className="conversation-list-toolbar">
-          <button className="export-primary compact-action" onClick={() => downloadExport(exportBase, EXPORT_ALL_FILTERS, "csv")}><FileText size={15}/>导出全部</button>
-          {exportFilters && <button className="ghost compact-action" onClick={() => downloadExport(exportBase, exportFilters, "csv")}><FileText size={15}/>导出当前账号</button>}
+          <button className="export-primary compact-action" onClick={() => downloadConversationExport(exportBase, EXPORT_ALL_FILTERS, "csv", notifyExportStarted)}><FileText size={15}/>导出全部</button>
+          {exportFilters && <button className="ghost compact-action" onClick={() => downloadConversationExport(exportBase, exportFilters, "csv", notifyExportStarted)}><FileText size={15}/>导出当前账号</button>}
           <button className="ghost" disabled={!selectedAccount || !accountUnread(selectedAccount.apiPhone)} onClick={markAllRead}><CheckCheck size={15}/>一键已读</button>
           {handoffs && <span className="status-pill warning">只显示待接管</span>}
         </div>
         <details className="conversation-tools export-tool">
           <summary>更多导出格式</summary>
-          <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact />
+          <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact onExportStarted={notifyExportStarted} />
         </details>
         <details className="conversation-tools">
           <summary>筛选客户</summary>
@@ -1655,17 +1631,6 @@ function useRows<T>(url: string): [T[], (rows: T[]) => void] {
 
 async function loadRows<T>(url: string): Promise<T[]> {
   return (await api<{ rows: T[] }>(url)).rows;
-}
-
-function downloadExport(base: string, filters: Filters, format: "csv" | "jsonl") {
-  const url = withQuery(base, { ...filters, format });
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  notify("success", format === "csv" ? "正在导出 CSV" : "正在导出 JSONL", "浏览器会开始下载对话数据文件。");
 }
 
 function withQuery(base: string, filters: Filters): string {
