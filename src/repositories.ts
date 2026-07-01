@@ -148,8 +148,8 @@ function inferCountryProfile(input: Record<string, unknown>, current?: MerchantC
     const normalized = name.toLowerCase();
     return normalized === normalizedName || normalized === rawCode;
   }));
-  const code = rawCode || preset?.code || current?.code || normalizedName.replace(/[^a-z]/g, "").slice(0, 2) || "default";
-  const defaultLanguage = rawLanguage || preset?.defaultLanguage || current?.defaultLanguage || "en";
+  const code = preset?.code || rawCode || current?.code || normalizedName.replace(/[^a-z]/g, "").slice(0, 2) || "default";
+  const defaultLanguage = preset?.defaultLanguage || rawLanguage || current?.defaultLanguage || "en";
   return { code, name: rawName || current?.name || code, defaultLanguage };
 }
 
