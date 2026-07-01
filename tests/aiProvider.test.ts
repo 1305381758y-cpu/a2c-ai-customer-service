@@ -41,10 +41,11 @@ describe("AI provider language detection", () => {
 });
 
 describe("MiniMax request queue", () => {
-  it("serializes concurrent MiniMax calls to avoid token plan rate limits", async () => {
+  it("allows limited concurrency while spacing MiniMax request starts", async () => {
     const callTimes: number[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       callTimes.push(Date.now());
+      await new Promise((resolve) => setTimeout(resolve, 500));
       return {
         ok: true,
         json: async () => ({
@@ -68,7 +69,7 @@ describe("MiniMax request queue", () => {
     expect(first).toBe("OK");
     expect(second).toBe("OK");
     expect(callTimes).toHaveLength(2);
-    expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(850);
-    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(850);
+    expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(200);
+    expect(Date.now() - startedAt).toBeLessThan(1200);
   });
 });

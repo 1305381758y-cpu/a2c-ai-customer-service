@@ -52,10 +52,12 @@ export interface AiReply {
 }
 
 const AI_TIMEOUT_MS = 15_000;
-const MINIMAX_QUEUE_GAP_MS = Number(process.env.MINIMAX_QUEUE_GAP_MS || 900);
+const MINIMAX_QUEUE_GAP_MS = Number(process.env.MINIMAX_QUEUE_GAP_MS || 250);
+const MINIMAX_QUEUE_CONCURRENCY = Math.max(1, Number(process.env.MINIMAX_QUEUE_CONCURRENCY || 4));
 const MINIMAX_RATE_LIMIT_RETRY_MS = Number(process.env.MINIMAX_RATE_LIMIT_RETRY_MS || 2200);
-let miniMaxQueue: Promise<unknown> = Promise.resolve();
-let lastMiniMaxRequestAt = 0;
+let activeMiniMaxRequests = 0;
+let nextMiniMaxRequestAt = 0;
+const miniMaxQueue: Array<() => void> = [];
 
 export class AiReplyClient {
   constructor(private readonly config: AppConfig) {}
@@ -505,15 +507,31 @@ async function generateMiniMaxAnthropicText(
 }
 
 function enqueueMiniMaxRequest<T>(task: () => Promise<T>): Promise<T> {
-  const run = async () => {
-    const waitMs = Math.max(0, MINIMAX_QUEUE_GAP_MS - (Date.now() - lastMiniMaxRequestAt));
-    if (waitMs > 0) await sleep(waitMs);
-    lastMiniMaxRequestAt = Date.now();
-    return task();
-  };
-  const next = miniMaxQueue.then(run, run);
-  miniMaxQueue = next.catch(() => undefined);
-  return next;
+  return new Promise<T>((resolve, reject) => {
+    miniMaxQueue.push(() => {
+      activeMiniMaxRequests += 1;
+      runMiniMaxTask(task).then(resolve, reject).finally(() => {
+        activeMiniMaxRequests -= 1;
+        drainMiniMaxQueue();
+      });
+    });
+    drainMiniMaxQueue();
+  });
+}
+
+function drainMiniMaxQueue(): void {
+  while (activeMiniMaxRequests < MINIMAX_QUEUE_CONCURRENCY && miniMaxQueue.length) {
+    miniMaxQueue.shift()?.();
+  }
+}
+
+async function runMiniMaxTask<T>(task: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const scheduledAt = Math.max(now, nextMiniMaxRequestAt);
+  nextMiniMaxRequestAt = scheduledAt + MINIMAX_QUEUE_GAP_MS;
+  const waitMs = scheduledAt - now;
+  if (waitMs > 0) await sleep(waitMs);
+  return task();
 }
 
 function isMiniMaxRateLimited(response: Response, providerError: string): boolean {
