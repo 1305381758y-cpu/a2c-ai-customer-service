@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCheck, CheckCircle2, ChevronsLeft, ChevronsRight, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Pin, PinOff, Plus, RefreshCw, Search, Send, Settings, Upload, Users, Workflow, X } from "lucide-react";
 import { ConversationExportBar, downloadConversationExport, EXPORT_ALL_FILTERS } from "./conversations/ConversationExport.js";
+import { ConversationAccountList } from "./conversations/ConversationAccountList.js";
 import { ConversationReviewCard } from "./conversations/ConversationReviewCard.js";
 import { MessageTimeline } from "./conversations/MessageTimeline.js";
 import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
 import type { A2CAccount, AgentProfile, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, SimulatorResponse, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
-import { AccountPagination, Pagination, useClientPagination } from "./ui/Pagination.js";
+import { Pagination, useClientPagination } from "./ui/Pagination.js";
 import "./styles.css";
 
 let emitToast: (toast: Omit<Toast, "id">) => void = () => undefined;
@@ -1278,35 +1279,26 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const exportBase = "/api/merchant/conversations/export";
 
   return <div className={`conversation-workspace ${customerCollapsed ? "customers-collapsed" : ""}`}>
-    <section className="account-list">
-      <div className="account-list-head">
-        <div>
-          <h3>客服账号</h3>
-          <span>{accounts.length ? `共 ${accounts.length} 个` : "未同步"}</span>
-        </div>
-        <AsyncButton className="sync-compact-button" busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}><RefreshCw size={14}/>同步</AsyncButton>
-      </div>
-      {accounts.length ? <>
-        <div className="account-list-filter">
-          <input value={accountKeyword} onChange={(e) => { setAccountKeyword(e.target.value); accountPager.setPage(1); }} placeholder="搜索账号/名称" />
-          <select value={accountStatus} onChange={(e) => { setAccountStatus(e.target.value); accountPager.setPage(1); }}>
-            <option value="">全部</option>
-            <option value="enabled">启用</option>
-            <option value="disabled">停用</option>
-          </select>
-        </div>
-        <div className="account-list-meta">筛选 {filteredAccounts.length} 个 · 第 {accountPager.page}/{accountPager.totalPages} 页</div>
-        <div className="stack-list account-scroll-list">
-          {accountPager.rows.map((account) => <button key={account.id} className={`list-item account-card ${selectedAccount?.id === account.id ? "active" : ""}`} onClick={() => setSelectedAccount(account)}>
-            <strong title={account.verifiedName || account.apiPhone}>{account.verifiedName || account.apiPhone}{accountUnread(account.apiPhone) > 0 && <span className="badge">{accountUnread(account.apiPhone)}</span>}</strong>
-            <span title={account.apiPhone}>{account.apiPhone}</span>
-            <small>{countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</small>
-          </button>)}
-          {!filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号。</div>}
-        </div>
-        <AccountPagination pager={accountPager} />
-      </> : <div className="empty-state">配置 A2C 密钥后点击同步账号；同步后可从这里选择客服账号主动发消息。</div>}
-    </section>
+    <ConversationAccountList
+      accounts={accounts}
+      filteredAccounts={filteredAccounts}
+      selectedAccount={selectedAccount}
+      accountKeyword={accountKeyword}
+      accountStatus={accountStatus}
+      pager={accountPager}
+      accountUnread={accountUnread}
+      countryLabel={countryLabel}
+      onKeywordChange={(value) => {
+        setAccountKeyword(value);
+        accountPager.setPage(1);
+      }}
+      onStatusChange={(value) => {
+        setAccountStatus(value);
+        accountPager.setPage(1);
+      }}
+      onSelectAccount={setSelectedAccount}
+      renderSyncButton={(children) => <AsyncButton className="sync-compact-button" busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>{children}</AsyncButton>}
+    />
     <section className="customer-list">
       <div className="panel-title">
         <h3>客户</h3>
