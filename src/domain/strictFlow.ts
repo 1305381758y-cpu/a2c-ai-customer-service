@@ -1,11 +1,10 @@
 import type { AppConfig } from "../config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
 import { isPositiveConfirmation, type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
-import { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
+import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
+import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
-
-const flowStepSet = new Set<string>(STRICT_FLOW_STEPS);
-const flowStepRank = new Map<StrictFlowStep, number>(STRICT_FLOW_STEPS.map((step, index) => [step, index]));
+export { inferStrictFlowStepFromContent, inferStrictFlowStepFromHistory, normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep, stageToStrictFlowStep } from "./strictFlowState.js";
 
 export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantCountryRecord, merchantConfig?: Pick<MerchantConfigRecord, "strictScriptFlowEnabled">): boolean {
   if (merchantConfig?.strictScriptFlowEnabled) return true;
@@ -50,14 +49,7 @@ export function resolveEffectiveStrictFlowStep(
   conversation: Pick<Conversation, "flowStep" | "stage">,
   history: ConversationMessageRecord[] = []
 ): StrictFlowStep | "" {
-  const stored = normalizeFlowStep(conversation.flowStep);
-  const inferred = inferStrictFlowStepFromHistory(history);
-  if (!stored) return inferred || stageToStrictFlowStep(conversation.stage);
-  if (!inferred) return stored;
-  if (stored === "first_greeting" && inferred !== "first_greeting") return inferred;
-  const storedRank = flowStepRank.get(stored) ?? 0;
-  const inferredRank = flowStepRank.get(inferred) ?? 0;
-  return inferredRank > storedRank ? inferred : stored;
+  return resolveStrictFlowStepFromState(conversation, history);
 }
 
 export function buildRuleContextualIntent(
@@ -504,13 +496,6 @@ function containsNextStepPrompt(content: string, nextStep: StrictFlowStep): bool
   return false;
 }
 
-function stageForFlowStep(step: StrictFlowStep, fallback: Conversation["stage"]): Conversation["stage"] {
-  if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") return "need_tg_register";
-  if (step === "human_handoff" || step === "ended") return "ready_for_handoff";
-  if (step === "wait_registration" || step === "send_register_link" || step === "registration_intent" || step === "project_intro" || step === "interest_screening") return "need_platform_register";
-  return fallback;
-}
-
 function reply(
   input: StrictFlowInput,
   language: string,
@@ -558,59 +543,6 @@ function sanitizeCustomerVisibleStrictReply(content: string): string {
     .replace(/[ \t]+/g, " ")
     .replace(/^[，,、。\s]+/gm, "")
     .trim();
-}
-
-function normalizeFlowStep(value: string): StrictFlowStep | "" {
-  return flowStepSet.has(value) ? value as StrictFlowStep : "";
-}
-
-function inferStrictFlowStepFromHistory(history: ConversationMessageRecord[]): StrictFlowStep | "" {
-  for (const message of [...history].reverse()) {
-    if (message.direction !== "outbound") continue;
-    const payloadStep = normalizeFlowStep(String(message.rawPayload?.strictFlowStep ?? ""));
-    if (payloadStep) return payloadStep;
-    const contentStep = inferStrictFlowStepFromContent(message.content);
-    if (contentStep) return contentStep;
-  }
-  return "";
-}
-
-function inferStrictFlowStepFromContent(content: string): StrictFlowStep | "" {
-  const text = content.trim();
-  if (!text) return "";
-  if (/(是否正在寻找|是否正在找|寻找可以在线完成的工作|赚取额外收入|part-time online job|renda extra|trabalho online)/i.test(text)) {
-    return "interest_screening";
-  }
-  if (/(简单介绍|每天可以赚取|提升产品销量|是否接受这份工作|briefly introduce|300 to 800|aumentar as vendas|300 a 800)/i.test(text)) {
-    return "registration_intent";
-  }
-  if (/(准备好注册|先在我们的平台上注册|ready to register|pronto para se cadastrar)/i.test(text)) {
-    return "registration_intent";
-  }
-  if (/(开户链接|注册链接|邀请码|registration link|invitation code|link de cadastro|código de convite)/i.test(text)) {
-    return "wait_registration";
-  }
-  if (/(是否已完成注册|注册的手机号码|registered phone|telefone usado no cadastro)/i.test(text)) {
-    return "wait_registration";
-  }
-  if (/(您有 Telegram|有 Telegram|Do you have the Telegram|Você tem o aplicativo Telegram)/i.test(text)) {
-    return "telegram_confirm";
-  }
-  if (/(下载 Telegram|注册 Telegram|download Telegram|baixar o Telegram|criar o Telegram)/i.test(text)) {
-    return "telegram_download";
-  }
-  if (/(@ 开头|@开头|Telegram 用户名|Telegram username|nome de usuário do Telegram)/i.test(text)) {
-    return "collect_telegram";
-  }
-  return "";
-}
-
-function stageToStrictFlowStep(stage: Conversation["stage"]): StrictFlowStep | "" {
-  if (stage === "need_tg_register") return "telegram_confirm";
-  if (stage === "need_phone_or_tg") return "wait_registration";
-  if (stage === "ready_for_handoff") return "human_handoff";
-  if (stage === "need_platform_register") return "";
-  return "";
 }
 
 function ensureActionableStrictContent(content: string, nextFlowStep: StrictFlowStep, language: string): string {
