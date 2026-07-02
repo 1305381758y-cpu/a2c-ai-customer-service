@@ -4,9 +4,8 @@ import { AiTasks } from "./aiTasks.js";
 import { analyzeInboundTurn } from "./inboundTurnAnalysis.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload, InboundConversationMessage } from "./inboundMessage.js";
-import { recordInboundTurn } from "./inboundTurnRecorder.js";
+import { persistAnalyzedInboundTurn } from "./inboundTurnPersistence.js";
 import { respondToInboundTurn } from "./inboundTurnResponder.js";
-import { translateForOperator } from "./translation.js";
 
 export class InboundConversationProcessor {
   constructor(
@@ -72,12 +71,9 @@ export class InboundConversationProcessor {
       customerTextForAi,
       history: historyForIntent
     });
-    const inboundTranslation = analysisText
-      ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
-      : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
-
-    const inboundTurn = recordInboundTurn({
+    const inboundTurn = await persistAnalyzedInboundTurn({
       repos: this.repos,
+      runtimeConfig,
       conversation,
       payload,
       data,
@@ -88,8 +84,8 @@ export class InboundConversationProcessor {
       imageAnalysis,
       simulation,
       analysis,
+      analysisText,
       customerTextForAi,
-      inboundTranslation,
       inferredIntent,
       contextualIntent,
       learnedIntentDebug,
