@@ -10,6 +10,7 @@ import { ConversationMemoryCard } from "./conversations/ConversationMemoryCard.j
 import { ConversationReviewCard } from "./conversations/ConversationReviewCard.js";
 import { MessageTimeline } from "./conversations/MessageTimeline.js";
 import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
+import { Dashboard } from "./dashboard/Dashboard.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
 import type { A2CAccount, AgentProfile, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
@@ -137,7 +138,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       </aside>
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
-        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
+        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} />}
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
@@ -155,12 +156,6 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       </main>
     </div>
   );
-}
-
-function Dashboard({ platform }: { platform: boolean }) {
-  const [data, setData] = useState<Record<string, number>>({});
-  useEffect(() => { api<Record<string, number>>(platform ? "/api/admin/dashboard" : "/api/merchant/dashboard").then(setData); }, [platform]);
-  return <div className="grid metrics">{Object.entries(data).map(([k, v]) => { const Icon = metricIcon(k); return <section key={k} className="metric-card"><div className="metric-top"><span>{merchantDashboardLabel(k, platform)}</span><i><Icon size={19}/></i></div><strong>{v}</strong><small>{merchantDashboardHint(k, platform)}</small></section>; })}</div>;
 }
 
 function Merchants() {
@@ -1565,44 +1560,6 @@ function statusTone(value: string) {
   if (["pending", "processing", "waiting", "need_platform_register", "need_phone_or_tg", "reserved", "candidate"].includes(value)) return "warning";
   if (["disabled", "error", "invalid", "human_handoff", "irrelevant_or_spam", "ignored"].includes(value)) return "danger";
   return "neutral";
-}
-
-function metricIcon(key: string) {
-  return ({
-    merchants: Building2,
-    customers: Contact,
-    conversations: MessageSquare,
-    handoffs: Workflow,
-    samples: Upload,
-    users: Users,
-    aiReplies: Bot,
-    messages: MessageSquare
-  } as Record<string, typeof Bot>)[key] || Bot;
-}
-
-function metricHint(key: string) {
-  return ({
-    merchants: "当前平台商户总量",
-    customers: "已沉淀客户档案",
-    conversations: "累计会话记录",
-    handoffs: "需要人工跟进",
-    samples: "已启用训练样本",
-    users: "后台可登录账号",
-    aiReplies: "AI 自动回复次数",
-    messages: "今日消息处理量"
-  } as Record<string, string>)[key] || "实时运营指标";
-}
-
-function merchantDashboardLabel(key: string, platform: boolean) {
-  if (!platform && key === "samples") return "学习内容";
-  if (!platform && key === "aiReplies") return "智能回复";
-  return label(key);
-}
-
-function merchantDashboardHint(key: string, platform: boolean) {
-  if (!platform && key === "samples") return "已学习并可参考的内容";
-  if (!platform && key === "aiReplies") return "自动处理客户消息次数";
-  return metricHint(key);
 }
 
 function translateSystemMessage(message: unknown) {
