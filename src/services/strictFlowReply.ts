@@ -17,6 +17,7 @@ import type { AiTasks } from "./aiTasks.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js";
+import { buildStrictFlowOutboundRawPayload } from "./strictFlowOutboundPayload.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -146,39 +147,16 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
       msgType: "text",
       language: strictReply.language,
       intent: "unknown",
-      rawPayload: {
-        replyMode: strictReply.fallback ? "fallback" : "strict_flow",
-        strictFlow: true,
+      rawPayload: buildStrictFlowOutboundRawPayload({
+        strictReply,
         strictFlowEnabled,
-        strictFlowStep: strictReply.nextFlowStep,
-        controlledQuestionType: strictReply.controlledQuestionType || "none",
-        controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
-        strictQuestionType: strictReply.controlledQuestionType || "none",
-        agentProfileName: agentProfile.agentName,
-        contextualIntent: strictReply.contextualIntent,
+        agentProfile,
         learnedIntent,
-        intentSource: strictReply.contextualIntent?.source || "none",
-        answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
-        questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
-        nextAction: strictReply.contextualIntent?.nextAction || "",
-        usedAiNaturalizer: naturalized.used,
-        naturalizerError: naturalized.error || "",
-        languageGuardTarget: languageGuard.targetLanguage,
-        languageGuardStatus: languageGuard.status,
-        languageGuardAttempts: languageGuard.attempts,
-        languageGuardFallbackUsed: languageGuard.fallbackUsed,
-        languageGuardError: languageGuard.error || "",
-        knowledgeHit: false,
-        aiFallback: Boolean(strictReply.fallback),
-        inviteCodeRequired: Boolean(country.requirePlatformAccount),
-        inviteCodeMissing: Boolean(strictReply.needsInviteCode && !inviteCode),
-        assignedInviteCode: inviteCode ? {
-          id: inviteCode.id,
-          code: inviteCode.code,
-          registerUrl: inviteCode.registerUrl,
-          status: inviteCode.status
-        } : null
-      }
+        naturalized,
+        languageGuard,
+        country,
+        inviteCode
+      })
     },
     memory: {
       intent: "unknown",
