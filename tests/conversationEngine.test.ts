@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConversationEngine } from "../src/services/conversationEngine.js";
+import { InboundConversationProcessor } from "../src/services/inboundConversationProcessor.js";
+import { WebhookProcessor } from "../src/services/webhookProcessor.js";
 import type { A2CWebhookPayload } from "../src/services/inboundMessage.js";
 
 function payload(type = "CUSTOMER_MESSAGE"): A2CWebhookPayload {
@@ -19,6 +21,10 @@ function payload(type = "CUSTOMER_MESSAGE"): A2CWebhookPayload {
 }
 
 describe("ConversationEngine", () => {
+  it("keeps the old webhook processor export as a compatibility adapter", () => {
+    expect(WebhookProcessor.prototype).toBeInstanceOf(InboundConversationProcessor);
+  });
+
   it("uses a narrow inbound interface for direct conversation handling", async () => {
     const processor = {
       process: vi.fn(async () => ({ status: "replied", conversationId: "conversation-1" })),
