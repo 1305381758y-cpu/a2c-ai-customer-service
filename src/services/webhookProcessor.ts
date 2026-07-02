@@ -1,13 +1,12 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
-import { shouldUseInviteForReply, suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
-import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
+import { generateAndRecordAiConversationReply, type LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
-import { completeConversationGoal } from "./conversationGoalCompletion.js";
+import { completeConversationGoal, isConversationGoalComplete } from "./conversationGoalCompletion.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
@@ -81,6 +80,12 @@ export class WebhookProcessor {
       customerText: customerTextForAi,
       flowStep: effectiveStrictFlowStep || conversation.flowStep || ""
     });
+    const learnedIntentDebug = learnedIntent ? {
+      id: learnedIntent.event.id,
+      suggestedIntent: learnedIntent.event.suggestedIntent,
+      displayName: learnedIntent.event.displayName,
+      score: learnedIntent.score
+    } satisfies LearnedIntentDebugInfo : null;
     let inferredIntent = await this.inferStrictFlowIntent({
       runtimeConfig,
       merchant,
@@ -135,12 +140,7 @@ export class WebhookProcessor {
         ...payload,
         inferredIntent,
         contextualIntent,
-        learnedIntent: learnedIntent ? {
-          id: learnedIntent.event.id,
-          suggestedIntent: learnedIntent.event.suggestedIntent,
-          displayName: learnedIntent.event.displayName,
-          score: learnedIntent.score
-        } : null,
+        learnedIntent: learnedIntentDebug,
         strictFlowEnabled,
         strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
         originalContent: inboundTranslation.originalText,
@@ -196,7 +196,7 @@ export class WebhookProcessor {
       return { status: "already_handoff", conversationId: conversation.id };
     }
 
-    if (isCountryGoalComplete(conversation, country)) {
+    if (isConversationGoalComplete(conversation, country)) {
       return completeConversationGoal({
         repos: this.repos,
         runtimeConfig,
@@ -300,12 +300,7 @@ export class WebhookProcessor {
             strictQuestionType: strictReply.controlledQuestionType || "none",
             agentProfileName: agentProfile.agentName,
             contextualIntent: strictReply.contextualIntent,
-            learnedIntent: learnedIntent ? {
-              id: learnedIntent.event.id,
-              suggestedIntent: learnedIntent.event.suggestedIntent,
-              displayName: learnedIntent.event.displayName,
-              score: learnedIntent.score
-            } : null,
+            learnedIntent: learnedIntentDebug,
             intentSource: strictReply.contextualIntent?.source || "none",
             answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
             questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
@@ -345,102 +340,25 @@ export class WebhookProcessor {
       }
     }
 
-    const enabledSamples = this.repos.listTrainingSamples({ merchantId: merchant.id, countryId: country.id, enabled: true });
-    const knowledge = this.repos.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id, enabled: true });
-    const trainingMaterials = this.repos.listTrainingMaterialSnippets(merchant.id, 20, country.id);
-    const shouldIncludeRegistrationDetails = shouldUseInviteForReply(country, conversation, analysis.intent, customerTextForAi);
-    const inviteCode = shouldIncludeRegistrationDetails
-      ? this.repos.reserveInviteCodeForConversation(conversation)
-      : undefined;
-    const samples = rankSamples(enabledSamples, {
-      text: customerTextForAi,
-      language: analysis.language,
-      intent: analysis.intent,
-      stage: analysis.stage
-    });
-    const history = this.repos.listConversationMessages(conversation.id, 20);
-    const aiReply = await this.ai.generateReply(runtimeConfig, { customerText: customerTextForAi, conversation, history, samples, knowledge, trainingMaterials, memory: inboundMemory, country, inviteCode, agentProfile });
-    if (!shouldIncludeRegistrationDetails) {
-      aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, runtimeConfig, country, conversation, aiReply.language || conversation.language);
-    }
-
-    if (aiReply.extractedPhone && !conversation.extractedPhone) conversation.extractedPhone = aiReply.extractedPhone;
-    if (aiReply.extractedTelegram && !conversation.extractedTelegram) conversation.extractedTelegram = aiReply.extractedTelegram;
-    if (aiReply.extractedWhatsApp && !conversation.extractedWhatsApp) conversation.extractedWhatsApp = aiReply.extractedWhatsApp;
-    if (aiReply.language) conversation.language = aiReply.language;
-    if (aiReply.stage === "ready_for_handoff" || isCountryGoalComplete(conversation, country)) {
-      return completeConversationGoal({
-        repos: this.repos,
-        runtimeConfig,
-        conversation,
-        data,
-        language: aiReply.language || analysis.language,
-        a2c,
-        telegram,
-        simulation,
-        sendVerificationReply: true,
-        generateReview: (conversationId, config) => generateConversationReview(this.repos, config, conversationId)
-      });
-    }
-
-    const outbound = await recordOutboundConversationMessage({
+    return generateAndRecordAiConversationReply({
       repos: this.repos,
+      ai: this.ai,
       runtimeConfig,
-      a2c,
       conversation,
+      country,
+      analysis,
+      customerText: customerTextForAi,
+      inboundMemory,
+      agentProfile,
+      a2c,
+      telegram,
+      data,
+      payloadId: payload.id,
       simulation,
-      payload: {
-        to: data.from,
-        senderPhoneNumber: data.to,
-        type: "text",
-        content: aiReply.reply
-      },
-      idPolicy: {
-        simulatedPrefix: "simulated_reply",
-        sentFallbackPrefix: "a2c_sent",
-        failedPrefix: "send_failed",
-        contextId: data.messageId || payload.id
-      },
-      message: {
-        content: aiReply.reply,
-        msgType: "text",
-        language: aiReply.language || conversation.language,
-        intent: "unknown",
-        rawPayload: {
-          replyMode: aiReply.fallback ? "fallback" : "ai",
-          strictFlowEnabled,
-          agentProfileName: agentProfile.agentName,
-          learnedIntent: learnedIntent ? {
-            id: learnedIntent.event.id,
-            suggestedIntent: learnedIntent.event.suggestedIntent,
-            displayName: learnedIntent.event.displayName,
-            score: learnedIntent.score
-          } : null,
-          samples: samples.map((sample) => sample.id),
-          trainingMaterials: trainingMaterials.map((item) => item.id),
-          aiFallback: Boolean(aiReply.fallback),
-          aiError: aiReply.error || "",
-          inviteCodeRequired: Boolean(country.requirePlatformAccount),
-          inviteCodeMissing: Boolean(country.requirePlatformAccount && !inviteCode),
-          assignedInviteCode: inviteCode ? {
-            id: inviteCode.id,
-            code: inviteCode.code,
-            registerUrl: inviteCode.registerUrl,
-            status: inviteCode.status
-          } : null
-        }
-      },
-      memory: {
-        intent: "unknown",
-        content: aiReply.reply,
-        direction: "outbound"
-      }
+      strictFlowEnabled,
+      learnedIntent: learnedIntentDebug,
+      generateReview: (conversationId, config) => generateConversationReview(this.repos, config, conversationId)
     });
-    this.repos.updateConversation(conversation);
-    this.repos.upsertCustomerFromConversation(conversation);
-
-    if (outbound.sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
-    return { status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
   }
 
   private async inferStrictFlowIntent(input: {
@@ -618,16 +536,6 @@ function detectContextualRegistrationPhone(text: string, flowStep: string): stri
   if (!/^\+?\d[\d\s-]{5,18}$/.test(normalized)) return "";
   const digits = normalized.replace(/[^\d+]/g, "");
   return digits.replace(/\D/g, "").length >= 6 ? digits : "";
-}
-
-function isCountryGoalComplete(
-  conversation: { extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string },
-  country: { requirePhone: boolean; requireTelegram: boolean; requireWhatsApp: boolean }
-): boolean {
-  if (country.requirePhone && !conversation.extractedPhone) return false;
-  if (country.requireTelegram && !conversation.extractedTelegram) return false;
-  if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
-  return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
 }
 
 export function shouldBypassStrictFlowForNaturalReply(

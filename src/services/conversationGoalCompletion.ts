@@ -11,6 +11,16 @@ export interface ConversationGoalCompletionResult {
   conversationId: string;
 }
 
+export function isConversationGoalComplete(
+  conversation: { extractedPhone: string; extractedTelegram: string; extractedWhatsApp: string },
+  country: { requirePhone: boolean; requireTelegram: boolean; requireWhatsApp: boolean }
+): boolean {
+  if (country.requirePhone && !conversation.extractedPhone) return false;
+  if (country.requireTelegram && !conversation.extractedTelegram) return false;
+  if (country.requireWhatsApp && !conversation.extractedWhatsApp) return false;
+  return country.requirePhone || country.requireTelegram || country.requireWhatsApp;
+}
+
 export async function completeConversationGoal(input: {
   repos: Repositories;
   runtimeConfig: AppConfig;
