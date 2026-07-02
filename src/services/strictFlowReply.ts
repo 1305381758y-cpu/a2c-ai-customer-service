@@ -10,13 +10,11 @@ import type {
   Repositories,
   ScriptFlowRuntime
 } from "../repositories.js";
-import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import type { AiTasks } from "./aiTasks.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js";
-import { buildStrictFlowOutboundRawPayload } from "./strictFlowOutboundPayload.js";
-import { refineStrictFlowReplyText } from "./strictFlowReplyTextRefinement.js";
+import { sendStrictFlowTextOutbound } from "./strictFlowTextOutbound.js";
 import { buildStrictFlowTurn } from "./strictFlowTurnBuilder.js";
 
 export interface StrictFlowReplyResult {
@@ -93,55 +91,23 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   conversation.stage = strictReply.stage;
   conversation.flowStep = strictReply.nextFlowStep;
 
-  const refinedReply = await refineStrictFlowReplyText({
-    ai,
-    runtimeConfig,
-    strictReply,
-    customerText,
-    history,
-    agentProfile
-  });
-  strictReply.reply = refinedReply.reply;
-
-  const outbound = await recordOutboundConversationMessage({
+  const { outbound } = await sendStrictFlowTextOutbound({
     repos,
+    ai,
     runtimeConfig,
     a2c,
     conversation,
+    strictReply,
+    customerText,
+    history,
+    agentProfile,
+    data,
+    payloadId,
     simulation,
-    payload: {
-      to: data.from,
-      senderPhoneNumber: data.to,
-      type: "text",
-      content: strictReply.reply
-    },
-    idPolicy: {
-      simulatedPrefix: "simulated_strict",
-      sentFallbackPrefix: "a2c_strict",
-      failedPrefix: "strict_send_failed",
-      contextId: data.messageId || payloadId
-    },
-    message: {
-      content: strictReply.reply,
-      msgType: "text",
-      language: strictReply.language,
-      intent: "unknown",
-      rawPayload: buildStrictFlowOutboundRawPayload({
-        strictReply,
-        strictFlowEnabled,
-        agentProfile,
-        learnedIntent,
-        naturalized: refinedReply.naturalized,
-        languageGuard: refinedReply.languageGuard,
-        country,
-        inviteCode
-      })
-    },
-    memory: {
-      intent: "unknown",
-      content: strictReply.reply,
-      direction: "outbound"
-    }
+    strictFlowEnabled,
+    learnedIntent,
+    country,
+    inviteCode
   });
 
   if (strictReply.tutorialImageRequested) {
