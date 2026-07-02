@@ -1,11 +1,12 @@
-import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
-import { buildRuleContextualIntent, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, type StrictContextualIntent } from "../domain/strictFlow.js";
+import { analyzeMessage } from "../domain/analyzer.js";
+import { isStrictFlowEnabled, resolveEffectiveStrictFlowStep } from "../domain/strictFlow.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
 import { generateAndRecordAiConversationReply, type LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { completeConversationGoal, isConversationGoalComplete } from "./conversationGoalCompletion.js";
+import { applyInternalIntent, inferStrictFlowContextualIntent, inferStrictFlowIntent } from "./contextualIntentInference.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
@@ -84,10 +85,9 @@ export class WebhookProcessor {
       displayName: learnedIntent.event.displayName,
       score: learnedIntent.score
     } satisfies LearnedIntentDebugInfo : null;
-    let inferredIntent = await this.inferStrictFlowIntent({
+    let inferredIntent = await inferStrictFlowIntent({
+      ai: this.ai,
       runtimeConfig,
-      merchant,
-      country,
       conversation,
       analysis,
       customerText: customerTextForAi,
@@ -100,7 +100,8 @@ export class WebhookProcessor {
     if (inferredIntent !== "unknown") {
       analysis = applyInternalIntent(analysis, inferredIntent);
     }
-    let contextualIntent = await this.inferContextualIntent({
+    let contextualIntent = await inferStrictFlowContextualIntent({
+      ai: this.ai,
       runtimeConfig,
       conversation,
       analysis,
@@ -264,126 +265,6 @@ export class WebhookProcessor {
     });
   }
 
-  private async inferStrictFlowIntent(input: {
-    runtimeConfig: AppConfig;
-    merchant: Parameters<typeof isStrictFlowEnabled>[0];
-    country: Parameters<typeof isStrictFlowEnabled>[1];
-    conversation: Parameters<Repositories["updateConversation"]>[0];
-    analysis: MessageAnalysis;
-    customerText: string;
-    strictFlowEnabled: boolean;
-    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
-  }): Promise<InternalIntentLabel> {
-    if (!input.customerText.trim()) return "unknown";
-    if (!input.strictFlowEnabled) return "unknown";
-    if (!input.conversation.flowStep) return "unknown";
-    if (input.analysis.intent !== "unknown" && input.analysis.intent !== "irrelevant_or_spam") return "unknown";
-    return this.ai.classifyIntent(input.runtimeConfig, {
-      customerText: input.customerText,
-      language: input.analysis.language || input.conversation.language,
-      flowStep: input.conversation.flowStep,
-      recentHistory: input.history
-    });
-  }
-
-  private async inferContextualIntent(input: {
-    runtimeConfig: AppConfig;
-    conversation: Parameters<Repositories["updateConversation"]>[0];
-    analysis: MessageAnalysis;
-    customerText: string;
-    strictFlowEnabled: boolean;
-    history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
-    inferredIntent: InternalIntentLabel;
-  }): Promise<StrictContextualIntent> {
-    const rule = buildRuleContextualIntent({
-      conversation: input.conversation,
-      analysis: input.analysis,
-      customerText: input.customerText,
-      inferredIntent: input.inferredIntent
-    }, input.history);
-    if (!input.strictFlowEnabled || !input.conversation.flowStep || !shouldAskAiForContext(rule, input.customerText, input.analysis.intent)) {
-      return rule;
-    }
-    const aiIntent = await this.ai.classifyContextualIntent(input.runtimeConfig, {
-      customerText: input.customerText,
-      language: input.analysis.language || input.conversation.language,
-      flowStep: input.conversation.flowStep,
-      previousAssistantMessage: lastAssistantContent(input.history),
-      recentHistory: input.history,
-      knownPhone: input.conversation.extractedPhone,
-      knownTelegram: input.conversation.extractedTelegram
-    });
-    if (aiIntent.intent === "unknown") return rule;
-    return {
-      intent: aiIntent.intent,
-      source: "ai",
-      answeredPreviousQuestion: aiIntent.answeredPreviousQuestion,
-      isQuestion: aiIntent.isQuestion,
-      isSubmission: aiIntent.intent === "phone_submission" || aiIntent.intent === "telegram_submission",
-      shouldPause: aiIntent.shouldPause,
-      questionType: normalizeContextualQuestionType(aiIntent.questionType),
-      nextAction: aiIntent.nextAction,
-      reason: aiIntent.reason
-    };
-  }
-}
-
-function shouldAskAiForContext(rule: StrictContextualIntent, text: string, intent: MessageAnalysis["intent"]): boolean {
-  if (rule.source === "rule" && rule.intent !== "unknown" && rule.intent !== "unknown_question") return false;
-  const normalized = text.trim();
-  if (!normalized) return false;
-  return rule.intent === "unknown_question" ||
-    intent === "unknown" ||
-    intent === "irrelevant_or_spam" ||
-    (intent === "greeting" && !/^(你好|您好|早上好|下午好|晚上好|hi|hello|hey)$/i.test(normalized)) ||
-    normalized.length <= 16 ||
-    /[?？为什么為什麼怎么怎麼如何什么什麼]/.test(normalized);
-}
-
-function normalizeContextualQuestionType(value: string): StrictContextualIntent["questionType"] {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "telegram") return "telegram";
-  if (normalized === "payment") return "payment";
-  if (normalized === "investment") return "investment";
-  if (normalized === "trust") return "trust";
-  if (normalized === "earning") return "earning";
-  if (normalized === "workflow") return "help";
-  if (normalized === "job") return "job";
-  if (normalized === "complaint") return "complaint";
-  if (normalized === "chat") return "chat";
-  if (normalized === "sensitive") return "sensitive";
-  if (normalized === "unknown") return "unknown";
-  return "none";
-}
-
-function lastAssistantContent(history: Array<{ direction: string; content: string }>): string {
-  return [...history].reverse().find((message) => message.direction === "outbound")?.content ?? "";
-}
-
-function applyInternalIntent(analysis: MessageAnalysis, inferredIntent: InternalIntentLabel): MessageAnalysis {
-  const intentMap: Partial<Record<InternalIntentLabel, MessageAnalysis["intent"]>> = {
-    positive_confirmation: "greeting",
-    negative_refusal: "unknown",
-    need_help: "need_help",
-    ask_platform_register: "ask_platform_register",
-    ask_link: "ask_link",
-    ask_tg_register: "ask_tg_register",
-    platform_register_done: "platform_register_done",
-    trust_concern: "trust_concern",
-    payment_concern: "unknown",
-    investment_concern: "unknown",
-    earning_concern: "unknown",
-    workflow_question: "need_help",
-    job_question: "greeting",
-    complaint: "unknown",
-    chat: "greeting",
-    sensitive_request: "unknown"
-  };
-  const intent = intentMap[inferredIntent] ?? analysis.intent;
-  const stage = intent === "ask_tg_register" || intent === "platform_register_done"
-    ? "need_phone_or_tg"
-    : analysis.stage;
-  return { ...analysis, intent, stage };
 }
 
 function detectContextualRegistrationPhone(text: string, flowStep: string): string {
