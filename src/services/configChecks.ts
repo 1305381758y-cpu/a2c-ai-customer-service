@@ -2,13 +2,13 @@ import { A2CClient } from "../clients/a2c.js";
 import {
   aiProviderLabel,
   deepseekModel,
-  generateAiText,
   hasUsableAiKey,
   minimaxModel,
   selectedAiProvider
 } from "../clients/aiProvider.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
+import { AiTasks } from "./aiTasks.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 
 export type ConfigCheckItem = {
@@ -37,7 +37,8 @@ export type MerchantConfigCheckResult =
 export async function checkMerchantConfig(
   repos: Repositories,
   baseConfig: AppConfig,
-  merchantId: string
+  merchantId: string,
+  ai: Pick<AiTasks, "checkAvailability"> = new AiTasks()
 ): Promise<MerchantConfigCheckResult> {
   const merchant = repos.getMerchant(merchantId);
   if (!merchant) return { ok: false, statusCode: 404, error: "merchant not found" };
@@ -47,7 +48,7 @@ export async function checkMerchantConfig(
   const checks: ConfigCheckItem[] = [];
 
   checks.push(await checkA2C(runtimeConfig, repos, merchantId));
-  checks.push(await checkAiProvider(runtimeConfig));
+  checks.push(await checkAiProvider(runtimeConfig, ai));
   checks.push(await checkTelegram(runtimeConfig));
   checks.push(checkPlatformRegisterUrl(runtimeConfig));
 
@@ -91,7 +92,7 @@ async function checkA2C(config: AppConfig, repos: Repositories, merchantId: stri
   }
 }
 
-async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
+async function checkAiProvider(config: AppConfig, ai: Pick<AiTasks, "checkAvailability">): Promise<ConfigCheckItem> {
   if (!hasUsableAiKey(config)) {
     return {
       key: "ai",
@@ -103,7 +104,7 @@ async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
   }
 
   try {
-    await generateAiText(config, "Reply with OK only.");
+    await ai.checkAvailability(config);
     const provider = selectedAiProvider(config);
     const model = provider === "minimax" ? minimaxModel(config) : provider === "deepseek" ? deepseekModel(config) : config.GOOGLE_AI_MODEL;
     return {

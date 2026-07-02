@@ -95,6 +95,10 @@ export class AiTasks {
     });
   }
 
+  async checkAvailability(config: AppConfig): Promise<void> {
+    await generateAiText(config, "Reply with OK only.");
+  }
+
   async generateConversationReviewDraft(config: AppConfig, input: AiConversationReviewDraftInput): Promise<ConversationReviewInput> {
     const text = await generateAiText(config, JSON.stringify({
       agentProfile: input.agentProfile,
