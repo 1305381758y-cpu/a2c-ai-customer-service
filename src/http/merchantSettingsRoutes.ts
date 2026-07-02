@@ -3,12 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { requireUser } from "../auth.js";
-import { A2CClient } from "../clients/a2c.js";
-import { aiProviderLabel, deepseekModel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "../clients/aiProvider.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
-import { appConfigForMerchant } from "../services/runtimeConfig.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
+import { registerMerchantConfigCheckRoutes } from "./merchantConfigCheckRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js";
 import { registerMerchantTelegramRoutes } from "./merchantTelegramRoutes.js";
@@ -25,6 +23,7 @@ type MerchantSettingsRoutesDeps = {
 export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
   registerAdminMerchantSettingsRoutes(app, deps);
   registerMerchantOwnSettingsRoutes(app, deps);
+  registerMerchantConfigCheckRoutes(app, deps);
   registerMerchantCountryRoutes(app, deps);
   registerMerchantInviteCodeRoutes(app, deps);
   registerMerchantA2CAccountRoutes(app, { ...deps, maskConfig });
@@ -37,7 +36,6 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.getMerchantAgentProfile(request.params.id));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: deps.adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
-  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: deps.adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -59,107 +57,6 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.get("/api/merchant/agent-profile", { preHandler: deps.merchantRoles }, async (request) => deps.repos.getMerchantAgentProfile(scopedMerchantId(request)));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: deps.merchantAdmins }, async (request) => deps.repos.patchMerchantAgentProfile(scopedMerchantId(request), cleanAgentProfilePatch(request.body ?? {})));
   app.post("/api/merchant/config/registration-tutorial-image", { preHandler: deps.merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
-  app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
-}
-
-type ConfigCheckItem = {
-  key: string;
-  label: string;
-  ok: boolean;
-  status: "ok" | "missing" | "error" | "waiting";
-  detail: string;
-};
-
-async function checkMerchantConfig(reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
-  const merchant = deps.repos.getMerchant(merchantId);
-  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-  const cfg = deps.repos.getMerchantConfig(merchantId);
-  const runtimeConfig = appConfigForMerchant(deps.config, cfg);
-  const checks: ConfigCheckItem[] = [];
-
-  checks.push(await checkA2C(runtimeConfig, deps.repos, merchantId));
-  checks.push(await checkAiProvider(runtimeConfig));
-  checks.push(await checkTelegram(runtimeConfig));
-  checks.push({
-    key: "platformRegisterUrl",
-    label: "开户链接",
-    ok: Boolean(runtimeConfig.PLATFORM_REGISTER_URL),
-    status: runtimeConfig.PLATFORM_REGISTER_URL ? "ok" : "missing",
-    detail: runtimeConfig.PLATFORM_REGISTER_URL || "未配置，AI 回复里无法给客户开户链接"
-  });
-
-  return {
-    ok: checks.every((item) => item.ok),
-    rows: checks,
-    checkedAt: new Date().toISOString()
-  };
-}
-
-async function checkA2C(config: AppConfig, repos: Repositories, merchantId: string): Promise<ConfigCheckItem> {
-  if (!config.A2C_APP_ID || !config.A2C_APP_SECRET) {
-    return { key: "a2c", label: "A2C", ok: false, status: "missing", detail: "缺少 A2C App ID 或密钥" };
-  }
-  const client = new A2CClient(config, repos.a2cTokenStore(merchantId));
-  try {
-    const accounts = await client.listAccounts();
-    const rows = repos.syncMerchantA2CAccounts(merchantId, accounts);
-    const enabledCount = rows.filter((account) => account.enabled).length;
-    return {
-      key: "a2c",
-      label: "A2C",
-      ok: true,
-      status: "ok",
-      detail: `已实时请求 A2C，认证正常；拉取到 ${rows.length} 个客服账号，其中 ${enabledCount} 个启用。`
-    };
-  } catch (error) {
-    const localAccounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
-    const suffix = localAccounts.length ? ` 本地仍保存 ${localAccounts.length} 个启用客服账号，可继续用于已有收发；但实时检测未通过。` : "";
-    return {
-      key: "a2c",
-      label: "A2C",
-      ok: false,
-      status: "error",
-      detail: `${error instanceof Error ? error.message : "A2C 实时检测失败"}${suffix}`
-    };
-  }
-}
-
-async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
-  if (!hasUsableAiKey(config)) return { key: "ai", label: "AI供应商", ok: false, status: "missing", detail: `缺少 ${aiProviderLabel(config)} Key，客户消息会降级使用样本/默认话术` };
-  try {
-    await generateAiText(config, "Reply with OK only.");
-    const provider = selectedAiProvider(config);
-    const model = provider === "minimax" ? minimaxModel(config) : provider === "deepseek" ? deepseekModel(config) : config.GOOGLE_AI_MODEL;
-    return { key: "ai", label: "AI供应商", ok: true, status: "ok", detail: `${aiProviderLabel(config)} 可用，当前模型 ${model}；客户消息会优先调用 AI 回复` };
-  } catch (error) {
-    return { key: "ai", label: "AI供应商", ok: false, status: "error", detail: error instanceof Error ? error.message : "AI供应商检测失败" };
-  }
-}
-
-async function checkTelegram(config: AppConfig): Promise<ConfigCheckItem> {
-  if (!config.TELEGRAM_BOT_TOKEN) return { key: "telegram", label: "Telegram", ok: false, status: "missing", detail: "缺少 TG 机器人 Token" };
-  try {
-    const me = await fetchTelegram(config.TELEGRAM_BOT_TOKEN, "getMe");
-    if (!me.ok) throw new Error(me.description || "TG 机器人 Token 无效");
-    if (!config.TELEGRAM_HANDOFF_CHAT_ID) {
-      return { key: "telegram", label: "Telegram", ok: false, status: "waiting", detail: "机器人可用，但尚未绑定接管群。请拉群并发送 /bind" };
-    }
-    const chat = await fetchTelegram(config.TELEGRAM_BOT_TOKEN, "getChat", { chat_id: config.TELEGRAM_HANDOFF_CHAT_ID });
-    if (!chat.ok) throw new Error(chat.description || "TG 群 ID 无效或机器人不在群里");
-    const title = typeof chat.result === "object" && chat.result && "title" in chat.result ? String((chat.result as { title?: string }).title || config.TELEGRAM_HANDOFF_CHAT_ID) : config.TELEGRAM_HANDOFF_CHAT_ID;
-    return { key: "telegram", label: "Telegram", ok: true, status: "ok", detail: `机器人和接管群可用：${title}` };
-  } catch (error) {
-    return { key: "telegram", label: "Telegram", ok: false, status: "error", detail: error instanceof Error ? error.message : "Telegram 检测失败" };
-  }
-}
-
-async function fetchTelegram(botToken: string, method: string, body?: Record<string, unknown>): Promise<{ ok: boolean; description?: string; result?: unknown }> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    method: body ? "POST" : "GET",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined
-  });
-  return await response.json().catch(() => ({ ok: false, description: response.statusText })) as { ok: boolean; description?: string; result?: unknown };
 }
 
 function requestOrigin(request: FastifyRequest): string {
