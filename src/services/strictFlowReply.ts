@@ -11,13 +11,13 @@ import type {
   Repositories,
   ScriptFlowRuntime
 } from "../repositories.js";
-import { ensureReplyCustomerLanguage, naturalizeStrictReply } from "./replyLanguage.js";
 import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import type { AiTasks } from "./aiTasks.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js";
 import { buildStrictFlowOutboundRawPayload } from "./strictFlowOutboundPayload.js";
+import { refineStrictFlowReplyText } from "./strictFlowReplyTextRefinement.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -104,25 +104,15 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   conversation.stage = strictReply.stage;
   conversation.flowStep = strictReply.nextFlowStep;
 
-  const naturalized = await naturalizeStrictReply(ai, runtimeConfig, {
+  const refinedReply = await refineStrictFlowReplyText({
+    ai,
+    runtimeConfig,
+    strictReply,
     customerText,
-    draftReply: strictReply.reply,
-    language: strictReply.language,
-    flowStep: strictReply.nextFlowStep,
-    questionType: strictReply.controlledQuestionType || "none",
     history,
-    allowLinkOrInvite: strictReply.needsInviteCode,
     agentProfile
   });
-  strictReply.reply = naturalized.reply;
-
-  const languageGuard = await ensureReplyCustomerLanguage(runtimeConfig, {
-    reply: strictReply.reply,
-    targetLanguage: strictReply.language,
-    flowStep: strictReply.nextFlowStep,
-    allowLinkOrInvite: strictReply.needsInviteCode
-  });
-  strictReply.reply = languageGuard.reply;
+  strictReply.reply = refinedReply.reply;
 
   const outbound = await recordOutboundConversationMessage({
     repos,
@@ -152,8 +142,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
         strictFlowEnabled,
         agentProfile,
         learnedIntent,
-        naturalized,
-        languageGuard,
+        naturalized: refinedReply.naturalized,
+        languageGuard: refinedReply.languageGuard,
         country,
         inviteCode
       })
