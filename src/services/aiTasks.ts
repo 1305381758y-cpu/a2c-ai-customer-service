@@ -5,11 +5,11 @@ import {
   detectAiLanguage,
   generateAiText,
   naturalizeStrictFlowText,
-  type AiImageAnalysis,
-  type AiTextPart
+  type AiImageAnalysis
 } from "../clients/aiProvider.js";
 import { AiReplyClient } from "../clients/aiReplyClient.js";
 import type { AiReply, ReplyInput } from "../clients/aiReplyTypes.js";
+import { extractTrainingImageTextWithAi, type AiTrainingImageTextInput, type AiTrainingImageTextResult } from "../clients/aiTrainingImageTextTask.js";
 import { translateTextWithAi, type AiTranslationInput } from "../clients/aiTranslationTask.js";
 import type { AppConfig } from "../config.js";
 import type { ContextualIntentLabel, InternalIntentLabel } from "../domain/analyzer.js";
@@ -56,18 +56,6 @@ export interface AiNaturalizeStrictFlowInput {
   agentProfile?: MerchantAgentProfileRecord;
 }
 
-export interface AiTrainingImageTextInput {
-  buffer: Buffer;
-  filename: string;
-  mimeType?: string;
-}
-
-export interface AiTrainingImageTextResult {
-  text: string;
-  status: "ok" | "skipped" | "failed";
-  error?: string;
-}
-
 export interface AiConversationReviewDraftInput {
   agentProfile: MerchantAgentProfileRecord;
   messages: ConversationMessageRecord[];
@@ -109,24 +97,11 @@ export class AiTasks {
   }
 
   async extractTrainingImageText(config: AppConfig, input: AiTrainingImageTextInput): Promise<AiTrainingImageTextResult> {
-    const hasMiniMax = Boolean(config.MINIMAX_API_KEY);
-    const hasGemini = Boolean(config.GOOGLE_AI_API_KEY);
-    if (!hasMiniMax && !hasGemini) {
-      return { text: "", status: "skipped", error: "图片 OCR 需要配置支持图片的 MiniMax 或 Gemini Key；当前图片未提取到文字" };
-    }
-
-    const imageProvider = config.AI_PROVIDER === "gemini" && hasGemini ? "gemini" : hasMiniMax ? "minimax" : "gemini";
-    const contents: AiTextPart[] = [
-      { inlineData: { mimeType: input.mimeType || guessImageMime(input.filename), data: input.buffer.toString("base64") } },
-      { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
-    ];
-
-    try {
-      const text = await generateAiText({ ...config, AI_PROVIDER: imageProvider }, contents);
-      return text.trim() ? { text, status: "ok" } : { text: "", status: "skipped", error: "图片 OCR 未提取到可读文字" };
-    } catch (error) {
-      return { text: "", status: "failed", error: error instanceof Error ? error.message : "图片 OCR 失败" };
-    }
+    return extractTrainingImageTextWithAi(config, input, {
+      hasMiniMaxKey: (runtimeConfig) => Boolean(runtimeConfig.MINIMAX_API_KEY),
+      hasGeminiKey: (runtimeConfig) => Boolean(runtimeConfig.GOOGLE_AI_API_KEY),
+      generateText: generateAiText
+    });
   }
 
   async generateConversationReviewDraft(config: AppConfig, input: AiConversationReviewDraftInput): Promise<ConversationReviewInput> {
@@ -172,13 +147,4 @@ JSON 字段：
 
 function stripJsonFence(text: string): string {
   return text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-}
-
-function guessImageMime(filename: string): string {
-  const name = filename.toLowerCase();
-  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
-  if (name.endsWith(".webp")) return "image/webp";
-  if (name.endsWith(".gif")) return "image/gif";
-  if (name.endsWith(".svg")) return "image/svg+xml";
-  return "image/png";
 }
