@@ -1,63 +1,20 @@
 import type { AppConfig } from "../config.js";
-import { generateAiText } from "../clients/aiProvider.js";
-import type { ConversationMessageRecord, ConversationReviewInput, MerchantAgentProfileRecord, Repositories } from "../repositories.js";
+import type { ConversationMessageRecord, ConversationReviewInput, Repositories } from "../repositories.js";
+import { AiTasks } from "./aiTasks.js";
 
 export async function generateConversationReview(
   repos: Repositories,
   config: AppConfig,
-  conversationId: string
+  conversationId: string,
+  ai: Pick<AiTasks, "generateConversationReviewDraft"> = new AiTasks()
 ): Promise<ReturnType<Repositories["upsertConversationReview"]>> {
   const conversation = repos.getConversation(conversationId);
   if (!conversation) throw new Error("conversation not found");
   const messages = repos.listConversationMessages(conversationId, 120);
   const agentProfile = repos.getMerchantAgentProfile(conversation.merchantId);
-  const generated = await generateWithAiProvider(config, agentProfile, messages).catch(() => fallbackReview(messages, conversation));
+  const generated = await ai.generateConversationReviewDraft(config, { agentProfile, messages }).catch(() => fallbackReview(messages, conversation));
   const review = normalizeReview(generated, messages, conversation);
   return repos.upsertConversationReview(conversation.id, conversation.merchantId, review);
-}
-
-async function generateWithAiProvider(
-  config: AppConfig,
-  agentProfile: MerchantAgentProfileRecord,
-  messages: ConversationMessageRecord[]
-): Promise<ConversationReviewInput> {
-  const text = await generateAiText(config, JSON.stringify({
-    agentProfile,
-    messages: messages.map((message) => ({
-      direction: message.direction,
-      content: message.content,
-      intent: message.intent,
-      language: message.language,
-      rawPayload: {
-        replyMode: message.rawPayload.replyMode,
-        flowStep: message.rawPayload.strictFlowStep || message.rawPayload.flowStep,
-        questionType: message.rawPayload.strictQuestionType || message.rawPayload.contextualIntent
-      },
-      createdAt: message.createdAt
-    }))
-  }), {
-    temperature: 0.15,
-    systemInstruction: `
-你是客服质检和训练数据审核员。请只输出 JSON，不要 markdown。
-目标：复盘一轮开户注册客服对话，判断是否完成手机号和 Telegram 收集，识别重复话术、答非所问、跳流程、未回答客户疑问。
-候选学习内容不能直接启用，只是给商户审核。
-JSON 字段：
-{
-  "score": 0-100,
-  "goalCompleted": boolean,
-  "summary": "一句中文总结",
-  "mainConcerns": ["安全", "收益"],
-  "mistakes": ["问题"],
-  "goodReplies": ["优秀回复原文"],
-  "suggestedSamples": [{"customerMessage":"客户说法","standardReply":"建议回复","intent":"unknown","stage":"auto_review","language":"zh","keywords":"复盘候选","priority":0}],
-  "suggestedKnowledge": [{"title":"知识标题","content":"知识内容","type":"faq","language":"zh","priority":0}],
-  "improvementActions": ["优化建议"]
-}
-评分维度：目标完成度、自然度、问题解答质量、流程推进、边界合规、重复程度。
-不要把错误回复作为优秀样本。不要包含 AI、机器人、模型等客户不可见身份话术。
-`
-  });
-  return JSON.parse(stripJsonFence(text)) as ConversationReviewInput;
 }
 
 function fallbackReview(messages: ConversationMessageRecord[], conversation: { extractedPhone: string; extractedTelegram: string }): ConversationReviewInput {
@@ -173,10 +130,6 @@ function defaultKnowledgeForConcern(concern: string): string {
   if (concern === "链接打不开") return "客户链接打不开时，引导复制到手机浏览器打开；仍失败则让客户发送截图或页面提示。";
   if (concern === "Telegram") return "客户不知道 Telegram 用户名时，引导打开 Telegram 设置，找到或设置 @ 开头用户名后发送。";
   return "客户卡住时，先确认卡在哪一步，再给对应的一步操作指引。";
-}
-
-function stripJsonFence(text: string): string {
-  return text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
 
 function stringArray(value: unknown, fallback: string[]): string[] {
