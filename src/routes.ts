@@ -12,6 +12,8 @@ import { registerAdminScriptFlowRoutes } from "./http/adminScriptFlowRoutes.js";
 import { registerMerchantScriptFlowRoutes } from "./http/merchantScriptFlowRoutes.js";
 import { registerMerchantTrainingRoutes } from "./http/merchantTrainingRoutes.js";
 import { registerMerchantTrainingSimulatorRoutes } from "./http/merchantTrainingSimulatorRoutes.js";
+import { registerMerchantCustomerRoutes } from "./http/merchantCustomerRoutes.js";
+import { registerMerchantIntentLearningRoutes } from "./http/merchantIntentLearningRoutes.js";
 import { registerAdminConversationRoutes } from "./http/adminConversationRoutes.js";
 import { registerMerchantConversationRoutes } from "./http/merchantConversationRoutes.js";
 import { registerMerchantSettingsRoutes, registerStaticFrontendRoute } from "./http/merchantSettingsRoutes.js";
@@ -38,6 +40,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerAdminConversationRoutes(app, { config: deps.config, repos: deps.repos, adminOnly });
   registerMerchantTrainingRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantTrainingSimulatorRoutes(app, { repos: deps.repos, conversationEngine: deps.conversationEngine, merchantRoles });
+  registerMerchantCustomerRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
+  registerMerchantIntentLearningRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantConversationRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
 

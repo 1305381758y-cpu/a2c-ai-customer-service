@@ -39,40 +39,6 @@ export function registerMerchantConversationRoutes(app: FastifyInstance, deps: M
     return sendConversationExport(reply, rows, request.query.format, "merchant-conversations");
   });
 
-  app.get<{ Querystring: { countryId?: string; status?: string; language?: string; limit?: string } }>("/api/merchant/customers", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listCustomers({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      status: request.query.status,
-      language: request.query.language,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-
-  app.get<{ Querystring: { countryId?: string; status?: string; suggestedIntent?: string; limit?: string } }>("/api/merchant/intent-learning", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listIntentLearningEvents({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      status: request.query.status,
-      suggestedIntent: request.query.suggestedIntent,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/intent-learning/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchIntentLearningEvent(id, request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "intent learning event not found" });
-    return row;
-  });
-
-  app.delete<{ Params: { customerKey: string } }>("/api/merchant/customers/:customerKey", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const result = deps.repos.deleteCustomer(scopedMerchantId(request), decodeURIComponent(request.params.customerKey));
-    if (!result.deleted) return reply.code(404).send({ error: "customer not found" });
-    return { ok: true, ...result };
-  });
-
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/merchant/conversations/:id/messages", { preHandler: deps.merchantRoles }, async (request, reply) => {
     const conversation = deps.repos.getConversation(request.params.id);
     if (!conversation || conversation.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ error: "conversation not found" });
