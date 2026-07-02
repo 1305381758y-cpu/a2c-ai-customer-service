@@ -11,7 +11,7 @@ import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { normalizeA2CWebhookPayload, type A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
-import { sendOutboundMessage } from "./outboundMessageSender.js";
+import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, refineMessageLanguage } from "./replyLanguage.js";
 import { appConfigForConversation, appConfigForMerchant } from "./runtimeConfig.js";
 import { translateForOperator } from "./translation.js";
@@ -259,8 +259,11 @@ export class WebhookProcessor {
       });
       strictReply.reply = languageGuard.reply;
 
-      const sendResult = await sendOutboundMessage({
+      const outbound = await recordOutboundConversationMessage({
+        repos: this.repos,
+        runtimeConfig,
         a2c,
+        conversation,
         simulation,
         payload: {
           to: data.from,
@@ -273,63 +276,55 @@ export class WebhookProcessor {
           sentFallbackPrefix: "a2c_strict",
           failedPrefix: "strict_send_failed",
           contextId: data.messageId || payload.id
-        }
-      });
-
-      const outboundTranslation = await translateForOperator(runtimeConfig, strictReply.reply, strictReply.language);
-      const outbound = this.repos.insertMessage({
-        conversationId: conversation.id,
-        direction: "outbound",
-        externalId: sendResult.externalId,
-        content: strictReply.reply,
-        msgType: "text",
-        language: strictReply.language,
-        intent: "unknown",
-        rawPayload: {
-          replyMode: strictReply.fallback ? "fallback" : "strict_flow",
-          strictFlow: true,
-          strictFlowEnabled,
-          strictFlowStep: strictReply.nextFlowStep,
-          controlledQuestionType: strictReply.controlledQuestionType || "none",
-          controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
-          strictQuestionType: strictReply.controlledQuestionType || "none",
-          agentProfileName: agentProfile.agentName,
-          contextualIntent: strictReply.contextualIntent,
-          learnedIntent: learnedIntent ? {
-            id: learnedIntent.event.id,
-            suggestedIntent: learnedIntent.event.suggestedIntent,
-            displayName: learnedIntent.event.displayName,
-            score: learnedIntent.score
-          } : null,
-          intentSource: strictReply.contextualIntent?.source || "none",
-          answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
-          questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
-          nextAction: strictReply.contextualIntent?.nextAction || "",
-          usedAiNaturalizer: naturalized.used,
-          naturalizerError: naturalized.error || "",
-          languageGuardTarget: languageGuard.targetLanguage,
-          languageGuardStatus: languageGuard.status,
-          languageGuardAttempts: languageGuard.attempts,
-          languageGuardFallbackUsed: languageGuard.fallbackUsed,
-          languageGuardError: languageGuard.error || "",
-          knowledgeHit: false,
-          aiFallback: Boolean(strictReply.fallback),
-          originalContent: outboundTranslation.originalText,
-          operatorTranslatedContent: outboundTranslation.translatedText,
-          operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
-          operatorTranslationStatus: outboundTranslation.status,
-          operatorTranslationError: outboundTranslation.error || "",
-          a2cSendStatus: sendResult.a2cSendStatus,
-          a2cSendError: sendResult.a2cSendError,
-          simulation,
-          inviteCodeRequired: Boolean(country.requirePlatformAccount),
-          inviteCodeMissing: Boolean(strictReply.needsInviteCode && !strictInviteCode),
-          assignedInviteCode: strictInviteCode ? {
-            id: strictInviteCode.id,
-            code: strictInviteCode.code,
-            registerUrl: strictInviteCode.registerUrl,
-            status: strictInviteCode.status
-          } : null
+        },
+        message: {
+          content: strictReply.reply,
+          msgType: "text",
+          language: strictReply.language,
+          intent: "unknown",
+          rawPayload: {
+            replyMode: strictReply.fallback ? "fallback" : "strict_flow",
+            strictFlow: true,
+            strictFlowEnabled,
+            strictFlowStep: strictReply.nextFlowStep,
+            controlledQuestionType: strictReply.controlledQuestionType || "none",
+            controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
+            strictQuestionType: strictReply.controlledQuestionType || "none",
+            agentProfileName: agentProfile.agentName,
+            contextualIntent: strictReply.contextualIntent,
+            learnedIntent: learnedIntent ? {
+              id: learnedIntent.event.id,
+              suggestedIntent: learnedIntent.event.suggestedIntent,
+              displayName: learnedIntent.event.displayName,
+              score: learnedIntent.score
+            } : null,
+            intentSource: strictReply.contextualIntent?.source || "none",
+            answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
+            questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
+            nextAction: strictReply.contextualIntent?.nextAction || "",
+            usedAiNaturalizer: naturalized.used,
+            naturalizerError: naturalized.error || "",
+            languageGuardTarget: languageGuard.targetLanguage,
+            languageGuardStatus: languageGuard.status,
+            languageGuardAttempts: languageGuard.attempts,
+            languageGuardFallbackUsed: languageGuard.fallbackUsed,
+            languageGuardError: languageGuard.error || "",
+            knowledgeHit: false,
+            aiFallback: Boolean(strictReply.fallback),
+            inviteCodeRequired: Boolean(country.requirePlatformAccount),
+            inviteCodeMissing: Boolean(strictReply.needsInviteCode && !strictInviteCode),
+            assignedInviteCode: strictInviteCode ? {
+              id: strictInviteCode.id,
+              code: strictInviteCode.code,
+              registerUrl: strictInviteCode.registerUrl,
+              status: strictInviteCode.status
+            } : null
+          }
+        },
+        memory: {
+          intent: "unknown",
+          content: strictReply.reply,
+          direction: "outbound"
         }
       });
       if (strictReply.tutorialImageRequested) {
@@ -337,9 +332,8 @@ export class WebhookProcessor {
       }
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
-      this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: strictReply.reply, direction: "outbound" });
-      if (sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "strict_flow_simulated" : "strict_flow_simulation_not_recorded", conversationId: conversation.id };
-      return { status: sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
+      if (outbound.sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "strict_flow_simulated" : "strict_flow_simulation_not_recorded", conversationId: conversation.id };
+      return { status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
       }
     }
 
@@ -380,8 +374,11 @@ export class WebhookProcessor {
       return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
     }
 
-    const sendResult = await sendOutboundMessage({
+    const outbound = await recordOutboundConversationMessage({
+      repos: this.repos,
+      runtimeConfig,
       a2c,
+      conversation,
       simulation,
       payload: {
         to: data.from,
@@ -394,56 +391,47 @@ export class WebhookProcessor {
         sentFallbackPrefix: "a2c_sent",
         failedPrefix: "send_failed",
         contextId: data.messageId || payload.id
-      }
-    });
-
-    const outboundTranslation = await translateForOperator(runtimeConfig, aiReply.reply, aiReply.language || conversation.language);
-    const outbound = this.repos.insertMessage({
-      conversationId: conversation.id,
-      direction: "outbound",
-      externalId: sendResult.externalId,
-      content: aiReply.reply,
-      msgType: "text",
-      language: aiReply.language || conversation.language,
-      intent: "unknown",
-      rawPayload: {
-        replyMode: aiReply.fallback ? "fallback" : "ai",
-        strictFlowEnabled,
-        agentProfileName: agentProfile.agentName,
-        learnedIntent: learnedIntent ? {
-          id: learnedIntent.event.id,
-          suggestedIntent: learnedIntent.event.suggestedIntent,
-          displayName: learnedIntent.event.displayName,
-          score: learnedIntent.score
-        } : null,
-        samples: samples.map((sample) => sample.id),
-        trainingMaterials: trainingMaterials.map((item) => item.id),
-        aiFallback: Boolean(aiReply.fallback),
-        aiError: aiReply.error || "",
-        originalContent: outboundTranslation.originalText,
-        operatorTranslatedContent: outboundTranslation.translatedText,
-        operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
-        operatorTranslationStatus: outboundTranslation.status,
-        operatorTranslationError: outboundTranslation.error || "",
-        a2cSendStatus: sendResult.a2cSendStatus,
-        a2cSendError: sendResult.a2cSendError,
-        simulation,
-        inviteCodeRequired: Boolean(country.requirePlatformAccount),
-        inviteCodeMissing: Boolean(country.requirePlatformAccount && !inviteCode),
-        assignedInviteCode: inviteCode ? {
-          id: inviteCode.id,
-          code: inviteCode.code,
-          registerUrl: inviteCode.registerUrl,
-          status: inviteCode.status
-        } : null
+      },
+      message: {
+        content: aiReply.reply,
+        msgType: "text",
+        language: aiReply.language || conversation.language,
+        intent: "unknown",
+        rawPayload: {
+          replyMode: aiReply.fallback ? "fallback" : "ai",
+          strictFlowEnabled,
+          agentProfileName: agentProfile.agentName,
+          learnedIntent: learnedIntent ? {
+            id: learnedIntent.event.id,
+            suggestedIntent: learnedIntent.event.suggestedIntent,
+            displayName: learnedIntent.event.displayName,
+            score: learnedIntent.score
+          } : null,
+          samples: samples.map((sample) => sample.id),
+          trainingMaterials: trainingMaterials.map((item) => item.id),
+          aiFallback: Boolean(aiReply.fallback),
+          aiError: aiReply.error || "",
+          inviteCodeRequired: Boolean(country.requirePlatformAccount),
+          inviteCodeMissing: Boolean(country.requirePlatformAccount && !inviteCode),
+          assignedInviteCode: inviteCode ? {
+            id: inviteCode.id,
+            code: inviteCode.code,
+            registerUrl: inviteCode.registerUrl,
+            status: inviteCode.status
+          } : null
+        }
+      },
+      memory: {
+        intent: "unknown",
+        content: aiReply.reply,
+        direction: "outbound"
       }
     });
     this.repos.updateConversation(conversation);
     this.repos.upsertCustomerFromConversation(conversation);
-    this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
-    if (sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
-    return { status: sendResult.a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
+    if (outbound.sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
+    return { status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
   }
 
   private async generateReviewSafe(conversationId: string, runtimeConfig: AppConfig): Promise<void> {
@@ -462,8 +450,11 @@ export class WebhookProcessor {
     simulation = false
   ): Promise<void> {
     const content = verificationReply(language);
-    const sendResult = await sendOutboundMessage({
+    await recordOutboundConversationMessage({
+      repos: this.repos,
+      runtimeConfig: appConfigForConversation(this.config, this.repos, conversation),
       a2c,
+      conversation,
       simulation,
       payload: {
         to: data.from,
@@ -476,32 +467,23 @@ export class WebhookProcessor {
         sentFallbackPrefix: "a2c_verify",
         failedPrefix: "verify_failed",
         contextId: data.messageId
+      },
+      message: {
+        content,
+        msgType: "text",
+        language,
+        intent: "human_request",
+        rawPayload: {
+          replyMode: "fallback",
+          systemFinalReply: true
+        }
+      },
+      memory: {
+        intent: "human_request",
+        content,
+        direction: "outbound"
       }
     });
-
-    const operatorTranslation = await translateForOperator(appConfigForConversation(this.config, this.repos, conversation), content, language);
-    this.repos.insertMessage({
-      conversationId: conversation.id,
-      direction: "outbound",
-      externalId: sendResult.externalId,
-      content,
-      msgType: "text",
-      language,
-      intent: "human_request",
-      rawPayload: {
-        replyMode: "fallback",
-        systemFinalReply: true,
-        originalContent: operatorTranslation.originalText,
-        operatorTranslatedContent: operatorTranslation.translatedText,
-        operatorTranslationTargetLanguage: operatorTranslation.targetLanguage,
-        operatorTranslationStatus: operatorTranslation.status,
-        operatorTranslationError: operatorTranslation.error || "",
-        a2cSendStatus: sendResult.a2cSendStatus,
-        a2cSendError: sendResult.a2cSendError,
-        simulation
-      }
-    });
-    this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "human_request", content, direction: "outbound" });
   }
 
   private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string, telegram = this.telegram): Promise<void> {
@@ -552,8 +534,11 @@ export class WebhookProcessor {
   ): Promise<void> {
     if (!tutorialImageUrl) return;
     const caption = registrationTutorialCaption(language);
-    const sendResult = await sendOutboundMessage({
+    await recordOutboundConversationMessage({
+      repos: this.repos,
+      runtimeConfig: appConfigForConversation(this.config, this.repos, conversation),
       a2c,
+      conversation,
       simulation,
       payload: {
         to: data.from,
@@ -568,26 +553,20 @@ export class WebhookProcessor {
         sentFallbackPrefix: "tutorial_image",
         failedPrefix: "tutorial_image_failed",
         contextId: data.messageId || `${Date.now()}`
-      }
-    });
-    this.repos.insertMessage({
-      conversationId: conversation.id,
-      direction: "outbound",
-      externalId: sendResult.externalId,
-      content: caption,
-      msgType: "image",
-      language,
-      intent: "unknown",
-      rawPayload: {
-        replyMode: "strict_flow",
-        strictFlow: true,
-        strictFlowStep: conversation.flowStep || "wait_registration",
-        registrationTutorialImage: true,
-        mediaUrl: tutorialImageUrl,
-        caption,
-        a2cSendStatus: sendResult.a2cSendStatus,
-        a2cSendError: sendResult.a2cSendError,
-        simulation
+      },
+      message: {
+        content: caption,
+        msgType: "image",
+        language,
+        intent: "unknown",
+        rawPayload: {
+          replyMode: "strict_flow",
+          strictFlow: true,
+          strictFlowStep: conversation.flowStep || "wait_registration",
+          registrationTutorialImage: true,
+          mediaUrl: tutorialImageUrl,
+          caption
+        }
       }
     });
   }
