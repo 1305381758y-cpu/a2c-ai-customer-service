@@ -53,6 +53,12 @@ export interface AiNaturalizeStrictFlowInput {
   agentProfile?: MerchantAgentProfileRecord;
 }
 
+export interface AiTranslationInput {
+  text: string;
+  targetLanguage: string;
+  systemPrompt: string;
+}
+
 export interface AiConversationReviewDraftInput {
   agentProfile: MerchantAgentProfileRecord;
   messages: ConversationMessageRecord[];
@@ -81,6 +87,12 @@ export class AiTasks {
 
   async naturalizeStrictFlowText(config: AppConfig, input: AiNaturalizeStrictFlowInput): Promise<{ text: string; used: boolean; error?: string }> {
     return naturalizeStrictFlowText(config, input);
+  }
+
+  async translateText(config: AppConfig, input: AiTranslationInput): Promise<string> {
+    return generateAiText(config, JSON.stringify({ targetLanguage: input.targetLanguage, text: input.text }), {
+      systemInstruction: input.systemPrompt
+    });
   }
 
   async generateConversationReviewDraft(config: AppConfig, input: AiConversationReviewDraftInput): Promise<ConversationReviewInput> {

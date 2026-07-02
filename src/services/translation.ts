@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config.js";
-import { aiProviderLabel, generateAiText, hasUsableAiKey } from "../clients/aiProvider.js";
+import { aiProviderLabel, hasUsableAiKey } from "../clients/aiProvider.js";
+import { AiTasks } from "./aiTasks.js";
 
 export interface TranslationResult {
   originalText: string;
@@ -9,18 +10,21 @@ export interface TranslationResult {
   error?: string;
 }
 
+export type TranslationAiTasks = Pick<AiTasks, "translateText">;
+
 const OPERATOR_LANGUAGE = "zh-CN";
 
-export async function translateForCustomer(config: AppConfig, text: string, targetLanguage: string): Promise<TranslationResult> {
+export async function translateForCustomer(config: AppConfig, text: string, targetLanguage: string, ai: TranslationAiTasks = new AiTasks()): Promise<TranslationResult> {
   return translateText(
     config,
     text,
     targetLanguage || "unknown",
-    "Translate the user's customer-service message into the target language. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translated message."
+    "Translate the user's customer-service message into the target language. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translated message.",
+    ai
   );
 }
 
-export async function translateForOperator(config: AppConfig, text: string, sourceLanguage: string): Promise<TranslationResult> {
+export async function translateForOperator(config: AppConfig, text: string, sourceLanguage: string, ai: TranslationAiTasks = new AiTasks()): Promise<TranslationResult> {
   const language = sourceLanguage || "unknown";
   if (language === "zh" || language === "zh-CN" || language === "cn") {
     const originalText = text.trim();
@@ -34,11 +38,12 @@ export async function translateForOperator(config: AppConfig, text: string, sour
     config,
     text,
     OPERATOR_LANGUAGE,
-    "Translate the customer's incoming message into Simplified Chinese for a customer-service operator. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translation."
+    "Translate the customer's incoming message into Simplified Chinese for a customer-service operator. Preserve URLs, usernames, phone numbers, amounts, platform names, and placeholders exactly. Return only the translation.",
+    ai
   );
 }
 
-async function translateText(config: AppConfig, text: string, targetLanguage: string, systemPrompt: string): Promise<TranslationResult> {
+async function translateText(config: AppConfig, text: string, targetLanguage: string, systemPrompt: string, ai: TranslationAiTasks): Promise<TranslationResult> {
   const originalText = text.trim();
   const language = targetLanguage || "unknown";
   const hasKey = hasUsableAiKey(config);
@@ -53,7 +58,7 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
   }
 
   try {
-    const translatedText = (await generateAiText(config, JSON.stringify({ targetLanguage: language, text: originalText }), { systemInstruction: systemPrompt })).trim() || originalText;
+    const translatedText = (await ai.translateText(config, { targetLanguage: language, text: originalText, systemPrompt })).trim() || originalText;
     const sameAsOriginal = normalizeForCompare(translatedText) === normalizeForCompare(originalText);
     return {
       originalText,

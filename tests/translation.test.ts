@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
-import { translateForOperator } from "../src/services/translation.js";
+import { translateForCustomer, translateForOperator } from "../src/services/translation.js";
 
 const config = loadConfig({});
 
@@ -27,6 +27,52 @@ describe("operator translation", () => {
     });
     await expect(translateForOperator(config, "Información", "en")).resolves.toMatchObject({
       translatedText: "信息",
+      status: "translated"
+    });
+  });
+
+  it("uses the AiTasks translation interface for provider-backed operator translations", async () => {
+    const ai = {
+      translateText: vi.fn(async () => "我要了解注册步骤")
+    };
+
+    const result = await translateForOperator(
+      loadConfig({ MINIMAX_API_KEY: "test-key" }),
+      "Quiero información del registro",
+      "es",
+      ai
+    );
+
+    expect(ai.translateText).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      targetLanguage: "zh-CN",
+      text: "Quiero información del registro",
+      systemPrompt: expect.stringContaining("Simplified Chinese")
+    }));
+    expect(result).toMatchObject({
+      translatedText: "我要了解注册步骤",
+      status: "translated"
+    });
+  });
+
+  it("uses the AiTasks translation interface for customer-facing translations", async () => {
+    const ai = {
+      translateText: vi.fn(async () => "Hola, siga este paso.")
+    };
+
+    const result = await translateForCustomer(
+      loadConfig({ MINIMAX_API_KEY: "test-key" }),
+      "您好，请按这一步操作。",
+      "es",
+      ai
+    );
+
+    expect(ai.translateText).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      targetLanguage: "es",
+      text: "您好，请按这一步操作。",
+      systemPrompt: expect.stringContaining("target language")
+    }));
+    expect(result).toMatchObject({
+      translatedText: "Hola, siga este paso.",
       status: "translated"
     });
   });
