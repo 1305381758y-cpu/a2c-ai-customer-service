@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
@@ -9,6 +8,7 @@ import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js"
 import { registerMerchantConfigCheckRoutes } from "./merchantConfigCheckRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js";
+import { registerMerchantRegistrationTutorialRoutes } from "./merchantRegistrationTutorialRoutes.js";
 import { registerMerchantTelegramRoutes } from "./merchantTelegramRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
@@ -26,6 +26,7 @@ export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: Merch
   registerMerchantConfigCheckRoutes(app, deps);
   registerMerchantCountryRoutes(app, deps);
   registerMerchantInviteCodeRoutes(app, deps);
+  registerMerchantRegistrationTutorialRoutes(app, { ...deps, maskConfig });
   registerMerchantA2CAccountRoutes(app, { ...deps, maskConfig });
   registerMerchantTelegramRoutes(app, { ...deps, maskConfig });
 }
@@ -35,7 +36,6 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: deps.adminOnly }, async (request) => maskConfig(deps.repos.patchMerchantConfig(request.params.id, cleanConfigPatch(request.body ?? {}))));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.getMerchantAgentProfile(request.params.id));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
-  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: deps.adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -56,56 +56,6 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: deps.merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
   app.get("/api/merchant/agent-profile", { preHandler: deps.merchantRoles }, async (request) => deps.repos.getMerchantAgentProfile(scopedMerchantId(request)));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: deps.merchantAdmins }, async (request) => deps.repos.patchMerchantAgentProfile(scopedMerchantId(request), cleanAgentProfilePatch(request.body ?? {})));
-  app.post("/api/merchant/config/registration-tutorial-image", { preHandler: deps.merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
-}
-
-function requestOrigin(request: FastifyRequest): string {
-  const proto = String(request.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
-  const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost";
-  return `${proto}://${host}`;
-}
-
-async function uploadRegistrationTutorialImage(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
-  let uploadError = "";
-  const file = await request.file().catch((error) => {
-    uploadError = error instanceof Error ? error.message : "图片上传失败";
-    return undefined;
-  });
-  if (uploadError) return reply.code(413).send({ error: "图片过大或上传失败", message: "注册教程图片上传失败，请压缩后重试。" });
-  if (!file) return reply.code(400).send({ error: "请上传注册教程图片" });
-  if (!isAllowedTutorialImage(file.filename, file.mimetype)) {
-    return reply.code(400).send({ error: "只支持图片文件", message: "请上传 PNG、JPG、JPEG、WEBP 或 GIF 图片。" });
-  }
-  const buffer = await file.toBuffer().catch(() => null);
-  if (!buffer) return reply.code(413).send({ error: "图片过大或读取失败", message: "注册教程图片读取失败，请压缩后重试。" });
-  const ext = tutorialImageExtension(file.filename, file.mimetype);
-  const uploadDir = registrationUploadDir(deps.config);
-  mkdirSync(uploadDir, { recursive: true });
-  const filename = `${merchantId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}-${randomUUID()}${ext}`;
-  writeFileSync(join(uploadDir, filename), buffer);
-  const imageUrl = `${requestOrigin(request)}/uploads/${encodeURIComponent(filename)}`;
-  const config = deps.repos.patchMerchantConfig(merchantId, { registrationTutorialImageUrl: imageUrl });
-  return { ok: true, imageUrl, config: maskConfig(config) };
-}
-
-function registrationUploadDir(config: AppConfig): string {
-  return config.DATABASE_URL === ":memory:" ? join(process.cwd(), "data", "uploads") : join(dirname(resolve(config.DATABASE_URL)), "uploads");
-}
-
-function isAllowedTutorialImage(filename: string, mimeType = ""): boolean {
-  const mime = mimeType.toLowerCase();
-  const name = filename.toLowerCase();
-  return /^(image\/)(png|jpe?g|webp|gif)$/.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(name);
-}
-
-function tutorialImageExtension(filename: string, mimeType = ""): string {
-  const ext = extname(filename).toLowerCase();
-  if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext)) return ext;
-  const mime = mimeType.toLowerCase();
-  if (mime.includes("png")) return ".png";
-  if (mime.includes("webp")) return ".webp";
-  if (mime.includes("gif")) return ".gif";
-  return ".jpg";
 }
 
 function maskConfig(config: MerchantConfigRecord) {
