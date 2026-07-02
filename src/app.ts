@@ -7,10 +7,8 @@ import type { AppConfig } from "./config.js";
 import { openDb } from "./db.js";
 import { Repositories } from "./repositories.js";
 import { registerRoutes } from "./routes.js";
-import { AiTasks } from "./services/aiTasks.js";
 import { ConversationEngine } from "./services/conversationEngine.js";
-import { FollowUpProcessor } from "./services/followUpProcessor.js";
-import { InboundConversationProcessor } from "./services/inboundConversationProcessor.js";
+import { createConversationApplication } from "./services/conversationApplication.js";
 import { hashPassword } from "./auth.js";
 
 const UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
@@ -23,17 +21,7 @@ export function buildApp(config: AppConfig) {
     email: config.DEFAULT_ADMIN_EMAIL,
     passwordHash: hashPassword(config.DEFAULT_ADMIN_PASSWORD)
   });
-  const inboundProcessor = new InboundConversationProcessor(
-    repos,
-    new AiTasks(),
-    config
-  );
-  const followUpProcessor = new FollowUpProcessor(repos, config);
-  const processor = {
-    handleInboundMessage: inboundProcessor.handleInboundMessage.bind(inboundProcessor),
-    processDueFollowUps: followUpProcessor.processDueFollowUps.bind(followUpProcessor)
-  };
-  const conversationEngine = new ConversationEngine(processor);
+  const conversationEngine = new ConversationEngine(createConversationApplication(repos, config));
 
   app.register(multipart, {
     limits: {
