@@ -7,6 +7,7 @@ import { completeConversationGoal, isConversationGoalComplete } from "./conversa
 import { analyzeInboundTurn } from "./inboundTurnAnalysis.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
+import { recordInboundTurn } from "./inboundTurnRecorder.js";
 import { generateAndRecordStrictFlowReply } from "./strictFlowReply.js";
 import { translateForOperator } from "./translation.js";
 
@@ -74,62 +75,29 @@ export class WebhookProcessor {
       ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
       : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
 
-    const inserted = this.repos.insertMessage({
-      conversationId: conversation.id,
-      direction: "inbound",
-      externalId: data.messageId || payload.id,
+    const inboundTurn = recordInboundTurn({
+      repos: this.repos,
+      conversation,
+      payload,
+      data,
       content,
       msgType,
-      language: analysis.language,
-      intent: analysis.intent,
-      phoneDetected: analysis.phone,
-      telegramDetected: analysis.telegram,
-      whatsappDetected: analysis.whatsapp,
-      rawPayload: {
-        ...payload,
-        inferredIntent,
-        contextualIntent,
-        learnedIntent: learnedIntentDebug,
-        strictFlowEnabled,
-        strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
-        originalContent: inboundTranslation.originalText,
-        translatedContent: inboundTranslation.translatedText,
-        targetLanguage: inboundTranslation.targetLanguage,
-        translationStatus: inboundTranslation.status,
-        translationError: inboundTranslation.error || "",
-        mediaUrl,
-        fileName: data.fileName || "",
-        imageAnalysis: msgType === "image" ? imageAnalysis : null,
-        simulation
-      }
+      mediaUrl,
+      fileName: data.fileName || "",
+      imageAnalysis,
+      simulation,
+      analysis,
+      customerTextForAi,
+      inboundTranslation,
+      inferredIntent,
+      contextualIntent,
+      learnedIntentDebug,
+      strictFlowEnabled,
+      strictFlowStepBefore: effectiveStrictFlowStep || conversation.flowStep || "",
+      intentLearningCandidate
     });
-    if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };
-    if (intentLearningCandidate) {
-      this.repos.recordIntentLearningEvent({
-        merchantId: merchant.id,
-        countryId: country.id,
-        conversationId: conversation.id,
-        messageId: inserted.id,
-        customerText: customerTextForAi,
-        language: analysis.language,
-        detectedIntent: analysis.intent,
-        inferredIntent,
-        contextualIntent: contextualIntent.intent,
-        flowStep: effectiveStrictFlowStep || conversation.flowStep || "",
-        ...intentLearningCandidate
-      });
-    }
-
-    conversation.language = analysis.language;
-    conversation.stage = analysis.stage;
-    conversation.extractedPhone = conversation.extractedPhone || analysis.phone;
-    conversation.extractedTelegram = conversation.extractedTelegram || analysis.telegram;
-    conversation.extractedWhatsApp = conversation.extractedWhatsApp || analysis.whatsapp;
-    if (analysis.intent === "platform_register_done") {
-      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
-    }
-    this.repos.upsertCustomerFromConversation(conversation);
-    const inboundMemory = this.repos.updateCustomerMemoryFromMessage(conversation, { intent: analysis.intent, content: customerTextForAi, direction: "inbound" });
+    if (!inboundTurn.inserted) return { status: "duplicate", conversationId: conversation.id };
+    const inboundMemory = inboundTurn.inboundMemory!;
 
     if (conversation.status === "human_handoff") {
       this.repos.updateConversation(conversation);
@@ -207,14 +175,6 @@ export class WebhookProcessor {
     });
   }
 
-}
-
-function detectContextualRegistrationPhone(text: string, flowStep: string): string {
-  if (flowStep !== "wait_registration" && flowStep !== "telegram_confirm") return "";
-  const normalized = text.trim();
-  if (!/^\+?\d[\d\s-]{5,18}$/.test(normalized)) return "";
-  const digits = normalized.replace(/[^\d+]/g, "");
-  return digits.replace(/\D/g, "").length >= 6 ? digits : "";
 }
 
 export function shouldBypassStrictFlowForNaturalReply(
