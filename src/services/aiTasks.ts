@@ -7,6 +7,7 @@ import {
   naturalizeStrictFlowText,
   type AiImageAnalysis
 } from "../clients/aiProvider.js";
+import { checkAiAvailability } from "../clients/aiAvailabilityTask.js";
 import { AiReplyClient } from "../clients/aiReplyClient.js";
 import type { AiReply, ReplyInput } from "../clients/aiReplyTypes.js";
 import { generateConversationReviewDraftWithAi, type AiConversationReviewDraftInput } from "../clients/aiConversationReviewTask.js";
@@ -89,7 +90,9 @@ export class AiTasks {
   }
 
   async checkAvailability(config: AppConfig): Promise<void> {
-    await generateAiText(config, "Reply with OK only.");
+    await checkAiAvailability(config, {
+      generateText: generateAiText
+    });
   }
 
   async extractTrainingImageText(config: AppConfig, input: AiTrainingImageTextInput): Promise<AiTrainingImageTextResult> {
