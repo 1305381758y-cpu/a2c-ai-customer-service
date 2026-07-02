@@ -9,7 +9,7 @@ import { aiProviderLabel, deepseekModel, generateAiText, hasUsableAiKey, minimax
 import { TelegramClient } from "./clients/telegram.js";
 import { hashPassword, requireUser, requestUser } from "./auth.js";
 import type { AppConfig } from "./config.js";
-import type { ConversationExportRecord, MerchantConfigRecord, Repositories } from "./repositories.js";
+import type { MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { ConversationEngine } from "./services/conversationEngine.js";
 import { generateConversationReview } from "./services/conversationReview.js";
 import { appConfigForMerchant } from "./services/runtimeConfig.js";
@@ -26,6 +26,8 @@ import { registerMerchantScriptFlowRoutes } from "./http/merchantScriptFlowRoute
 import { scopedMerchantId } from "./http/routeHelpers.js";
 import { registerMerchantTrainingRoutes } from "./http/merchantTrainingRoutes.js";
 import { importSamples } from "./http/trainingImports.js";
+import { registerAdminConversationRoutes } from "./http/adminConversationRoutes.js";
+import { normalizeConversationExportQuery, sendConversationExport, type ConversationExportQuery } from "./http/conversationExport.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -155,92 +157,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerAdminUserRoutes(app, { repos: deps.repos, adminOnly });
   registerAdminTrainingRoutes(app, { repos: deps.repos, adminOnly });
   registerAdminScriptFlowRoutes(app, { repos: deps.repos, adminOnly });
-  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: string } }>("/api/admin/conversations", { preHandler: adminOnly }, async (request) => ({
-    rows: deps.repos.listConversations({
-      merchantId: request.query.merchantId,
-      countryId: request.query.countryId,
-      status: request.query.status,
-      handoffStatus: request.query.handoffStatus,
-      language: request.query.language,
-      a2cAccountPhone: request.query.a2cAccountPhone,
-      customerPhone: request.query.customerPhone,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-  app.get<{ Querystring: ConversationExportQuery }>("/api/admin/conversations/export", { preHandler: adminOnly }, async (request, reply) => {
-    const rows = deps.repos.exportConversationMessages(normalizeConversationExportQuery(request.query));
-    return sendConversationExport(reply, rows, request.query.format, "admin-conversations");
-  });
-  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; language?: string; limit?: string } }>("/api/admin/customers", { preHandler: adminOnly }, async (request) => ({
-    rows: deps.repos.listCustomers({
-      merchantId: request.query.merchantId,
-      countryId: request.query.countryId,
-      status: request.query.status,
-      language: request.query.language,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-  app.get<{ Querystring: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; limit?: string } }>("/api/admin/intent-learning", { preHandler: adminOnly }, async (request) => ({
-    rows: deps.repos.listIntentLearningEvents({
-      merchantId: request.query.merchantId,
-      countryId: request.query.countryId,
-      status: request.query.status,
-      suggestedIntent: request.query.suggestedIntent,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/intent-learning/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchIntentLearningEvent(id, request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "intent learning event not found" });
-    return row;
-  });
-  app.delete<{ Params: { customerKey: string }; Querystring: { merchantId?: string } }>("/api/admin/customers/:customerKey", { preHandler: adminOnly }, async (request, reply) => {
-    const merchantId = request.query.merchantId || "default";
-    const result = deps.repos.deleteCustomer(merchantId, decodeURIComponent(request.params.customerKey));
-    if (!result.deleted) return reply.code(404).send({ error: "customer not found" });
-    return { ok: true, ...result };
-  });
-  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/admin/conversations/:id/messages", { preHandler: adminOnly }, async (request, reply) => {
-    const conversation = deps.repos.getConversation(request.params.id);
-    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
-    return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
-  });
-  app.delete<{ Params: { id: string } }>("/api/admin/conversations/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const ok = deps.repos.deleteConversation(request.params.id);
-    if (!ok) return reply.code(404).send({ error: "conversation not found" });
-    return { ok: true };
-  });
-  app.post<{ Params: { id: string }; Body: { pinned?: boolean } }>("/api/admin/conversations/:id/pin", { preHandler: adminOnly }, async (request, reply) => {
-    const conversation = deps.repos.getConversation(request.params.id);
-    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
-    const row = deps.repos.pinConversation(request.params.id, conversation.merchantId, Boolean(request.body?.pinned));
-    if (!row) return reply.code(404).send({ error: "conversation not found" });
-    return row;
-  });
-  app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
-    const memory = deps.repos.getCustomerMemoryByConversation(request.params.id);
-    if (!memory) return reply.code(404).send({ error: "memory not found" });
-    return memory;
-  });
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/conversations/:id/memory", { preHandler: adminOnly }, async (request, reply) => {
-    const memory = deps.repos.patchCustomerMemory(request.params.id, undefined, request.body ?? {});
-    if (!memory) return reply.code(404).send({ error: "memory not found" });
-    return memory;
-  });
-  app.get<{ Params: { id: string } }>("/api/admin/conversations/:id/review", { preHandler: adminOnly }, async (request, reply) => {
-    const conversation = deps.repos.getConversation(request.params.id);
-    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
-    return deps.repos.getConversationReview(request.params.id) ?? { review: null, items: [] };
-  });
-  app.post<{ Params: { id: string } }>("/api/admin/conversations/:id/review", { preHandler: adminOnly }, async (request, reply) => {
-    const conversation = deps.repos.getConversation(request.params.id);
-    if (!conversation) return reply.code(404).send({ error: "conversation not found" });
-    const cfg = deps.repos.getMerchantConfig(conversation.merchantId);
-    const runtimeConfig = appConfigForMerchant(deps.config, cfg, deps.repos.getMerchantCountry(conversation.countryId));
-    return generateConversationReview(deps.repos, runtimeConfig, conversation.id);
-  });
+  registerAdminConversationRoutes(app, { config: deps.config, repos: deps.repos, adminOnly });
   app.get("/api/merchant/dashboard", { preHandler: merchantRoles }, async (request) => {
     const merchantId = scopedMerchantId(request);
     const conversations = deps.repos.listConversations({ merchantId, limit: 500 });
@@ -978,136 +895,6 @@ function maskConfig(config: MerchantConfigRecord) {
     googleAiApiKey: maskSecret(config.googleAiApiKey),
     telegramBotToken: maskSecret(config.telegramBotToken)
   };
-}
-
-type ConversationExportQuery = {
-  merchantId?: string;
-  countryId?: string;
-  status?: string;
-  handoffStatus?: string;
-  language?: string;
-  a2cAccountPhone?: string;
-  customerPhone?: string;
-  direction?: string;
-  startAt?: string;
-  endAt?: string;
-  limit?: string;
-  format?: "csv" | "jsonl";
-};
-
-function normalizeConversationExportQuery(query: ConversationExportQuery) {
-  const direction = query.direction === "inbound" || query.direction === "outbound" ? query.direction : undefined;
-  const limit = query.limit ? Number(query.limit) : undefined;
-  return {
-    merchantId: cleanQueryValue(query.merchantId),
-    countryId: cleanQueryValue(query.countryId),
-    status: query.status === "active" || query.status === "human_handoff" ? query.status : undefined,
-    handoffStatus: query.handoffStatus === "pending" || query.handoffStatus === "processing" || query.handoffStatus === "done" ? query.handoffStatus : undefined,
-    language: cleanQueryValue(query.language),
-    a2cAccountPhone: cleanQueryValue(query.a2cAccountPhone),
-    customerPhone: cleanQueryValue(query.customerPhone),
-    direction,
-    startAt: cleanQueryValue(query.startAt),
-    endAt: cleanQueryValue(query.endAt),
-    limit: Number.isFinite(limit) ? limit : undefined
-  };
-}
-
-function cleanQueryValue(value?: string): string | undefined {
-  const trimmed = String(value || "").trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function sendConversationExport(reply: FastifyReply, rows: ConversationExportRecord[], format: string | undefined, prefix: string) {
-  const safeDate = formatBeijingDateTimeForFile(new Date());
-  const beijingRows = rows.map((row) => ({ ...row, createdAt: formatBeijingDateTime(row.createdAt) }));
-  if (format === "jsonl") {
-    const body = beijingRows.map((row) => JSON.stringify(row)).join("\n");
-    return reply
-      .header("Content-Type", "application/x-ndjson; charset=utf-8")
-      .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.jsonl"`)
-      .send(body ? `${body}\n` : "");
-  }
-  return reply
-    .header("Content-Type", "text/csv; charset=utf-8")
-    .header("Content-Disposition", `attachment; filename="${prefix}-${safeDate}.csv"`)
-    .send(`\uFEFF${conversationExportCsv(beijingRows)}`);
-}
-
-function formatBeijingDateTime(value: string | Date): string {
-  const date = normalizeDate(value);
-  if (!date) return typeof value === "string" ? value : "";
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).format(date).replace(/\//g, "-");
-}
-
-function formatBeijingDateTimeForFile(value: Date): string {
-  return formatBeijingDateTime(value).replace(/[ :]/g, "-");
-}
-
-function normalizeDate(value: string | Date): Date | undefined {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)
-    ? `${trimmed.replace(" ", "T")}Z`
-    : trimmed;
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-const CONVERSATION_EXPORT_COLUMNS: Array<{ key: keyof ConversationExportRecord; label: string }> = [
-  { key: "createdAt", label: "消息时间" },
-  { key: "merchantId", label: "商户ID" },
-  { key: "countryName", label: "国家/市场" },
-  { key: "countryCode", label: "国家代码" },
-  { key: "conversationId", label: "会话ID" },
-  { key: "customerPhone", label: "客户发送账号号码" },
-  { key: "nickname", label: "客户昵称" },
-  { key: "a2cAccountPhone", label: "A2C客服账号" },
-  { key: "direction", label: "方向" },
-  { key: "msgType", label: "消息类型" },
-  { key: "content", label: "系统内容" },
-  { key: "originalContent", label: "原文" },
-  { key: "translatedContent", label: "中文译文" },
-  { key: "operatorTranslatedContent", label: "客服译文" },
-  { key: "messageLanguage", label: "消息语言" },
-  { key: "intent", label: "意图" },
-  { key: "conversationStage", label: "会话阶段" },
-  { key: "flowStep", label: "流程步骤" },
-  { key: "replyMode", label: "回复模式" },
-  { key: "strictFlowStep", label: "严格流程步骤" },
-  { key: "a2cSendStatus", label: "A2C发送状态" },
-  { key: "a2cSendError", label: "A2C失败原因" },
-  { key: "extractedPhone", label: "已识别手机号" },
-  { key: "extractedTelegram", label: "已识别Telegram" },
-  { key: "extractedWhatsApp", label: "已识别WhatsApp" },
-  { key: "phoneDetected", label: "本条手机号" },
-  { key: "telegramDetected", label: "本条Telegram" },
-  { key: "whatsappDetected", label: "本条WhatsApp" },
-  { key: "conversationStatus", label: "会话状态" },
-  { key: "handoffStatus", label: "接管状态" },
-  { key: "externalId", label: "外部消息ID" }
-];
-
-function conversationExportCsv(rows: ConversationExportRecord[]): string {
-  return [
-    CONVERSATION_EXPORT_COLUMNS.map((column) => csvCell(column.label)).join(","),
-    ...rows.map((row) => CONVERSATION_EXPORT_COLUMNS.map((column) => csvCell(String(row[column.key] ?? ""))).join(","))
-  ].join("\n");
-}
-
-function csvCell(value: string): string {
-  const normalized = value.replace(/\r?\n/g, " ").replace(/\t/g, " ").trim();
-  return `"${normalized.replaceAll("\"", "\"\"")}"`;
 }
 
 function maskSecret(value: string): string {
