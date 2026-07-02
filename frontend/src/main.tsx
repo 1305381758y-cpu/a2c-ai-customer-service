@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCircle2, Contact, Copy, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { AgentProfilePage } from "./agent/AgentProfilePage.js";
 import { ConversationExportBar } from "./conversations/ConversationExport.js";
 import { ConversationAccountList } from "./conversations/ConversationAccountList.js";
 import { ConversationCustomerList } from "./conversations/ConversationCustomerList.js";
@@ -12,7 +13,7 @@ import { MessageTimeline } from "./conversations/MessageTimeline.js";
 import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
-import type { A2CAccount, AgentProfile, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
+import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
 import "./styles.css";
 
@@ -142,7 +143,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
-        {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} />}
+        {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />}
         {activeView === "customers" && <Customers platform={user.role === "platform_admin"} />}
         {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
         {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} />}
@@ -559,55 +560,6 @@ function Config({ platform }: { platform: boolean }) {
     </div>
     <div className="memory"><div className="account-section-head"><div><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p></div><span>已保存 {a2cAccounts.length} 个账号</span></div><div className="account-filter-bar"><label>搜索账号<input value={accountKeyword} onChange={(e) => { setAccountKeyword(e.target.value); accountPager.setPage(1); }} placeholder="手机号、名称、WABA ID" /></label><label>状态<select value={accountStatus} onChange={(e) => { setAccountStatus(e.target.value); accountPager.setPage(1); }}><option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option></select></label><label>国家<select value={accountCountryId} onChange={(e) => { setAccountCountryId(e.target.value); accountPager.setPage(1); }}><option value="">全部国家</option>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select></label></div><div className="account-list-meta">当前筛选 {filteredA2CAccounts.length} 个账号，显示第 {(accountPager.page - 1) * accountPager.pageSize + (accountPager.total ? 1 : 0)} - {Math.min(accountPager.page * accountPager.pageSize, accountPager.total)} 个。</div><div className="account-grid">{accountPager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => toggleA2CAccount(row)} onCountry={async () => undefined} />)}{!a2cAccounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}{a2cAccounts.length > 0 && !filteredA2CAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}</div><Pagination pager={accountPager} /></div>
     <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
-  </section>;
-}
-
-function AgentProfilePage({ platform, canEdit }: { platform: boolean; canEdit: boolean }) {
-  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
-  const [merchantId, setMerchantId] = useState("default");
-  const [form, setForm] = useState<AgentProfile | null>(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const url = platform ? `/api/admin/merchants/${merchantId}/agent-profile` : "/api/merchant/agent-profile";
-  const load = async () => setForm(await api<AgentProfile>(url));
-  useEffect(() => { load().catch((err) => setError(err instanceof Error ? err.message : "加载 Agent 配置失败")); }, [url]);
-  const fields: Array<[keyof AgentProfile, string, string]> = [
-    ["agentName", "Agent名称", "例如：开户注册接待专员"],
-    ["roleDefinition", "角色定义", "说明这个客服是谁，有什么经验，负责什么"],
-    ["toneStyle", "语气风格", "例如：简短、口语化、耐心、像真人聊天"],
-    ["coreGoal", "核心目标", "这个 Agent 最终要帮客户完成什么"],
-    ["mustFollow", "必须遵守", "流程、回答方式、资料收集顺序等"],
-    ["forbidden", "禁止事项", "不能承诺、不能收集、不能暴露的内容"],
-    ["uncertaintyPolicy", "不确定问题口径", "遇到未配置规则时怎么回答"],
-    ["handoffPolicy", "转人工条件", "什么时候停止自动引导并通知人工"]
-  ];
-  const save = async () => {
-    if (!form) return;
-    setMessage("");
-    setError("");
-    try {
-      const saved = await api<AgentProfile>(url, { method: "PATCH", body: JSON.stringify(form) });
-      setForm(saved);
-      setMessage("Agent 配置已保存，后续严格流程、普通回复和模拟训练都会使用这份设定。");
-      notify("success", "Agent 配置已保存");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败");
-    }
-  };
-  return <section className="single-column">
-    <div className="work-panel">
-      <div className="section-title"><div><h2>商户 Agent 配置</h2><p>流程仍由话本状态机控制，这里只控制人设、语气、边界和转人工口径。</p></div>{form && <span className={`status-pill ${form.enabled ? "ok" : "neutral"}`}>{form.enabled ? "已启用" : "已停用"}</span>}</div>
-      {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select>}
-      {error && <div className="error">{error}</div>}
-      {message && <div className="notice">{message}</div>}
-      {form ? <>
-        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露 AI、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div><button className={form.enabled ? "ghost" : ""} disabled={!canEdit} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button></div>
-        <div className="form-grid elevated-form agent-profile-grid">
-          {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
-        </div>
-        <div className="toolbar sticky-actions"><AsyncButton disabled={!canEdit} onClick={save} busyText="保存中...">保存 Agent 配置</AsyncButton><AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
-      </> : <div className="empty-state">正在加载 Agent 配置...</div>}
-    </div>
   </section>;
 }
 
