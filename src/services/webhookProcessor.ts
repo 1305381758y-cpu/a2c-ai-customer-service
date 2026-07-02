@@ -1,6 +1,5 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
-import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
-import type { A2CClient } from "../clients/a2c.js";
+import { buildRuleContextualIntent, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, type StrictContextualIntent } from "../domain/strictFlow.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
 import { generateAndRecordAiConversationReply, type LearnedIntentDebugInfo } from "./aiConversationReply.js";
@@ -10,9 +9,8 @@ import { completeConversationGoal, isConversationGoalComplete } from "./conversa
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
-import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
-import { ensureReplyCustomerLanguage, naturalizeStrictReply, refineMessageLanguage } from "./replyLanguage.js";
-import { appConfigForConversation } from "./runtimeConfig.js";
+import { refineMessageLanguage } from "./replyLanguage.js";
+import { generateAndRecordStrictFlowReply } from "./strictFlowReply.js";
 import { translateForOperator } from "./translation.js";
 
 export class WebhookProcessor {
@@ -219,124 +217,29 @@ export class WebhookProcessor {
 
     const useNaturalReply = shouldBypassStrictFlowForNaturalReply(customerTextForAi, conversation);
     if (!useNaturalReply) {
-      const strictNeedsInviteCode = strictFlowNeedsInviteCode({
+      const strictReply = await generateAndRecordStrictFlowReply({
+        repos: this.repos,
+        ai: this.ai,
+        runtimeConfig,
         merchant,
         country,
         conversation,
         analysis,
         customerText: customerTextForAi,
+        agentProfile,
+        a2c,
+        data,
+        payloadId: payload.id,
+        simulation,
         strictFlowEnabled,
-        inferredIntent
-      });
-      const strictInviteCode = strictNeedsInviteCode
-        ? this.repos.reserveInviteCodeForConversation(conversation)
-        : undefined;
-      const strictReply = buildStrictFlowReply({
-        merchant,
-        country,
-        conversation,
-        analysis,
-        customerText: customerTextForAi,
-        inviteCode: strictInviteCode,
-        config: runtimeConfig,
+        scriptFlow,
         inferredIntent,
         contextualIntent,
-        strictFlowEnabled,
-        scriptFlow
+        learnedIntent: learnedIntentDebug,
+        history: historyForIntent
       });
-      if (strictReply.enabled) {
-      conversation.language = strictReply.language;
-      conversation.stage = strictReply.stage;
-      conversation.flowStep = strictReply.nextFlowStep;
-      const naturalized = await naturalizeStrictReply(this.ai, runtimeConfig, {
-        customerText: customerTextForAi,
-        draftReply: strictReply.reply,
-        language: strictReply.language,
-        flowStep: strictReply.nextFlowStep,
-        questionType: strictReply.controlledQuestionType || "none",
-        history: historyForIntent,
-        allowLinkOrInvite: strictReply.needsInviteCode,
-        agentProfile
-      });
-      strictReply.reply = naturalized.reply;
-      const languageGuard = await ensureReplyCustomerLanguage(runtimeConfig, {
-        reply: strictReply.reply,
-        targetLanguage: strictReply.language,
-        flowStep: strictReply.nextFlowStep,
-        allowLinkOrInvite: strictReply.needsInviteCode
-      });
-      strictReply.reply = languageGuard.reply;
-
-      const outbound = await recordOutboundConversationMessage({
-        repos: this.repos,
-        runtimeConfig,
-        a2c,
-        conversation,
-        simulation,
-        payload: {
-          to: data.from,
-          senderPhoneNumber: data.to,
-          type: "text",
-          content: strictReply.reply
-        },
-        idPolicy: {
-          simulatedPrefix: "simulated_strict",
-          sentFallbackPrefix: "a2c_strict",
-          failedPrefix: "strict_send_failed",
-          contextId: data.messageId || payload.id
-        },
-        message: {
-          content: strictReply.reply,
-          msgType: "text",
-          language: strictReply.language,
-          intent: "unknown",
-          rawPayload: {
-            replyMode: strictReply.fallback ? "fallback" : "strict_flow",
-            strictFlow: true,
-            strictFlowEnabled,
-            strictFlowStep: strictReply.nextFlowStep,
-            controlledQuestionType: strictReply.controlledQuestionType || "none",
-            controlledQuestionFallback: Boolean(strictReply.controlledQuestionFallback),
-            strictQuestionType: strictReply.controlledQuestionType || "none",
-            agentProfileName: agentProfile.agentName,
-            contextualIntent: strictReply.contextualIntent,
-            learnedIntent: learnedIntentDebug,
-            intentSource: strictReply.contextualIntent?.source || "none",
-            answeredPreviousQuestion: Boolean(strictReply.contextualIntent?.answeredPreviousQuestion),
-            questionType: strictReply.contextualIntent?.questionType || strictReply.controlledQuestionType || "none",
-            nextAction: strictReply.contextualIntent?.nextAction || "",
-            usedAiNaturalizer: naturalized.used,
-            naturalizerError: naturalized.error || "",
-            languageGuardTarget: languageGuard.targetLanguage,
-            languageGuardStatus: languageGuard.status,
-            languageGuardAttempts: languageGuard.attempts,
-            languageGuardFallbackUsed: languageGuard.fallbackUsed,
-            languageGuardError: languageGuard.error || "",
-            knowledgeHit: false,
-            aiFallback: Boolean(strictReply.fallback),
-            inviteCodeRequired: Boolean(country.requirePlatformAccount),
-            inviteCodeMissing: Boolean(strictReply.needsInviteCode && !strictInviteCode),
-            assignedInviteCode: strictInviteCode ? {
-              id: strictInviteCode.id,
-              code: strictInviteCode.code,
-              registerUrl: strictInviteCode.registerUrl,
-              status: strictInviteCode.status
-            } : null
-          }
-        },
-        memory: {
-          intent: "unknown",
-          content: strictReply.reply,
-          direction: "outbound"
-        }
-      });
-      if (strictReply.tutorialImageRequested) {
-        await this.sendRegistrationTutorialImage(conversation, data, strictReply.language, runtimeConfig.REGISTRATION_TUTORIAL_IMAGE_URL, a2c, simulation);
-      }
-      this.repos.updateConversation(conversation);
-      this.repos.upsertCustomerFromConversation(conversation);
-      if (outbound.sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "strict_flow_simulated" : "strict_flow_simulation_not_recorded", conversationId: conversation.id };
-      return { status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
+      if (strictReply.handled) {
+        return { status: strictReply.status, conversationId: strictReply.conversationId };
       }
     }
 
@@ -380,53 +283,6 @@ export class WebhookProcessor {
       language: input.analysis.language || input.conversation.language,
       flowStep: input.conversation.flowStep,
       recentHistory: input.history
-    });
-  }
-
-  private async sendRegistrationTutorialImage(
-    conversation: Parameters<Repositories["updateConversation"]>[0],
-    data: A2CWebhookPayload["data"],
-    language: string,
-    tutorialImageUrl: string,
-    a2c: A2CClient,
-    simulation = false
-  ): Promise<void> {
-    if (!tutorialImageUrl) return;
-    const caption = registrationTutorialCaption(language);
-    await recordOutboundConversationMessage({
-      repos: this.repos,
-      runtimeConfig: appConfigForConversation(this.config, this.repos, conversation),
-      a2c,
-      conversation,
-      simulation,
-      payload: {
-        to: data.from,
-        senderPhoneNumber: data.to,
-        type: "image",
-        url: tutorialImageUrl,
-        caption,
-        fileName: "registration-tutorial.jpg"
-      },
-      idPolicy: {
-        simulatedPrefix: "simulated_tutorial",
-        sentFallbackPrefix: "tutorial_image",
-        failedPrefix: "tutorial_image_failed",
-        contextId: data.messageId || `${Date.now()}`
-      },
-      message: {
-        content: caption,
-        msgType: "image",
-        language,
-        intent: "unknown",
-        rawPayload: {
-          replyMode: "strict_flow",
-          strictFlow: true,
-          strictFlowStep: conversation.flowStep || "wait_registration",
-          registrationTutorialImage: true,
-          mediaUrl: tutorialImageUrl,
-          caption
-        }
-      }
     });
   }
 
@@ -545,10 +401,4 @@ export function shouldBypassStrictFlowForNaturalReply(
   void customerText;
   void conversation;
   return false;
-}
-
-function registrationTutorialCaption(language: string): string {
-  if (language === "en") return "Here is the registration tutorial image. Follow it step by step, and send me the registered phone number after you finish.";
-  if (language === "pt-BR") return "Esta é a imagem do tutorial de cadastro. Siga passo a passo e, quando terminar, envie o telefone usado no cadastro.";
-  return "这是注册教程图片。您按图片步骤操作，完成后把注册手机号发给我就可以。";
 }
