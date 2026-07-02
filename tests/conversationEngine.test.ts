@@ -81,6 +81,33 @@ describe("ConversationEngine", () => {
     });
   });
 
+  it("handles simulator inbound messages synchronously with simulation enabled", async () => {
+    const processor = {
+      process: vi.fn(async () => ({ status: "reply_simulated", conversationId: "conversation-sim" })),
+      processDueFollowUps: vi.fn()
+    };
+    const engine = new ConversationEngine(processor, { asyncProcessing: true });
+
+    await expect(engine.simulateInboundMessage({ payload: payload(), merchantId: "merchant-sim" })).resolves.toEqual({
+      status: "reply_simulated",
+      conversationId: "conversation-sim"
+    });
+
+    expect(processor.process).toHaveBeenCalledWith(payload(), "merchant-sim", { simulation: true });
+  });
+
+  it("depends on a narrow conversation processor interface", async () => {
+    const processor = {
+      process: vi.fn(async () => ({ status: "replied" })),
+      processDueFollowUps: vi.fn(async () => ({ scanned: 0, sent: 0, skipped: 0, failed: 0 }))
+    };
+
+    const engine = new ConversationEngine(processor, { asyncProcessing: false });
+
+    await expect(engine.receiveInboundMessage({ payload: payload() })).resolves.toEqual({ status: "replied" });
+    expect(processor.process).toHaveBeenCalledOnce();
+  });
+
   it("keeps follow-up execution behind the engine interface", async () => {
     const processor = {
       process: vi.fn(),

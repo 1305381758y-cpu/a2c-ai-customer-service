@@ -1,4 +1,3 @@
-import type { WebhookProcessor } from "./webhookProcessor.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 
 export interface InboundConversationMessage {
@@ -17,6 +16,11 @@ export interface QueuedConversationResult {
   queueDepth: number;
 }
 
+export interface ConversationProcessor {
+  process(payload: A2CWebhookPayload, merchantId?: string, options?: { simulation?: boolean }): Promise<ConversationEngineResult>;
+  processDueFollowUps(limit?: number): Promise<{ scanned: number; sent: number; skipped: number; failed: number }>;
+}
+
 type QueuedConversationJob = InboundConversationMessage;
 type InboundProcessingMode = "auto" | "sync" | "async";
 
@@ -25,7 +29,7 @@ export class ConversationEngine {
   private activeJobs = 0;
 
   constructor(
-    private readonly processor: Pick<WebhookProcessor, "process" | "processDueFollowUps">,
+    private readonly processor: ConversationProcessor,
     private readonly options: { concurrency?: number; asyncProcessing?: boolean } = {}
   ) {}
 
@@ -38,6 +42,10 @@ export class ConversationEngine {
 
   async handleInboundMessage(input: InboundConversationMessage): Promise<ConversationEngineResult> {
     return this.processor.process(input.payload, input.merchantId, { simulation: input.simulation });
+  }
+
+  async simulateInboundMessage(input: Omit<InboundConversationMessage, "simulation">): Promise<ConversationEngineResult> {
+    return this.handleInboundMessage({ ...input, simulation: true });
   }
 
   enqueueInboundMessage(input: InboundConversationMessage): QueuedConversationResult {

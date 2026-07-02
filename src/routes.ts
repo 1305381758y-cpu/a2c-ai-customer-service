@@ -712,9 +712,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     if (msgType !== "text" && !body.url && !content.trim()) return reply.code(400).send({ error: "请输入媒体链接或说明" });
     const now = Math.floor(Date.now() / 1000);
     const messageId = `sim_in:${merchantId}:${customerPhone}:${Date.now()}:${randomUUID().slice(0, 8)}`;
-    const result = await deps.conversationEngine.handleInboundMessage({
+    const result = await deps.conversationEngine.simulateInboundMessage({
       merchantId,
-      simulation: true,
       payload: {
         id: `sim:${messageId}`,
         timestamp: now,
