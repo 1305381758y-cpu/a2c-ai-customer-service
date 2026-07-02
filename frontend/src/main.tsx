@@ -21,6 +21,7 @@ import { countryLabel, displayValue, formatDateTime } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
 import "./script-flows/script-flows.css";
+import "./intent-learning/intent-learning.css";
 import "./conversations/conversations.css";
 
 function App() {
