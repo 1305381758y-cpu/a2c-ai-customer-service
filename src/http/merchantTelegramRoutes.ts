@@ -1,9 +1,14 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { requireUser } from "../auth.js";
-import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
+import {
+  handleTelegramWebhookUpdate,
+  setupTelegramWebhook as setupTelegramWebhookBinding,
+  type TelegramSetupResult,
+  type TelegramUpdate,
+  type TelegramWebhookResult
+} from "../services/telegramBinding.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantTelegramRoutesDeps = {
@@ -21,91 +26,13 @@ export function registerMerchantTelegramRoutes(app: FastifyInstance, deps: Merch
 
 export function registerTelegramWebhookRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories }): void {
   app.post<{ Params: { merchantId: string }; Body: TelegramUpdate }>("/webhooks/telegram/:merchantId", async (request, reply) => {
-    const merchant = deps.repos.getMerchant(request.params.merchantId);
-    if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-    const expectedSecret = telegramWebhookSecret(deps.config, merchant.id);
-    if (!verifySecret(String(request.headers["x-telegram-bot-api-secret-token"] || ""), expectedSecret)) {
-      return reply.code(401).send({ error: "unauthorized" });
-    }
-    const result = bindTelegramUpdate(deps.repos, merchant.id, request.body);
-    return reply.code(200).send(result);
+    const result = handleTelegramWebhookUpdate(deps.repos, deps.config, request.params.merchantId, String(request.headers["x-telegram-bot-api-secret-token"] || ""), request.body);
+    return sendWebhookResult(reply, result);
   });
 }
 
 async function setupTelegramWebhook(request: FastifyRequest, reply: FastifyReply, deps: MerchantTelegramRoutesDeps, merchantId: string) {
-  const merchant = deps.repos.getMerchant(merchantId);
-  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-  const cfg = deps.repos.getMerchantConfig(merchantId);
-  if (!cfg.telegramBotToken) return reply.code(400).send({ error: "telegram bot token is required" });
-  const webhookUrl = `${requestOrigin(request)}/webhooks/telegram/${merchantId}`;
-  try {
-    await TelegramClient.setWebhook({
-      botToken: cfg.telegramBotToken,
-      url: webhookUrl,
-      secretToken: telegramWebhookSecret(deps.config, merchantId)
-    });
-    const status = cfg.telegramHandoffChatId ? "bound" : "waiting";
-    const updated = deps.repos.updateTelegramBinding(merchantId, { status });
-    return { ok: true, webhookUrl, config: deps.maskConfig(updated) };
-  } catch (error) {
-    deps.repos.updateTelegramBinding(merchantId, { status: "invalid", error: error instanceof Error ? error.message : "telegram webhook setup failed" });
-    return reply.code(502).send({ error: error instanceof Error ? error.message : "telegram webhook setup failed" });
-  }
-}
-
-type TelegramUpdate = {
-  update_id?: number;
-  message?: { text?: string; chat?: TelegramChat };
-  my_chat_member?: {
-    chat?: TelegramChat;
-    new_chat_member?: { status?: string };
-  };
-};
-
-type TelegramChat = {
-  id: number | string;
-  type?: string;
-  title?: string;
-};
-
-function bindTelegramUpdate(repos: Repositories, merchantId: string, update: TelegramUpdate) {
-  const membership = update.my_chat_member;
-  const membershipChat = membership?.chat;
-  const membershipStatus = membership?.new_chat_member?.status || "";
-  if (membershipChat && isGroupChat(membershipChat)) {
-    if (membershipStatus === "left" || membershipStatus === "kicked") {
-      const config = repos.updateTelegramBinding(merchantId, {
-        chatId: String(membershipChat.id),
-        chatTitle: membershipChat.title || "",
-        status: "invalid",
-        error: "Telegram bot was removed from the handoff group"
-      });
-      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-    }
-    if (["member", "administrator", "creator"].includes(membershipStatus)) {
-      const config = repos.updateTelegramBinding(merchantId, {
-        chatId: String(membershipChat.id),
-        chatTitle: membershipChat.title || "",
-        status: "bound"
-      });
-      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-    }
-  }
-
-  const messageChat = update.message?.chat;
-  if (messageChat && isGroupChat(messageChat)) {
-    const config = repos.updateTelegramBinding(merchantId, {
-      chatId: String(messageChat.id),
-      chatTitle: messageChat.title || "",
-      status: "bound"
-    });
-    return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-  }
-  return { ok: true, status: "ignored" };
-}
-
-function isGroupChat(chat: TelegramChat): boolean {
-  return chat.type === "group" || chat.type === "supergroup";
+  return sendSetupResult(reply, await setupTelegramWebhookBinding(deps.repos, deps.config, deps.maskConfig, merchantId, requestOrigin(request)));
 }
 
 function requestOrigin(request: FastifyRequest): string {
@@ -114,12 +41,12 @@ function requestOrigin(request: FastifyRequest): string {
   return `${proto}://${host}`;
 }
 
-function telegramWebhookSecret(config: AppConfig, merchantId: string): string {
-  return createHmac("sha256", config.SESSION_SECRET).update(`telegram:${merchantId}`).digest("hex");
+function sendSetupResult(reply: FastifyReply, result: TelegramSetupResult) {
+  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
+  return result.value;
 }
 
-function verifySecret(actual: string, expected: string): boolean {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+function sendWebhookResult(reply: FastifyReply, result: TelegramWebhookResult) {
+  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
+  return reply.code(200).send(result.value);
 }
