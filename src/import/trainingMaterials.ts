@@ -1,6 +1,7 @@
 import mammoth from "mammoth";
-import { generateAiText, type AiTextPart } from "../clients/aiProvider.js";
+import type { AppConfig } from "../config.js";
 import { detectLanguage } from "../domain/analyzer.js";
+import { AiTasks } from "../services/aiTasks.js";
 import { looksLikeConversationPackage, parseConversationPackage } from "./conversationPackage.js";
 import { parseTrainingSamples, type ImportedTrainingSample } from "./trainingSamples.js";
 
@@ -21,19 +22,14 @@ export interface ParsedTrainingMaterial {
   warnings: string[];
 }
 
+export type TrainingMaterialAiTasks = Pick<AiTasks, "extractTrainingImageText">;
+
 export async function parseTrainingMaterial(input: {
   buffer: Buffer;
   filename: string;
   mimeType?: string;
-  aiProvider?: "minimax" | "gemini" | "deepseek";
-  minimaxApiKey?: string;
-  minimaxModel?: string;
-  minimaxBaseUrl?: string;
-  deepseekApiKey?: string;
-  deepseekModel?: string;
-  deepseekBaseUrl?: string;
-  googleAiApiKey?: string;
-  googleAiModel?: string;
+  aiConfig?: AppConfig;
+  ai?: TrainingMaterialAiTasks;
 }): Promise<ParsedTrainingMaterial> {
   const sourceType = detectSourceType(input.filename, input.mimeType);
   const warnings: string[] = [];
@@ -67,15 +63,8 @@ export async function parseTrainingMaterial(input: {
 
   if (sourceType === "image") {
     const text = await extractImageText(input.buffer, input.filename, input.mimeType, {
-      aiProvider: input.aiProvider,
-      minimaxApiKey: input.minimaxApiKey,
-      minimaxModel: input.minimaxModel,
-      minimaxBaseUrl: input.minimaxBaseUrl,
-      deepseekApiKey: input.deepseekApiKey,
-      deepseekModel: input.deepseekModel,
-      deepseekBaseUrl: input.deepseekBaseUrl,
-      googleAiApiKey: input.googleAiApiKey,
-      googleAiModel: input.googleAiModel
+      aiConfig: input.aiConfig,
+      ai: input.ai
     }, warnings);
     return buildTextMaterial(sourceType, input.filename, text, warnings);
   }
@@ -162,16 +151,9 @@ async function extractImageText(
   buffer: Buffer,
   filename: string,
   mimeType = "",
-  aiConfig: {
-    aiProvider?: "minimax" | "gemini" | "deepseek";
-    minimaxApiKey?: string;
-    minimaxModel?: string;
-    minimaxBaseUrl?: string;
-    deepseekApiKey?: string;
-    deepseekModel?: string;
-    deepseekBaseUrl?: string;
-    googleAiApiKey?: string;
-    googleAiModel?: string;
+  extractor: {
+    aiConfig?: AppConfig;
+    ai?: TrainingMaterialAiTasks;
   },
   warnings: string[]
 ): Promise<string> {
@@ -191,39 +173,14 @@ async function extractImageText(
     if (text) return text;
   }
 
-  const hasMiniMax = Boolean(aiConfig.minimaxApiKey);
-  const hasGemini = Boolean(aiConfig.googleAiApiKey);
-  if (!hasMiniMax && !hasGemini) {
+  if (!extractor.aiConfig) {
     warnings.push("图片 OCR 需要配置支持图片的 MiniMax 或 Gemini Key；当前图片未提取到文字");
     return "";
   }
-  const imageProvider = aiConfig.aiProvider === "gemini" && hasGemini ? "gemini" : hasMiniMax ? "minimax" : "gemini";
 
-  const mediaType = mimeType || guessImageMime(filename);
-  const contents: AiTextPart[] = [
-    { inlineData: { mimeType: mediaType, data: buffer.toString("base64") } },
-    { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
-  ];
-  return generateAiText({
-    AI_PROVIDER: imageProvider,
-    MINIMAX_API_KEY: aiConfig.minimaxApiKey || "",
-    MINIMAX_MODEL: aiConfig.minimaxModel || "MiniMax-M3",
-    MINIMAX_BASE_URL: aiConfig.minimaxBaseUrl || "https://api.minimax.io",
-    DEEPSEEK_API_KEY: aiConfig.deepseekApiKey || "",
-    DEEPSEEK_MODEL: aiConfig.deepseekModel || "deepseek-chat",
-    DEEPSEEK_BASE_URL: aiConfig.deepseekBaseUrl || "https://api.deepseek.com",
-    GOOGLE_AI_API_KEY: aiConfig.googleAiApiKey || "",
-    GOOGLE_AI_MODEL: aiConfig.googleAiModel || "gemini-2.5-flash"
-  } as Parameters<typeof generateAiText>[0], contents);
-}
-
-function guessImageMime(filename: string): string {
-  const name = filename.toLowerCase();
-  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
-  if (name.endsWith(".webp")) return "image/webp";
-  if (name.endsWith(".gif")) return "image/gif";
-  if (name.endsWith(".svg")) return "image/svg+xml";
-  return "image/png";
+  const result = await (extractor.ai || new AiTasks()).extractTrainingImageText(extractor.aiConfig, { buffer, filename, mimeType });
+  if (result.error) warnings.push(result.error);
+  return result.text;
 }
 
 function splitParagraphs(text: string): string[] {

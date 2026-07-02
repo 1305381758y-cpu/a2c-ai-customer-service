@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import { parseTrainingMaterial } from "../import/trainingMaterials.js";
 import { parseTrainingSamples } from "../import/trainingSamples.js";
 import type { Repositories } from "../repositories.js";
+import { appConfigForMerchant } from "../services/runtimeConfig.js";
 
 export async function importSamples(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, merchantId: string) {
   let uploadError = "";
@@ -41,15 +42,7 @@ export async function importMaterial(request: FastifyRequest, reply: FastifyRepl
       buffer,
       filename: file.filename,
       mimeType: file.mimetype,
-      aiProvider: merchantConfig.aiProvider || deps.config.AI_PROVIDER,
-      minimaxApiKey: merchantConfig.minimaxApiKey || deps.config.MINIMAX_API_KEY,
-      minimaxModel: merchantConfig.minimaxModel || deps.config.MINIMAX_MODEL,
-      minimaxBaseUrl: deps.config.MINIMAX_BASE_URL,
-      deepseekApiKey: merchantConfig.deepseekApiKey || deps.config.DEEPSEEK_API_KEY,
-      deepseekModel: merchantConfig.deepseekModel || deps.config.DEEPSEEK_MODEL,
-      deepseekBaseUrl: deps.config.DEEPSEEK_BASE_URL,
-      googleAiApiKey: merchantConfig.googleAiApiKey || deps.config.GOOGLE_AI_API_KEY,
-      googleAiModel: merchantConfig.googleAiModel || deps.config.GOOGLE_AI_MODEL
+      aiConfig: appConfigForMerchant(deps.config, merchantConfig)
     });
     const material = deps.repos.createTrainingMaterial({
       merchantId,
