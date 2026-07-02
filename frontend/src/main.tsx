@@ -20,6 +20,7 @@ import { AsyncButton } from "./ui/components.js";
 import { countryLabel, displayValue, formatDateTime } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
+import "./conversations/conversations.css";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
