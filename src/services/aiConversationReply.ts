@@ -1,8 +1,7 @@
 import type { A2CClient } from "../clients/a2c.js";
 import type { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
-import { shouldUseInviteForReply, suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
-import { rankSamples } from "../domain/sampleRetrieval.js";
+import { suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
 import type { MessageAnalysis } from "../domain/analyzer.js";
 import type { Conversation, CustomerMemoryRecord, MerchantAgentProfileRecord, MerchantCountryRecord, Repositories } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
@@ -10,6 +9,7 @@ import { completeConversationGoal, isConversationGoalComplete } from "./conversa
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import { buildAiConversationOutboundRawPayload } from "./aiConversationOutboundPayload.js";
+import { buildAiConversationReplyContext } from "./aiConversationReplyContext.js";
 
 export interface LearnedIntentDebugInfo {
   id: number;
@@ -42,33 +42,17 @@ export async function generateAndRecordAiConversationReply(input: {
   learnedIntent: LearnedIntentDebugInfo | null;
   generateReview?: (conversationId: string, runtimeConfig: AppConfig) => Promise<unknown>;
 }): Promise<AiConversationReplyResult> {
-  const enabledSamples = input.repos.listTrainingSamples({ merchantId: input.conversation.merchantId, countryId: input.country.id, enabled: true });
-  const knowledge = input.repos.listKnowledgeItems({ merchantId: input.conversation.merchantId, countryId: input.country.id, enabled: true });
-  const trainingMaterials = input.repos.listTrainingMaterialSnippets(input.conversation.merchantId, 20, input.country.id);
-  const shouldIncludeRegistrationDetails = shouldUseInviteForReply(input.country, input.conversation, input.analysis.intent, input.customerText);
-  const inviteCode = shouldIncludeRegistrationDetails
-    ? input.repos.reserveInviteCodeForConversation(input.conversation)
-    : undefined;
-  const samples = rankSamples(enabledSamples, {
-    text: input.customerText,
-    language: input.analysis.language,
-    intent: input.analysis.intent,
-    stage: input.analysis.stage
-  });
-  const history = input.repos.listConversationMessages(input.conversation.id, 20);
-  const aiReply = await input.ai.generateReply(input.runtimeConfig, {
-    customerText: input.customerText,
+  const replyContext = buildAiConversationReplyContext({
+    repos: input.repos,
     conversation: input.conversation,
-    history,
-    samples,
-    knowledge,
-    trainingMaterials,
-    memory: input.inboundMemory,
     country: input.country,
-    inviteCode,
+    analysis: input.analysis,
+    customerText: input.customerText,
+    inboundMemory: input.inboundMemory,
     agentProfile: input.agentProfile
   });
-  if (!shouldIncludeRegistrationDetails) {
+  const aiReply = await input.ai.generateReply(input.runtimeConfig, replyContext.replyInput);
+  if (!replyContext.shouldIncludeRegistrationDetails) {
     aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, input.runtimeConfig, input.country, input.conversation, aiReply.language || input.conversation.language);
   }
 
@@ -119,10 +103,10 @@ export async function generateAndRecordAiConversationReply(input: {
         strictFlowEnabled: input.strictFlowEnabled,
         agentProfile: input.agentProfile,
         learnedIntent: input.learnedIntent,
-        samples,
-        trainingMaterials,
+        samples: replyContext.samples,
+        trainingMaterials: replyContext.trainingMaterials,
         country: input.country,
-        inviteCode
+        inviteCode: replyContext.inviteCode
       })
     },
     memory: {
