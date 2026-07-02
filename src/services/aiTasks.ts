@@ -1,14 +1,12 @@
 import {
-  AiReplyClient,
   analyzeAiImage,
   classifyAiContextualIntent,
   classifyAiIntent,
   detectAiLanguage,
   naturalizeStrictFlowText,
-  type AiImageAnalysis,
-  type AiReply,
-  type ReplyInput
+  type AiImageAnalysis
 } from "../clients/aiProvider.js";
+import { AiReplyClient, type AiReply, type ReplyInput } from "../clients/aiReplyClient.js";
 import type { AppConfig } from "../config.js";
 import type { ContextualIntentLabel, InternalIntentLabel } from "../domain/analyzer.js";
 import type { MerchantAgentProfileRecord } from "../repositories.js";
