@@ -5,9 +5,9 @@ import type { IntentLabel } from "./domain/intents.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
 import type { UserRole } from "./auth.js";
-import { inferCountryProfile } from "./repositoryCountryProfile.js";
 import { MerchantA2CAccountRepository } from "./repositoryA2CAccounts.js";
 import { CustomerRepository } from "./repositoryCustomers.js";
+import { MerchantSettingsRepository } from "./repositoryMerchantSettings.js";
 import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
 import { TrainingContentRepository } from "./repositoryTrainingContent.js";
 import {
@@ -22,10 +22,7 @@ import {
   mapCustomerMemory,
   mapIntentLearningEvent,
   mapMerchant,
-  mapMerchantA2CAccount,
   mapMerchantAgentProfile,
-  mapMerchantConfig,
-  mapMerchantCountry,
   mapUser,
   normalizeReviewSampleStage,
   parseJsonObject,
@@ -92,16 +89,18 @@ export type {
 } from "./repositoryTypes.js";
 
 export class Repositories {
+  private readonly settings: MerchantSettingsRepository;
   private readonly a2cAccounts: MerchantA2CAccountRepository;
   private readonly customers: CustomerRepository;
   private readonly scriptFlows: ScriptFlowRepository;
   private readonly trainingContent: TrainingContentRepository;
 
   constructor(private readonly db: Db) {
+    this.settings = new MerchantSettingsRepository(db);
     this.a2cAccounts = new MerchantA2CAccountRepository(
       db,
-      { defaultCountryId: (merchantId) => this.defaultCountryId(merchantId) },
-      { getMerchantConfig: (merchantId) => this.getMerchantConfig(merchantId) }
+      { defaultCountryId: (merchantId) => this.settings.defaultCountryId(merchantId) },
+      { getMerchantConfig: (merchantId) => this.settings.getConfig(merchantId) }
     );
     this.customers = new CustomerRepository(db);
     this.scriptFlows = new ScriptFlowRepository(db, {
@@ -1278,238 +1277,51 @@ export class Repositories {
   }
 
   getMerchantConfig(merchantId: string): MerchantConfigRecord {
-    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    const row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
-    return mapMerchantConfig(row);
+    return this.settings.getConfig(merchantId);
   }
 
   a2cTokenStore(merchantId: string): A2CTokenStore {
-    return {
-      get: (cacheKey) => {
-        const config = this.getMerchantConfig(merchantId);
-        if (config.a2cTokenCacheKey !== cacheKey || !config.a2cAccessToken || !config.a2cTokenExpiresAt) return undefined;
-        return { accessToken: config.a2cAccessToken, expiresAt: config.a2cTokenExpiresAt };
-      },
-      set: (cacheKey, accessToken, expiresAt) => {
-        this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-        this.db.sqlite
-          .prepare(`
-            UPDATE merchant_configs
-            SET a2c_token_cache_key = ?,
-                a2c_access_token = ?,
-                a2c_token_expires_at = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE merchant_id = ?
-          `)
-          .run(cacheKey, accessToken, expiresAt, merchantId);
-      },
-      clear: (cacheKey) => {
-        const config = this.getMerchantConfig(merchantId);
-        if (config.a2cTokenCacheKey && config.a2cTokenCacheKey !== cacheKey) return;
-        this.db.sqlite
-          .prepare(`
-            UPDATE merchant_configs
-            SET a2c_token_cache_key = '',
-                a2c_access_token = '',
-                a2c_token_expires_at = 0,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE merchant_id = ?
-          `)
-          .run(merchantId);
-      }
-    };
+    return this.settings.tokenStore(merchantId);
   }
 
   ensureDefaultCountry(merchantId: string): MerchantCountryRecord {
-    const id = `${merchantId}:default`;
-    this.db.sqlite.prepare(`
-      INSERT OR IGNORE INTO merchant_countries
-        (id, merchant_id, code, name, default_language)
-      VALUES (?, ?, 'default', '默认国家', 'unknown')
-    `).run(id, merchantId);
-    return this.getMerchantCountry(id)!;
+    return this.settings.ensureDefaultCountry(merchantId);
   }
 
   defaultCountryId(merchantId: string): string {
-    return this.ensurePrimaryCountry(merchantId).id;
+    return this.settings.defaultCountryId(merchantId);
   }
 
   ensurePrimaryCountry(merchantId: string): MerchantCountryRecord {
-    this.ensureDefaultCountry(merchantId);
-    const row = this.db.sqlite
-      .prepare(`
-        SELECT *
-        FROM merchant_countries
-        WHERE merchant_id = ? AND status = 'active'
-        ORDER BY CASE WHEN code = 'default' THEN 1 ELSE 0 END, updated_at DESC, created_at DESC
-        LIMIT 1
-      `)
-      .get(merchantId) as Record<string, unknown> | undefined;
-    return row ? mapMerchantCountry(row) : this.ensureDefaultCountry(merchantId);
+    return this.settings.ensurePrimaryCountry(merchantId);
   }
 
   validCountryId(merchantId: string, countryId: string): string {
-    if (!countryId) return "";
-    const row = this.db.sqlite.prepare("SELECT id FROM merchant_countries WHERE id = ? AND merchant_id = ?").get(countryId, merchantId) as { id: string } | undefined;
-    return row?.id ?? "";
+    return this.settings.validCountryId(merchantId, countryId);
   }
 
   getMerchantCountry(id: string): MerchantCountryRecord | undefined {
-    const row = this.db.sqlite.prepare("SELECT * FROM merchant_countries WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-    return row ? mapMerchantCountry(row) : undefined;
+    return this.settings.getCountry(id);
   }
 
   listMerchantCountries(merchantId: string): MerchantCountryRecord[] {
-    return [this.ensurePrimaryCountry(merchantId)];
+    return this.settings.listCountries(merchantId);
   }
 
   createMerchantCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
-    const current = this.ensurePrimaryCountry(merchantId);
-    const profile = inferCountryProfile(input, current);
-    const code = profile.code;
-    const id = current.id;
-    this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, code, id);
-    this.db.sqlite.prepare(`
-      UPDATE merchant_countries
-      SET code = ?,
-          name = ?,
-          default_language = ?,
-          platform_register_url = ?,
-          tg_register_guide_url = ?,
-          require_platform_account = ?,
-          require_phone = ?,
-          require_telegram = ?,
-          require_whatsapp = ?,
-          status = 'active',
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND merchant_id = ?
-    `).run(
-      code,
-      profile.name,
-      profile.defaultLanguage,
-      String(input.platformRegisterUrl ?? current.platformRegisterUrl ?? ""),
-      String(input.tgRegisterGuideUrl ?? current.tgRegisterGuideUrl ?? ""),
-      booleanPatchValue(input.requirePlatformAccount, current.requirePlatformAccount),
-      booleanPatchValue(input.requirePhone, current.requirePhone),
-      booleanPatchValue(input.requireTelegram, current.requireTelegram),
-      booleanPatchValue(input.requireWhatsApp, current.requireWhatsApp),
-      id,
-      merchantId
-    );
-    this.reassignMerchantToSingleCountry(merchantId, id);
-    return this.getMerchantCountry(id)!;
+    return this.settings.createCountry(merchantId, input);
   }
 
   patchMerchantCountry(id: string, merchantId: string, patch: Record<string, unknown>): MerchantCountryRecord | undefined {
-    const allowed: Record<string, string> = {
-      code: "code",
-      name: "name",
-      defaultLanguage: "default_language",
-      platformRegisterUrl: "platform_register_url",
-      tgRegisterGuideUrl: "tg_register_guide_url",
-      requirePlatformAccount: "require_platform_account",
-      requirePhone: "require_phone",
-      requireTelegram: "require_telegram",
-      requireWhatsApp: "require_whatsapp",
-      status: "status"
-    };
-    const entries = Object.entries(patch).filter(([key]) => key in allowed);
-    if (entries.length) {
-      const current = this.getMerchantCountry(id);
-      const normalizedPatch = { ...patch };
-      if (current && ("name" in patch || "code" in patch || "defaultLanguage" in patch)) {
-        const profile = inferCountryProfile(patch, current);
-        normalizedPatch.code = profile.code;
-        normalizedPatch.name = profile.name;
-        normalizedPatch.defaultLanguage = profile.defaultLanguage;
-      }
-      if (typeof normalizedPatch.code === "string" && normalizedPatch.code.trim()) {
-        this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ? AND code = ? AND id != ?").run(merchantId, normalizedPatch.code.trim(), id);
-      }
-      const normalizedEntries = Object.entries(normalizedPatch).filter(([key]) => key in allowed);
-      const assignments = normalizedEntries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      const values = normalizedEntries.map(([key, value]) => {
-        if (key.startsWith("require")) return value ? 1 : 0;
-        return String(value ?? "");
-      }) as Array<string | number>;
-      this.db.sqlite.prepare(`UPDATE merchant_countries SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?`).run(...values, id, merchantId);
-      this.reassignMerchantToSingleCountry(merchantId, id);
-    }
-    const row = this.db.sqlite.prepare("SELECT * FROM merchant_countries WHERE id = ? AND merchant_id = ?").get(id, merchantId) as Record<string, unknown> | undefined;
-    return row ? mapMerchantCountry(row) : undefined;
+    return this.settings.patchCountry(id, merchantId, patch);
   }
 
   countryIdForA2CAccount(merchantId: string, apiPhone: string): string {
-    void apiPhone;
-    return this.defaultCountryId(merchantId);
-  }
-
-  private reassignMerchantToSingleCountry(merchantId: string, countryId: string): void {
-    if (!this.validCountryId(merchantId, countryId)) return;
-    this.db.sqlite
-      .prepare(`
-        DELETE FROM customer_memories
-        WHERE merchant_id = ?
-          AND id NOT IN (
-            SELECT MAX(id)
-            FROM customer_memories
-            WHERE merchant_id = ?
-            GROUP BY customer_key
-          )
-      `)
-      .run(merchantId, merchantId);
-    this.db.sqlite.prepare("UPDATE merchant_countries SET status = CASE WHEN id = ? THEN 'active' ELSE 'disabled' END, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE merchant_a2c_accounts SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE conversations SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE customers SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE customer_memories SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE training_samples SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE knowledge_items SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE training_materials SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE training_material_items SET country_id = ? WHERE merchant_id = ?").run(countryId, merchantId);
-    this.db.sqlite.prepare("UPDATE a2c_invite_codes SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+    return this.settings.countryIdForA2CAccount(merchantId, apiPhone);
   }
 
   patchMerchantConfig(merchantId: string, patch: Record<string, unknown>): MerchantConfigRecord {
-    const allowed: Record<string, string> = {
-      a2cBaseUrl: "a2c_base_url",
-      a2cAppId: "a2c_app_id",
-      a2cAppSecret: "a2c_app_secret",
-      a2cAccountPhone: "a2c_account_phone",
-      openaiApiKey: "openai_api_key",
-      openaiModel: "openai_model",
-      aiProvider: "ai_provider",
-      minimaxApiKey: "minimax_api_key",
-      minimaxModel: "minimax_model",
-      deepseekApiKey: "deepseek_api_key",
-      deepseekModel: "deepseek_model",
-      googleAiApiKey: "google_ai_api_key",
-      googleAiModel: "google_ai_model",
-      telegramBotToken: "telegram_bot_token",
-      telegramHandoffChatId: "telegram_handoff_chat_id",
-      telegramHandoffChatTitle: "telegram_handoff_chat_title",
-      telegramHandoffChatStatus: "telegram_handoff_chat_status",
-      telegramHandoffChatError: "telegram_handoff_chat_error",
-      smartReplyEnabled: "smart_reply_enabled",
-      trainingSimulationEnabled: "training_simulation_enabled",
-      strictScriptFlowEnabled: "strict_script_flow_enabled",
-      platformRegisterUrl: "platform_register_url",
-      tgRegisterGuideUrl: "tg_register_guide_url",
-      registrationTutorialImageUrl: "registration_tutorial_image_url"
-    };
-    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean"));
-    if (entries.length) {
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([key, value]) => {
-        if (key === "smartReplyEnabled") return booleanPatchValue(value, true);
-        if (key === "trainingSimulationEnabled") return booleanPatchValue(value, false);
-        if (key === "strictScriptFlowEnabled") return booleanPatchValue(value, false);
-        if (key === "aiProvider") return value === "gemini" || value === "deepseek" ? value : "minimax";
-        return value as string;
-      }), merchantId);
-    }
-    return this.getMerchantConfig(merchantId);
+    return this.settings.patchConfig(merchantId, patch);
   }
 
   listMerchantA2CAccounts(filters: { merchantId?: string; enabled?: boolean } = {}): MerchantA2CAccountRecord[] {
@@ -1565,23 +1377,11 @@ export class Repositories {
   }
 
   updateTelegramBinding(merchantId: string, input: { chatId?: string; chatTitle?: string; status: MerchantConfigRecord["telegramHandoffChatStatus"]; error?: string }): MerchantConfigRecord {
-    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    this.db.sqlite
-      .prepare(`
-        UPDATE merchant_configs
-        SET telegram_handoff_chat_id = COALESCE(?, telegram_handoff_chat_id),
-            telegram_handoff_chat_title = COALESCE(?, telegram_handoff_chat_title),
-            telegram_handoff_chat_status = ?,
-            telegram_handoff_chat_error = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE merchant_id = ?
-      `)
-      .run(input.chatId ?? null, input.chatTitle ?? null, input.status, input.error ?? "", merchantId);
-    return this.getMerchantConfig(merchantId);
+    return this.settings.updateTelegramBinding(merchantId, input);
   }
 
   markTelegramBindingInvalid(merchantId: string, error: string): MerchantConfigRecord {
-    return this.updateTelegramBinding(merchantId, { status: "invalid", error });
+    return this.settings.markTelegramBindingInvalid(merchantId, error);
   }
 
   findMerchantByA2CAccount(accountPhone: string): MerchantRecord {
