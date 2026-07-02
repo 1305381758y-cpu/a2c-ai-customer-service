@@ -8,8 +8,6 @@ import { A2CClient } from "./clients/a2c.js";
 import { aiProviderLabel, deepseekModel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "./clients/aiProvider.js";
 import { TelegramClient } from "./clients/telegram.js";
 import { hashPassword, requireUser, requestUser } from "./auth.js";
-import { parseTrainingSamples } from "./import/trainingSamples.js";
-import { parseTrainingMaterial } from "./import/trainingMaterials.js";
 import type { AppConfig } from "./config.js";
 import type { ConversationExportRecord, MerchantConfigRecord, Repositories } from "./repositories.js";
 import type { ConversationEngine } from "./services/conversationEngine.js";
@@ -26,6 +24,8 @@ import { registerAdminTrainingRoutes } from "./http/adminTrainingRoutes.js";
 import { registerAdminScriptFlowRoutes } from "./http/adminScriptFlowRoutes.js";
 import { registerMerchantScriptFlowRoutes } from "./http/merchantScriptFlowRoutes.js";
 import { scopedMerchantId } from "./http/routeHelpers.js";
+import { registerMerchantTrainingRoutes } from "./http/merchantTrainingRoutes.js";
+import { importSamples } from "./http/trainingImports.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -319,80 +319,8 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     return { ok: true };
   });
   app.post("/api/merchant/telegram/setup-webhook", { preHandler: merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
-  app.get<{ Querystring: { countryId?: string; type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: merchantRoles }, async (request) => ({
-    rows: deps.repos.listKnowledgeItems({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      type: request.query.type,
-      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
-    })
-  }));
-  app.post<{ Body: Record<string, unknown> }>("/api/merchant/knowledge", { preHandler: merchantAdmins }, async (request, reply) => {
-    try {
-      return deps.repos.createKnowledgeItem(scopedMerchantId(request), request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid knowledge item" });
-    }
-  });
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/knowledge/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const row = deps.repos.patchKnowledgeItem(Number(request.params.id), request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "knowledge item not found" });
-    return row;
-  });
-  app.delete<{ Params: { id: string } }>("/api/merchant/knowledge/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.deleteKnowledgeItem(Number(request.params.id), scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
-    return { ok: true };
-  });
-
-  app.post("/api/merchant/training-samples/import", { preHandler: merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
-  app.post("/api/merchant/training-materials/import", { preHandler: merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
-  app.get<{ Querystring: { countryId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/merchant/training-materials", { preHandler: merchantRoles }, async (request) => ({
-    rows: deps.repos.listTrainingMaterials({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      sourceType: request.query.sourceType,
-      status: request.query.status,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
-  app.get<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: merchantRoles }, async (request, reply) => {
-    const id = Number(request.params.id);
-    const merchantId = scopedMerchantId(request);
-    const material = deps.repos.getTrainingMaterial(id, merchantId);
-    if (!material) return reply.code(404).send({ error: "material not found" });
-    return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
-  });
-  app.delete<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.deleteTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "material not found" });
-    return { ok: true };
-  });
+  registerMerchantTrainingRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
-  app.get<{ Querystring: { countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: merchantRoles }, async (request) => ({
-    rows: deps.repos.listTrainingSamples({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      language: request.query.language,
-      intent: request.query.intent,
-      stage: request.query.stage,
-      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
-    })
-  }));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/training-samples/:id", { preHandler: merchantRoles }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchTrainingSample(id, request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "sample not found" });
-    return row;
-  });
-  app.delete<{ Params: { id: string } }>("/api/merchant/training-samples/:id", { preHandler: merchantAdmins }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const ok = deps.repos.deleteTrainingSample(id, scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "sample not found" });
-    return { ok: true };
-  });
 
   app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: merchantRoles }, async (request) => ({
     rows: deps.repos.listConversations({
@@ -994,112 +922,6 @@ function verifySecret(actual: string, expected: string): boolean {
   const actualBuffer = Buffer.from(actual);
   const expectedBuffer = Buffer.from(expected);
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-async function importSamples(request: FastifyRequest, reply: FastifyReply, deps: { repos: Repositories }, merchantId: string) {
-  let uploadError = "";
-  const file = await request.file().catch((error) => {
-    uploadError = error instanceof Error ? error.message : "文件上传失败";
-    return undefined;
-  });
-  if (uploadError) return reply.code(413).send({ error: "文件过大或上传失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
-  if (!file) return reply.code(400).send({ error: "file is required" });
-  const countryId = deps.repos.defaultCountryId(merchantId);
-  const buffer = await file.toBuffer().catch(() => null);
-  if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
-  try {
-    const samples = await parseTrainingSamples(buffer, file.filename);
-    const imported = deps.repos.insertTrainingSamples(samples, merchantId, countryId);
-    return { imported, enabled: imported };
-  } catch (error) {
-    return reply.code(400).send({ error: "invalid training sample file", message: error instanceof Error ? error.message : "unknown parse error" });
-  }
-}
-
-async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
-  let uploadError = "";
-  const file = await request.file().catch((error) => {
-    uploadError = error instanceof Error ? error.message : "文件上传失败";
-    return undefined;
-  });
-  if (uploadError) return reply.code(413).send({ error: "文件过大或上传失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
-  if (!file) return reply.code(400).send({ error: "file is required" });
-  const countryId = deps.repos.defaultCountryId(merchantId);
-  const buffer = await file.toBuffer().catch(() => null);
-  if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
-  try {
-    const merchantConfig = deps.repos.getMerchantConfig(merchantId);
-    const parsed = await parseTrainingMaterial({
-      buffer,
-      filename: file.filename,
-      mimeType: file.mimetype,
-      aiProvider: merchantConfig.aiProvider || deps.config.AI_PROVIDER,
-      minimaxApiKey: merchantConfig.minimaxApiKey || deps.config.MINIMAX_API_KEY,
-      minimaxModel: merchantConfig.minimaxModel || deps.config.MINIMAX_MODEL,
-      minimaxBaseUrl: deps.config.MINIMAX_BASE_URL,
-      deepseekApiKey: merchantConfig.deepseekApiKey || deps.config.DEEPSEEK_API_KEY,
-      deepseekModel: merchantConfig.deepseekModel || deps.config.DEEPSEEK_MODEL,
-      deepseekBaseUrl: deps.config.DEEPSEEK_BASE_URL,
-      googleAiApiKey: merchantConfig.googleAiApiKey || deps.config.GOOGLE_AI_API_KEY,
-      googleAiModel: merchantConfig.googleAiModel || deps.config.GOOGLE_AI_MODEL
-    });
-    const material = deps.repos.createTrainingMaterial({
-      merchantId,
-      countryId,
-      sourceType: parsed.sourceType,
-      filename: file.filename,
-      mimeType: file.mimetype,
-      rawText: parsed.rawText,
-      warnings: parsed.warnings
-    });
-
-    let sampleCount = 0;
-    let knowledgeCount = 0;
-    for (const sample of parsed.samples) {
-      const created = deps.repos.createTrainingSample(merchantId, sample, countryId);
-      sampleCount += 1;
-      deps.repos.addTrainingMaterialItem({
-        materialId: material.id,
-        merchantId,
-        countryId,
-        kind: "sample",
-        sampleId: created.id,
-        title: sample.customerMessage.slice(0, 80),
-        content: `${sample.customerMessage}\n${sample.standardReply}`,
-        intent: sample.intent,
-        stage: sample.stage,
-        language: sample.language,
-        enabled: sample.enabled
-      });
-    }
-    for (const item of parsed.knowledge) {
-      const created = deps.repos.createKnowledgeItem(merchantId, { ...item, countryId });
-      knowledgeCount += 1;
-      deps.repos.addTrainingMaterialItem({
-        materialId: material.id,
-        merchantId,
-        countryId,
-        kind: "knowledge",
-        knowledgeId: created.id,
-        title: item.title,
-        content: item.content,
-        intent: "unknown",
-        stage: "",
-        language: item.language,
-        enabled: item.enabled
-      });
-    }
-
-    const finalized = deps.repos.finalizeTrainingMaterial(material.id, merchantId, {
-      itemCount: sampleCount + knowledgeCount,
-      sampleCount,
-      knowledgeCount,
-      warnings: parsed.warnings
-    });
-    return { material: finalized, imported: sampleCount + knowledgeCount, samples: sampleCount, knowledge: knowledgeCount, warnings: finalized.warnings };
-  } catch (error) {
-    return reply.code(400).send({ error: "invalid training material file", message: error instanceof Error ? error.message : "unknown parse error" });
-  }
 }
 
 async function uploadRegistrationTutorialImage(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
