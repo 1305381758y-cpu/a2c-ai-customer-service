@@ -3,7 +3,7 @@ import type { Repositories } from "../repositories.js";
 import { AiTasks } from "./aiTasks.js";
 import { analyzeInboundTurn } from "./inboundTurnAnalysis.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
-import type { A2CWebhookPayload } from "./inboundMessage.js";
+import type { A2CWebhookPayload, InboundConversationMessage } from "./inboundMessage.js";
 import { recordInboundTurn } from "./inboundTurnRecorder.js";
 import { respondToInboundTurn } from "./inboundTurnResponder.js";
 import { translateForOperator } from "./translation.js";
@@ -14,6 +14,10 @@ export class InboundConversationProcessor {
     private readonly ai: AiTasks,
     private readonly config: AppConfig
   ) {}
+
+  async handleInboundMessage(input: InboundConversationMessage): Promise<{ status: string; conversationId?: string }> {
+    return this.process(input.payload, input.merchantId, { simulation: input.simulation });
+  }
 
   async process(payload: A2CWebhookPayload, merchantId?: string, options: { simulation?: boolean } = {}): Promise<{ status: string; conversationId?: string }> {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };

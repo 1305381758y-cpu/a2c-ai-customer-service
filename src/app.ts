@@ -30,7 +30,7 @@ export function buildApp(config: AppConfig) {
   );
   const followUpProcessor = new FollowUpProcessor(repos, config);
   const processor = {
-    process: inboundProcessor.process.bind(inboundProcessor),
+    handleInboundMessage: inboundProcessor.handleInboundMessage.bind(inboundProcessor),
     processDueFollowUps: followUpProcessor.processDueFollowUps.bind(followUpProcessor)
   };
   const conversationEngine = new ConversationEngine(processor);

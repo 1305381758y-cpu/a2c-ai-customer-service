@@ -17,6 +17,12 @@ export interface A2CWebhookPayload {
   };
 }
 
+export interface InboundConversationMessage {
+  payload: A2CWebhookPayload;
+  merchantId?: string;
+  simulation?: boolean;
+}
+
 export type NormalizedMessageType = "text" | "image" | "video" | "audio" | "document";
 
 export interface NormalizedInboundMessage {
