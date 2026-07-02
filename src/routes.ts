@@ -22,6 +22,7 @@ import { requireInternalApiKey as auth } from "./http/internalApiKeyAuth.js";
 import { registerAdminUserRoutes } from "./http/adminUserRoutes.js";
 import { maskUser } from "./http/routeHelpers.js";
 import { registerAuthRoutes } from "./http/authRoutes.js";
+import { registerAdminDashboardRoutes } from "./http/adminDashboardRoutes.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -32,13 +33,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
 
   registerAuthRoutes(app, deps);
 
-  app.get("/api/admin/dashboard", { preHandler: adminOnly }, async () => ({
-    merchants: deps.repos.listMerchants().length,
-    customers: deps.repos.listCustomers({ limit: 500 }).length,
-    conversations: deps.repos.listConversations({ limit: 500 }).length,
-    handoffs: deps.repos.listConversations({ status: "human_handoff", limit: 500 }).length,
-    samples: deps.repos.listTrainingSamples({ enabled: true }).length
-  }));
+  registerAdminDashboardRoutes(app, { repos: deps.repos, adminOnly });
 
   app.get("/api/admin/merchants", { preHandler: adminOnly }, async () => ({ rows: deps.repos.listMerchants() }));
   app.post("/api/admin/merchants", { preHandler: adminOnly }, async (request, reply) => {
