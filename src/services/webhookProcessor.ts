@@ -2,13 +2,12 @@ import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "
 import { shouldUseInviteForReply, suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
-import { A2CClient } from "../clients/a2c.js";
-import { TelegramClient } from "../clients/telegram.js";
+import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
-import { buildHandoffMessage } from "./handoff.js";
+import { completeConversationGoal } from "./conversationGoalCompletion.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
@@ -21,8 +20,6 @@ export class WebhookProcessor {
   constructor(
     private readonly repos: Repositories,
     private readonly ai: AiTasks,
-    private readonly a2c: A2CClient,
-    private readonly telegram: TelegramClient,
     private readonly config: AppConfig
   ) {}
 
@@ -200,19 +197,18 @@ export class WebhookProcessor {
     }
 
     if (isCountryGoalComplete(conversation, country)) {
-      conversation.stage = "ready_for_handoff";
-      conversation.status = "human_handoff";
-      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
-      if (merchantConfig.smartReplyEnabled || simulation) {
-        await this.sendVerificationReply(conversation, data, analysis.language, a2c, simulation);
-      }
-      if (!simulation) {
-        await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
-      }
-      this.repos.updateConversation(conversation);
-      this.repos.upsertCustomerFromConversation(conversation);
-      await this.generateReviewSafe(conversation.id, runtimeConfig);
-      return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
+      return completeConversationGoal({
+        repos: this.repos,
+        runtimeConfig,
+        conversation,
+        data,
+        language: analysis.language,
+        a2c,
+        telegram,
+        simulation,
+        sendVerificationReply: merchantConfig.smartReplyEnabled || simulation,
+        generateReview: (conversationId, config) => generateConversationReview(this.repos, config, conversationId)
+      });
     }
 
     if (!merchantConfig.smartReplyEnabled && !simulation) {
@@ -373,17 +369,18 @@ export class WebhookProcessor {
     if (aiReply.extractedWhatsApp && !conversation.extractedWhatsApp) conversation.extractedWhatsApp = aiReply.extractedWhatsApp;
     if (aiReply.language) conversation.language = aiReply.language;
     if (aiReply.stage === "ready_for_handoff" || isCountryGoalComplete(conversation, country)) {
-      conversation.stage = "ready_for_handoff";
-      conversation.status = "human_handoff";
-      this.repos.markInviteCodeUsedForConversation(conversation.id, conversation.merchantId);
-      await this.sendVerificationReply(conversation, data, aiReply.language || analysis.language, a2c, simulation);
-      if (!simulation) {
-        await this.notifyHandoffOnce(conversation, data.messageId, new Date((data.timestamp || Date.now()) * 1000).toISOString(), telegram);
-      }
-      this.repos.updateConversation(conversation);
-      this.repos.upsertCustomerFromConversation(conversation);
-      await this.generateReviewSafe(conversation.id, runtimeConfig);
-      return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
+      return completeConversationGoal({
+        repos: this.repos,
+        runtimeConfig,
+        conversation,
+        data,
+        language: aiReply.language || analysis.language,
+        a2c,
+        telegram,
+        simulation,
+        sendVerificationReply: true,
+        generateReview: (conversationId, config) => generateConversationReview(this.repos, config, conversationId)
+      });
     }
 
     const outbound = await recordOutboundConversationMessage({
@@ -444,74 +441,6 @@ export class WebhookProcessor {
 
     if (outbound.sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
     return { status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
-  }
-
-  private async generateReviewSafe(conversationId: string, runtimeConfig: AppConfig): Promise<void> {
-    try {
-      await generateConversationReview(this.repos, runtimeConfig, conversationId);
-    } catch (error) {
-      console.warn("conversation review generation failed", error);
-    }
-  }
-
-  private async sendVerificationReply(
-    conversation: Parameters<Repositories["updateConversation"]>[0],
-    data: A2CWebhookPayload["data"],
-    language: string,
-    a2c: A2CClient,
-    simulation = false
-  ): Promise<void> {
-    const content = verificationReply(language);
-    await recordOutboundConversationMessage({
-      repos: this.repos,
-      runtimeConfig: appConfigForConversation(this.config, this.repos, conversation),
-      a2c,
-      conversation,
-      simulation,
-      payload: {
-        to: data.from,
-        senderPhoneNumber: data.to,
-        type: "text",
-        content
-      },
-      idPolicy: {
-        simulatedPrefix: "simulated_verify",
-        sentFallbackPrefix: "a2c_verify",
-        failedPrefix: "verify_failed",
-        contextId: data.messageId
-      },
-      message: {
-        content,
-        msgType: "text",
-        language,
-        intent: "human_request",
-        rawPayload: {
-          replyMode: "fallback",
-          systemFinalReply: true
-        }
-      },
-      memory: {
-        intent: "human_request",
-        content,
-        direction: "outbound"
-      }
-    });
-  }
-
-  private async notifyHandoffOnce(conversation: Parameters<Repositories["updateConversation"]>[0], lastMessageId: string, lastMessageTime: string, telegram = this.telegram): Promise<void> {
-    if (conversation.handoffNotified) return;
-    const history = this.repos.listConversationMessages(conversation.id, 8);
-    const summary = history.map((item) => `${item.direction}: ${item.content}`).join("\n");
-    const message = buildHandoffMessage({ conversation, lastMessageId, lastMessageTime, summary });
-    try {
-      await telegram.sendHandoffMessage(message);
-      conversation.handoffNotified = 1;
-      this.repos.insertHandoffEvent(conversation.id, message, true);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "unknown";
-      this.repos.markTelegramBindingInvalid(conversation.merchantId, errorMessage);
-      this.repos.insertHandoffEvent(conversation.id, message, false, errorMessage);
-    }
   }
 
   private async inferStrictFlowIntent(input: {
@@ -708,17 +637,6 @@ export function shouldBypassStrictFlowForNaturalReply(
   void customerText;
   void conversation;
   return false;
-}
-
-function verificationReply(language: string): string {
-  if (language === "en") return "We are verifying your information. Please wait a moment.";
-  if (language === "pt-BR") return "Estamos verificando suas informações. Aguarde um momento.";
-  if (language === "ja") return "情報を確認しています。少々お待ちください。";
-  if (language === "th") return "เรากำลังตรวจสอบข้อมูลของคุณ กรุณารอสักครู่";
-  if (language === "vi") return "Chúng tôi đang xác minh thông tin của bạn. Vui lòng chờ một chút.";
-  if (language === "ms") return "Kami sedang menyemak maklumat anda. Sila tunggu sebentar.";
-  if (language === "id") return "Kami sedang memverifikasi informasi Anda. Mohon tunggu sebentar.";
-  return "我们正在核实，请稍后。";
 }
 
 function registrationTutorialCaption(language: string): string {

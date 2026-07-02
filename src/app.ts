@@ -3,8 +3,6 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { A2CClient } from "./clients/a2c.js";
-import { TelegramClient } from "./clients/telegram.js";
 import type { AppConfig } from "./config.js";
 import { openDb } from "./db.js";
 import { Repositories } from "./repositories.js";
@@ -28,8 +26,6 @@ export function buildApp(config: AppConfig) {
   const webhookProcessor = new WebhookProcessor(
     repos,
     new AiTasks(),
-    new A2CClient(config),
-    new TelegramClient(config),
     config
   );
   const followUpProcessor = new FollowUpProcessor(repos, config);
