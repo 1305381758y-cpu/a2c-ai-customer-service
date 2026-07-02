@@ -5,11 +5,12 @@ import { suppressRegistrationDetailsForNonLinkStep } from "../domain/registratio
 import type { MessageAnalysis } from "../domain/analyzer.js";
 import type { Conversation, CustomerMemoryRecord, MerchantAgentProfileRecord, MerchantCountryRecord, Repositories } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
-import { completeConversationGoal, isConversationGoalComplete } from "./conversationGoalCompletion.js";
+import { completeConversationGoal } from "./conversationGoalCompletion.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import { buildAiConversationOutboundRawPayload } from "./aiConversationOutboundPayload.js";
 import { buildAiConversationReplyContext } from "./aiConversationReplyContext.js";
+import { applyAiReplyConversationState } from "./aiConversationReplyState.js";
 
 export interface LearnedIntentDebugInfo {
   id: number;
@@ -56,17 +57,19 @@ export async function generateAndRecordAiConversationReply(input: {
     aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, input.runtimeConfig, input.country, input.conversation, aiReply.language || input.conversation.language);
   }
 
-  if (aiReply.extractedPhone && !input.conversation.extractedPhone) input.conversation.extractedPhone = aiReply.extractedPhone;
-  if (aiReply.extractedTelegram && !input.conversation.extractedTelegram) input.conversation.extractedTelegram = aiReply.extractedTelegram;
-  if (aiReply.extractedWhatsApp && !input.conversation.extractedWhatsApp) input.conversation.extractedWhatsApp = aiReply.extractedWhatsApp;
-  if (aiReply.language) input.conversation.language = aiReply.language;
-  if (aiReply.stage === "ready_for_handoff" || isConversationGoalComplete(input.conversation, input.country)) {
+  const replyState = applyAiReplyConversationState({
+    conversation: input.conversation,
+    country: input.country,
+    aiReply,
+    fallbackLanguage: input.analysis.language
+  });
+  if (replyState.readyForHandoff) {
     return completeConversationGoal({
       repos: input.repos,
       runtimeConfig: input.runtimeConfig,
       conversation: input.conversation,
       data: input.data,
-      language: aiReply.language || input.analysis.language,
+      language: replyState.handoffLanguage,
       a2c: input.a2c,
       telegram: input.telegram,
       simulation: input.simulation,
