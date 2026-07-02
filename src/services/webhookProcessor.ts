@@ -1,16 +1,12 @@
-import { analyzeMessage } from "../domain/analyzer.js";
-import { isStrictFlowEnabled, resolveEffectiveStrictFlowStep } from "../domain/strictFlow.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
-import { generateAndRecordAiConversationReply, type LearnedIntentDebugInfo } from "./aiConversationReply.js";
+import { generateAndRecordAiConversationReply } from "./aiConversationReply.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { completeConversationGoal, isConversationGoalComplete } from "./conversationGoalCompletion.js";
-import { applyInternalIntent, inferStrictFlowContextualIntent, inferStrictFlowIntent } from "./contextualIntentInference.js";
+import { analyzeInboundTurn } from "./inboundTurnAnalysis.js";
 import { prepareInboundConversationContext } from "./inboundConversationContext.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
-import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
-import { refineMessageLanguage } from "./replyLanguage.js";
 import { generateAndRecordStrictFlowReply } from "./strictFlowReply.js";
 import { translateForOperator } from "./translation.js";
 
@@ -49,77 +45,31 @@ export class WebhookProcessor {
       merchantId,
       simulation: options.simulation
     });
-    let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
-    if (msgType === "image" && !analysisText && !imageAnalysis.text) {
-      analysis = { ...analysis, language: conversation.language || analysis.language, intent: "need_help", stage: "need_platform_register" };
-    }
     const historyForIntent = this.repos.listConversationMessages(conversation.id, 8);
-    analysis = await refineMessageLanguage(this.ai, {
+    const {
+      analysis,
+      scriptFlow,
+      strictFlowEnabled,
+      effectiveStrictFlowStep,
+      inferredIntent,
+      contextualIntent,
+      learnedIntent,
+      learnedIntentDebug,
+      intentLearningCandidate
+    } = await analyzeInboundTurn({
+      repos: this.repos,
+      ai: this.ai,
       runtimeConfig,
+      merchant,
+      merchantConfig,
       country,
       conversation,
-      analysis,
-      customerText: customerTextForAi,
+      msgType,
+      analysisText,
+      imageAnalysisText: imageAnalysis.text,
+      customerTextForAi,
       history: historyForIntent
     });
-    const scriptFlow = this.repos.getActiveScriptFlow(merchant.id, country.id);
-    const strictFlowEnabled = Boolean(scriptFlow) || isStrictFlowEnabled(merchant, country, merchantConfig);
-    const effectiveStrictFlowStep = strictFlowEnabled
-      ? resolveEffectiveStrictFlowStep(conversation, historyForIntent)
-      : "";
-    if (effectiveStrictFlowStep && conversation.flowStep !== effectiveStrictFlowStep) {
-      conversation.flowStep = effectiveStrictFlowStep;
-    }
-    const contextualPhone = detectContextualRegistrationPhone(analysisText, effectiveStrictFlowStep || conversation.flowStep);
-    if (contextualPhone && !analysis.phone) {
-      analysis = { ...analysis, phone: contextualPhone, intent: "provide_phone", stage: "need_phone_or_tg" };
-    }
-    const learnedIntent = findLearnedIntentMatch({
-      events: this.repos.listPromotedIntentLearningEvents({ merchantId: merchant.id, countryId: country.id }),
-      customerText: customerTextForAi,
-      flowStep: effectiveStrictFlowStep || conversation.flowStep || ""
-    });
-    const learnedIntentDebug = learnedIntent ? {
-      id: learnedIntent.event.id,
-      suggestedIntent: learnedIntent.event.suggestedIntent,
-      displayName: learnedIntent.event.displayName,
-      score: learnedIntent.score
-    } satisfies LearnedIntentDebugInfo : null;
-    let inferredIntent = await inferStrictFlowIntent({
-      ai: this.ai,
-      runtimeConfig,
-      conversation,
-      analysis,
-      customerText: customerTextForAi,
-      strictFlowEnabled,
-      history: historyForIntent
-    });
-    if (learnedIntent?.internalIntent && inferredIntent === "unknown") {
-      inferredIntent = learnedIntent.internalIntent;
-    }
-    if (inferredIntent !== "unknown") {
-      analysis = applyInternalIntent(analysis, inferredIntent);
-    }
-    let contextualIntent = await inferStrictFlowContextualIntent({
-      ai: this.ai,
-      runtimeConfig,
-      conversation,
-      analysis,
-      customerText: customerTextForAi,
-      strictFlowEnabled,
-      history: historyForIntent,
-      inferredIntent
-    });
-    if (learnedIntent?.contextualIntent && (contextualIntent.intent === "unknown" || contextualIntent.intent === "unknown_question" || contextualIntent.source === "ai")) {
-      contextualIntent = {
-        ...contextualIntent,
-        intent: learnedIntent.contextualIntent,
-        source: "rule",
-        questionType: contextualQuestionTypeFromLearnedIntent(learnedIntent.contextualIntent),
-        nextAction: `learned intent: ${learnedIntent.event.displayName || learnedIntent.event.suggestedIntent}`,
-        reason: `matched promoted intent #${learnedIntent.event.id}`
-      };
-    }
     const inboundTranslation = analysisText
       ? await translateForOperator(runtimeConfig, analysisText, analysis.language)
       : { originalText: content, translatedText: "", targetLanguage: "zh-CN", status: "skipped" as const, error: "" };
@@ -154,14 +104,6 @@ export class WebhookProcessor {
       }
     });
     if (!inserted.inserted) return { status: "duplicate", conversationId: conversation.id };
-    const intentLearningCandidate = buildIntentLearningCandidate({
-      customerText: customerTextForAi,
-      analysis,
-      inferredIntent,
-      contextualIntent,
-      flowStep: effectiveStrictFlowStep || conversation.flowStep || "",
-      strictFlowEnabled
-    });
     if (intentLearningCandidate) {
       this.repos.recordIntentLearningEvent({
         merchantId: merchant.id,
