@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
+import type { Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
 import { type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 import {
   asksAboutJob,
@@ -53,6 +53,7 @@ import {
 } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine, registrationFieldQuestionReply } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
+import { activeScriptStep, applyScriptVariables, configuredNextFlowStep, flowScriptLine, inviteDisplayText } from "./strictFlowScriptRuntime.js";
 import { strictFlowScriptLine, strictFlowVerificationLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
@@ -507,80 +508,4 @@ function registrationStartInstruction(input: StrictFlowInput, language: string):
   if (language === "en") return `Okay, let's start with the first step. Please open the link first, and I will guide you step by step.\n${instruction}`;
   if (language === "pt-BR") return `Certo, vamos começar pelo primeiro passo. Abra primeiro o link, e eu vou orientar você etapa por etapa.\n${instruction}`;
   return `好的，我们先从第一步开始。您先打开下面这个链接，我一步步带您操作。\n${instruction}`;
-}
-
-function flowScriptLine(input: StrictFlowInput, key: string, language: string): string {
-  const step = activeScriptStep(input, key);
-  if (step?.standardReply) {
-    return applyScriptVariables(step.standardReply, input, language, "");
-  }
-  return strictFlowScriptLine(key, language);
-}
-
-function activeScriptStep(input: StrictFlowInput, key: string) {
-  const steps = input.scriptFlow?.steps ?? [];
-  const enabledSteps = steps.filter((step) => step.enabled);
-  const normalizedKey = key.toLowerCase();
-  const exact = enabledSteps.find((step) => step.flowStep === key || step.flowCode.toLowerCase() === normalizedKey);
-  if (exact) return exact;
-
-  if (key === "first_greeting" || key === "interest_screening_retry") {
-    return enabledSteps.find((step) => step.flowStep === "interest_screening");
-  }
-
-  if (key === "project_intro") {
-    return (
-      enabledSteps.find((step) => step.flowStep === "registration_intent" && /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
-      enabledSteps.find((step) => /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
-      enabledSteps.find((step) => step.flowCode.toUpperCase() === "B" || step.flowCode.toUpperCase() === "C") ??
-      enabledSteps.find((step) => step.flowStep === "registration_intent")
-    );
-  }
-
-  if (key === "registration_intent") {
-    return (
-      enabledSteps.find((step) => step.flowStep === "registration_intent" && (step.sendLink || step.sendInvite)) ??
-      enabledSteps.find((step) => step.flowStep === "registration_intent" && /注册|注册链接|开户链接|邀请码|register|invite/i.test(`${step.flowName} ${step.goal} ${step.standardReply}`))
-    );
-  }
-
-  if (key === "wait_registration") {
-    return enabledSteps.find((step) => step.flowStep === "wait_registration" || step.sendLink || step.sendInvite);
-  }
-
-  return undefined;
-}
-
-function configuredNextFlowStep(input: StrictFlowInput, currentKey: string, fallback: StrictFlowStep): StrictFlowStep {
-  const configured = normalizeFlowStep(activeScriptStep(input, currentKey)?.nextFlowStep || "");
-  return configured || fallback;
-}
-
-function applyScriptVariables(content: string, input: StrictFlowInput, language: string, display: string): string {
-  const fallbackUrl = input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL || "";
-  const registerUrl = input.inviteCode?.registerUrl
-    ? input.inviteCode.registerUrl.includes("{code}")
-      ? input.inviteCode.registerUrl.replaceAll("{code}", input.inviteCode.code)
-      : input.inviteCode.registerUrl
-    : fallbackUrl;
-  return content
-    .replaceAll("{{REGISTER_URL}}", registerUrl)
-    .replaceAll("{{INVITE_CODE}}", input.inviteCode?.code || "")
-    .replaceAll("{{INVITE_DISPLAY}}", display || inviteDisplayText(input.inviteCode, language, fallbackUrl))
-    .replaceAll("{{CUSTOMER_PHONE}}", input.conversation.extractedPhone || input.analysis.phone || "")
-    .replaceAll("{{TELEGRAM_USERNAME}}", input.conversation.extractedTelegram || input.analysis.telegram || "");
-}
-
-function inviteDisplayText(inviteCode: A2CInviteCodeRecord | undefined, language: string, fallbackUrl = ""): string {
-  if (!inviteCode) return fallbackUrl || "";
-  const template = inviteCode.registerUrl || fallbackUrl;
-  const url = template ? template.includes("{code}") ? template.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : template : "";
-  if (template.includes("{code}")) {
-    if (language === "en") return `Exclusive registration link: ${url}\nInvitation code: ${inviteCode.code}`;
-    if (language === "pt-BR") return `Link exclusivo de cadastro: ${url}\nCódigo de convite: ${inviteCode.code}`;
-    return `专属开户链接：${url}\n邀请码：${inviteCode.code}`;
-  }
-  if (language === "en") return `Registration link: ${url || "confirming"}\nInvitation code: ${inviteCode.code}`;
-  if (language === "pt-BR") return `Link de cadastro: ${url || "confirmando"}\nCódigo de convite: ${inviteCode.code}`;
-  return `开户链接：${url || "确认中"}\n邀请码：${inviteCode.code}`;
 }
