@@ -9,11 +9,12 @@ import type { Repositories } from "../repositories.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
-import { normalizeA2CWebhookPayload, type A2CWebhookPayload } from "./inboundMessage.js";
+import { prepareInboundConversationContext } from "./inboundConversationContext.js";
+import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
 import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, refineMessageLanguage } from "./replyLanguage.js";
-import { appConfigForConversation, appConfigForMerchant } from "./runtimeConfig.js";
+import { appConfigForConversation } from "./runtimeConfig.js";
 import { translateForOperator } from "./translation.js";
 
 export class WebhookProcessor {
@@ -28,20 +29,31 @@ export class WebhookProcessor {
   async process(payload: A2CWebhookPayload, merchantId?: string, options: { simulation?: boolean } = {}): Promise<{ status: string; conversationId?: string }> {
     if (payload.type !== "CUSTOMER_MESSAGE") return { status: "ignored" };
 
-    const { data, msgType, mediaUrl, analysisText, content, shouldAnalyzeImage } = normalizeA2CWebhookPayload(payload);
-    const merchant = merchantId ? this.repos.getMerchant(merchantId) ?? this.repos.findMerchantByA2CAccount(data.to) : this.repos.findMerchantByA2CAccount(data.to);
-    const merchantConfig = this.repos.getMerchantConfig(merchant.id);
-    const agentProfile = this.repos.getMerchantAgentProfile(merchant.id);
-    const simulation = Boolean(options.simulation || merchantConfig.trainingSimulationEnabled);
-    const country = this.repos.ensurePrimaryCountry(merchant.id);
-    const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-    const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(merchant.id));
-    const telegram = new TelegramClient(runtimeConfig);
-    const conversation = this.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
-    const imageAnalysis = shouldAnalyzeImage
-      ? await this.ai.analyzeImage(runtimeConfig, mediaUrl)
-      : { text: "", status: "skipped" as const };
-    const customerTextForAi = analysisText || (imageAnalysis.text ? `${content} ${imageAnalysis.text}` : content);
+    const {
+      data,
+      msgType,
+      mediaUrl,
+      analysisText,
+      content,
+      merchant,
+      merchantConfig,
+      agentProfile,
+      simulation,
+      country,
+      runtimeConfig,
+      a2c,
+      telegram,
+      conversation,
+      imageAnalysis,
+      customerTextForAi
+    } = await prepareInboundConversationContext({
+      repos: this.repos,
+      ai: this.ai,
+      config: this.config,
+      payload,
+      merchantId,
+      simulation: options.simulation
+    });
     let analysis = analyzeMessage(msgType === "text" || analysisText ? customerTextForAi : imageAnalysis.text, conversation.language);
     if (msgType === "image" && !analysisText && !imageAnalysis.text) {
       analysis = { ...analysis, language: conversation.language || analysis.language, intent: "need_help", stage: "need_platform_register" };
