@@ -9,15 +9,12 @@ import { ConversationRepository } from "./repositoryConversations.js";
 import { CustomerRepository } from "./repositoryCustomers.js";
 import { HandoffRepository } from "./repositoryHandoffs.js";
 import { IntentLearningRepository } from "./repositoryIntentLearning.js";
+import { MerchantAgentProfileRepository } from "./repositoryMerchantAgentProfiles.js";
 import { MerchantRepository } from "./repositoryMerchants.js";
 import { MerchantSettingsRepository } from "./repositoryMerchantSettings.js";
 import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
 import { TrainingContentRepository } from "./repositoryTrainingContent.js";
 import { UserRepository } from "./repositoryUsers.js";
-import {
-  booleanPatchValue,
-  mapMerchantAgentProfile,
-} from "./repositoryMappers.js";
 
 import type {
   Conversation,
@@ -85,6 +82,7 @@ export class Repositories {
   private readonly customers: CustomerRepository;
   private readonly handoffs: HandoffRepository;
   private readonly intentLearning: IntentLearningRepository;
+  private readonly agentProfiles: MerchantAgentProfileRepository;
   private readonly merchants: MerchantRepository;
   private readonly reviews: ConversationReviewRepository;
   private readonly scriptFlows: ScriptFlowRepository;
@@ -104,6 +102,7 @@ export class Repositories {
     this.customers = new CustomerRepository(db);
     this.handoffs = new HandoffRepository(db);
     this.intentLearning = new IntentLearningRepository(db);
+    this.agentProfiles = new MerchantAgentProfileRepository(db);
     this.merchants = new MerchantRepository(db, {
       ensureDefaultCountry: (merchantId) => {
         this.settings.ensureDefaultCountry(merchantId);
@@ -471,33 +470,11 @@ export class Repositories {
   }
 
   getMerchantAgentProfile(merchantId: string): MerchantAgentProfileRecord {
-    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_agent_profiles (merchant_id) VALUES (?)").run(merchantId);
-    const row = this.db.sqlite.prepare("SELECT * FROM merchant_agent_profiles WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
-    return mapMerchantAgentProfile(row);
+    return this.agentProfiles.get(merchantId);
   }
 
   patchMerchantAgentProfile(merchantId: string, patch: Record<string, unknown>): MerchantAgentProfileRecord {
-    this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_agent_profiles (merchant_id) VALUES (?)").run(merchantId);
-    const allowed: Record<string, string> = {
-      agentName: "agent_name",
-      roleDefinition: "role_definition",
-      toneStyle: "tone_style",
-      coreGoal: "core_goal",
-      mustFollow: "must_follow",
-      forbidden: "forbidden",
-      uncertaintyPolicy: "uncertainty_policy",
-      handoffPolicy: "handoff_policy",
-      enabled: "enabled"
-    };
-    const entries = Object.entries(patch).filter(([key]) => key in allowed);
-    if (entries.length) {
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      const values = entries.map(([key, value]) => key === "enabled" ? booleanPatchValue(value, true) : String(value ?? ""));
-      this.db.sqlite
-        .prepare(`UPDATE merchant_agent_profiles SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`)
-        .run(...values, merchantId);
-    }
-    return this.getMerchantAgentProfile(merchantId);
+    return this.agentProfiles.patch(merchantId, patch);
   }
 
   getConversationReview(conversationId: string, merchantId?: string): { review: ConversationReviewRecord; items: ConversationReviewItemRecord[] } | undefined {
