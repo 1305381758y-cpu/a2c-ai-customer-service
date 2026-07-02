@@ -40,11 +40,9 @@ import {
   lastAssistantContent,
   looksLikeQuestion,
   mapInternalToContextual,
-  mentionsAndroidPhone,
   reportsLinkLoadFailure,
   reportsRegistrationBlocker,
   saysContextualNo,
-  saysNoTelegram,
   saysNotAvailable,
   saysNotRegistered,
   saysTelegramInstalled,
@@ -59,6 +57,15 @@ import { isStrictFlowEnabled } from "./strictFlowMarketPolicy.js";
 import { registerInstruction, registrationStartInstruction } from "./strictFlowRegistration.js";
 import { strictFlowScriptLine, strictFlowVerificationLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
+import {
+  isNegativeTelegramAnswer,
+  shouldAcknowledgeTelegramInstalled,
+  shouldCollectTelegramUsername,
+  shouldGuideTelegramDownload,
+  shouldPauseTelegramFlow,
+  shouldWaitForTelegramUsername,
+  telegramUsernameHelpScriptKey
+} from "./strictFlowTelegram.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
 export { buildStrictFlowFollowUp } from "./strictFlowFollowUp.js";
@@ -168,7 +175,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const contextualLabel = contextualIntent.intent;
   const positive = isContextualPositive(step, contextualLabel) || isPositive(text, input.analysis.intent, input.inferredIntent);
-  const negativeTelegram = contextualLabel === "no_telegram" || saysNoTelegram(text);
+  const negativeTelegram = isNegativeTelegramAnswer(contextualLabel, text);
   const asksLink = asksForInviteOrLink(text, input.analysis.intent);
   const inferredIntent = input.inferredIntent ?? "unknown";
 
@@ -310,17 +317,17 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "telegram_confirm") {
     if (contextualLabel === "telegram_username_help") {
-      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      const line = telegramUsernameHelpScriptKey(text);
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
     if (negativeTelegram) {
       const nextStep = configuredNextFlowStep(input, "telegram_confirm", "telegram_download");
       return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_download", language));
     }
-    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
+    if (shouldPauseTelegramFlow(contextualLabel, inferredIntent)) {
       return reply(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
-    if (positive || contextualLabel === "telegram_installed" || contextualLabel === "ask_tg_register" || inferredIntent === "ask_tg_register" || input.analysis.intent === "ask_tg_register") {
+    if (shouldCollectTelegramUsername(contextualLabel, inferredIntent, input.analysis.intent, positive)) {
       const nextStep = configuredNextFlowStep(input, "telegram_confirm", "collect_telegram");
       return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "collect_telegram", language));
     }
@@ -329,13 +336,13 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "telegram_download") {
     if (contextualLabel === "telegram_username_help") {
-      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      const line = telegramUsernameHelpScriptKey(text);
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
-    if (contextualLabel === "no_telegram" || contextualLabel === "need_help" || contextualLabel === "workflow_question" || contextualLabel === "ask_tg_register") {
+    if (shouldGuideTelegramDownload(contextualLabel)) {
       return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
     }
-    if (contextualLabel === "telegram_installed" || contextualLabel === "acknowledgement" || positive) {
+    if (shouldAcknowledgeTelegramInstalled(contextualLabel, positive)) {
       const nextStep = configuredNextFlowStep(input, "telegram_download", "collect_telegram");
       return reply(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_installed_ack", language));
     }
@@ -344,19 +351,19 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
 
   if (step === "collect_telegram") {
     if (contextualLabel === "telegram_username_help") {
-      const line = mentionsAndroidPhone(text) ? "telegram_username_android_help" : "telegram_username_help";
+      const line = telegramUsernameHelpScriptKey(text);
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
     }
     if (asksGenericQuestionPermission(text)) {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "ask_question_prompt_tg", language));
     }
-    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
+    if (shouldPauseTelegramFlow(contextualLabel, inferredIntent)) {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
     }
     if (negativeTelegram || contextualLabel === "need_help") {
       return reply(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
     }
-    if (contextualLabel === "acknowledgement" || positive) {
+    if (shouldWaitForTelegramUsername(contextualLabel, positive)) {
       return reply(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram_wait", language));
     }
     return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
