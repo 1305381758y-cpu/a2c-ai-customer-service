@@ -1,12 +1,12 @@
 import type { A2CClient } from "../clients/a2c.js";
 import type { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
-import { suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
 import type { MessageAnalysis } from "../domain/analyzer.js";
 import type { Conversation, CustomerMemoryRecord, MerchantAgentProfileRecord, MerchantCountryRecord, Repositories } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
 import { completeConversationGoal } from "./conversationGoalCompletion.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
+import { generateAiConversationReplyDraft } from "./aiConversationReplyGeneration.js";
 import { buildAiConversationReplyContext } from "./aiConversationReplyContext.js";
 import { applyAiReplyConversationState } from "./aiConversationReplyState.js";
 import { sendAiConversationTextOutbound } from "./aiConversationTextOutbound.js";
@@ -51,10 +51,13 @@ export async function generateAndRecordAiConversationReply(input: {
     inboundMemory: input.inboundMemory,
     agentProfile: input.agentProfile
   });
-  const aiReply = await input.ai.generateReply(input.runtimeConfig, replyContext.replyInput);
-  if (!replyContext.shouldIncludeRegistrationDetails) {
-    aiReply.reply = suppressRegistrationDetailsForNonLinkStep(aiReply.reply, input.runtimeConfig, input.country, input.conversation, aiReply.language || input.conversation.language);
-  }
+  const aiReply = await generateAiConversationReplyDraft({
+    ai: input.ai,
+    runtimeConfig: input.runtimeConfig,
+    conversation: input.conversation,
+    country: input.country,
+    replyContext
+  });
 
   const replyState = applyAiReplyConversationState({
     conversation: input.conversation,

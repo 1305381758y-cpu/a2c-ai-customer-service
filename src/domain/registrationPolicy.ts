@@ -49,15 +49,15 @@ function stripKnownRegistrationUrls(
   let result = value;
   for (const template of [country.platformRegisterUrl || "", config.PLATFORM_REGISTER_URL || ""]) {
     if (!template) continue;
-    for (const candidate of registrationUrlCandidates(template)) {
-      result = result.split(candidate).join("");
-    }
     const escaped = escapeRegExp(template);
     const pattern = new RegExp(
       escaped.replace("\\{code\\}", "[^\\s。.!?！？，,；;]+"),
       "gi"
     );
     result = result.replace(pattern, "");
+    for (const candidate of registrationUrlCandidates(template)) {
+      result = result.split(candidate).join("");
+    }
   }
   return result
     .replace(/(?:开户链接和邀请码|开户链接|注册链接|注册入口|开户链接和邀請碼|registration link and invitation code|registration link|register link|link de cadastro e código de convite|link de cadastro)\s*[:：]?\s*/gi, "")
