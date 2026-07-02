@@ -60,6 +60,6 @@ export function ensureActionableStrictContent(
 }
 
 function isLowInformationStrictReply(value: string): boolean {
-  const normalized = value.replace(/[。.!?！？\s]/g, "");
+  const normalized = value.replace(/[。.!?！？,，、\s]/g, "");
   return /^(好的我继续协助您|我继续协助您|OkayIwillcontinuehelpingyouwiththenextstep|Certovoucontinuarajudandovocênopróximopasso)$/i.test(normalized);
 }
