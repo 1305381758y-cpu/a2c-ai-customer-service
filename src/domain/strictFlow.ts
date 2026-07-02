@@ -2,37 +2,28 @@ import type { AppConfig } from "../config.js";
 import type { Conversation, ConversationMessageRecord } from "../repositories.js";
 import { type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 import {
-  asksAboutJob,
-  asksAboutPlatform,
-  asksEarningConcern,
   asksForInviteOrLink,
-  asksForMoreJobInfo,
-  asksForOperationHelp,
-  asksForRegistrationSteps,
   asksNextStep,
   asksSensitiveInfo,
-  asksToChat,
-  complainsAboutReply,
   isAcknowledgement,
   isContextualPositive,
-  isExplicitRefusal,
   isHesitant,
   isPositive,
-  isReadyToStartRegistration,
   isRepeatGreeting,
   saysNotAvailable
 } from "./strictFlowPredicates.js";
 import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
-import { buildInterestProgressReply, buildStrictFlowResponse, naturalizeStrictReply, normalizeReplyLanguage } from "./strictFlowResponseBuilder.js";
-import { configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
+import { buildStrictFlowResponse, normalizeReplyLanguage } from "./strictFlowResponseBuilder.js";
+import { flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { strictFlowNeedsInviteCode } from "./strictFlowInvitePolicy.js";
 import { isStrictFlowEnabled } from "./strictFlowMarketPolicy.js";
 import { registerInstruction } from "./strictFlowRegistration.js";
 import { strictFlowVerificationLine } from "./strictFlowScriptText.js";
-import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
+import { normalizeFlowStep, resolveStrictFlowStepFromState } from "./strictFlowState.js";
 import { buildWaitRegistrationReply } from "./strictFlowWaitRegistration.js";
 import { buildTelegramStepReply } from "./strictFlowTelegramSteps.js";
 import { isNegativeTelegramAnswer } from "./strictFlowTelegram.js";
+import { buildRegistrationStepReply } from "./strictFlowRegistrationSteps.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
 export { buildStrictFlowFollowUp } from "./strictFlowFollowUp.js";
@@ -79,56 +70,16 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     return buildStrictFlowResponse(input, language, "collect_telegram", "need_phone_or_tg", flowScriptLine(input, "ask_registered_phone", language));
   }
 
-  if (step === "interest_screening") {
-    if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
-      return buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
-    }
-    if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
-      const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
-      return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
-    }
-    if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
-      return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
-    }
-    if (asksLink) {
-      return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
-    }
-    return buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "interest_screening_retry", language), "interest_screening", input.analysis.intent));
-  }
-
-  if (step === "project_intro") {
-    return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "project_intro", language), "registration_intent", input.analysis.intent));
-  }
-
-  if (step === "registration_intent") {
-    if (contextualLabel === "not_available" || contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
-      return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
-    }
-    if (asksForMoreJobInfo(text)) {
-      return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
-    }
-    if ((contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) &&
-      !(asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text))) {
-      return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "registration_help_before_ready", language));
-    }
-    if (asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text)) {
-      const nextStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
-      return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
-    }
-    if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
-      return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
-    }
-    if (positive || asksLink || inferredIntent === "ask_link" || inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-      const nextStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
-      return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
-    }
-    return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
-  }
-
-  if (step === "send_register_link") {
-    const nextStep = configuredNextFlowStep(input, "send_register_link", "wait_registration");
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
+  if (step === "interest_screening" || step === "project_intro" || step === "registration_intent" || step === "send_register_link") {
+    return buildRegistrationStepReply(input, {
+      language,
+      step,
+      text,
+      contextualLabel,
+      positive,
+      asksLink,
+      inferredIntent
+    });
   }
 
   if (step === "wait_registration") {
