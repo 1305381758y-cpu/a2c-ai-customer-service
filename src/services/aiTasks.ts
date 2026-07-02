@@ -10,6 +10,7 @@ import {
 } from "../clients/aiProvider.js";
 import { AiReplyClient } from "../clients/aiReplyClient.js";
 import type { AiReply, ReplyInput } from "../clients/aiReplyTypes.js";
+import { translateTextWithAi, type AiTranslationInput } from "../clients/aiTranslationTask.js";
 import type { AppConfig } from "../config.js";
 import type { ContextualIntentLabel, InternalIntentLabel } from "../domain/analyzer.js";
 import type { ConversationMessageRecord, ConversationReviewInput, MerchantAgentProfileRecord } from "../repositories.js";
@@ -55,12 +56,6 @@ export interface AiNaturalizeStrictFlowInput {
   agentProfile?: MerchantAgentProfileRecord;
 }
 
-export interface AiTranslationInput {
-  text: string;
-  targetLanguage: string;
-  systemPrompt: string;
-}
-
 export interface AiTrainingImageTextInput {
   buffer: Buffer;
   filename: string;
@@ -104,8 +99,8 @@ export class AiTasks {
   }
 
   async translateText(config: AppConfig, input: AiTranslationInput): Promise<string> {
-    return generateAiText(config, JSON.stringify({ targetLanguage: input.targetLanguage, text: input.text }), {
-      systemInstruction: input.systemPrompt
+    return translateTextWithAi(config, input, {
+      generateText: generateAiText
     });
   }
 
