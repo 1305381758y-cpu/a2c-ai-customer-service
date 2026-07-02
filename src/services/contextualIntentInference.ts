@@ -1,6 +1,7 @@
 import type { AppConfig } from "../config.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
-import { buildRuleContextualIntent, type StrictContextualIntent } from "../domain/strictFlow.js";
+import { buildRuleContextualIntent } from "../domain/strictFlowContextualIntent.js";
+import type { StrictContextualIntent } from "../domain/strictFlowTypes.js";
 import type { Conversation, ConversationMessageRecord } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
 
