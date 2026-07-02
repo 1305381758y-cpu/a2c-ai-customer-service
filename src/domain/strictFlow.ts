@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import type { Conversation, ConversationMessageRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord } from "../repositories.js";
+import type { Conversation, ConversationMessageRecord } from "../repositories.js";
 import { type ContextualIntentLabel, type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 import {
   asksAboutJob,
@@ -53,51 +53,18 @@ import {
 } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine, registrationFieldQuestionReply } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
-import { activeScriptStep, applyScriptVariables, configuredNextFlowStep, flowScriptLine, inviteDisplayText } from "./strictFlowScriptRuntime.js";
+import { configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
+import { strictFlowNeedsInviteCode } from "./strictFlowInvitePolicy.js";
+import { isStrictFlowEnabled } from "./strictFlowMarketPolicy.js";
+import { registerInstruction, registrationStartInstruction } from "./strictFlowRegistration.js";
 import { strictFlowScriptLine, strictFlowVerificationLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
+export { strictFlowNeedsInviteCode } from "./strictFlowInvitePolicy.js";
+export { isStrictFlowEnabled } from "./strictFlowMarketPolicy.js";
+export { registerInstruction, registrationStartInstruction } from "./strictFlowRegistration.js";
 export { inferStrictFlowStepFromContent, inferStrictFlowStepFromHistory, normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep, stageToStrictFlowStep } from "./strictFlowState.js";
-
-export function isStrictFlowEnabled(merchant: MerchantRecord, country: MerchantCountryRecord, merchantConfig?: Pick<MerchantConfigRecord, "strictScriptFlowEnabled">): boolean {
-  if (merchantConfig?.strictScriptFlowEnabled) return true;
-  const merchantName = merchant.name.trim().toLowerCase();
-  const merchantId = merchant.id.trim().toLowerCase();
-  const countryName = country.name.trim().toLowerCase();
-  const countryCode = country.code.trim().toLowerCase();
-  const isAston = merchantName.includes("阿斯顿") || merchantName.includes("aston") || merchantId.includes("aston");
-  const isDefaultMerchant = merchantId === "default" || merchantName.includes("默认") || merchantName.includes("default");
-  const isBrazil = countryName.includes("巴西") || countryName.includes("brazil") || countryName.includes("brasil") || countryCode === "br" || countryCode === "brasil";
-  const isUnconfiguredMarket =
-    !countryName ||
-    !countryCode ||
-    countryName.includes("默认") ||
-    countryName.includes("default") ||
-    countryCode === "default" ||
-    countryCode === "unknown";
-  return (isAston || isDefaultMerchant) && (isBrazil || isUnconfiguredMarket);
-}
-
-export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "strictFlowEnabled">): boolean {
-  if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country)) || !input.country.requirePlatformAccount) return false;
-  if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
-  const step = normalizeFlowStep(input.conversation.flowStep);
-  if (step === "send_register_link") return true;
-  if (step === "registration_intent") {
-    return asksForInviteOrLink(input.customerText, input.analysis.intent) ||
-      asksForRegistrationSteps(input.customerText) ||
-      isReadyToStartRegistration(input.customerText) ||
-      isPositive(input.customerText, input.analysis.intent, input.inferredIntent);
-  }
-  if (step === "wait_registration") {
-    return input.inferredIntent === "ask_link" ||
-      asksForInviteOrLink(input.customerText, input.analysis.intent) ||
-      asksForRegistrationSteps(input.customerText) ||
-      isReadyToStartRegistration(input.customerText);
-  }
-  return false;
-}
 
 export function resolveEffectiveStrictFlowStep(
   conversation: Pick<Conversation, "flowStep" | "stage">,
@@ -468,44 +435,4 @@ function reply(
 function normalizeReplyLanguage(detected: string, previous: string, defaultLanguage: string): string {
   const value = detected && detected !== "unknown" ? detected : previous && previous !== "unknown" ? previous : defaultLanguage;
   return value && value !== "unknown" ? value : "pt-BR";
-}
-
-function registerInstruction(input: StrictFlowInput, language: string, mode: "initial" | "help" = "initial"): string {
-  const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
-  const customStep = activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
-  if (customStep?.standardReply) {
-    const withVariables = applyScriptVariables(customStep.standardReply, input, language, display);
-    if (customStep.sendLink || customStep.sendInvite) {
-      return withVariables.includes(display) || withVariables.includes(input.inviteCode?.code || "__missing_code__")
-        ? withVariables
-        : joinReplyParts(withVariables, display, language);
-    }
-    return withVariables;
-  }
-  if (!input.inviteCode) {
-    return strictFlowScriptLine("missing_invite", language, display);
-  }
-  if (language === "en") {
-    if (mode === "help") {
-      return `Sure, I will send the registration steps clearly again${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? " together with the tutorial image" : ""}.\n${display}\nRegistration steps:\n1. Open the link in your browser.\n2. Fill in your phone number.\n3. Set your username and password.\n4. Enter the invitation code.\n5. Submit the registration.\nAfter registration is completed, send me the registered phone number.`;
-    }
-    return `Okay, I will send you the registration link and invitation code now.\n${display}\nRegistration steps:\n1. Open the link in your browser.\n2. Fill in your phone number.\n3. Set your username and password.\n4. Enter the invitation code.\n5. Submit the registration.\nAfter registration is completed, please tell me.`;
-  }
-  if (language === "pt-BR") {
-    if (mode === "help") {
-      return `Claro, vou enviar os passos do cadastro novamente${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? " junto com a imagem do tutorial" : ""}.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir, envie o telefone usado no cadastro.`;
-    }
-    return `Certo, vou enviar agora o link de cadastro e o código de convite.\n${display}\nPassos do cadastro:\n1. Abra o link no navegador.\n2. Preencha seu número de telefone.\n3. Defina seu nome de usuário e sua senha.\n4. Insira o código de convite.\n5. Envie o cadastro.\nDepois de concluir o cadastro, me avise.`;
-  }
-  if (mode === "help") {
-    return `可以，我把注册步骤给您列清楚${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? "，教程图片也会一起发您" : ""}。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成后把注册手机号发给我就可以。`;
-  }
-  return `好的，现在我会把链接和邀请码发给您。\n${display}\n注册步骤：\n1. 在浏览器中打开链接。\n2. 填写手机号码。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成注册后请告诉我。`;
-}
-
-function registrationStartInstruction(input: StrictFlowInput, language: string): string {
-  const instruction = registerInstruction(input, language);
-  if (language === "en") return `Okay, let's start with the first step. Please open the link first, and I will guide you step by step.\n${instruction}`;
-  if (language === "pt-BR") return `Certo, vamos começar pelo primeiro passo. Abra primeiro o link, e eu vou orientar você etapa por etapa.\n${instruction}`;
-  return `好的，我们先从第一步开始。您先打开下面这个链接，我一步步带您操作。\n${instruction}`;
 }
