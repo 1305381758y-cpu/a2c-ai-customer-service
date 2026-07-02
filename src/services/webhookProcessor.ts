@@ -12,6 +12,7 @@ import { generateConversationReview } from "./conversationReview.js";
 import { buildHandoffMessage } from "./handoff.js";
 import { normalizeA2CWebhookPayload, type A2CWebhookPayload } from "./inboundMessage.js";
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
+import { sendOutboundMessage } from "./outboundMessageSender.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, refineMessageLanguage } from "./replyLanguage.js";
 import { translateForOperator } from "./translation.js";
 
@@ -258,32 +259,28 @@ export class WebhookProcessor {
       });
       strictReply.reply = languageGuard.reply;
 
-      let externalId = "";
-      let a2cSendStatus: "sent" | "failed" | "simulated" = simulation ? "simulated" : "sent";
-      let a2cSendError = "";
-      if (simulation) {
-        externalId = `simulated_strict:${data.messageId || payload.id}:${Date.now()}`;
-      } else {
-        try {
-          externalId = await a2c.sendMessage({
-            to: data.from,
-            senderPhoneNumber: data.to,
-            type: "text",
-            content: strictReply.reply
-          });
-          if (!externalId) externalId = `a2c_strict:${data.messageId || payload.id}:${Date.now()}`;
-        } catch (error) {
-          a2cSendStatus = "failed";
-          a2cSendError = error instanceof Error ? error.message : "unknown";
-          externalId = `strict_send_failed:${data.messageId || payload.id}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
+      const sendResult = await sendOutboundMessage({
+        a2c,
+        simulation,
+        payload: {
+          to: data.from,
+          senderPhoneNumber: data.to,
+          type: "text",
+          content: strictReply.reply
+        },
+        idPolicy: {
+          simulatedPrefix: "simulated_strict",
+          sentFallbackPrefix: "a2c_strict",
+          failedPrefix: "strict_send_failed",
+          contextId: data.messageId || payload.id
         }
-      }
+      });
 
       const outboundTranslation = await translateForOperator(runtimeConfig, strictReply.reply, strictReply.language);
       const outbound = this.repos.insertMessage({
         conversationId: conversation.id,
         direction: "outbound",
-        externalId,
+        externalId: sendResult.externalId,
         content: strictReply.reply,
         msgType: "text",
         language: strictReply.language,
@@ -322,8 +319,8 @@ export class WebhookProcessor {
           operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
           operatorTranslationStatus: outboundTranslation.status,
           operatorTranslationError: outboundTranslation.error || "",
-          a2cSendStatus,
-          a2cSendError,
+          a2cSendStatus: sendResult.a2cSendStatus,
+          a2cSendError: sendResult.a2cSendError,
           simulation,
           inviteCodeRequired: Boolean(country.requirePlatformAccount),
           inviteCodeMissing: Boolean(strictReply.needsInviteCode && !strictInviteCode),
@@ -341,8 +338,8 @@ export class WebhookProcessor {
       this.repos.updateConversation(conversation);
       this.repos.upsertCustomerFromConversation(conversation);
       this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: strictReply.reply, direction: "outbound" });
-      if (a2cSendStatus === "simulated") return { status: outbound.inserted ? "strict_flow_simulated" : "strict_flow_simulation_not_recorded", conversationId: conversation.id };
-      return { status: a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
+      if (sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "strict_flow_simulated" : "strict_flow_simulation_not_recorded", conversationId: conversation.id };
+      return { status: sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed", conversationId: conversation.id };
       }
     }
 
@@ -383,32 +380,28 @@ export class WebhookProcessor {
       return { status: simulation ? "handoff_simulated" : "handoff", conversationId: conversation.id };
     }
 
-    let externalId = "";
-    let a2cSendStatus: "sent" | "failed" | "simulated" = simulation ? "simulated" : "sent";
-    let a2cSendError = "";
-    if (simulation) {
-      externalId = `simulated_reply:${data.messageId || payload.id}:${Date.now()}`;
-    } else {
-      try {
-        externalId = await a2c.sendMessage({
-          to: data.from,
-          senderPhoneNumber: data.to,
-          type: "text",
-          content: aiReply.reply
-        });
-        if (!externalId) externalId = `a2c_sent:${data.messageId || payload.id}:${Date.now()}`;
-      } catch (error) {
-        a2cSendStatus = "failed";
-        a2cSendError = error instanceof Error ? error.message : "unknown";
-        externalId = `send_failed:${data.messageId || payload.id}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
+    const sendResult = await sendOutboundMessage({
+      a2c,
+      simulation,
+      payload: {
+        to: data.from,
+        senderPhoneNumber: data.to,
+        type: "text",
+        content: aiReply.reply
+      },
+      idPolicy: {
+        simulatedPrefix: "simulated_reply",
+        sentFallbackPrefix: "a2c_sent",
+        failedPrefix: "send_failed",
+        contextId: data.messageId || payload.id
       }
-    }
+    });
 
     const outboundTranslation = await translateForOperator(runtimeConfig, aiReply.reply, aiReply.language || conversation.language);
     const outbound = this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
-      externalId,
+      externalId: sendResult.externalId,
       content: aiReply.reply,
       msgType: "text",
       language: aiReply.language || conversation.language,
@@ -432,8 +425,8 @@ export class WebhookProcessor {
         operatorTranslationTargetLanguage: outboundTranslation.targetLanguage,
         operatorTranslationStatus: outboundTranslation.status,
         operatorTranslationError: outboundTranslation.error || "",
-        a2cSendStatus,
-        a2cSendError,
+        a2cSendStatus: sendResult.a2cSendStatus,
+        a2cSendError: sendResult.a2cSendError,
         simulation,
         inviteCodeRequired: Boolean(country.requirePlatformAccount),
         inviteCodeMissing: Boolean(country.requirePlatformAccount && !inviteCode),
@@ -449,8 +442,8 @@ export class WebhookProcessor {
     this.repos.upsertCustomerFromConversation(conversation);
     this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: aiReply.reply, direction: "outbound" });
 
-    if (a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
-    return { status: a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
+    if (sendResult.a2cSendStatus === "simulated") return { status: outbound.inserted ? "reply_simulated" : "reply_simulation_not_recorded", conversationId: conversation.id };
+    return { status: sendResult.a2cSendStatus === "sent" && outbound.inserted ? "replied" : "reply_send_failed", conversationId: conversation.id };
   }
 
   private async generateReviewSafe(conversationId: string, runtimeConfig: AppConfig): Promise<void> {
@@ -483,42 +476,48 @@ export class WebhookProcessor {
       const content = buildStrictFlowFollowUp(conversation.flowStep || conversation.stage, conversation.language || country?.defaultLanguage || "zh");
       const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(conversation.merchantId));
       const flowStep = conversation.flowStep || conversation.stage || "unknown";
-      let externalId = "";
-      let errorMessage = "";
-      try {
-        externalId = await a2c.sendMessage({
+      const sendResult = await sendOutboundMessage({
+        a2c,
+        payload: {
           to: conversation.customerPhone,
           senderPhoneNumber: conversation.a2cAccountPhone,
           type: "text",
           content
-        });
-        if (!externalId) externalId = `followup:${conversation.id}:${Date.now()}`;
-        this.repos.insertMessage({
-          conversationId: conversation.id,
-          direction: "outbound",
-          externalId,
-          content,
-          msgType: "text",
-          language: conversation.language || country?.defaultLanguage || "unknown",
-          intent: "unknown",
-          rawPayload: {
-            replyMode: "strict_flow",
-            followupSent: true,
-            followupReason: "idle_2m",
-            followupStep: flowStep,
-            strictFlow: true,
-            strictFlowStep: flowStep,
-            a2cSendStatus: "sent"
-          }
-        });
-        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
-        this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content, direction: "outbound" });
-        sent += 1;
-      } catch (error) {
-        errorMessage = error instanceof Error ? error.message : "follow-up send failed";
-        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: errorMessage });
+        },
+        idPolicy: {
+          simulatedPrefix: "simulated_followup",
+          sentFallbackPrefix: "followup",
+          failedPrefix: "followup_failed",
+          contextId: conversation.id
+        }
+      });
+      if (sendResult.a2cSendStatus === "failed") {
+        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: sendResult.a2cSendError || "follow-up send failed" });
         failed += 1;
+        continue;
       }
+      this.repos.insertMessage({
+        conversationId: conversation.id,
+        direction: "outbound",
+        externalId: sendResult.externalId,
+        content,
+        msgType: "text",
+        language: conversation.language || country?.defaultLanguage || "unknown",
+        intent: "unknown",
+        rawPayload: {
+          replyMode: "strict_flow",
+          followupSent: true,
+          followupReason: "idle_2m",
+          followupStep: flowStep,
+          strictFlow: true,
+          strictFlowStep: flowStep,
+          a2cSendStatus: sendResult.a2cSendStatus,
+          a2cSendError: sendResult.a2cSendError
+        }
+      });
+      this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
+      this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content, direction: "outbound" });
+      sent += 1;
     }
     return { scanned: candidates.length, sent, skipped, failed };
   }
@@ -531,32 +530,28 @@ export class WebhookProcessor {
     simulation = false
   ): Promise<void> {
     const content = verificationReply(language);
-    let externalId = "";
-    let a2cSendStatus: "sent" | "failed" | "simulated" = simulation ? "simulated" : "sent";
-    let a2cSendError = "";
-    if (simulation) {
-      externalId = `simulated_verify:${data.messageId}:${Date.now()}`;
-    } else {
-      try {
-        externalId = await a2c.sendMessage({
-          to: data.from,
-          senderPhoneNumber: data.to,
-          type: "text",
-          content
-        });
-        if (!externalId) externalId = `a2c_verify:${data.messageId}:${Date.now()}`;
-      } catch (error) {
-        a2cSendStatus = "failed";
-        a2cSendError = error instanceof Error ? error.message : "unknown";
-        externalId = `verify_failed:${data.messageId}:${Date.now()}:${a2cSendError.slice(0, 120)}`;
+    const sendResult = await sendOutboundMessage({
+      a2c,
+      simulation,
+      payload: {
+        to: data.from,
+        senderPhoneNumber: data.to,
+        type: "text",
+        content
+      },
+      idPolicy: {
+        simulatedPrefix: "simulated_verify",
+        sentFallbackPrefix: "a2c_verify",
+        failedPrefix: "verify_failed",
+        contextId: data.messageId
       }
-    }
+    });
 
     const operatorTranslation = await translateForOperator(appConfigForConversation(this.config, this.repos, conversation), content, language);
     this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
-      externalId,
+      externalId: sendResult.externalId,
       content,
       msgType: "text",
       language,
@@ -569,8 +564,8 @@ export class WebhookProcessor {
         operatorTranslationTargetLanguage: operatorTranslation.targetLanguage,
         operatorTranslationStatus: operatorTranslation.status,
         operatorTranslationError: operatorTranslation.error || "",
-        a2cSendStatus,
-        a2cSendError,
+        a2cSendStatus: sendResult.a2cSendStatus,
+        a2cSendError: sendResult.a2cSendError,
         simulation
       }
     });
@@ -625,32 +620,28 @@ export class WebhookProcessor {
   ): Promise<void> {
     if (!tutorialImageUrl) return;
     const caption = registrationTutorialCaption(language);
-    let externalId = "";
-    let a2cSendStatus: "sent" | "failed" | "simulated" = simulation ? "simulated" : "sent";
-    let a2cSendError = "";
-    if (simulation) {
-      externalId = `simulated_tutorial:${data.messageId || Date.now()}:${Date.now()}`;
-    } else {
-      try {
-        externalId = await a2c.sendMessage({
-          to: data.from,
-          senderPhoneNumber: data.to,
-          type: "image",
-          url: tutorialImageUrl,
-          caption,
-          fileName: "registration-tutorial.jpg"
-        });
-        if (!externalId) externalId = `tutorial_image:${data.messageId || Date.now()}`;
-      } catch (error) {
-        a2cSendStatus = "failed";
-        a2cSendError = error instanceof Error ? error.message : "unknown";
-        externalId = `tutorial_image_failed:${data.messageId || Date.now()}:${a2cSendError.slice(0, 120)}`;
+    const sendResult = await sendOutboundMessage({
+      a2c,
+      simulation,
+      payload: {
+        to: data.from,
+        senderPhoneNumber: data.to,
+        type: "image",
+        url: tutorialImageUrl,
+        caption,
+        fileName: "registration-tutorial.jpg"
+      },
+      idPolicy: {
+        simulatedPrefix: "simulated_tutorial",
+        sentFallbackPrefix: "tutorial_image",
+        failedPrefix: "tutorial_image_failed",
+        contextId: data.messageId || `${Date.now()}`
       }
-    }
+    });
     this.repos.insertMessage({
       conversationId: conversation.id,
       direction: "outbound",
-      externalId,
+      externalId: sendResult.externalId,
       content: caption,
       msgType: "image",
       language,
@@ -662,8 +653,8 @@ export class WebhookProcessor {
         registrationTutorialImage: true,
         mediaUrl: tutorialImageUrl,
         caption,
-        a2cSendStatus,
-        a2cSendError,
+        a2cSendStatus: sendResult.a2cSendStatus,
+        a2cSendError: sendResult.a2cSendError,
         simulation
       }
     });
