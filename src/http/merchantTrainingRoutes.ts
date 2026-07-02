@@ -1,7 +1,22 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
+import {
+  createKnowledgeItem,
+  deleteKnowledgeItem,
+  deleteTrainingMaterial,
+  deleteTrainingSample,
+  getTrainingMaterialWithItems,
+  listKnowledgeItems,
+  listTrainingMaterials,
+  listTrainingSamples,
+  patchKnowledgeItem,
+  patchTrainingSample,
+  type KnowledgeListQuery,
+  type TrainingMaterialListQuery,
+  type TrainingSampleListQuery
+} from "../services/trainingContent.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 import { importMaterial, importSamples } from "./trainingImports.js";
 
@@ -13,87 +28,55 @@ type MerchantTrainingRoutesDeps = {
 };
 
 export function registerMerchantTrainingRoutes(app: FastifyInstance, deps: MerchantTrainingRoutesDeps): void {
-  app.get<{ Querystring: { countryId?: string; type?: string; enabled?: string } }>("/api/merchant/knowledge", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listKnowledgeItems({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      type: request.query.type,
-      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
-    })
-  }));
+  app.get<{ Querystring: Omit<KnowledgeListQuery, "merchantId"> }>("/api/merchant/knowledge", { preHandler: deps.merchantRoles }, async (request) =>
+    listKnowledgeItems(deps.repos, { ...request.query, merchantId: scopedMerchantId(request) })
+  );
 
   app.post<{ Body: Record<string, unknown> }>("/api/merchant/knowledge", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    try {
-      return deps.repos.createKnowledgeItem(scopedMerchantId(request), request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid knowledge item" });
-    }
+    return sendResult(reply, createKnowledgeItem(deps.repos, scopedMerchantId(request), request.body ?? {}));
   });
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/knowledge/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const row = deps.repos.patchKnowledgeItem(Number(request.params.id), request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "knowledge item not found" });
-    return row;
+    return sendResult(reply, patchKnowledgeItem(deps.repos, request.params.id, request.body ?? {}, scopedMerchantId(request)));
   });
 
   app.delete<{ Params: { id: string } }>("/api/merchant/knowledge/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.deleteKnowledgeItem(Number(request.params.id), scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "knowledge item not found" });
-    return { ok: true };
+    return sendResult(reply, deleteKnowledgeItem(deps.repos, request.params.id, scopedMerchantId(request)));
   });
 
   app.post("/api/merchant/training-samples/import", { preHandler: deps.merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
 
   app.post("/api/merchant/training-materials/import", { preHandler: deps.merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
 
-  app.get<{ Querystring: { countryId?: string; sourceType?: string; status?: string; limit?: string } }>("/api/merchant/training-materials", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listTrainingMaterials({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      sourceType: request.query.sourceType,
-      status: request.query.status,
-      limit: request.query.limit ? Number(request.query.limit) : undefined
-    })
-  }));
+  app.get<{ Querystring: Omit<TrainingMaterialListQuery, "merchantId"> }>("/api/merchant/training-materials", { preHandler: deps.merchantRoles }, async (request) =>
+    listTrainingMaterials(deps.repos, { ...request.query, merchantId: scopedMerchantId(request) })
+  );
 
   app.get<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: deps.merchantRoles }, async (request, reply) => {
-    const id = Number(request.params.id);
-    const merchantId = scopedMerchantId(request);
-    const material = deps.repos.getTrainingMaterial(id, merchantId);
-    if (!material) return reply.code(404).send({ error: "material not found" });
-    return { material, items: deps.repos.listTrainingMaterialItems(id, merchantId) };
+    return sendResult(reply, getTrainingMaterialWithItems(deps.repos, request.params.id, scopedMerchantId(request)));
   });
 
   app.delete<{ Params: { id: string } }>("/api/merchant/training-materials/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const ok = deps.repos.deleteTrainingMaterial(Number(request.params.id), scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "material not found" });
-    return { ok: true };
+    return sendResult(reply, deleteTrainingMaterial(deps.repos, request.params.id, scopedMerchantId(request)));
   });
 
-  app.get<{ Querystring: { countryId?: string; language?: string; intent?: string; stage?: string; enabled?: string } }>("/api/merchant/training-samples", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listTrainingSamples({
-      merchantId: scopedMerchantId(request),
-      countryId: request.query.countryId,
-      language: request.query.language,
-      intent: request.query.intent,
-      stage: request.query.stage,
-      enabled: request.query.enabled === undefined ? undefined : request.query.enabled === "true" || request.query.enabled === "1"
-    })
-  }));
+  app.get<{ Querystring: Omit<TrainingSampleListQuery, "merchantId"> }>("/api/merchant/training-samples", { preHandler: deps.merchantRoles }, async (request) =>
+    listTrainingSamples(deps.repos, { ...request.query, merchantId: scopedMerchantId(request) })
+  );
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/training-samples/:id", { preHandler: deps.merchantRoles }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchTrainingSample(id, request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "sample not found" });
-    return row;
+    return sendResult(reply, patchTrainingSample(deps.repos, request.params.id, request.body ?? {}, scopedMerchantId(request)));
   });
 
   app.delete<{ Params: { id: string } }>("/api/merchant/training-samples/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const ok = deps.repos.deleteTrainingSample(id, scopedMerchantId(request));
-    if (!ok) return reply.code(404).send({ error: "sample not found" });
-    return { ok: true };
+    return sendResult(reply, deleteTrainingSample(deps.repos, request.params.id, scopedMerchantId(request)));
   });
+}
+
+function sendResult<T>(
+  reply: FastifyReply,
+  result: { ok: true; value: T } | { ok: false; statusCode: 400 | 404; error: string }
+): T | FastifyReply {
+  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
+  return result.value;
 }
