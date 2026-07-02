@@ -1,15 +1,11 @@
 import type { AppConfig } from "../config.js";
 import { buildStrictFlowFollowUp } from "../domain/strictFlow.js";
 import type { Repositories } from "../repositories.js";
+import type { ConversationFollowUpResult } from "./conversationEngine.js";
 import { createA2CFollowUpSender, type FollowUpSender } from "./followUpSender.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 
-export type FollowUpProcessingResult = {
-  scanned: number;
-  sent: number;
-  skipped: number;
-  failed: number;
-};
+export type FollowUpProcessingResult = ConversationFollowUpResult;
 
 export class FollowUpProcessor {
   constructor(

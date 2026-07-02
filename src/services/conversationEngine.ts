@@ -10,9 +10,16 @@ export interface QueuedConversationResult {
   queueDepth: number;
 }
 
+export interface ConversationFollowUpResult {
+  scanned: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+}
+
 export interface ConversationProcessor {
   handleInboundMessage(input: InboundConversationMessage): Promise<ConversationEngineResult>;
-  processDueFollowUps(limit?: number): Promise<{ scanned: number; sent: number; skipped: number; failed: number }>;
+  processDueFollowUps(limit?: number): Promise<ConversationFollowUpResult>;
 }
 
 type QueuedConversationJob = InboundConversationMessage;
@@ -49,7 +56,7 @@ export class ConversationEngine {
     return { status: "queued", queueDepth: this.queue.length + this.activeJobs };
   }
 
-  processDueFollowUps(limit = 50): Promise<{ scanned: number; sent: number; skipped: number; failed: number }> {
+  processDueFollowUps(limit = 50): Promise<ConversationFollowUpResult> {
     return this.processor.processDueFollowUps(limit);
   }
 

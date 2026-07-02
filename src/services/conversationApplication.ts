@@ -1,7 +1,7 @@
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
-import type { ConversationEngineResult, ConversationProcessor } from "./conversationEngine.js";
-import { FollowUpProcessor, type FollowUpProcessingResult } from "./followUpProcessor.js";
+import type { ConversationEngineResult, ConversationFollowUpResult, ConversationProcessor } from "./conversationEngine.js";
+import { FollowUpProcessor } from "./followUpProcessor.js";
 import type { InboundConversationMessage } from "./inboundMessage.js";
 import { InboundConversationProcessor } from "./inboundConversationProcessor.js";
 import { AiTasks } from "./aiTasks.js";
@@ -11,7 +11,7 @@ export interface InboundConversationHandler {
 }
 
 export interface DueFollowUpHandler {
-  processDueFollowUps(limit?: number): Promise<FollowUpProcessingResult>;
+  processDueFollowUps(limit?: number): Promise<ConversationFollowUpResult>;
 }
 
 export class ConversationApplication implements ConversationProcessor {
@@ -24,7 +24,7 @@ export class ConversationApplication implements ConversationProcessor {
     return this.inbound.handleInboundMessage(input);
   }
 
-  processDueFollowUps(limit?: number): Promise<FollowUpProcessingResult> {
+  processDueFollowUps(limit?: number): Promise<ConversationFollowUpResult> {
     return this.followUps.processDueFollowUps(limit);
   }
 }

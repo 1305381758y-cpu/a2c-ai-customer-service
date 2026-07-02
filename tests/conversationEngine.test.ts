@@ -122,7 +122,7 @@ describe("ConversationEngine", () => {
     expect(processor.handleInboundMessage).toHaveBeenCalledOnce();
   });
 
-  it("keeps follow-up execution behind the engine interface", async () => {
+  it("keeps follow-up execution and result shape behind the engine interface", async () => {
     const processor = {
       handleInboundMessage: vi.fn(),
       processDueFollowUps: vi.fn(async () => ({ scanned: 2, sent: 1, skipped: 1, failed: 0 }))
