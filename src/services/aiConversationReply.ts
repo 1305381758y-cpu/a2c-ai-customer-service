@@ -7,10 +7,9 @@ import type { Conversation, CustomerMemoryRecord, MerchantAgentProfileRecord, Me
 import type { AiTasks } from "./aiTasks.js";
 import { completeConversationGoal } from "./conversationGoalCompletion.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
-import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
-import { buildAiConversationOutboundRawPayload } from "./aiConversationOutboundPayload.js";
 import { buildAiConversationReplyContext } from "./aiConversationReplyContext.js";
 import { applyAiReplyConversationState } from "./aiConversationReplyState.js";
+import { sendAiConversationTextOutbound } from "./aiConversationTextOutbound.js";
 
 export interface LearnedIntentDebugInfo {
   id: number;
@@ -78,45 +77,20 @@ export async function generateAndRecordAiConversationReply(input: {
     });
   }
 
-  const outbound = await recordOutboundConversationMessage({
+  const outbound = await sendAiConversationTextOutbound({
     repos: input.repos,
     runtimeConfig: input.runtimeConfig,
     a2c: input.a2c,
     conversation: input.conversation,
+    country: input.country,
+    aiReply,
+    replyContext,
+    agentProfile: input.agentProfile,
+    data: input.data,
+    payloadId: input.payloadId,
     simulation: input.simulation,
-    payload: {
-      to: input.data.from,
-      senderPhoneNumber: input.data.to,
-      type: "text",
-      content: aiReply.reply
-    },
-    idPolicy: {
-      simulatedPrefix: "simulated_reply",
-      sentFallbackPrefix: "a2c_sent",
-      failedPrefix: "send_failed",
-      contextId: input.data.messageId || input.payloadId
-    },
-    message: {
-      content: aiReply.reply,
-      msgType: "text",
-      language: aiReply.language || input.conversation.language,
-      intent: "unknown",
-      rawPayload: buildAiConversationOutboundRawPayload({
-        aiReply,
-        strictFlowEnabled: input.strictFlowEnabled,
-        agentProfile: input.agentProfile,
-        learnedIntent: input.learnedIntent,
-        samples: replyContext.samples,
-        trainingMaterials: replyContext.trainingMaterials,
-        country: input.country,
-        inviteCode: replyContext.inviteCode
-      })
-    },
-    memory: {
-      intent: "unknown",
-      content: aiReply.reply,
-      direction: "outbound"
-    }
+    strictFlowEnabled: input.strictFlowEnabled,
+    learnedIntent: input.learnedIntent
   });
   input.repos.updateConversation(input.conversation);
   input.repos.upsertCustomerFromConversation(input.conversation);
