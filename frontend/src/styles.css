@@ -2307,14 +2307,6 @@ tbody tr:hover td {
   grid-column: 1 / -1;
 }
 
-.agent-profile-grid textarea {
-  min-height: 108px;
-  resize: vertical;
-}
-.agent-profile-grid small {
-  color: var(--muted-strong);
-  font-size: 12px;
-}
 .review-card {
   display: grid;
   gap: 12px;
@@ -2733,14 +2725,6 @@ main {
   min-width: 0;
 }
 
-.agent-profile-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-}
-
-.agent-profile-grid label:nth-child(n + 4) {
-  grid-column: span 2;
-}
-
 .invite-console,
 .invite-manager,
 .invite-editor-grid {
@@ -2776,9 +2760,6 @@ main {
     justify-content: flex-start;
   }
 
-  .agent-profile-grid label:nth-child(n + 4) {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 760px) {

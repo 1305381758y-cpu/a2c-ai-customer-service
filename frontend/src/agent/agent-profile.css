@@ -1,0 +1,23 @@
+.agent-profile-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.agent-profile-grid label:nth-child(n + 4) {
+  grid-column: span 2;
+}
+
+.agent-profile-grid textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.agent-profile-grid small {
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .agent-profile-grid label:nth-child(n + 4) {
+    grid-column: 1 / -1;
+  }
+}

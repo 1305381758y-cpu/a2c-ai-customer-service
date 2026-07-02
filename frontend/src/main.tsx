@@ -20,6 +20,7 @@ import { AsyncButton } from "./ui/components.js";
 import { countryLabel, displayValue, formatDateTime } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
+import "./agent/agent-profile.css";
 import "./script-flows/script-flows.css";
 import "./intent-learning/intent-learning.css";
 import "./simulator/simulator.css";
