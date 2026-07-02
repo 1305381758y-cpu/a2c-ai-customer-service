@@ -9,6 +9,7 @@ import type { AiTasks } from "./aiTasks.js";
 import { completeConversationGoal, isConversationGoalComplete } from "./conversationGoalCompletion.js";
 import type { A2CWebhookPayload } from "./inboundMessage.js";
 import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
+import { buildAiConversationOutboundRawPayload } from "./aiConversationOutboundPayload.js";
 
 export interface LearnedIntentDebugInfo {
   id: number;
@@ -113,24 +114,16 @@ export async function generateAndRecordAiConversationReply(input: {
       msgType: "text",
       language: aiReply.language || input.conversation.language,
       intent: "unknown",
-      rawPayload: {
-        replyMode: aiReply.fallback ? "fallback" : "ai",
+      rawPayload: buildAiConversationOutboundRawPayload({
+        aiReply,
         strictFlowEnabled: input.strictFlowEnabled,
-        agentProfileName: input.agentProfile.agentName,
+        agentProfile: input.agentProfile,
         learnedIntent: input.learnedIntent,
-        samples: samples.map((sample) => sample.id),
-        trainingMaterials: trainingMaterials.map((item) => item.id),
-        aiFallback: Boolean(aiReply.fallback),
-        aiError: aiReply.error || "",
-        inviteCodeRequired: Boolean(input.country.requirePlatformAccount),
-        inviteCodeMissing: Boolean(input.country.requirePlatformAccount && !inviteCode),
-        assignedInviteCode: inviteCode ? {
-          id: inviteCode.id,
-          code: inviteCode.code,
-          registerUrl: inviteCode.registerUrl,
-          status: inviteCode.status
-        } : null
-      }
+        samples,
+        trainingMaterials,
+        country: input.country,
+        inviteCode
+      })
     },
     memory: {
       intent: "unknown",
