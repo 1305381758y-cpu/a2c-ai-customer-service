@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Settings, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
+import { api, loadRows, useRows, withQuery } from "./app/api.js";
 import { ConversationExportBar } from "./conversations/ConversationExport.js";
 import { ConversationAccountList } from "./conversations/ConversationAccountList.js";
 import { ConversationCustomerList } from "./conversations/ConversationCustomerList.js";
@@ -30,13 +31,6 @@ const STRICT_STEP_OPTIONS = [
   "human_handoff",
   "ended"
 ];
-
-async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers = { ...(options.body === undefined ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
-  const response = await fetch(url, { ...options, headers });
-  if (!response.ok) throw new Error(translateSystemMessage((await response.json().catch(() => ({}))).error || response.statusText));
-  return response.json() as Promise<T>;
-}
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -1254,31 +1248,6 @@ function coercePatch(input: Record<string, any>) {
     if (patch[key] === "false") patch[key] = false;
   }
   return patch;
-}
-
-function useRows<T>(url: string): [T[], (rows: T[]) => void] {
-  const [rows, setRows] = useState<T[]>([]);
-  useEffect(() => {
-    if (!url) {
-      setRows([]);
-      return;
-    }
-    loadRows<T>(url).then(setRows).catch(() => setRows([]));
-  }, [url]);
-  return [rows, setRows];
-}
-
-async function loadRows<T>(url: string): Promise<T[]> {
-  return (await api<{ rows: T[] }>(url)).rows;
-}
-
-function withQuery(base: string, filters: Filters): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) {
-    if (value !== "") params.set(key, value);
-  }
-  const query = params.toString();
-  return query ? `${base}?${query}` : base;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
