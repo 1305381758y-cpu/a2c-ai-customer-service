@@ -1,11 +1,10 @@
 import { analyzeMessage, type InternalIntentLabel, type MessageAnalysis } from "../domain/analyzer.js";
 import { shouldUseInviteForReply, suppressRegistrationDetailsForNonLinkStep } from "../domain/registrationPolicy.js";
 import { rankSamples } from "../domain/sampleRetrieval.js";
-import { buildRuleContextualIntent, buildStrictFlowFollowUp, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
+import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
 import { A2CClient } from "../clients/a2c.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
-import type { MerchantConfigRecord } from "../repositories.js";
 import type { Repositories } from "../repositories.js";
 import { AiTasks } from "./aiTasks.js";
 import { generateConversationReview } from "./conversationReview.js";
@@ -14,6 +13,7 @@ import { normalizeA2CWebhookPayload, type A2CWebhookPayload } from "./inboundMes
 import { buildIntentLearningCandidate, contextualQuestionTypeFromLearnedIntent, findLearnedIntentMatch } from "./intentLearning.js";
 import { sendOutboundMessage } from "./outboundMessageSender.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, refineMessageLanguage } from "./replyLanguage.js";
+import { appConfigForConversation, appConfigForMerchant } from "./runtimeConfig.js";
 import { translateForOperator } from "./translation.js";
 
 export class WebhookProcessor {
@@ -454,74 +454,6 @@ export class WebhookProcessor {
     }
   }
 
-  async processDueFollowUps(limit = 50): Promise<{ scanned: number; sent: number; skipped: number; failed: number }> {
-    const candidates = this.repos.listDueFollowUpCandidates(limit);
-    let sent = 0;
-    let skipped = 0;
-    let failed = 0;
-    for (const candidate of candidates) {
-      const conversation = candidate.conversation;
-      const merchant = this.repos.getMerchant(conversation.merchantId);
-      if (!merchant || merchant.status !== "active") {
-        skipped += 1;
-        continue;
-      }
-      const merchantConfig = this.repos.getMerchantConfig(conversation.merchantId);
-      if (!merchantConfig.smartReplyEnabled) {
-        skipped += 1;
-        continue;
-      }
-      const country = this.repos.getMerchantCountry(conversation.countryId);
-      const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-      const content = buildStrictFlowFollowUp(conversation.flowStep || conversation.stage, conversation.language || country?.defaultLanguage || "zh");
-      const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(conversation.merchantId));
-      const flowStep = conversation.flowStep || conversation.stage || "unknown";
-      const sendResult = await sendOutboundMessage({
-        a2c,
-        payload: {
-          to: conversation.customerPhone,
-          senderPhoneNumber: conversation.a2cAccountPhone,
-          type: "text",
-          content
-        },
-        idPolicy: {
-          simulatedPrefix: "simulated_followup",
-          sentFallbackPrefix: "followup",
-          failedPrefix: "followup_failed",
-          contextId: conversation.id
-        }
-      });
-      if (sendResult.a2cSendStatus === "failed") {
-        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: sendResult.a2cSendError || "follow-up send failed" });
-        failed += 1;
-        continue;
-      }
-      this.repos.insertMessage({
-        conversationId: conversation.id,
-        direction: "outbound",
-        externalId: sendResult.externalId,
-        content,
-        msgType: "text",
-        language: conversation.language || country?.defaultLanguage || "unknown",
-        intent: "unknown",
-        rawPayload: {
-          replyMode: "strict_flow",
-          followupSent: true,
-          followupReason: "idle_2m",
-          followupStep: flowStep,
-          strictFlow: true,
-          strictFlowStep: flowStep,
-          a2cSendStatus: sendResult.a2cSendStatus,
-          a2cSendError: sendResult.a2cSendError
-        }
-      });
-      this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
-      this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content, direction: "outbound" });
-      sent += 1;
-    }
-    return { scanned: candidates.length, sent, skipped, failed };
-  }
-
   private async sendVerificationReply(
     conversation: Parameters<Repositories["updateConversation"]>[0],
     data: A2CWebhookPayload["data"],
@@ -766,37 +698,6 @@ function detectContextualRegistrationPhone(text: string, flowStep: string): stri
   if (!/^\+?\d[\d\s-]{5,18}$/.test(normalized)) return "";
   const digits = normalized.replace(/[^\d+]/g, "");
   return digits.replace(/\D/g, "").length >= 6 ? digits : "";
-}
-
-function appConfigForMerchant(config: AppConfig, merchantConfig: MerchantConfigRecord, country?: { platformRegisterUrl?: string; tgRegisterGuideUrl?: string }): AppConfig {
-  return {
-    ...config,
-    A2C_BASE_URL: merchantConfig.a2cBaseUrl || config.A2C_BASE_URL,
-    A2C_APP_ID: merchantConfig.a2cAppId || config.A2C_APP_ID,
-    A2C_APP_SECRET: merchantConfig.a2cAppSecret || config.A2C_APP_SECRET,
-    OPENAI_API_KEY: merchantConfig.openaiApiKey || config.OPENAI_API_KEY,
-    OPENAI_MODEL: merchantConfig.openaiModel || config.OPENAI_MODEL,
-    AI_PROVIDER: merchantConfig.aiProvider || config.AI_PROVIDER,
-    MINIMAX_API_KEY: merchantConfig.minimaxApiKey || config.MINIMAX_API_KEY,
-    MINIMAX_MODEL: merchantConfig.minimaxModel || config.MINIMAX_MODEL,
-    MINIMAX_BASE_URL: config.MINIMAX_BASE_URL,
-    DEEPSEEK_API_KEY: merchantConfig.deepseekApiKey || config.DEEPSEEK_API_KEY,
-    DEEPSEEK_MODEL: merchantConfig.deepseekModel || config.DEEPSEEK_MODEL,
-    DEEPSEEK_BASE_URL: config.DEEPSEEK_BASE_URL,
-    GOOGLE_AI_API_KEY: merchantConfig.googleAiApiKey || config.GOOGLE_AI_API_KEY,
-    GOOGLE_AI_MODEL: merchantConfig.googleAiModel || config.GOOGLE_AI_MODEL,
-    TELEGRAM_BOT_TOKEN: merchantConfig.telegramBotToken || config.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
-    PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
-    TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL,
-    REGISTRATION_TUTORIAL_IMAGE_URL: merchantConfig.registrationTutorialImageUrl || config.REGISTRATION_TUTORIAL_IMAGE_URL
-  };
-}
-
-function appConfigForConversation(config: AppConfig, repos: Repositories, conversation: Parameters<Repositories["updateConversation"]>[0]): AppConfig {
-  const merchantConfig = repos.getMerchantConfig(conversation.merchantId);
-  const country = repos.getMerchantCountry(conversation.countryId);
-  return appConfigForMerchant(config, merchantConfig, country);
 }
 
 function isCountryGoalComplete(

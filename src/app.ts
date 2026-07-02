@@ -11,6 +11,7 @@ import { Repositories } from "./repositories.js";
 import { registerRoutes } from "./routes.js";
 import { AiTasks } from "./services/aiTasks.js";
 import { ConversationEngine } from "./services/conversationEngine.js";
+import { FollowUpProcessor } from "./services/followUpProcessor.js";
 import { WebhookProcessor } from "./services/webhookProcessor.js";
 import { hashPassword } from "./auth.js";
 
@@ -24,13 +25,18 @@ export function buildApp(config: AppConfig) {
     email: config.DEFAULT_ADMIN_EMAIL,
     passwordHash: hashPassword(config.DEFAULT_ADMIN_PASSWORD)
   });
-  const processor = new WebhookProcessor(
+  const webhookProcessor = new WebhookProcessor(
     repos,
     new AiTasks(),
     new A2CClient(config),
     new TelegramClient(config),
     config
   );
+  const followUpProcessor = new FollowUpProcessor(repos, config);
+  const processor = {
+    process: webhookProcessor.process.bind(webhookProcessor),
+    processDueFollowUps: followUpProcessor.processDueFollowUps.bind(followUpProcessor)
+  };
   const conversationEngine = new ConversationEngine(processor);
 
   app.register(multipart, {
