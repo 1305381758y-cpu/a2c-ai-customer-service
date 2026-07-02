@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCircle2, Contact, Copy, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Settings, Upload, Users, Workflow, X } from "lucide-react";
+import { Bot, Building2, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Settings, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
 import { ConversationExportBar } from "./conversations/ConversationExport.js";
 import { ConversationAccountList } from "./conversations/ConversationAccountList.js";
@@ -13,20 +13,12 @@ import { MessageTimeline } from "./conversations/MessageTimeline.js";
 import { CustomerConversationHistory } from "./customers/CustomerConversationHistory.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
-import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, Toast, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
-import { COUNTRY_PRESETS, countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, optionLabel, replyModeLabel, statusTone, translateSystemMessage } from "./ui/formatters.js";
+import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, Customer, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
+import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
+import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, statusTone, translateSystemMessage } from "./ui/formatters.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
+import { notify, notifyExportStarted, ToastHost } from "./ui/toast.js";
 import "./styles.css";
-
-let emitToast: (toast: Omit<Toast, "id">) => void = () => undefined;
-
-function notify(type: Toast["type"], title: string, detail?: string) {
-  emitToast({ type, title, detail });
-}
-
-function notifyExportStarted(format: "csv" | "jsonl") {
-  notify("success", format === "csv" ? "正在导出 CSV" : "正在导出 JSONL", "浏览器会开始下载对话数据文件。");
-}
 
 const STRICT_STEP_OPTIONS = [
   "interest_screening",
@@ -63,19 +55,6 @@ function App() {
   if (loading) return <Shell><ToastHost /><div className="boot-screen"><Loader2 size={22} className="spin" />正在进入后台...</div></Shell>;
   if (!user) return <><ToastHost /><Login onLogin={setUser} /></>;
   return <><ToastHost /><Portal user={user} view={view} setView={setView} onLogout={() => setUser(null)} /></>;
-}
-
-function ToastHost() {
-  const [items, setItems] = useState<Toast[]>([]);
-  useEffect(() => {
-    emitToast = (toast) => {
-      const id = Date.now() + Math.random();
-      setItems((current) => [...current, { ...toast, id }].slice(-4));
-      window.setTimeout(() => setItems((current) => current.filter((item) => item.id !== id)), 3600);
-    };
-    return () => { emitToast = () => undefined; };
-  }, []);
-  return <div className="toast-host">{items.map((item) => <article key={item.id} className={`toast ${item.type}`}><strong>{item.title}</strong>{item.detail && <p>{item.detail}</p>}<button className="ghost icon-only" onClick={() => setItems((current) => current.filter((row) => row.id !== item.id))}><X size={15}/></button></article>)}</div>;
 }
 
 function Login({ onLogin }: { onLogin: (user: User) => void }) {
@@ -1263,53 +1242,6 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
     onNotesChange={setNotes}
     renderSaveAction={() => <AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton>}
   /><ConversationReviewCard platform={platform} data={review} onGenerate={generate} onApply={apply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} /><div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: formatConversationDate, formatTime, label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={(disabled, children) => <AsyncButton disabled={disabled} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}>{children}</AsyncButton>} />}</div>;
-}
-
-function Table<T extends Record<string, any>>({ rows, columns, onRow, selectedKey, rowKey }: { rows: T[]; columns: string[]; onRow?: (row: T) => void; selectedKey?: string | number; rowKey?: (row: T, index: number) => string | number }) {
-  const [internalSelected, setInternalSelected] = useState<string | number | undefined>();
-  const activeKey = selectedKey ?? internalSelected;
-  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c])}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}>暂无数据</td></tr>}</tbody></table></div>;
-}
-
-function AsyncButton({ children, busyText, onClick, className, disabled = false }: { children: React.ReactNode; busyText: string; onClick: () => Promise<void>; className?: string; disabled?: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  return <button className={className} disabled={busy || disabled} aria-busy={busy} onClick={async () => { if (busy || disabled) return; setBusy(true); setDone(false); try { await onClick(); setDone(true); window.setTimeout(() => setDone(false), 900); } catch (err) { notify("error", "操作失败", translateSystemMessage(err instanceof Error ? err.message : "未知错误")); } finally { setBusy(false); } }}>{busy ? <><Loader2 size={16} className="spin"/>{busyText}</> : done ? <><CheckCircle2 size={16}/>已完成</> : children}</button>;
-}
-
-function Editor({ title, value, fields, selects, onSave, onDelete }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void>; onDelete?: () => Promise<void> }) {
-  const [draft, setDraft] = useState<Record<string, any>>(value);
-  useEffect(() => setDraft(value), [value]);
-  return <div><h3>{title}</h3><div className="form-grid">{fields.map((field) => <label key={field}>{label(field)}{selects?.[field] ? <select value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{label(option)}</option>)}</select> : <input value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />}</label>)}</div><div className="toolbar"><AsyncButton busyText="保存中..." onClick={() => onSave(draft)}>保存</AsyncButton>{onDelete && <AsyncButton className="danger" busyText="删除中..." onClick={onDelete}>删除</AsyncButton>}</div></div>;
-}
-
-function CountryPresetDatalist() {
-  return <datalist id="merchant-country-presets">{COUNTRY_PRESETS.map((item) => <option key={item.code} value={item.name} />)}</datalist>;
-}
-
-function CountrySettingsEditor({ value, onSave }: { value: MerchantCountry; onSave: (patch: Record<string, any>) => Promise<void> }) {
-  const [draft, setDraft] = useState<Record<string, any>>(value);
-  useEffect(() => setDraft(value), [value]);
-  const updateName = (name: string) => {
-    const inferred = inferCountryProfile(name);
-    setDraft({ ...draft, name, code: inferred.code, defaultLanguage: inferred.defaultLanguage });
-  };
-  return <div><h3>国家设置</h3><div className="form-grid">
-    <label>国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：巴西" value={String(draft.name ?? "")} onChange={(e) => updateName(e.target.value)} /></label>
-    <label>国家代码<input readOnly value={String(draft.code ?? "")} /></label>
-    <label>默认语言<input readOnly value={languageName(draft.defaultLanguage)} /></label>
-    <label>{label("platformRegisterUrl")}<input value={String(draft.platformRegisterUrl ?? "")} onChange={(e) => setDraft({ ...draft, platformRegisterUrl: e.target.value })} /></label>
-    <label>{label("tgRegisterGuideUrl")}<input value={String(draft.tgRegisterGuideUrl ?? "")} onChange={(e) => setDraft({ ...draft, tgRegisterGuideUrl: e.target.value })} /></label>
-    <label>{label("requirePlatformAccount")}<select value={String(draft.requirePlatformAccount ?? true)} onChange={(e) => setDraft({ ...draft, requirePlatformAccount: e.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select></label>
-    <label>{label("requirePhone")}<select value={String(draft.requirePhone ?? true)} onChange={(e) => setDraft({ ...draft, requirePhone: e.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select></label>
-    <label>{label("requireTelegram")}<select value={String(draft.requireTelegram ?? true)} onChange={(e) => setDraft({ ...draft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select></label>
-    <label>{label("requireWhatsApp")}<select value={String(draft.requireWhatsApp ?? false)} onChange={(e) => setDraft({ ...draft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select></label>
-    <label>{label("status")}<select value={String(draft.status ?? "active")} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="active">启用</option><option value="disabled">停用</option></select></label>
-  </div><div className="toolbar"><AsyncButton busyText="保存中..." onClick={() => onSave(draft)}>保存</AsyncButton></div></div>;
-}
-
-function FilterBar({ filters, setFilters, fields, selects = {}, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; onApply: () => Promise<void> }) {
-  return <div className="toolbar wrap filters">{fields.map((field) => selects[field] ? <select key={field} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? optionLabel(field, option) : label(field)}</option>)}</select> : <input key={field} placeholder={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} />)}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button className="ghost" onClick={() => { const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""])); setFilters(reset); }}><X size={16}/>重置</button></div>;
 }
 
 function coercePatch(input: Record<string, any>) {
