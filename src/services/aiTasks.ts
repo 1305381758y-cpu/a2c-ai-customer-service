@@ -8,7 +8,8 @@ import {
   type AiImageAnalysis,
   type AiTextPart
 } from "../clients/aiProvider.js";
-import { AiReplyClient, type AiReply, type ReplyInput } from "../clients/aiReplyClient.js";
+import { AiReplyClient } from "../clients/aiReplyClient.js";
+import type { AiReply, ReplyInput } from "../clients/aiReplyTypes.js";
 import type { AppConfig } from "../config.js";
 import type { ContextualIntentLabel, InternalIntentLabel } from "../domain/analyzer.js";
 import type { ConversationMessageRecord, ConversationReviewInput, MerchantAgentProfileRecord } from "../repositories.js";

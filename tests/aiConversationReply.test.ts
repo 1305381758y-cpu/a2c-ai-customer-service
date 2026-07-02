@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import type { MessageAnalysis } from "../src/domain/analyzer.js";
-import type { ReplyInput } from "../src/clients/aiReplyClient.js";
+import type { ReplyInput } from "../src/clients/aiReplyTypes.js";
 import { Repositories } from "../src/repositories.js";
 import { generateAndRecordAiConversationReply } from "../src/services/aiConversationReply.js";
 
