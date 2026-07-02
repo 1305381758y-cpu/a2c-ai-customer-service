@@ -11,6 +11,7 @@ import { IntentLearningRepository } from "./repositoryIntentLearning.js";
 import { MerchantSettingsRepository } from "./repositoryMerchantSettings.js";
 import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
 import { TrainingContentRepository } from "./repositoryTrainingContent.js";
+import { UserRepository } from "./repositoryUsers.js";
 import {
   booleanPatchValue,
   buildCustomerMemorySummary,
@@ -23,7 +24,6 @@ import {
   mapCustomerMemory,
   mapMerchant,
   mapMerchantAgentProfile,
-  mapUser,
   normalizeReviewSampleStage,
   parseJsonObject,
 } from "./repositoryMappers.js";
@@ -94,6 +94,7 @@ export class Repositories {
   private readonly intentLearning: IntentLearningRepository;
   private readonly scriptFlows: ScriptFlowRepository;
   private readonly trainingContent: TrainingContentRepository;
+  private readonly users: UserRepository;
 
   constructor(private readonly db: Db) {
     this.settings = new MerchantSettingsRepository(db);
@@ -112,6 +113,7 @@ export class Repositories {
       defaultCountryId: (merchantId) => this.defaultCountryId(merchantId),
       validCountryId: (merchantId, countryId) => this.validCountryId(merchantId, countryId)
     });
+    this.users = new UserRepository(db);
   }
 
   insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default", countryId = this.defaultCountryId(merchantId)): number {
@@ -193,11 +195,7 @@ export class Repositories {
   }
 
   ensureBootstrapAdmin(input: { email: string; passwordHash: string }): void {
-    const existing = this.db.sqlite.prepare("SELECT id FROM users WHERE role = 'platform_admin' LIMIT 1").get();
-    if (existing) return;
-    this.db.sqlite
-      .prepare("INSERT INTO users (id, merchant_id, email, name, password_hash, role) VALUES (?, NULL, ?, ?, ?, 'platform_admin')")
-      .run(randomUUID(), input.email, "平台管理员", input.passwordHash);
+    this.users.ensureBootstrapAdmin(input);
   }
 
   getOrCreateConversation(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId = this.countryIdForA2CAccount(merchantId, a2cAccountPhone)): Conversation {
@@ -1267,79 +1265,31 @@ export class Repositories {
   }
 
   getUserByEmail(email: string): UserRecord | undefined {
-    const row = this.db.sqlite.prepare("SELECT * FROM users WHERE lower(email) = lower(?)").get(email) as Record<string, unknown> | undefined;
-    return row ? mapUser(row) : undefined;
+    return this.users.getByEmail(email);
   }
 
   getUserById(id: string): UserRecord | undefined {
-    const row = this.db.sqlite.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-    return row ? mapUser(row) : undefined;
+    return this.users.getById(id);
   }
 
   listUsers(filters: { merchantId?: string } = {}): UserRecord[] {
-    const where = filters.merchantId ? "WHERE merchant_id = ?" : "";
-    const params = filters.merchantId ? [filters.merchantId] : [];
-    return this.db.sqlite.prepare(`SELECT * FROM users ${where} ORDER BY created_at DESC`).all(...params).map((row) => mapUser(row as Record<string, unknown>));
+    return this.users.list(filters);
   }
 
   createUser(input: { merchantId: string | null; email: string; name: string; passwordHash: string; role: UserRole }): UserRecord {
-    const id = randomUUID();
-    this.db.sqlite
-      .prepare("INSERT INTO users (id, merchant_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(id, input.merchantId, input.email, input.name, input.passwordHash, input.role);
-    return this.getUserById(id)!;
+    return this.users.create(input);
   }
 
   resetPlatformAdmin(input: { email: string; passwordHash: string; name?: string }): UserRecord {
-    const existing = this.getUserByEmail(input.email);
-    if (existing) {
-      return this.patchUser(existing.id, {
-        name: input.name ?? existing.name,
-        status: "active",
-        passwordHash: input.passwordHash,
-        role: "platform_admin",
-        merchantId: null
-      })!;
-    }
-    return this.createUser({
-      merchantId: null,
-      email: input.email,
-      name: input.name ?? "平台管理员",
-      passwordHash: input.passwordHash,
-      role: "platform_admin"
-    });
+    return this.users.resetPlatformAdmin(input);
   }
 
   patchUser(id: string, patch: { name?: string; status?: string; passwordHash?: string; role?: UserRole; merchantId?: string | null }): UserRecord | undefined {
-    const assignments = ["updated_at = CURRENT_TIMESTAMP"];
-    const values: Array<string | null> = [];
-    if (patch.name !== undefined) {
-      assignments.push("name = ?");
-      values.push(patch.name);
-    }
-    if (patch.status !== undefined) {
-      assignments.push("status = ?");
-      values.push(patch.status);
-    }
-    if (patch.passwordHash !== undefined) {
-      assignments.push("password_hash = ?");
-      values.push(patch.passwordHash);
-    }
-    if (patch.role !== undefined) {
-      assignments.push("role = ?");
-      values.push(patch.role);
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "merchantId")) {
-      assignments.push("merchant_id = ?");
-      values.push(patch.merchantId ?? null);
-    }
-    this.db.sqlite.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).run(...values, id);
-    return this.getUserById(id);
+    return this.users.patch(id, patch);
   }
 
   deleteUser(id: string): boolean {
-    const result = this.db.sqlite.prepare("DELETE FROM users WHERE id = ?").run(id);
-    return result.changes > 0;
+    return this.users.delete(id);
   }
 
   updateHandoffStatus(conversationId: string, merchantId: string, handoffStatus: "pending" | "processing" | "done"): Conversation | undefined {
