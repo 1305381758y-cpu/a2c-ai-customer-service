@@ -19,6 +19,8 @@ import { appConfigForMerchant } from "./services/runtimeConfig.js";
 import { translateForCustomer, translateForOperator } from "./services/translation.js";
 import { registerConversationIngressRoutes } from "./http/conversationIngressRoutes.js";
 import { requireInternalApiKey as auth } from "./http/internalApiKeyAuth.js";
+import { registerAdminUserRoutes } from "./http/adminUserRoutes.js";
+import { maskUser } from "./http/routeHelpers.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -167,9 +169,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   });
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 
-  app.get<{ Querystring: { merchantId?: string } }>("/api/admin/users", { preHandler: adminOnly }, async (request) => ({
-    rows: deps.repos.listUsers({ merchantId: request.query.merchantId }).map(maskUser)
-  }));
+  registerAdminUserRoutes(app, { repos: deps.repos, adminOnly });
   app.get<{ Querystring: { merchantId?: string; countryId?: string; type?: string; enabled?: string } }>("/api/admin/knowledge", { preHandler: adminOnly }, async (request) => ({
     rows: deps.repos.listKnowledgeItems({
       merchantId: request.query.merchantId,
@@ -386,43 +386,6 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
     const runtimeConfig = appConfigForMerchant(deps.config, cfg, deps.repos.getMerchantCountry(conversation.countryId));
     return generateConversationReview(deps.repos, runtimeConfig, conversation.id);
   });
-  app.post("/api/admin/users", { preHandler: adminOnly }, async (request) => {
-    const body = z.object({
-      merchantId: z.string().nullable().optional(),
-      email: z.string().email(),
-      name: z.string().min(1),
-      password: z.string().min(8),
-      role: z.enum(["platform_admin", "merchant_admin", "merchant_operator"])
-    }).parse(request.body);
-    return maskUser(deps.repos.createUser({
-      merchantId: body.role === "platform_admin" ? null : body.merchantId ?? "default",
-      email: body.email,
-      name: body.name,
-      passwordHash: hashPassword(body.password),
-      role: body.role
-    }));
-  });
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/users/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const body = request.body ?? {};
-    const role = body.role === "platform_admin" || body.role === "merchant_admin" || body.role === "merchant_operator" ? body.role : undefined;
-    const user = deps.repos.patchUser(request.params.id, {
-      name: typeof body.name === "string" ? body.name : undefined,
-      status: body.status === "active" || body.status === "disabled" ? body.status : undefined,
-      role,
-      merchantId: role === "platform_admin" ? null : typeof body.merchantId === "string" ? body.merchantId : undefined,
-      passwordHash: typeof body.password === "string" && body.password.length >= 8 ? hashPassword(body.password) : undefined
-    });
-    if (!user) return reply.code(404).send({ error: "user not found" });
-    return maskUser(user);
-  });
-  app.delete<{ Params: { id: string } }>("/api/admin/users/:id", { preHandler: adminOnly }, async (request, reply) => {
-    const current = requestUser(request);
-    if (current.id === request.params.id) return reply.code(400).send({ error: "不能删除当前登录账号" });
-    const ok = deps.repos.deleteUser(request.params.id);
-    if (!ok) return reply.code(404).send({ error: "user not found" });
-    return { ok: true };
-  });
-
   app.get("/api/merchant/dashboard", { preHandler: merchantRoles }, async (request) => {
     const merchantId = scopedMerchantId(request);
     const conversations = deps.repos.listConversations({ merchantId, limit: 500 });
@@ -1611,11 +1574,6 @@ function readMultipartField(fields: unknown, key: string): string {
   if (!field || typeof field !== "object") return "";
   const value = (field as { value?: unknown }).value;
   return typeof value === "string" ? value : "";
-}
-
-function maskUser<T extends { passwordHash?: string }>(user: T): Omit<T, "passwordHash"> {
-  const { passwordHash: _passwordHash, ...rest } = user;
-  return rest;
 }
 
 function a2cAccountAllowed(repos: Repositories, merchantId: string, config: MerchantConfigRecord, apiPhone: string): boolean {
