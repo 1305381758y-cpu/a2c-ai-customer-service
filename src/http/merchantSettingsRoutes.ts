@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
+import { buildMerchantDashboard } from "../services/merchantDashboard.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
 import { registerMerchantConfigCheckRoutes } from "./merchantConfigCheckRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
@@ -39,18 +40,7 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
-  app.get("/api/merchant/dashboard", { preHandler: deps.merchantRoles }, async (request) => {
-    const merchantId = scopedMerchantId(request);
-    const conversations = deps.repos.listConversations({ merchantId, limit: 500 });
-    return {
-      customers: deps.repos.listCustomers({ merchantId, limit: 500 }).length,
-      conversations: conversations.length,
-      active: conversations.filter((item) => item.status === "active").length,
-      handoffs: conversations.filter((item) => item.status === "human_handoff").length,
-      pendingHandoffs: conversations.filter((item) => item.status === "human_handoff" && item.handoffStatus !== "done").length,
-      samples: deps.repos.listTrainingSamples({ merchantId, enabled: true }).length
-    };
-  });
+  app.get("/api/merchant/dashboard", { preHandler: deps.merchantRoles }, async (request) => buildMerchantDashboard(deps.repos, scopedMerchantId(request)));
 
   app.get("/api/merchant/config", { preHandler: deps.merchantRoles }, async (request) => maskConfig(deps.repos.getMerchantConfig(scopedMerchantId(request))));
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: deps.merchantAdmins }, async (request) => maskConfig(deps.repos.patchMerchantConfig(scopedMerchantId(request), cleanConfigPatch(request.body ?? {}))));
