@@ -53,6 +53,7 @@ import {
 } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine, registrationFieldQuestionReply } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
+import { strictFlowScriptLine, strictFlowVerificationLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep, resolveStrictFlowStepFromState, stageForFlowStep } from "./strictFlowState.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
@@ -392,7 +393,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     return reply(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram_retry", language), "collect_telegram", input.analysis.intent));
   }
 
-  return reply(input, language, "ended", "ready_for_handoff", verificationLine(language));
+  return reply(input, language, "ended", "ready_for_handoff", strictFlowVerificationLine(language));
 }
 
 export function buildStrictFlowFollowUp(flowStep: string, language: string): string {
@@ -443,7 +444,7 @@ function reply(
   content: string,
   needsInviteCode = false
 ): StrictFlowReply {
-  const actionableContent = sanitizeCustomerVisibleStrictReply(ensureActionableStrictContent(content, nextFlowStep, language, scriptLine));
+  const actionableContent = sanitizeCustomerVisibleStrictReply(ensureActionableStrictContent(content, nextFlowStep, language, strictFlowScriptLine));
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
   const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, (key, lineLanguage) => flowScriptLine(input, key, lineLanguage), debugIntent);
@@ -481,7 +482,7 @@ function registerInstruction(input: StrictFlowInput, language: string, mode: "in
     return withVariables;
   }
   if (!input.inviteCode) {
-    return scriptLine("missing_invite", language, display);
+    return strictFlowScriptLine("missing_invite", language, display);
   }
   if (language === "en") {
     if (mode === "help") {
@@ -513,7 +514,7 @@ function flowScriptLine(input: StrictFlowInput, key: string, language: string): 
   if (step?.standardReply) {
     return applyScriptVariables(step.standardReply, input, language, "");
   }
-  return scriptLine(key, language);
+  return strictFlowScriptLine(key, language);
 }
 
 function activeScriptStep(input: StrictFlowInput, key: string) {
@@ -582,249 +583,4 @@ function inviteDisplayText(inviteCode: A2CInviteCodeRecord | undefined, language
   if (language === "en") return `Registration link: ${url || "confirming"}\nInvitation code: ${inviteCode.code}`;
   if (language === "pt-BR") return `Link de cadastro: ${url || "confirmando"}\nCódigo de convite: ${inviteCode.code}`;
   return `开户链接：${url || "确认中"}\n邀请码：${inviteCode.code}`;
-}
-
-function verificationLine(language: string): string {
-  if (language === "en") return "We are verifying your information. Please wait a moment.";
-  if (language === "pt-BR") return "Estamos verificando suas informações. Aguarde um momento.";
-  return "我们正在核实，请稍后。";
-}
-
-function scriptLine(key: string, language: string, fallback = ""): string {
-  const zh: Record<string, string> = {
-    first_greeting: "您好，您是想了解一份兼职在线工作吗？",
-    repeat_greeting: "您好，我在的。您直接说现在卡在哪一步就行。",
-    chat_ack: "可以的，您想先了解工作内容、注册流程，还是 Telegram 怎么处理？我按您的问题一步一步说。",
-    complaint_ack: "抱歉，刚才没接住您的问题，我先按您问的点说明清楚。",
-    trust_ack: "我理解您的顾虑，具体规则和资料核实都会以后续确认为准，过程中有不清楚的地方可以直接问我。",
-    payment_concern_ack: "当前引导阶段不会要求您向客服转账或私下付款；后续如有平台规则，以页面和人工确认为准。",
-    investment_concern_ack: "不用先给我这边投钱或交押金；如果页面后面有规则，也以页面和人工确认为准。",
-    telegram_explain_ack: "Telegram 是个聊天工具，我们后续的沟通和指导都会通过它进行，方便您随时提问。您现在先完成平台注册，完成后把注册手机号发给我。",
-    telegram_explain_after_phone_ack: "Telegram 是个聊天工具，我们后续的沟通和指导都会通过它进行，方便您随时提问。您已经完成手机号这一步了，接下来只需要下载或注册 Telegram，并把 @ 开头的用户名发给我。",
-    earning_concern_ack: "收益不是我这边口头固定承诺的，会按实际任务和平台规则核算，后面会再确认。",
-    identity_ack: "我这边负责协助您完成开户注册和联系方式核对，会按当前步骤帮您处理。",
-    phone_reason_ack: "手机号用于核对您刚才注册的平台账号，方便后续确认资料是否对应。",
-    link_open_ack: "您可以先把开户链接完整复制到手机浏览器里打开，建议用 Chrome 或 Safari。注意不要只点聊天里的预览链接，先复制完整链接试一下。",
-    link_load_failure_ack: "明白，是链接页面加载不出来，不是您不会操作。您先试这几步：换 Chrome 或 Safari 打开、切换一下网络、关闭 VPN/代理后重试。还是空白或加载不出来的话，我这边就需要帮您核对开户链接。",
-    next_step_ack: "可以，我按当前进度带您继续下一步。",
-    sensitive_info_ack: "这些敏感信息不用发给我，也不要给任何人。我这里只需要按流程核对开户注册所需的信息。",
-    unknown_question_ack: "这个细节要以后续页面或人工确认为准，我先帮您把当前步骤走顺。",
-    general_help_ack: "可以，我会一步一步协助您，不需要您自己猜流程。",
-    registration_help_before_ready: "可以，我会一步步带您。您先确认现在方便操作吗？方便的话我再把注册入口和专属码发给您。",
-    registration_help_ack: "可以，我继续带您处理。您告诉我卡在打开链接、填写手机号、设置账号，还是输入邀请码，我就按那一步帮您。",
-    ask_question_prompt: "当然可以，您直接问我就行。我会先按您当前开户注册这一步帮您处理。",
-    ask_question_prompt_tg: "当然可以，您直接问我就行。问完我再继续带您处理 Telegram 用户名这一步。",
-    look_at_problem_ack: "可以，您把页面截图或提示文字发我，我帮您看具体卡在哪里；如果是链接打不开，也可以告诉我是打不开还是页面报错。",
-    registration_blocker_ack: "没事，先别急。把页面提示或截图发我，我帮您看卡在哪一步；不确定的操作先不要乱点。",
-    registration_screenshot_ack: "我看到您发的截图了。看起来是注册页打开或加载这一步有问题，您先试试换浏览器、切换网络再打开；如果页面还是空白或一直加载，我这边帮您核对开户链接。",
-    image_recognition_ack: "可以，我能看到您发的是图片或截图。如果页面字比较小，您也可以把提示文字发我；我先帮您按注册问题处理，看看卡在哪一步。",
-    verification_code_ack: "验证码收不到的话，先确认手机号填对、网络正常，再等一会儿重试。页面如果有提示，截图发我看一下。",
-    telegram_help_ack: "可以，我来协助您处理 Telegram。先下载或注册 Telegram，完成后把 @ 开头的用户名发给我。",
-    refusal_ack: "好的，我先不继续打扰您。如果您之后还想了解或继续注册，随时联系我就可以。",
-    platform_explain: "这是用于开始兼职在线工作的开户注册平台。您可以先了解工作内容，确认愿意继续后，我再给您开户链接。",
-    interest_screening_retry: "您好，您是想了解这份兼职在线工作吗？如果您感兴趣，我可以先简单介绍。",
-    hesitation_ack: "没关系，您可以先了解清楚再决定。",
-    bridge_interest: "您如果感兴趣，我可以先简单介绍。",
-    bridge_registration_intent: "您现在是否有空继续开户注册？",
-    bridge_wait_registration: "您准备继续时告诉我，我会继续带您处理注册步骤；如果已经注册完成，请把注册手机号发给我。",
-    bridge_telegram_confirm: "下一步只需要确认 Telegram，方便后续人工继续跟进。",
-    bridge_collect_telegram: "完成后把 @ 开头的 Telegram 用户名发给我就可以。",
-    not_registered_ack: "没关系，您先按页面步骤注册；如果卡在哪一步，把页面情况发我就行。注册完成后把注册手机号发给我。",
-    wait_registration_ack: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
-    incomplete_phone_ack: "我看到您说注册好了，不过这个手机号好像不完整。请把注册时填写的完整手机号发我一下。",
-    more_job_info_ack: "可以，我再简单补充一下：具体任务细节、规则和收益核算以后续页面和人工确认为准。我这边主要负责先协助您完成开户注册，方便后面继续安排。您现在方便继续注册吗？",
-    registration_question_retry_ack: "抱歉，刚才没有回答清楚。注册页面里的用户名按页面要求填写即可，不一定要写真实姓名；手机号建议填写您自己能正常使用的号码，方便后面核对您刚注册的平台账号。填好提交后，把注册手机号发给我就行。",
-    project_intro: "好的，我先简单介绍一下：这份兼职在线工作主要是协助商家提升产品销量和排名，按任务获得佣金。具体收益以页面规则和后续确认为准。您现在有空闲时间继续开户注册吗？",
-    registration_intent: "要开始您的第一份工作并赚取佣金，您需要先在我们的平台上注册。准备好注册了吗？我会一步一步教您完成。",
-    wait_registration: "请告知我您是否已完成注册。完成后，请将您注册的手机号码发送给我，以便我们进行验证。",
-    ask_registered_phone: "好的，请将您注册的手机号码发送给我，以便我们进行验证。",
-    telegram_confirm: "恭喜！您已成功注册。这是您的兼职账号。请保存您的用户名和密码，以免忘记。您需要一个 Telegram 账号才能开始工作，您有 Telegram 应用吗？",
-    telegram_confirm_question: "您有 Telegram 应用吗？如果有，请把您的 Telegram 用户名发给我。",
-    telegram_download: "如果你的手机里安装了应用商店（Play Store 或 App Store），可以直接在那里搜索并下载 Telegram 应用。创建 Telegram 账号后请告诉我。我们会在 Telegram 教你如何赚取佣金。完成后请把 @ 开头的用户名发给我。",
-    telegram_installed_ack: "好的，那接下来请注册 Telegram 账号；注册好后，把 @ 开头的 Telegram 用户名发给我。",
-    telegram_username_help: "可以，打开 Telegram 后进入设置，找到 Username/用户名。如果已经有 @ 开头的用户名，直接发给我；如果没有，就在用户名那里设置一个英文或数字组合，保存后把 @ 开头的用户名发我。",
-    telegram_username_android_help: "安卓手机一般这样找：打开 Telegram，点左上角三条线菜单，再点“设置”。里面会有“用户名/Username”。如果还没有用户名，就点进去设置一个英文或数字组合，保存后把 @ 开头的用户名发我。",
-    collect_telegram: "您注册好 Telegram 账号了吗？请把 @ 开头的 Telegram 用户名发送给我。",
-    collect_telegram_wait: "好的，注册好后把 @ 开头的 Telegram 用户名发给我就行，我在这边等您。",
-    collect_telegram_retry: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
-    missing_invite: `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${fallback ? `\n开户链接：${fallback}` : ""}`
-  };
-  const en: Record<string, string> = {
-    first_greeting: "Hello, are you looking for an online part-time job?",
-    repeat_greeting: "Hello, I am here. You can ask me about the job details, or tell me which step you are stuck on.",
-    chat_ack: "Yes, we can talk. Would you like to know the job details, the registration steps, or how to handle Telegram? I will explain step by step.",
-    complaint_ack: "Sorry, I did not understand your meaning clearly just now. You can tell me whether you want to know the job details, registration steps, or Telegram issue, and I will answer that directly.",
-    trust_ack: "I understand your concern. The exact rules and information verification will follow the later confirmation. If anything is unclear, ask me directly.",
-    payment_concern_ack: "At this step, you do not need to transfer money to customer service or pay privately. If the platform has later rules, follow the page and later confirmation.",
-    investment_concern_ack: "You do not need to invest money or pay a deposit to me here first. If there are later platform rules, follow the page and later confirmation.",
-    telegram_explain_ack: "Telegram is the contact tool used later for follow-up guidance. Please complete the platform registration first, then send me the registered phone number.",
-    telegram_explain_after_phone_ack: "Telegram is the contact tool used later for follow-up guidance. Your phone step is already done; next, please download or create Telegram and send me the username starting with @.",
-    earning_concern_ack: "The income is not a fixed verbal promise from me. It is calculated by actual tasks and platform rules, subject to later confirmation.",
-    identity_ack: "I handle the registration and contact verification steps here, and I will guide you according to the current step.",
-    phone_reason_ack: "The phone number is used to verify the platform account you registered, so the follow-up information can match correctly.",
-    link_open_ack: "Please copy the full registration link and open it in your phone browser, preferably Chrome or Safari. Do not only tap the preview in chat; try pasting the full link first.",
-    link_load_failure_ack: "Understood, the link page is not loading, not that you are doing it wrong. Please try Chrome or Safari, switch the network, and turn off VPN/proxy if there is one. If it is still blank or cannot load, I will help verify the registration link.",
-    next_step_ack: "Yes, I will continue guiding you from the current step.",
-    sensitive_info_ack: "You do not need to send sensitive information like passwords, verification codes, payment details, or ID documents. I only need the information required by the current registration flow.",
-    unknown_question_ack: "This needs to follow the page display or later confirmation. I will first help you complete the current registration step.",
-    general_help_ack: "Yes, I can guide you step by step, so you do not need to guess the process yourself.",
-    registration_help_before_ready: "Yes, I can guide you step by step. Please confirm whether you are free to operate now; if yes, I will send the registration entry and dedicated code.",
-    registration_help_ack: "Yes, I will keep guiding you. Tell me whether you are stuck opening the link, filling the phone number, setting the account, or entering the invitation code.",
-    ask_question_prompt: "Of course. Ask me directly, and I will answer based on the current registration step.",
-    ask_question_prompt_tg: "Of course. Ask me directly. After that, I will continue guiding you through the Telegram username step.",
-    look_at_problem_ack: "Sure, send me the page screenshot or prompt text and I will check where it is stuck. If the link does not open, tell me whether it cannot open or shows an error.",
-    registration_blocker_ack: "No worries, do not rush. Send me the page prompt or a screenshot, and I will check where it is stuck. Do not click anything uncertain first.",
-    registration_screenshot_ack: "I saw the screenshot you sent. It looks like the registration page is having an opening or loading issue. Please try another browser and switch the network first. If it is still blank or keeps loading, I will help verify the registration link.",
-    image_recognition_ack: "Yes, I can see that you sent an image or screenshot. If the text on it is small, you can also type the page prompt here, and I will help check the registration issue.",
-    verification_code_ack: "If the verification code does not arrive, first check that the phone number is correct and the network is stable, then retry after a moment. If the page shows a prompt, send me a screenshot.",
-    telegram_help_ack: "Yes, I will help you handle Telegram. Please download or create Telegram first, then send me the username starting with @.",
-    refusal_ack: "Okay, I will not disturb you further for now. If you want to learn more or continue registration later, you can contact me anytime.",
-    platform_explain: "This is the registration platform used to start the part-time online job. You can learn about the job first. If you decide to continue, I will send the registration entry.",
-    interest_screening_retry: "Hello, would you like to learn about this part-time online job? If you are interested, I can briefly introduce it.",
-    hesitation_ack: "No problem. You can understand it first and decide later.",
-    bridge_interest: "If you are interested, I can briefly introduce it first.",
-    bridge_registration_intent: "Do you have time now to continue with the account registration?",
-    bridge_wait_registration: "When you are ready to continue, tell me and I will guide you through the registration step. If you have completed registration, please send me the registered phone number.",
-    bridge_telegram_confirm: "The next step is only to confirm Telegram so the follow-up can continue smoothly.",
-    bridge_collect_telegram: "After that, send me your Telegram username starting with @.",
-    not_registered_ack: "No problem. Please follow the page steps first. If you get stuck, send me what you see. After registration, send me the registered phone number.",
-    wait_registration_ack: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
-    incomplete_phone_ack: "I see you said registration is done, but that phone number looks incomplete. Please send me the full phone number used for registration.",
-    more_job_info_ack: "Sure, I can add a little more: the exact task details, rules, and earnings calculation should follow the page and later confirmation. My role here is to help you finish the account registration first so the next step can continue. Do you have time to continue registration now?",
-    registration_question_retry_ack: "Sorry, I did not answer that clearly. For the username, follow the page requirement; it usually does not have to be your real name unless the page asks for it. For the phone number, use one you can actually use so the platform account can be matched later. After submitting, send me the registered phone number.",
-    project_intro: "Okay, let me briefly introduce it: this online part-time work helps merchants improve product sales and ranking, and commission is based on tasks. The exact earnings follow the page rules and later confirmation. Do you have time to continue registration now?",
-    registration_intent: "To start your first job and earn commission, you need to register on our platform first. Are you ready to register? I will guide you step by step.",
-    wait_registration: "Please let me know whether you have completed the registration. After that, send me the phone number you registered with so we can verify it.",
-    ask_registered_phone: "Okay, please send me the phone number you registered with so we can verify it.",
-    telegram_confirm: "Congratulations, you have registered successfully. This is your part-time work account. Please save your username and password so you do not forget them. You need a Telegram account to start working. Do you have the Telegram app?",
-    telegram_confirm_question: "Do you have the Telegram app? If yes, please send me your Telegram username.",
-    telegram_download: "If your phone has Play Store or App Store, you can search for Telegram there and download it directly. After creating your Telegram account, please tell me. We will teach you on Telegram how to earn commission. After that, send me your username starting with @.",
-    telegram_installed_ack: "Okay, next please create your Telegram account. After that, send me your Telegram username starting with @.",
-    telegram_username_help: "Sure. Open Telegram, go to Settings, and find Username. If you already have a username starting with @, send it to me. If not, set one with letters or numbers, save it, then send me the @ username.",
-    telegram_username_android_help: "On Android, open Telegram, tap the three-line menu on the top left, then tap Settings. Find Username. If there is no username yet, tap it and set one with letters or numbers, then send me the @ username.",
-    collect_telegram: "Have you registered your Telegram account? Please send me your Telegram username starting with @.",
-    collect_telegram_wait: "Okay, after you finish, just send me the Telegram username starting with @. I will wait here.",
-    collect_telegram_retry: "Please send me your Telegram username. It should start with @.",
-    missing_invite: `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${fallback ? `\nRegistration link: ${fallback}` : ""}`
-  };
-  const pt: Record<string, string> = {
-    first_greeting: "Olá, você quer conhecer um trabalho online de meio período?",
-    repeat_greeting: "Olá, estou aqui. Você pode perguntar sobre os detalhes do trabalho ou me dizer em qual etapa ficou com dúvida.",
-    chat_ack: "Podemos conversar, sim. Você quer saber primeiro sobre o trabalho, o cadastro ou como usar o Telegram? Eu explico passo a passo.",
-    complaint_ack: "Desculpe, não entendi bem sua intenção agora há pouco. Você pode me dizer se quer saber sobre o trabalho, o cadastro ou o Telegram, e eu respondo diretamente.",
-    trust_ack: "Entendo sua preocupação. As regras exatas e a verificação das informações seguem a confirmação posterior. Se algo não ficar claro, pode me perguntar diretamente.",
-    payment_concern_ack: "Nesta etapa, você não precisa transferir dinheiro para o atendimento nem pagar por fora. Se houver regras da plataforma depois, siga a página e a confirmação posterior.",
-    investment_concern_ack: "Você não precisa investir dinheiro nem pagar depósito para mim aqui primeiro. Se houver regras da plataforma depois, siga a página e a confirmação posterior.",
-    telegram_explain_ack: "O Telegram é a ferramenta de contato usada depois para orientação. Primeiro conclua o cadastro na plataforma e envie o telefone usado no cadastro.",
-    telegram_explain_after_phone_ack: "O Telegram é a ferramenta de contato usada depois para orientação. A etapa do telefone já foi concluída; agora baixe ou crie o Telegram e envie o nome de usuário começando com @.",
-    earning_concern_ack: "O ganho não é uma promessa fixa minha; é calculado conforme as tarefas e regras da plataforma, sujeito à confirmação posterior.",
-    identity_ack: "Eu acompanho as etapas de cadastro e verificação de contato aqui, e vou orientar você conforme a etapa atual.",
-    phone_reason_ack: "O telefone é usado para verificar a conta que você cadastrou na plataforma, para que as informações sejam confirmadas corretamente depois.",
-    link_open_ack: "Copie o link completo de cadastro e abra no navegador do celular, de preferência Chrome ou Safari. Não toque apenas na prévia do chat; primeiro cole o link completo no navegador.",
-    link_load_failure_ack: "Entendi, a página do link não está carregando; não é erro seu. Tente abrir no Chrome ou Safari, trocar a rede e desligar VPN/proxy se estiver usando. Se continuar em branco ou sem carregar, eu ajudo a verificar o link de cadastro.",
-    next_step_ack: "Sim, vou continuar orientando você a partir da etapa atual.",
-    sensitive_info_ack: "Você não precisa enviar informações sensíveis como senha, código de verificação, dados de pagamento ou documentos. Só preciso das informações necessárias para esta etapa do cadastro.",
-    unknown_question_ack: "Isso precisa seguir a página ou a confirmação posterior. Primeiro vou ajudar você a concluir a etapa atual do cadastro.",
-    general_help_ack: "Sim, posso orientar você passo a passo, sem você precisar adivinhar o processo.",
-    registration_help_before_ready: "Sim, posso orientar você passo a passo. Primeiro confirme se você tem tempo para operar agora; se tiver, envio a entrada de cadastro e o código exclusivo.",
-    registration_help_ack: "Sim, vou continuar orientando você. Me diga se travou ao abrir o link, preencher o telefone, criar a conta ou inserir o código de convite.",
-    ask_question_prompt: "Claro, pode me perguntar diretamente. Vou responder considerando esta etapa atual do cadastro.",
-    ask_question_prompt_tg: "Claro, pode me perguntar diretamente. Depois eu continuo orientando você na etapa do nome de usuário do Telegram.",
-    look_at_problem_ack: "Claro, envie a captura de tela ou a mensagem da página e eu verifico onde travou. Se o link não abrir, me diga se não abre ou se aparece erro.",
-    registration_blocker_ack: "Sem problema, não precisa ter pressa. Envie o aviso da página ou uma captura de tela, e eu vejo onde travou. Não clique em nada incerto por enquanto.",
-    registration_screenshot_ack: "Vi a captura de tela que você enviou. Parece ser um problema ao abrir ou carregar a página de cadastro. Tente trocar o navegador e a rede primeiro; se continuar em branco ou carregando, eu ajudo a verificar o link de cadastro.",
-    image_recognition_ack: "Sim, consigo ver que você enviou uma imagem ou captura de tela. Se o texto estiver pequeno, envie também a mensagem da página, e eu ajudo a verificar o problema do cadastro.",
-    verification_code_ack: "Se o código de verificação não chegar, confirme primeiro se o telefone está correto e se a rede está estável, depois tente novamente. Se a página mostrar algum aviso, envie uma captura de tela.",
-    telegram_help_ack: "Sim, vou ajudar você com o Telegram. Primeiro baixe ou crie o Telegram e depois envie o nome de usuário começando com @.",
-    refusal_ack: "Tudo bem, não vou incomodar você agora. Se quiser saber mais ou continuar o cadastro depois, pode me chamar a qualquer momento.",
-    platform_explain: "Esta é a plataforma de cadastro usada para iniciar o trabalho online de meio período. Você pode conhecer o trabalho primeiro. Se decidir continuar, eu envio a entrada de cadastro.",
-    interest_screening_retry: "Olá, você gostaria de conhecer este trabalho online de meio período? Se tiver interesse, posso explicar rapidamente.",
-    hesitation_ack: "Sem problema. Você pode entender primeiro e decidir depois.",
-    bridge_interest: "Se tiver interesse, posso explicar rapidamente primeiro.",
-    bridge_registration_intent: "Você tem tempo agora para continuar o cadastro da conta?",
-    bridge_wait_registration: "Quando estiver pronto para continuar, me avise e eu continuo orientando o cadastro. Se já concluiu o cadastro, envie o telefone usado no cadastro.",
-    bridge_telegram_confirm: "O próximo passo é apenas confirmar o Telegram para continuar o acompanhamento.",
-    bridge_collect_telegram: "Depois disso, envie seu nome de usuário do Telegram começando com @.",
-    not_registered_ack: "Sem problema. Siga primeiro as etapas da página. Se travar em alguma parte, me envie o que aparece. Depois do cadastro, envie o telefone usado no cadastro.",
-    wait_registration_ack: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
-    incomplete_phone_ack: "Entendi que você concluiu o cadastro, mas esse telefone parece incompleto. Envie o número completo usado no cadastro, por favor.",
-    more_job_info_ack: "Claro, posso explicar um pouco mais: os detalhes das tarefas, regras e cálculo de ganhos devem seguir a página e a confirmação posterior. Meu papel aqui é ajudar você a concluir primeiro o cadastro da conta para continuar a próxima etapa. Você tem tempo agora para continuar o cadastro?",
-    registration_question_retry_ack: "Desculpe, não respondi isso com clareza. Para o nome de usuário, siga o que a página pede; normalmente não precisa ser seu nome real, a menos que a página peça. Para o telefone, use um número que você realmente consegue usar para conferir a conta depois. Depois de enviar, me mande o telefone usado no cadastro.",
-    project_intro: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento dos produtos, e a comissão depende das tarefas. Os ganhos exatos seguem as regras da página e a confirmação posterior. Você tem tempo para continuar o cadastro agora?",
-    registration_intent: "Para começar seu primeiro trabalho e ganhar comissão, você precisa se cadastrar primeiro na nossa plataforma. Você está pronto para se cadastrar? Vou orientar você passo a passo.",
-    wait_registration: "Por favor, me avise se você já concluiu o cadastro. Depois disso, envie o número de telefone usado no cadastro para fazermos a verificação.",
-    ask_registered_phone: "Certo, envie o número de telefone usado no cadastro para fazermos a verificação.",
-    telegram_confirm: "Parabéns, seu cadastro foi concluído. Esta é sua conta de trabalho de meio período. Guarde seu nome de usuário e sua senha para não esquecer. Você precisa de uma conta no Telegram para começar a trabalhar. Você tem o aplicativo Telegram?",
-    telegram_confirm_question: "Você tem o aplicativo Telegram? Se tiver, envie seu nome de usuário do Telegram.",
-    telegram_download: "Se o seu celular tiver Play Store ou App Store, você pode pesquisar e baixar o Telegram diretamente. Depois de criar a conta do Telegram, me avise. Vamos ensinar no Telegram como ganhar comissão. Depois disso, envie o nome de usuário começando com @.",
-    telegram_installed_ack: "Certo, agora crie sua conta no Telegram. Depois disso, envie seu nome de usuário começando com @.",
-    telegram_username_help: "Claro. Abra o Telegram, entre em Configurações e procure Username/nome de usuário. Se já tiver um nome começando com @, envie para mim. Se não tiver, crie um com letras ou números, salve e me envie o @.",
-    telegram_username_android_help: "No Android, abra o Telegram, toque no menu de três linhas no canto superior esquerdo e depois em Configurações. Procure Username/nome de usuário. Se ainda não tiver, crie um com letras ou números, salve e me envie o @.",
-    collect_telegram: "Você já registrou sua conta no Telegram? Envie seu nome de usuário do Telegram começando com @.",
-    collect_telegram_wait: "Certo, quando terminar, envie seu nome de usuário do Telegram começando com @. Vou aguardar por aqui.",
-    collect_telegram_retry: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
-    missing_invite: `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${fallback ? `\nLink de cadastro: ${fallback}` : ""}`
-  };
-  const es: Record<string, string> = {
-    first_greeting: "Hola, ¿quiere conocer un trabajo de medio tiempo en línea?",
-    repeat_greeting: "Hola, estoy aquí. Puede preguntarme sobre el trabajo o decirme en qué paso se quedó.",
-    chat_ack: "Sí, podemos conversar. ¿Quiere saber primero sobre el trabajo, el registro o Telegram? Le explico paso a paso.",
-    complaint_ack: "Disculpe, creo que no entendí bien su pregunta. Dígame si quiere saber sobre el trabajo, el registro o Telegram, y le respondo directo.",
-    trust_ack: "Entiendo su preocupación. Las reglas y la verificación de datos se confirmarán después según la página o el personal encargado. Si algo no queda claro, puede preguntarme.",
-    payment_concern_ack: "En esta etapa no necesita transferir dinero al servicio ni pagar por privado. Si luego hay reglas de la plataforma, siga la página y la confirmación posterior.",
-    investment_concern_ack: "No necesita invertir dinero ni pagar depósito aquí primero. Si luego existen reglas de la plataforma, se confirmarán en la página o por personal encargado.",
-    telegram_explain_ack: "Telegram es la herramienta de contacto que se usa después para la orientación. Primero complete el registro en la plataforma y luego envíeme el teléfono registrado.",
-    telegram_explain_after_phone_ack: "Telegram es la herramienta de contacto que se usa después para la orientación. Ya tenemos el teléfono; ahora solo necesita descargar o crear Telegram y enviarme el usuario que empieza con @.",
-    earning_concern_ack: "La ganancia no es una promesa fija de mi parte; se calcula según las tareas reales y las reglas de la plataforma, sujeto a confirmación posterior.",
-    identity_ack: "Yo me encargo de acompañarle en el registro y la verificación de contacto, y le guío según el paso actual.",
-    phone_reason_ack: "El teléfono se usa para verificar la cuenta que registró en la plataforma, así los datos coinciden correctamente después.",
-    link_open_ack: "Copie el enlace completo de registro y ábralo en el navegador del celular, preferiblemente Chrome o Safari. No toque solo la vista previa del chat; primero pegue el enlace completo.",
-    link_load_failure_ack: "Entiendo, la página del enlace no carga; no es que usted lo esté haciendo mal. Pruebe con Chrome o Safari, cambie de red y desactive VPN/proxy si usa. Si sigue en blanco o sin cargar, le ayudo a revisar el enlace de registro.",
-    next_step_ack: "Sí, le sigo guiando desde el paso actual.",
-    sensitive_info_ack: "No necesita enviarme datos sensibles como contraseña, código de verificación, datos de pago o documentos. Solo necesito la información requerida por este paso del registro.",
-    unknown_question_ack: "Ese detalle debe confirmarse según la página o el personal encargado. Primero le ayudo a dejar listo el paso actual.",
-    general_help_ack: "Sí, puedo guiarle paso a paso, no necesita adivinar el proceso.",
-    registration_help_before_ready: "Sí, puedo guiarle paso a paso. Primero confirme si tiene tiempo para operar ahora; si puede, le envío el acceso de registro y el código.",
-    registration_help_ack: "Sí, le sigo guiando. Dígame si se quedó en abrir el enlace, completar el teléfono, crear la cuenta o ingresar el código de invitación.",
-    ask_question_prompt: "Claro, pregúnteme directamente. Le respondo según este paso actual del registro.",
-    ask_question_prompt_tg: "Claro, pregúnteme directamente. Después seguimos con el usuario de Telegram.",
-    look_at_problem_ack: "Claro, envíeme la captura de pantalla o el texto que aparece y reviso dónde se trabó. Si el enlace no abre, dígame si no carga o si muestra error.",
-    registration_blocker_ack: "No se preocupe, vamos con calma. Envíeme el aviso de la página o una captura, y reviso dónde se quedó. No toque nada si no está seguro.",
-    registration_screenshot_ack: "Vi la captura que envió. Parece un problema al abrir o cargar la página de registro. Pruebe cambiar de navegador y de red primero; si sigue en blanco o cargando, le ayudo a revisar el enlace.",
-    image_recognition_ack: "Sí, veo que envió una imagen o captura. Si el texto se ve pequeño, también puede escribir aquí el aviso de la página; le ayudo con el problema de registro.",
-    verification_code_ack: "Si no llega el código de verificación, confirme primero que el teléfono esté correcto y que la red esté estable; luego espere un momento y vuelva a intentar. Si la página muestra un aviso, envíeme una captura.",
-    telegram_help_ack: "Sí, le ayudo con Telegram. Primero descargue o cree Telegram y luego envíeme el usuario que empieza con @.",
-    refusal_ack: "Está bien, por ahora no le molesto más. Si después quiere saber más o continuar el registro, puede escribirme cuando guste.",
-    platform_explain: "Esta es la plataforma de registro para empezar el trabajo en línea. Puede conocer primero el trabajo; si decide continuar, le envío la entrada de registro.",
-    interest_screening_retry: "Hola, ¿quiere conocer este trabajo de medio tiempo en línea? Si le interesa, puedo explicarle brevemente.",
-    hesitation_ack: "No hay problema. Puede entenderlo primero y decidir después.",
-    bridge_interest: "Si le interesa, puedo explicarle brevemente.",
-    bridge_registration_intent: "¿Tiene tiempo ahora para continuar con el registro?",
-    bridge_wait_registration: "Cuando esté listo para continuar, dígame y le sigo guiando con el registro. Si ya terminó, envíeme el teléfono usado en el registro.",
-    bridge_telegram_confirm: "El siguiente paso es confirmar Telegram para que el seguimiento continúe sin problema.",
-    bridge_collect_telegram: "Después envíeme su usuario de Telegram que empieza con @.",
-    not_registered_ack: "No hay problema. Siga primero los pasos de la página. Si se queda trabado, envíeme lo que aparece. Después del registro, envíeme el teléfono usado.",
-    wait_registration_ack: "De acuerdo, siga primero los pasos de la página. Después del registro, envíeme el teléfono usado. Si se queda en algún paso, dígame dónde.",
-    incomplete_phone_ack: "Veo que dijo que terminó el registro, pero ese teléfono parece incompleto. Envíeme el número completo usado en el registro, por favor.",
-    more_job_info_ack: "Claro, le explico un poco más: los detalles de tareas, reglas y cálculo de ganancias deben seguir la página y la confirmación posterior. Mi parte aquí es ayudarle primero a terminar el registro para poder continuar. ¿Tiene tiempo para seguir con el registro ahora?",
-    registration_question_retry_ack: "Disculpe, no lo expliqué claro. Para el usuario, siga lo que pide la página; normalmente no tiene que ser su nombre real salvo que la página lo pida. Para el teléfono, use uno que pueda usar normalmente para verificar la cuenta después. Al enviar el registro, mándeme el teléfono usado.",
-    project_intro: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento de productos, y la comisión depende de las tareas. Las ganancias exactas siguen las reglas de la página y la confirmación posterior. ¿Tiene tiempo para continuar el registro ahora?",
-    registration_intent: "Para empezar su primer trabajo y ganar comisión, primero debe registrarse en nuestra plataforma. ¿Está listo para registrarse? Le guío paso a paso.",
-    wait_registration: "Por favor dígame si ya completó el registro. Después, envíeme el número de teléfono usado en el registro para verificarlo.",
-    ask_registered_phone: "De acuerdo, envíeme el número de teléfono usado en el registro para verificarlo.",
-    telegram_confirm: "Felicidades, su registro se completó. Esta es su cuenta de trabajo de medio tiempo. Guarde su usuario y contraseña para no olvidarlos. Necesita una cuenta de Telegram para empezar a trabajar. ¿Tiene la aplicación Telegram?",
-    telegram_confirm_question: "¿Tiene la aplicación Telegram? Si la tiene, envíeme su usuario de Telegram.",
-    telegram_download: "Si su celular tiene Play Store o App Store, puede buscar Telegram allí y descargarlo. Después de crear la cuenta de Telegram, avíseme. En Telegram le enseñaremos cómo ganar comisión. Luego envíeme el usuario que empieza con @.",
-    telegram_installed_ack: "De acuerdo, ahora cree su cuenta de Telegram. Después envíeme el usuario que empieza con @.",
-    telegram_username_help: "Claro. Abra Telegram, entre en Configuración y busque Username/usuario. Si ya tiene un usuario que empieza con @, envíemelo. Si no tiene, cree uno con letras o números, guárdelo y envíeme el @.",
-    telegram_username_android_help: "En Android, abra Telegram, toque el menú de tres líneas arriba a la izquierda y luego Configuración. Busque Username/usuario. Si aún no tiene, cree uno con letras o números, guárdelo y envíeme el @.",
-    collect_telegram: "¿Ya registró su cuenta de Telegram? Envíeme su usuario de Telegram que empieza con @.",
-    collect_telegram_wait: "De acuerdo, cuando termine, envíeme su usuario de Telegram que empieza con @. Le espero por aquí.",
-    collect_telegram_retry: "Por favor envíeme su usuario de Telegram. Debe empezar con @.",
-    missing_invite: `El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.${fallback ? `\nEnlace de registro: ${fallback}` : ""}`
-  };
-  if (language === "en") return en[key] ?? zh[key] ?? "";
-  if (language === "es") return es[key] ?? zh[key] ?? "";
-  if (language === "pt-BR") return pt[key] ?? zh[key] ?? "";
-  return zh[key] ?? "";
 }
