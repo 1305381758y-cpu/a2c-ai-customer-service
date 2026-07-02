@@ -1,8 +1,7 @@
-import { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import { buildStrictFlowFollowUp } from "../domain/strictFlow.js";
 import type { Repositories } from "../repositories.js";
-import { sendOutboundMessage } from "./outboundMessageSender.js";
+import { createA2CFollowUpSender, type FollowUpSender } from "./followUpSender.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 
 export type FollowUpProcessingResult = {
@@ -15,7 +14,8 @@ export type FollowUpProcessingResult = {
 export class FollowUpProcessor {
   constructor(
     private readonly repos: Repositories,
-    private readonly config: AppConfig
+    private readonly config: AppConfig,
+    private readonly sender: FollowUpSender = createA2CFollowUpSender(repos)
   ) {}
 
   async processDueFollowUps(limit = 50): Promise<FollowUpProcessingResult> {
@@ -38,22 +38,11 @@ export class FollowUpProcessor {
       const country = this.repos.getMerchantCountry(conversation.countryId);
       const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
       const content = buildStrictFlowFollowUp(conversation.flowStep || conversation.stage, conversation.language || country?.defaultLanguage || "zh");
-      const a2c = new A2CClient(runtimeConfig, this.repos.a2cTokenStore(conversation.merchantId));
       const flowStep = conversation.flowStep || conversation.stage || "unknown";
-      const sendResult = await sendOutboundMessage({
-        a2c,
-        payload: {
-          to: conversation.customerPhone,
-          senderPhoneNumber: conversation.a2cAccountPhone,
-          type: "text",
-          content
-        },
-        idPolicy: {
-          simulatedPrefix: "simulated_followup",
-          sentFallbackPrefix: "followup",
-          failedPrefix: "followup_failed",
-          contextId: conversation.id
-        }
+      const sendResult = await this.sender.send({
+        runtimeConfig,
+        conversation,
+        content
       });
       if (sendResult.a2cSendStatus === "failed") {
         this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: sendResult.a2cSendError || "follow-up send failed" });

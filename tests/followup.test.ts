@@ -3,6 +3,7 @@ import { loadConfig } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
 import { FollowUpProcessor } from "../src/services/followUpProcessor.js";
+import { createA2CFollowUpSender } from "../src/services/followUpSender.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -66,16 +67,6 @@ describe("follow-up candidates", () => {
   });
 
   it("sends due follow-ups through the follow-up processor module", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const target = String(url);
-      if (target.endsWith("/open/auth/token")) {
-        return new Response(JSON.stringify({ code: 200, data: { accessToken: "token" } }), { status: 200 });
-      }
-      if (target.endsWith("/v1/messages")) {
-        return new Response(JSON.stringify({ code: 200, data: "followup-message-id" }), { status: 200 });
-      }
-      return new Response(JSON.stringify({ code: 404, msg: "not found" }), { status: 404 });
-    });
     const db = openDb(":memory:");
     const repos = new Repositories(db);
     const merchant = repos.createMerchant("跟进发送商户");
@@ -102,20 +93,67 @@ describe("follow-up candidates", () => {
     db.sqlite
       .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
       .run("followup-send-seed");
+    const sender = {
+      send: vi.fn(async () => ({
+        externalId: "followup-message-id",
+        a2cSendStatus: "sent" as const,
+        a2cSendError: ""
+      }))
+    };
     const processor = new FollowUpProcessor(repos, loadConfig({
       DATABASE_URL: ":memory:",
       A2C_BASE_URL: "https://a2c.test",
       A2C_APP_ID: "app-id",
       A2C_APP_SECRET: "app-secret"
-    }));
+    }), sender);
 
     await expect(processor.processDueFollowUps()).resolves.toEqual({ scanned: 1, sent: 1, skipped: 0, failed: 0 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({
+      content: "您注册到哪一步了？如果卡住，把页面情况发我就行。",
+      conversation: expect.objectContaining({
+        customerPhone: "5511913586749",
+        a2cAccountPhone: "18507251675"
+      })
+    }));
     const messages = repos.listConversationMessages(conversation.id, 10);
     const followup = messages.find((message) => message.rawPayload?.followupSent === true);
     expect(followup?.rawPayload?.followupSent).toBe(true);
     expect(followup?.rawPayload?.a2cSendStatus).toBe("sent");
     expect(repos.listDueFollowUpCandidates()).toHaveLength(0);
+  });
+
+  it("keeps the default A2C follow-up sender behind an adapter seam", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const target = String(url);
+      if (target.endsWith("/open/auth/token")) {
+        return new Response(JSON.stringify({ code: 200, data: { accessToken: "token" } }), { status: 200 });
+      }
+      if (target.endsWith("/v1/messages")) {
+        return new Response(JSON.stringify({ code: 200, data: "followup-message-id" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ code: 404, msg: "not found" }), { status: 404 });
+    });
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("跟进 adapter 商户");
+    const conversation = repos.getOrCreateConversation("5511913586749", "18507251675", "", merchant.id);
+    const sender = createA2CFollowUpSender(repos);
+
+    await expect(sender.send({
+      runtimeConfig: loadConfig({
+        DATABASE_URL: ":memory:",
+        A2C_BASE_URL: "https://a2c.test",
+        A2C_APP_ID: "app-id",
+        A2C_APP_SECRET: "app-secret"
+      }),
+      conversation,
+      content: "您注册到哪一步了？"
+    })).resolves.toEqual({
+      externalId: "followup-message-id",
+      a2cSendStatus: "sent",
+      a2cSendError: ""
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
