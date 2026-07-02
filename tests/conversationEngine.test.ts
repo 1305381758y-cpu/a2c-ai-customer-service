@@ -50,6 +50,37 @@ describe("ConversationEngine", () => {
     });
   });
 
+  it("receives inbound messages synchronously when configured for direct handling", async () => {
+    const processor = {
+      process: vi.fn(async () => ({ status: "strict_flow_replied", conversationId: "conversation-sync" })),
+      processDueFollowUps: vi.fn()
+    };
+    const engine = new ConversationEngine(processor, { asyncProcessing: false });
+
+    await expect(engine.receiveInboundMessage({ payload: payload(), merchantId: "merchant-sync" })).resolves.toEqual({
+      status: "strict_flow_replied",
+      conversationId: "conversation-sync"
+    });
+    expect(processor.process).toHaveBeenCalledWith(payload(), "merchant-sync", { simulation: undefined });
+  });
+
+  it("receives inbound messages asynchronously when configured for queued handling", async () => {
+    const processor = {
+      process: vi.fn(async () => ({ status: "strict_flow_replied", conversationId: "conversation-async" })),
+      processDueFollowUps: vi.fn()
+    };
+    const engine = new ConversationEngine(processor, { asyncProcessing: true, concurrency: 1 });
+
+    await expect(engine.receiveInboundMessage({ payload: payload(), merchantId: "merchant-async" })).resolves.toEqual({
+      status: "queued",
+      queueDepth: 1
+    });
+
+    await vi.waitFor(() => {
+      expect(processor.process).toHaveBeenCalledWith(payload(), "merchant-async", { simulation: undefined });
+    });
+  });
+
   it("keeps follow-up execution behind the engine interface", async () => {
     const processor = {
       process: vi.fn(),
