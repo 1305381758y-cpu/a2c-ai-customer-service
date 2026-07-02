@@ -9,6 +9,7 @@ import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
 import { appConfigForMerchant } from "../services/runtimeConfig.js";
+import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
@@ -26,6 +27,7 @@ export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: Merch
   registerMerchantOwnSettingsRoutes(app, deps);
   registerMerchantCountryRoutes(app, deps);
   registerMerchantInviteCodeRoutes(app, deps);
+  registerMerchantA2CAccountRoutes(app, { ...deps, maskConfig });
 }
 
 function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -35,16 +37,6 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: deps.adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: deps.adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
-
-  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: deps.adminOnly }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: request.params.id }) }));
-  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: deps.adminOnly }, async (request, reply) => syncA2CAccounts(request, reply, deps, request.params.id));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id", { preHandler: deps.adminOnly }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchMerchantA2CAccount(id, request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "a2c account not found" });
-    return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
-  });
 
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: deps.adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 }
@@ -70,16 +62,6 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.post("/api/merchant/config/registration-tutorial-image", { preHandler: deps.merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
 
-  app.get("/api/merchant/a2c/accounts", { preHandler: deps.merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: scopedMerchantId(request) }) }));
-  app.post("/api/merchant/a2c/accounts/sync", { preHandler: deps.merchantAdmins }, async (request, reply) => syncA2CAccounts(request, reply, deps, scopedMerchantId(request)));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/a2c/accounts/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "invalid id" });
-    const row = deps.repos.patchMerchantA2CAccount(id, request.body ?? {}, scopedMerchantId(request));
-    if (!row) return reply.code(404).send({ error: "a2c account not found" });
-    return { row, config: maskConfig(deps.repos.getMerchantConfig(row.merchantId)) };
-  });
-
   app.post("/api/merchant/telegram/setup-webhook", { preHandler: deps.merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
 }
 
@@ -94,47 +76,6 @@ export function registerTelegramWebhookRoutes(app: FastifyInstance, deps: { conf
     const result = bindTelegramUpdate(deps.repos, merchant.id, request.body);
     return reply.code(200).send(result);
   });
-}
-
-async function syncA2CAccounts(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
-  const merchant = deps.repos.getMerchant(merchantId);
-  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-  const cfg = deps.repos.getMerchantConfig(merchantId);
-  const client = new A2CClient(appConfigForMerchant(deps.config, cfg), deps.repos.a2cTokenStore(merchantId));
-  try {
-    const accounts = await client.listAccounts();
-    const rows = deps.repos.syncMerchantA2CAccounts(merchantId, accounts);
-    return {
-      imported: rows.length,
-      rows,
-      config: maskConfig(deps.repos.getMerchantConfig(merchantId))
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "A2C accounts sync failed";
-    const existingRows = localA2CAccountsForRateLimitFallback(deps.repos, merchantId, cfg);
-    if (existingRows.length && isA2CRateLimitMessage(message)) {
-      return {
-        imported: 0,
-        rows: existingRows,
-        config: maskConfig(deps.repos.getMerchantConfig(merchantId)),
-        stale: true,
-        warning: "A2C 当前限制认证请求，已继续使用本地保存的客服账号。请 10 分钟后再刷新账号。"
-      };
-    }
-    return reply.code(502).send({ error: message });
-  }
-}
-
-function localA2CAccountsForRateLimitFallback(repos: Repositories, merchantId: string, cfg: MerchantConfigRecord) {
-  const rows = repos.listMerchantA2CAccounts({ merchantId });
-  if (rows.length) return rows;
-  const configuredAccounts = cfg.a2cAccountPhone
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((apiPhone) => ({ apiPhone }));
-  if (!configuredAccounts.length) return rows;
-  return repos.syncMerchantA2CAccounts(merchantId, configuredAccounts);
 }
 
 type ConfigCheckItem = {
@@ -197,10 +138,6 @@ async function checkA2C(config: AppConfig, repos: Repositories, merchantId: stri
       detail: `${error instanceof Error ? error.message : "A2C 实时检测失败"}${suffix}`
     };
   }
-}
-
-function isA2CRateLimitMessage(message: string): boolean {
-  return /(visit too frequently|too frequent|rate limit|too many requests|请求.*频繁|访问.*频繁|稍后再试|频繁)/i.test(message);
 }
 
 async function checkAiProvider(config: AppConfig): Promise<ConfigCheckItem> {
