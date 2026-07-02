@@ -1,6 +1,7 @@
 import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
-import { buildStrictFlowReply, strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
+import { strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
+import { nextStrictFlowTurn } from "../domain/strictFlowRuntime.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
 import type {
   Conversation,
@@ -79,7 +80,7 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   const inviteCode = needsInviteCode
     ? repos.reserveInviteCodeForConversation(conversation)
     : undefined;
-  const strictReply = buildStrictFlowReply({
+  const strictReply = nextStrictFlowTurn({
     merchant,
     country,
     conversation,
