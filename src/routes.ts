@@ -13,7 +13,8 @@ import { registerMerchantScriptFlowRoutes } from "./http/merchantScriptFlowRoute
 import { registerMerchantTrainingRoutes } from "./http/merchantTrainingRoutes.js";
 import { registerAdminConversationRoutes } from "./http/adminConversationRoutes.js";
 import { registerMerchantConversationRoutes } from "./http/merchantConversationRoutes.js";
-import { registerMerchantSettingsRoutes, registerStaticFrontendRoute, registerTelegramWebhookRoutes } from "./http/merchantSettingsRoutes.js";
+import { registerMerchantSettingsRoutes, registerStaticFrontendRoute } from "./http/merchantSettingsRoutes.js";
+import { registerTelegramWebhookRoutes } from "./http/merchantTelegramRoutes.js";
 import { registerAdminMerchantRoutes } from "./http/adminMerchantRoutes.js";
 import { registerInternalMaintenanceRoutes } from "./http/internalMaintenanceRoutes.js";
 

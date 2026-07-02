@@ -1,17 +1,17 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { requireUser } from "../auth.js";
 import { A2CClient } from "../clients/a2c.js";
 import { aiProviderLabel, deepseekModel, generateAiText, hasUsableAiKey, minimaxModel, selectedAiProvider } from "../clients/aiProvider.js";
-import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
 import { appConfigForMerchant } from "../services/runtimeConfig.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js";
+import { registerMerchantTelegramRoutes } from "./merchantTelegramRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantSettingsRoutesDeps = {
@@ -28,6 +28,7 @@ export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: Merch
   registerMerchantCountryRoutes(app, deps);
   registerMerchantInviteCodeRoutes(app, deps);
   registerMerchantA2CAccountRoutes(app, { ...deps, maskConfig });
+  registerMerchantTelegramRoutes(app, { ...deps, maskConfig });
 }
 
 function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -37,8 +38,6 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: deps.adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: deps.adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
-
-  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/telegram/setup-webhook", { preHandler: deps.adminOnly }, async (request, reply) => setupTelegramWebhook(request, reply, deps, request.params.id));
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -61,21 +60,6 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: deps.merchantAdmins }, async (request) => deps.repos.patchMerchantAgentProfile(scopedMerchantId(request), cleanAgentProfilePatch(request.body ?? {})));
   app.post("/api/merchant/config/registration-tutorial-image", { preHandler: deps.merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
-
-  app.post("/api/merchant/telegram/setup-webhook", { preHandler: deps.merchantAdmins }, async (request, reply) => setupTelegramWebhook(request, reply, deps, scopedMerchantId(request)));
-}
-
-export function registerTelegramWebhookRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories }): void {
-  app.post<{ Params: { merchantId: string }; Body: TelegramUpdate }>("/webhooks/telegram/:merchantId", async (request, reply) => {
-    const merchant = deps.repos.getMerchant(request.params.merchantId);
-    if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-    const expectedSecret = telegramWebhookSecret(deps.config, merchant.id);
-    if (!verifySecret(String(request.headers["x-telegram-bot-api-secret-token"] || ""), expectedSecret)) {
-      return reply.code(401).send({ error: "unauthorized" });
-    }
-    const result = bindTelegramUpdate(deps.repos, merchant.id, request.body);
-    return reply.code(200).send(result);
-  });
 }
 
 type ConfigCheckItem = {
@@ -178,96 +162,10 @@ async function fetchTelegram(botToken: string, method: string, body?: Record<str
   return await response.json().catch(() => ({ ok: false, description: response.statusText })) as { ok: boolean; description?: string; result?: unknown };
 }
 
-async function setupTelegramWebhook(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
-  const merchant = deps.repos.getMerchant(merchantId);
-  if (!merchant) return reply.code(404).send({ error: "merchant not found" });
-  const cfg = deps.repos.getMerchantConfig(merchantId);
-  if (!cfg.telegramBotToken) return reply.code(400).send({ error: "telegram bot token is required" });
-  const webhookUrl = `${requestOrigin(request)}/webhooks/telegram/${merchantId}`;
-  try {
-    await TelegramClient.setWebhook({
-      botToken: cfg.telegramBotToken,
-      url: webhookUrl,
-      secretToken: telegramWebhookSecret(deps.config, merchantId)
-    });
-    const status = cfg.telegramHandoffChatId ? "bound" : "waiting";
-    const updated = deps.repos.updateTelegramBinding(merchantId, { status });
-    return { ok: true, webhookUrl, config: maskConfig(updated) };
-  } catch (error) {
-    deps.repos.updateTelegramBinding(merchantId, { status: "invalid", error: error instanceof Error ? error.message : "telegram webhook setup failed" });
-    return reply.code(502).send({ error: error instanceof Error ? error.message : "telegram webhook setup failed" });
-  }
-}
-
-type TelegramUpdate = {
-  update_id?: number;
-  message?: { text?: string; chat?: TelegramChat };
-  my_chat_member?: {
-    chat?: TelegramChat;
-    new_chat_member?: { status?: string };
-  };
-};
-
-type TelegramChat = {
-  id: number | string;
-  type?: string;
-  title?: string;
-};
-
-function bindTelegramUpdate(repos: Repositories, merchantId: string, update: TelegramUpdate) {
-  const membership = update.my_chat_member;
-  const membershipChat = membership?.chat;
-  const membershipStatus = membership?.new_chat_member?.status || "";
-  if (membershipChat && isGroupChat(membershipChat)) {
-    if (membershipStatus === "left" || membershipStatus === "kicked") {
-      const config = repos.updateTelegramBinding(merchantId, {
-        chatId: String(membershipChat.id),
-        chatTitle: membershipChat.title || "",
-        status: "invalid",
-        error: "Telegram bot was removed from the handoff group"
-      });
-      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-    }
-    if (["member", "administrator", "creator"].includes(membershipStatus)) {
-      const config = repos.updateTelegramBinding(merchantId, {
-        chatId: String(membershipChat.id),
-        chatTitle: membershipChat.title || "",
-        status: "bound"
-      });
-      return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-    }
-  }
-
-  const messageChat = update.message?.chat;
-  if (messageChat && isGroupChat(messageChat)) {
-    const config = repos.updateTelegramBinding(merchantId, {
-      chatId: String(messageChat.id),
-      chatTitle: messageChat.title || "",
-      status: "bound"
-    });
-    return { ok: true, status: config.telegramHandoffChatStatus, chatId: config.telegramHandoffChatId };
-  }
-  return { ok: true, status: "ignored" };
-}
-
-function isGroupChat(chat: TelegramChat): boolean {
-  return chat.type === "group" || chat.type === "supergroup";
-}
-
 function requestOrigin(request: FastifyRequest): string {
   const proto = String(request.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
   const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost";
   return `${proto}://${host}`;
-}
-
-function telegramWebhookSecret(config: AppConfig, merchantId: string): string {
-  return createHmac("sha256", config.SESSION_SECRET).update(`telegram:${merchantId}`).digest("hex");
-}
-
-function verifySecret(actual: string, expected: string): boolean {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 async function uploadRegistrationTutorialImage(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
