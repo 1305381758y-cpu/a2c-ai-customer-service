@@ -9,6 +9,7 @@ import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
 import { appConfigForMerchant } from "../services/runtimeConfig.js";
+import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantSettingsRoutesDeps = {
@@ -22,6 +23,7 @@ type MerchantSettingsRoutesDeps = {
 export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
   registerAdminMerchantSettingsRoutes(app, deps);
   registerMerchantOwnSettingsRoutes(app, deps);
+  registerMerchantCountryRoutes(app, deps);
 }
 
 function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -31,20 +33,6 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) => deps.repos.patchMerchantAgentProfile(request.params.id, cleanAgentProfilePatch(request.body ?? {})));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/config/registration-tutorial-image", { preHandler: deps.adminOnly }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, request.params.id));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: deps.adminOnly }, async (request, reply) => checkMerchantConfig(reply, deps, request.params.id));
-
-  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request) => ({ rows: deps.repos.listMerchantCountries(request.params.id) }));
-  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request, reply) => {
-    try {
-      return deps.repos.createMerchantCountry(request.params.id, request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
-    }
-  });
-  app.patch<{ Params: { id: string; countryId: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries/:countryId", { preHandler: deps.adminOnly }, async (request, reply) => {
-    const row = deps.repos.patchMerchantCountry(request.params.countryId, request.params.id, request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "country not found" });
-    return row;
-  });
 
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: deps.adminOnly }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: request.params.id }) }));
   app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: deps.adminOnly }, async (request, reply) => syncA2CAccounts(request, reply, deps, request.params.id));
@@ -84,20 +72,6 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: deps.merchantAdmins }, async (request) => deps.repos.patchMerchantAgentProfile(scopedMerchantId(request), cleanAgentProfilePatch(request.body ?? {})));
   app.post("/api/merchant/config/registration-tutorial-image", { preHandler: deps.merchantAdmins }, async (request, reply) => uploadRegistrationTutorialImage(request, reply, deps, scopedMerchantId(request)));
   app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => checkMerchantConfig(reply, deps, scopedMerchantId(request)));
-
-  app.get("/api/merchant/countries", { preHandler: deps.merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantCountries(scopedMerchantId(request)) }));
-  app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    try {
-      return deps.repos.createMerchantCountry(scopedMerchantId(request), request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
-    }
-  });
-  app.patch<{ Params: { countryId: string }; Body: Record<string, unknown> }>("/api/merchant/countries/:countryId", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const row = deps.repos.patchMerchantCountry(request.params.countryId, scopedMerchantId(request), request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "country not found" });
-    return row;
-  });
 
   app.get("/api/merchant/a2c/accounts", { preHandler: deps.merchantRoles }, async (request) => ({ rows: deps.repos.listMerchantA2CAccounts({ merchantId: scopedMerchantId(request) }) }));
   app.post("/api/merchant/a2c/accounts/sync", { preHandler: deps.merchantAdmins }, async (request, reply) => syncA2CAccounts(request, reply, deps, scopedMerchantId(request)));
