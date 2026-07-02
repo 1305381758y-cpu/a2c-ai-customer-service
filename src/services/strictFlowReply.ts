@@ -1,7 +1,6 @@
 import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
-import { strictFlowNeedsInviteCode, type StrictContextualIntent } from "../domain/strictFlow.js";
-import { nextStrictFlowTurn } from "../domain/strictFlowRuntime.js";
+import type { StrictContextualIntent } from "../domain/strictFlow.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
 import type {
   Conversation,
@@ -18,6 +17,7 @@ import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js";
 import { buildStrictFlowOutboundRawPayload } from "./strictFlowOutboundPayload.js";
 import { refineStrictFlowReplyText } from "./strictFlowReplyTextRefinement.js";
+import { buildStrictFlowTurn } from "./strictFlowTurnBuilder.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -70,31 +70,20 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     history
   } = input;
 
-  const needsInviteCode = strictFlowNeedsInviteCode({
+  const flowTurn = buildStrictFlowTurn({
+    repos,
+    runtimeConfig,
     merchant,
     country,
     conversation,
     analysis,
     customerText,
     strictFlowEnabled,
-    inferredIntent
-  });
-  const inviteCode = needsInviteCode
-    ? repos.reserveInviteCodeForConversation(conversation)
-    : undefined;
-  const strictReply = nextStrictFlowTurn({
-    merchant,
-    country,
-    conversation,
-    analysis,
-    customerText,
-    inviteCode,
-    config: runtimeConfig,
     inferredIntent,
     contextualIntent,
-    strictFlowEnabled,
     scriptFlow
   });
+  const { strictReply, inviteCode } = flowTurn;
 
   if (!strictReply.enabled) {
     return { handled: false, status: "strict_flow_disabled", conversationId: conversation.id };
