@@ -1,12 +1,44 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildSamplesUrl,
   deleteSample,
   importSampleTrainingFile,
+  loadSamples,
   updateSample
 } from "../frontend/src/samples/samplesApi.js";
 
 describe("sample API helpers", () => {
+  it("builds scoped sample list URLs", () => {
+    expect(buildSamplesUrl(false, {
+      merchantId: "ignored",
+      countryId: "country-1",
+      language: "pt",
+      intent: "ask_link",
+      stage: "wait_registration",
+      enabled: "true"
+    })).toBe("/api/merchant/training-samples?countryId=country-1&language=pt&intent=ask_link&stage=wait_registration&enabled=true");
+
+    expect(buildSamplesUrl(true, {
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      language: "es",
+      intent: "need_help",
+      stage: "collect_telegram",
+      enabled: "false"
+    })).toBe("/api/admin/training-samples?merchantId=merchant-1&countryId=country-1&language=es&intent=need_help&stage=collect_telegram&enabled=false");
+  });
+
+  it("loads sample list rows through the shared rows helper", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      rows: [{ id: 12, customerMessage: "注册链接" }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(loadSamples("/api/merchant/training-samples")).resolves.toEqual([{ id: 12, customerMessage: "注册链接" }]);
+    expect(fetcher).toHaveBeenCalledWith("/api/merchant/training-samples", { headers: {} });
+    fetcher.mockRestore();
+  });
+
   it("imports training files through the shared material import route", async () => {
     const file = new File(["sample"], "samples.csv", { type: "text/csv" });
     const fetcher = vi.fn(async () => new Response(JSON.stringify({

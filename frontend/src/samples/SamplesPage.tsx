@@ -1,25 +1,25 @@
 import { Upload } from "lucide-react";
 import { useState } from "react";
 
-import { loadRows, useRows, withQuery } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, Sample } from "../types.js";
 import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
 import { countryLabel } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import { deleteSample, importSampleTrainingFile, updateSample } from "./samplesApi.js";
+import { buildSamplesUrl, deleteSample, importSampleTrainingFile, loadSamples, samplesBase, updateSample } from "./samplesApi.js";
 
 export function SamplesPage({ platform = false }: { platform?: boolean }) {
-  const base = platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
+  const base = samplesBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", language: "", intent: "", stage: "", enabled: "" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, language: filters.language, intent: filters.intent, stage: filters.stage, enabled: filters.enabled });
+  const rowsUrl = buildSamplesUrl(platform, filters);
   const [rows, setRows] = useRows<Sample>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Sample | null>(null);
   const reload = async () => {
-    setRows(await loadRows(rowsUrl));
+    setRows(await loadSamples(rowsUrl));
     pager.setPage(1);
   };
 

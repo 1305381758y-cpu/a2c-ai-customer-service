@@ -1,5 +1,5 @@
-import { api } from "../app/api.js";
-import type { Sample } from "../types.js";
+import { api, loadRows, withQuery } from "../app/api.js";
+import type { Filters, Sample } from "../types.js";
 import { coercePatch } from "../ui/form.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 
@@ -9,6 +9,27 @@ export type SampleTrainingImportResult = {
   knowledge: number;
   warnings?: string[];
 };
+
+export function samplesBase(platform: boolean): "/api/admin/training-samples" | "/api/merchant/training-samples" {
+  return platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
+}
+
+export function buildSamplesUrl(platform: boolean, filters: Filters): string {
+  return withQuery(
+    samplesBase(platform),
+    platform ? filters : {
+      countryId: filters.countryId,
+      language: filters.language,
+      intent: filters.intent,
+      stage: filters.stage,
+      enabled: filters.enabled
+    }
+  );
+}
+
+export async function loadSamples(url: string): Promise<Sample[]> {
+  return await loadRows<Sample>(url);
+}
 
 export async function importSampleTrainingFile(
   file: File,
