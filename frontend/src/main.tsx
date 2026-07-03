@@ -20,6 +20,7 @@ import { AsyncButton } from "./ui/components.js";
 import { countryLabel, displayValue, formatDateTime } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
+import "./ui/pagination.css";
 import "./agent/agent-profile.css";
 import "./customers/customers.css";
 import "./config/config.css";

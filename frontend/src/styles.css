@@ -474,27 +474,6 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
 .compact-create button {
   justify-self: start;
 }
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 2px 0;
-  color: var(--muted-strong);
-  font-size: 13px;
-  font-weight: 700;
-}
-.pagination.compact {
-  justify-content: flex-start;
-  color: var(--muted);
-}
-.pagination button,
-.pagination select {
-  min-height: 32px;
-  height: 32px;
-  padding: 4px 9px;
-}
-
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -747,29 +726,6 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
-}
-.account-mini-pager {
-  display: grid;
-  grid-template-columns: minmax(68px, 1fr) 78px minmax(68px, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-}
-.account-mini-pager.single {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-.account-mini-pager button,
-.account-mini-pager select {
-  width: 100%;
-  min-height: 32px;
-  height: 32px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  white-space: nowrap;
 }
 .customers-collapsed .customer-list {
   padding: 10px 7px;
@@ -1314,7 +1270,6 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   header { align-items: flex-start; flex-direction: column; }
   main { padding: 16px; }
   .sticky-actions { position: static; }
-  .pagination { justify-content: flex-start; flex-wrap: wrap; }
   .smart-reply-card { align-items: stretch; flex-direction: column; }
 }
 
@@ -2012,47 +1967,6 @@ main {
   scrollbar-gutter: stable;
 }
 
-.account-mini-pager {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0 0;
-}
-
-.account-mini-pager.single {
-  display: block;
-  color: var(--muted-strong);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.account-mini-pager button,
-.account-mini-pager select {
-  min-width: 0;
-  height: 34px;
-  min-height: 34px;
-  padding: 4px 6px;
-}
-
-.account-page-buttons {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.account-page-buttons button {
-  font-size: 12px;
-}
-
-.account-page-indicator {
-  color: var(--muted-strong);
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.35;
-  min-width: 0;
-}
 
 .conversation-tools {
   flex: 0 0 auto;
