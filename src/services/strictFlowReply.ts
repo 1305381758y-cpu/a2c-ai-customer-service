@@ -2,6 +2,7 @@ import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { StrictContextualIntent } from "../domain/strictFlow.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
+import type { StrictFlowRuntimeEngine } from "../domain/strictFlowRuntime.js";
 import type {
   Conversation,
   MerchantAgentProfileRecord,
@@ -41,6 +42,7 @@ export interface GenerateStrictFlowReplyInput {
   scriptFlow?: ScriptFlowRuntime;
   inferredIntent: InternalIntentLabel;
   contextualIntent: StrictContextualIntent;
+  strictFlowRuntime?: StrictFlowRuntimeEngine;
   learnedIntent: LearnedIntentDebugInfo | null;
   history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
 }
@@ -64,6 +66,7 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     scriptFlow,
     inferredIntent,
     contextualIntent,
+    strictFlowRuntime,
     learnedIntent,
     history
   } = input;
@@ -79,7 +82,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     strictFlowEnabled,
     inferredIntent,
     contextualIntent,
-    scriptFlow
+    scriptFlow,
+    strictFlowRuntime
   });
   const { strictReply, inviteCode } = flowTurn;
 

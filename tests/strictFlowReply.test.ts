@@ -4,6 +4,7 @@ import { loadConfig } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
+import type { StrictFlowRuntimeContext, StrictFlowRuntimeEngine } from "../src/domain/strictFlowRuntime.js";
 import { Repositories } from "../src/repositories.js";
 import { generateAndRecordStrictFlowReply } from "../src/services/strictFlowReply.js";
 
@@ -160,5 +161,63 @@ describe("strict flow reply module", () => {
     const messages = context.repos.listConversationMessages(context.conversation.id, 10).filter((message) => message.direction === "outbound");
     expect(messages).toHaveLength(2);
     expect(messages.some((message) => message.msgType === "image" && message.rawPayload?.registrationTutorialImage === true)).toBe(true);
+  });
+
+  it("uses an injected strict-flow runtime while preserving invite reservation and outbound recording", async () => {
+    const context = setupConversation("registration_intent");
+    const analysis = analyzeMessage("可以", "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "可以",
+      inferredIntent: "positive_confirmation"
+    });
+    const nextTurn = vi.fn((input: StrictFlowRuntimeContext) => ({
+      enabled: true,
+      reply: `这是注入流程回复，邀请码 ${input.inviteCode?.code}`,
+      language: "zh",
+      nextFlowStep: "wait_registration" as const,
+      stage: "need_platform_register" as const,
+      needsInviteCode: true
+    }));
+    const strictFlowRuntime: StrictFlowRuntimeEngine = { nextTurn };
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "可以",
+      a2c,
+      data: {
+        messageId: "inbound-runtime",
+        content: "可以",
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-runtime",
+      simulation: true,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      strictFlowRuntime,
+      learnedIntent: null,
+      history: []
+    });
+
+    expect(result.status).toBe("strict_flow_simulated");
+    expect(nextTurn).toHaveBeenCalledOnce();
+    expect(nextTurn.mock.calls[0]?.[0].inviteCode?.code).toBe("INV-1");
+    expect(a2c.sendMessage).not.toHaveBeenCalled();
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 10).find((message) => message.direction === "outbound");
+    expect(outbound?.content).toContain("这是注入流程回复，邀请码 INV-1");
+    expect(outbound?.rawPayload).toMatchObject({
+      replyMode: "strict_flow",
+      strictFlowStep: "wait_registration",
+      a2cSendStatus: "simulated"
+    });
   });
 });
