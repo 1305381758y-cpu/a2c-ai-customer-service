@@ -5,7 +5,15 @@ import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../type
 import { coercePatch } from "../ui/form.js";
 import { languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
-import { uploadRegistrationTutorialImage } from "./configApi.js";
+import {
+  checkConfig,
+  saveConfig as saveConfigRequest,
+  saveCountry as saveCountryRequest,
+  setupTelegramWebhook,
+  syncA2CAccounts as syncA2CAccountsRequest,
+  toggleA2CAccount as toggleA2CAccountRequest,
+  uploadRegistrationTutorialImage
+} from "./configApi.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
 import { applyCountryNameInference, buildA2CWebhookUrl, buildA2CSyncMessage, buildConfigSavedMessage, buildTelegramSetupMessage, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
 import type { ConfigForm } from "./types.js";
@@ -56,7 +64,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setError("");
     setMessage("正在检测配置...");
     try {
-      const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(checkUrl);
+      const result = await checkConfig(checkUrl);
       setChecks(result.rows);
       setMessage("配置检测完成。");
     } catch (err) {
@@ -68,7 +76,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<ConfigForm>(configUrl, { method: "PATCH", body: JSON.stringify(form) });
+      const saved = await saveConfigRequest(configUrl, form);
       setForm(saved);
       setMessage(buildConfigSavedMessage(saved));
     } catch (error) {
@@ -79,8 +87,8 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      if (!skipSave) await api(configUrl, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ imported: number; rows: A2CAccount[]; config: ConfigForm; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
+      if (!skipSave) await saveConfigRequest(configUrl, form);
+      const result = await syncA2CAccountsRequest(a2cSyncUrl);
       setA2CAccounts(result.rows);
       setForm(result.config);
       setMessage(buildA2CSyncMessage(result));
@@ -90,13 +98,13 @@ export function useConfigController({ platform }: { platform: boolean }) {
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
     const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
-    const result = await api<{ config: ConfigForm }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
+    const result = await toggleA2CAccountRequest(endpoint, !row.enabled);
     setForm(result.config);
     await reloadA2CAccounts();
   };
   const saveCountry = async () => {
     const payload = coercePatch(countryDraft);
-    await api(countriesUrl, { method: "POST", body: JSON.stringify(payload) });
+    await saveCountryRequest(countriesUrl, payload);
     await reloadCountries();
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
@@ -124,8 +132,8 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      await api(configUrl, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ config: ConfigForm; webhookUrl?: string }>(telegramSetupUrl, { method: "POST" });
+      await saveConfigRequest(configUrl, form);
+      const result = await setupTelegramWebhook(telegramSetupUrl);
       setForm(result.config);
       setMessage(buildTelegramSetupMessage(result));
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);
