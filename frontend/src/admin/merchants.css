@@ -1,0 +1,70 @@
+.merchant-admin-layout {
+  grid-template-columns: minmax(640px, 1fr) minmax(340px, 420px);
+}
+
+.merchant-create-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.panel-heading h3,
+.panel-heading p,
+.form-section h4 {
+  margin: 0;
+}
+
+.panel-heading p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.form-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.form-section h4 {
+  font-size: 14px;
+  color: var(--muted-strong);
+}
+
+.target-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 10px;
+}
+
+.merchant-create-actions {
+  position: static;
+  margin: 0;
+  justify-content: space-between;
+}
+
+.success-text {
+  color: var(--green);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.merchant-detail {
+  display: grid;
+  gap: 12px;
+}
