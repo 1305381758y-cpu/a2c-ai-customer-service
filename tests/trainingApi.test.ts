@@ -1,12 +1,42 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildTrainingMaterialsUrl,
   deleteTrainingMaterial,
   importTrainingMaterial,
+  loadTrainingMaterials,
   loadTrainingMaterialDetail
 } from "../frontend/src/training/trainingApi.js";
 
 describe("training material API helpers", () => {
+  it("builds scoped material list URLs", () => {
+    expect(buildTrainingMaterialsUrl(false, {
+      merchantId: "ignored",
+      countryId: "country-1",
+      sourceType: "docx",
+      status: "enabled",
+      limit: "100"
+    })).toBe("/api/merchant/training-materials?countryId=country-1&sourceType=docx&status=enabled&limit=100");
+
+    expect(buildTrainingMaterialsUrl(true, {
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      sourceType: "image",
+      status: "disabled",
+      limit: "50"
+    })).toBe("/api/admin/training-materials?merchantId=merchant-1&countryId=country-1&sourceType=image&status=disabled&limit=50");
+  });
+
+  it("loads material list rows through the shared rows helper", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      rows: [{ id: 42, filename: "script.docx" }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(loadTrainingMaterials("/api/merchant/training-materials")).resolves.toEqual([{ id: 42, filename: "script.docx" }]);
+    expect(fetcher).toHaveBeenCalledWith("/api/merchant/training-materials", { headers: {} });
+    fetcher.mockRestore();
+  });
+
   it("loads material detail through the shared JSON client", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
       material: { id: 42, filename: "script.docx" },

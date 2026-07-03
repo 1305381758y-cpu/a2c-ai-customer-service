@@ -1,19 +1,19 @@
 import { FileText, Upload } from "lucide-react";
 import { useState } from "react";
 
-import { loadRows, useRows, withQuery } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, TrainingMaterial, TrainingMaterialItem } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import { deleteTrainingMaterial, importTrainingMaterial, loadTrainingMaterialDetail } from "./trainingApi.js";
+import { buildTrainingMaterialsUrl, deleteTrainingMaterial, importTrainingMaterial, loadTrainingMaterialDetail, loadTrainingMaterials, trainingMaterialsBase } from "./trainingApi.js";
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
-  const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
+  const base = trainingMaterialsBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, sourceType: filters.sourceType, status: filters.status, limit: filters.limit });
+  const rowsUrl = buildTrainingMaterialsUrl(platform, filters);
   const [rows, setRows] = useRows<TrainingMaterial>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [file, setFile] = useState<File | null>(null);
@@ -22,7 +22,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
   const [detail, setDetail] = useState<{ material: TrainingMaterial; items: TrainingMaterialItem[] } | null>(null);
   const [message, setMessage] = useState("");
   const reload = async () => {
-    setRows(await loadRows(rowsUrl));
+    setRows(await loadTrainingMaterials(rowsUrl));
     pager.setPage(1);
   };
   const loadDetail = async (row: TrainingMaterial) => {

@@ -1,5 +1,5 @@
-import { api } from "../app/api.js";
-import type { TrainingMaterial, TrainingMaterialItem } from "../types.js";
+import { api, loadRows, withQuery } from "../app/api.js";
+import type { Filters, TrainingMaterial, TrainingMaterialItem } from "../types.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 
 export type TrainingMaterialDetail = {
@@ -13,6 +13,26 @@ export type TrainingMaterialImportResult = {
   knowledge: number;
   warnings?: string[];
 };
+
+export function trainingMaterialsBase(platform: boolean): "/api/admin/training-materials" | "/api/merchant/training-materials" {
+  return platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
+}
+
+export function buildTrainingMaterialsUrl(platform: boolean, filters: Filters): string {
+  return withQuery(
+    trainingMaterialsBase(platform),
+    platform ? filters : {
+      countryId: filters.countryId,
+      sourceType: filters.sourceType,
+      status: filters.status,
+      limit: filters.limit
+    }
+  );
+}
+
+export async function loadTrainingMaterials(url: string): Promise<TrainingMaterial[]> {
+  return await loadRows<TrainingMaterial>(url);
+}
 
 export async function loadTrainingMaterialDetail(base: string, materialId: number): Promise<TrainingMaterialDetail> {
   return await api<TrainingMaterialDetail>(`${base}/${materialId}`);
