@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import type { Conversation, Customer } from "../types.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { buildCustomerConversationsUrl, loadCustomerConversations } from "./customersApi.js";
 
 type CustomerConversationHistoryProps = {
   platform: boolean;
   customer: Customer;
-  loadRows: <T>(url: string) => Promise<T[]>;
-  withQuery: (base: string, filters: Record<string, string>) => string;
   renderConversation: (conversation: Conversation, reload: () => Promise<void>) => React.ReactNode;
   helpers: {
     formatConversationDate: (value: string) => string;
@@ -20,22 +19,16 @@ type CustomerConversationHistoryProps = {
 export function CustomerConversationHistory({
   platform,
   customer,
-  loadRows,
-  withQuery,
   renderConversation,
   helpers
 }: CustomerConversationHistoryProps) {
-  const base = platform ? "/api/admin/conversations" : "/api/merchant/conversations";
-  const filters = platform
-    ? { merchantId: customer.merchantId, customerPhone: customer.customerKey, limit: "50000" }
-    : { customerPhone: customer.customerKey, limit: "50000" };
-  const rowsUrl = withQuery(base, filters);
+  const rowsUrl = buildCustomerConversationsUrl(platform, customer);
   const [rows, setRows] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const pager = useClientPagination(rows, 10);
 
   const reload = async () => {
-    setRows(await loadRows<Conversation>(rowsUrl));
+    setRows(await loadCustomerConversations(rowsUrl));
     pager.setPage(1);
   };
 
@@ -45,7 +38,7 @@ export function CustomerConversationHistory({
 
   useEffect(() => {
     let cancelled = false;
-    loadRows<Conversation>(rowsUrl)
+    loadCustomerConversations(rowsUrl)
       .then((nextRows) => {
         if (!cancelled) setRows(nextRows);
       })
@@ -55,7 +48,7 @@ export function CustomerConversationHistory({
     return () => {
       cancelled = true;
     };
-  }, [rowsUrl, loadRows]);
+  }, [rowsUrl]);
 
   useEffect(() => {
     if (!selected && rows.length) setSelected(rows[0]);
