@@ -9,5 +9,5 @@ export async function checkAiAvailability(
   config: AppConfig,
   runtime: AiAvailabilityRuntime
 ): Promise<void> {
-  await runtime.generateText(config, "Reply with OK only.");
+  await runtime.generateText(config, "Reply with OK only.", { taskType: "availability_check" });
 }

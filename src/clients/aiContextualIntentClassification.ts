@@ -57,6 +57,7 @@ export async function classifyAiContextualIntent(
     }), {
       temperature: 0,
       maxOutputTokens: 260,
+      taskType: "contextual_intent",
       systemInstruction: `
 你只做开户注册流程的上下文意图分类，不能生成客服回复，不能决定跳流程。
 必须只输出 JSON，不要 Markdown，不要解释。

@@ -31,6 +31,7 @@ export async function classifyAiIntent(
     }), {
       temperature: 0,
       maxOutputTokens: 80,
+      taskType: "intent_classification",
       systemInstruction: `
 你只负责把客户当前消息归类为一个固定标签，不要解释，不要输出 JSON。
 可选标签只有：

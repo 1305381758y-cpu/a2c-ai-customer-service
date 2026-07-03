@@ -33,7 +33,9 @@ import type {
   ConversationMessageRecord,
   ConversationExportRecord,
   IntentLearningEventRecord,
-  IntentLearningInput
+  IntentLearningInput,
+  AiCallLogInput,
+  AiCallStats
 } from "./repositoryTypes.js";
 export type {
   Conversation,
@@ -62,7 +64,9 @@ export type {
   ConversationMessageRecord,
   ConversationExportRecord,
   IntentLearningEventRecord,
-  IntentLearningInput
+  IntentLearningInput,
+  AiCallLogInput,
+  AiCallStats
 } from "./repositoryTypes.js";
 
 export class Repositories {
@@ -91,6 +95,7 @@ export class Repositories {
   private get scriptFlows() { return this.modules.scriptFlows; }
   private get trainingContent() { return this.modules.trainingContent; }
   private get users() { return this.modules.users; }
+  private get aiCalls() { return this.modules.aiCalls; }
 
   insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default", countryId = this.defaultCountryId(merchantId)): number {
     return this.trainingContent.insertTrainingSamples(samples, merchantId, countryId);
@@ -132,11 +137,11 @@ export class Repositories {
     return this.customers.get(merchantId, customerKey);
   }
 
-  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
+  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
     return this.customers.list(filters);
   }
 
-  countCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string } = {}): number {
+  countCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     return this.customers.count(filters);
   }
 
@@ -156,8 +161,12 @@ export class Repositories {
     return this.intentLearning.get(id, merchantId);
   }
 
-  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; limit?: number } = {}): IntentLearningEventRecord[] {
     return this.intentLearning.list(filters);
+  }
+
+  countIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string } = {}): number {
+    return this.intentLearning.count(filters);
   }
 
   listPromotedIntentLearningEvents(filters: { merchantId: string; countryId: string; limit?: number }): IntentLearningEventRecord[] {
@@ -581,5 +590,13 @@ export class Repositories {
 
   recordFollowUp(input: { merchantId: string; conversationId: string; flowStep: string; type?: string; sent: boolean; error?: string }): boolean {
     return this.handoffs.recordFollowUp(input);
+  }
+
+  recordAiCall(input: AiCallLogInput): void {
+    this.aiCalls.record(input);
+  }
+
+  aiCallStats(filters: { merchantId?: string; startAt?: string; endAt?: string } = {}): AiCallStats {
+    return this.aiCalls.stats(filters);
   }
 }

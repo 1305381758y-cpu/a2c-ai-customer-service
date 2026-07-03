@@ -63,7 +63,7 @@ export class CustomerRepository {
     return row ? mapCustomer(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
+  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -82,6 +82,7 @@ export class CustomerRepository {
       clauses.push("cu.language = ?");
       params.push(filters.language);
     }
+    addSearchFilter(clauses, params, filters.q);
     if (filters.startAt) {
       clauses.push("cu.last_seen_at >= ?");
       params.push(filters.startAt);
@@ -106,7 +107,7 @@ export class CustomerRepository {
       .map((row) => mapCustomer(row as Record<string, unknown>));
   }
 
-  count(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string } = {}): number {
+  count(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -125,6 +126,7 @@ export class CustomerRepository {
       clauses.push("language = ?");
       params.push(filters.language);
     }
+    addSearchFilter(clauses, params, filters.q);
     if (filters.startAt) {
       clauses.push("last_seen_at >= ?");
       params.push(filters.startAt);
@@ -184,4 +186,20 @@ export class CustomerRepository {
       `)
       .run(count?.count ?? 0, latest?.id ?? "", latest?.a2c_account_phone ?? null, latest?.status ?? null, latest?.updated_at ?? null, merchantId, customerKey);
   }
+}
+
+function addSearchFilter(clauses: string[], params: Array<string | number>, q: string | undefined): void {
+  const text = q?.trim();
+  if (!text) return;
+  const like = `%${text}%`;
+  clauses.push(`(
+    customer_key LIKE ?
+    OR nickname LIKE ?
+    OR first_a2c_account_phone LIKE ?
+    OR last_a2c_account_phone LIKE ?
+    OR extracted_phone LIKE ?
+    OR extracted_telegram LIKE ?
+    OR extracted_whatsapp LIKE ?
+  )`);
+  params.push(like, like, like, like, like, like, like);
 }

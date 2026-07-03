@@ -20,6 +20,7 @@ export async function translateTextWithAi(
     targetLanguage: input.targetLanguage,
     text: input.text
   }), {
+    taskType: "translation",
     systemInstruction: input.systemPrompt
   });
 }

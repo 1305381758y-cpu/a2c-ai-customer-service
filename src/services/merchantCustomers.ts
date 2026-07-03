@@ -12,22 +12,28 @@ export function listMerchantCustomers(
     countryId?: string;
     status?: string;
     language?: string;
+    q?: string;
     startAt?: string;
     endAt?: string;
     limit?: string;
   }
-): { rows: CustomerRecord[] } {
+): { rows: CustomerRecord[]; total: number } {
   const range = normalizeSqlTimeRange({ startAt: filters.startAt, endAt: filters.endAt });
+  const scopedFilters = {
+    merchantId,
+    countryId: filters.countryId,
+    status: filters.status,
+    language: filters.language,
+    q: filters.q,
+    startAt: range.startAt,
+    endAt: range.endAt
+  };
   return {
     rows: repos.listCustomers({
-      merchantId,
-      countryId: filters.countryId,
-      status: filters.status,
-      language: filters.language,
-      startAt: range.startAt,
-      endAt: range.endAt,
+      ...scopedFilters,
       limit: filters.limit ? Number(filters.limit) : undefined
-    })
+    }),
+    total: repos.countCustomers(scopedFilters)
   };
 }
 

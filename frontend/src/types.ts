@@ -25,3 +25,11 @@ export type SimulatorResponse = { status: string; conversation?: Conversation; r
 export type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 export type Filters = Record<string, string>;
 export type Toast = { id: number; type: "success" | "error" | "info"; title: string; detail?: string };
+export type AiCallStats = {
+  totalCalls: number;
+  successCalls: number;
+  errorCalls: number;
+  averageDurationMs: number;
+  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
+  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
+};

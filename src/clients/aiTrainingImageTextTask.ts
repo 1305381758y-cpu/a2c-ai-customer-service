@@ -37,7 +37,7 @@ export async function extractTrainingImageTextWithAi(
   ];
 
   try {
-    const text = await runtime.generateText({ ...config, AI_PROVIDER: imageProvider }, contents);
+    const text = await runtime.generateText({ ...config, AI_PROVIDER: imageProvider }, contents, { taskType: "training_image_ocr" });
     return text.trim() ? { text, status: "ok" } : { text: "", status: "skipped", error: "图片 OCR 未提取到可读文字" };
   } catch (error) {
     return { text: "", status: "failed", error: error instanceof Error ? error.message : "图片 OCR 失败" };

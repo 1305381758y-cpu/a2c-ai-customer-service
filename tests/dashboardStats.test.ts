@@ -43,5 +43,31 @@ describe("dashboard stats", () => {
     const dashboard = buildMerchantDashboard(repos, merchant.id);
 
     expect(dashboard.todayReplies).toBe(1);
+    expect(dashboard.replies).toBe(1);
+    expect(dashboard.customerMessages).toBe(1);
+  });
+
+  it("counts conversations and messages by an explicit filtered range without list limits", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("筛选统计商户");
+    for (let i = 0; i < 105; i += 1) {
+      const conversation = repos.getOrCreateConversation(`range-customer-${i}`, "a2c-a", "", merchant.id);
+      repos.insertMessage({
+        conversationId: conversation.id,
+        direction: "inbound",
+        content: "客户消息",
+        msgType: "text",
+        language: "zh",
+        intent: "unknown"
+      });
+    }
+
+    const dashboard = buildMerchantDashboard(repos, merchant.id, { startAt: "2026-01-01", endAt: "2027-01-01" });
+
+    expect(dashboard.conversations).toBe(105);
+    expect(dashboard.customerMessages).toBe(105);
+    expect(dashboard.rangeConversations).toBe(105);
+    expect(dashboard.rangeCustomerMessages).toBe(105);
   });
 });

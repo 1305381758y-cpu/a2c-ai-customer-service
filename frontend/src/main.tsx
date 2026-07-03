@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, BookOpen, Building2, Check, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Settings, Sparkles, ThumbsDown, ThumbsUp, Upload, Users, Workflow } from "lucide-react";
+import { Bot, BookOpen, Building2, Check, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Search, Settings, Sparkles, ThumbsDown, ThumbsUp, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
 import { api, loadRows, useRows, withQuery } from "./app/api.js";
 import { ConversationExportBar } from "./conversations/ConversationExport.js";
@@ -15,7 +15,7 @@ import { CustomersPage } from "./customers/CustomersPage.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { KnowledgePage } from "./knowledge/KnowledgePage.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
-import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
+import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
 import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, statusTone, translateSystemMessage } from "./ui/formatters.js";
@@ -91,8 +91,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
   const merchantTrainingViews = ["materials", "knowledge", "samples"];
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "Agent配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["simulator", "模拟训练", MessageSquare], ["agentProfile", "Agent配置", Bot], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "Agent配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["training", "训练中心", Upload], ["simulator", "模拟训练", MessageSquare], ["agentProfile", "Agent配置", Bot], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
   useEffect(() => {
     if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
@@ -108,6 +108,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
         {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} />}
+        {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
@@ -125,6 +126,57 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       </main>
     </div>
   );
+}
+
+function AiCallsPage({ platform = false }: { platform?: boolean }) {
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", startAt: "", endAt: "" });
+  const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
+  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, averageDurationMs: 0, byType: [], byProvider: [] });
+  const reload = async () => {
+    const query = platform ? filters : { startAt: filters.startAt, endAt: filters.endAt };
+    setData(await api<AiCallStats>(withQuery(endpoint, query)));
+  };
+  useEffect(() => { reload().catch(() => undefined); }, [platform]);
+  return <div className="ai-calls-page work-split single-column">
+    <section className="work-panel">
+      <div className="training-center-hero compact">
+        <div>
+          <h3>大模型调用统计</h3>
+          <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。</p>
+        </div>
+      </div>
+      <div className="toolbar wrap filters">
+        {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} />}
+        <input type="date" placeholder="开始日期" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
+        <input type="date" placeholder="结束日期" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
+        <button onClick={reload}><Search size={16}/>筛选</button>
+      </div>
+      <div className="grid metrics">
+        <MetricCard title="总调用" value={data.totalCalls} detail="所有供应商、所有任务类型" />
+        <MetricCard title="成功调用" value={data.successCalls} detail="已正常返回内容" />
+        <MetricCard title="失败调用" value={data.errorCalls} detail="Key、限流、超时或返回异常" />
+        <MetricCard title="平均耗时" value={`${data.averageDurationMs} ms`} detail="按筛选范围计算" />
+      </div>
+      <div className="ai-call-columns">
+        <section className="assistant-card">
+          <h3>按调用类型</h3>
+          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} />
+        </section>
+        <section className="assistant-card">
+          <h3>按供应商</h3>
+          <Table rows={data.byProvider} columns={["provider", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} />
+        </section>
+      </div>
+    </section>
+  </div>;
+}
+
+function MetricCard({ title, value, detail }: { title: string; value: number | string; detail: string }) {
+  return <section className="metric-card">
+    <div className="metric-top"><span>{title}</span><i><Sparkles size={19}/></i></div>
+    <strong>{value}</strong>
+    <small>{detail}</small>
+  </section>;
 }
 
 function Merchants() {
@@ -799,9 +851,10 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
 function IntentLearning({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, limit: filters.limit });
-  const [rows, setRows] = useRows<IntentLearningEvent>(rowsUrl);
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", limit: "100" });
+  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, q: filters.q, limit: filters.limit });
+  const [rows, setRows] = useState<IntentLearningEvent[]>([]);
+  const [total, setTotal] = useState(0);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<IntentLearningEvent | null>(null);
   const [detailDraft, setDetailDraft] = useState({ status: "candidate", displayName: "", description: "" });
@@ -810,11 +863,13 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
     setDetailDraft({ status: selected.status, displayName: selected.displayName, description: selected.description });
   }, [selected]);
   const reload = async () => {
-    const next = await loadRows<IntentLearningEvent>(rowsUrl);
-    setRows(next);
+    const result = await api<{ rows: IntentLearningEvent[]; total: number }>(rowsUrl);
+    setRows(result.rows);
+    setTotal(result.total);
     pager.setPage(1);
-    setSelected((current) => current ? next.find((item) => item.id === current.id) || null : null);
+    setSelected((current) => current ? result.rows.find((item) => item.id === current.id) || null : null);
   };
+  useEffect(() => { reload().catch(() => { setRows([]); setTotal(0); }); }, [rowsUrl]);
   const patchSelected = async (patch: Record<string, unknown>, message = "意图候选已更新") => {
     if (!selected) return;
     const saved = await api<IntentLearningEvent>(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
@@ -837,12 +892,13 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
         </div>
       </div>
       <div className="learning-metrics">
+        <span>筛选总数 <strong>{total}</strong></span>
         <span>待处理 <strong>{metrics.candidate}</strong></span>
         <span>已确认 <strong>{metrics.reviewed}</strong></span>
         <span>已沉淀 <strong>{metrics.promoted}</strong></span>
         <span>已忽略 <strong>{metrics.ignored}</strong></span>
       </div>
-      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status", "suggestedIntent", "limit"] : ["countryId", "status", "suggestedIntent", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
+      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "limit"] : ["q", "countryId", "status", "suggestedIntent", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
       <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
       <Pagination pager={pager} />
     </section>

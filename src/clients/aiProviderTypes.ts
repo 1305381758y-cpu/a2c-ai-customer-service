@@ -12,4 +12,5 @@ export interface AiTextOptions {
   systemInstruction?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  taskType?: string;
 }

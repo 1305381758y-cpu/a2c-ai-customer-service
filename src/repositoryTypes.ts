@@ -446,3 +446,23 @@ export interface IntentLearningInput {
   displayName: string;
   description: string;
 }
+
+export interface AiCallLogInput {
+  merchantId?: string;
+  countryId?: string;
+  provider: string;
+  model: string;
+  taskType: string;
+  status: "success" | "error";
+  durationMs: number;
+  error?: string;
+}
+
+export interface AiCallStats {
+  totalCalls: number;
+  successCalls: number;
+  errorCalls: number;
+  averageDurationMs: number;
+  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
+  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
+}

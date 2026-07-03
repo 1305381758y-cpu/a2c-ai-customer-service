@@ -1,5 +1,4 @@
 import type { AppConfig } from "../config.js";
-import { analyzeGeminiImage } from "./gemini.js";
 import type { AiTextOptions, AiTextPart } from "./aiProviderTypes.js";
 
 export interface AiImageAnalysis {
@@ -21,16 +20,15 @@ export async function analyzeCustomerImage(
 ): Promise<AiImageAnalysis> {
   if (!imageUrl) return { text: "", status: "skipped" };
   const provider = runtime.selectedProvider(config);
-  if (provider === "gemini") return analyzeGeminiImage(config, imageUrl);
   if (provider === "deepseek") {
     return { text: "", status: "skipped", error: "DeepSeek 暂不支持图片理解，请切换 MiniMax/Gemini 或让客户补充文字说明" };
   }
-  if (!runtime.hasMiniMaxKey(config)) return { text: "", status: "skipped", error: "MiniMax Key 未配置" };
+  if (provider === "minimax" && !runtime.hasMiniMaxKey(config)) return { text: "", status: "skipped", error: "MiniMax Key 未配置" };
   try {
-    const text = await runtime.generateMiniMaxText(config, [
+    const text = await runtime.generateMiniMaxText({ ...config, AI_PROVIDER: provider }, [
       { text: customerImageAnalysisPrompt() },
       { inlineData: { mimeType: "image/jpeg", data: imageUrl } }
-    ], { temperature: 0, maxOutputTokens: 160 });
+    ], { temperature: 0, maxOutputTokens: 160, taskType: "customer_image_analysis" });
     return { text: text.slice(0, 160), status: text ? "ok" : "skipped" };
   } catch (error) {
     return { text: "", status: "failed", error: error instanceof Error ? error.message : "图片识别失败" };

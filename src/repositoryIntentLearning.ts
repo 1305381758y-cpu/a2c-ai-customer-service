@@ -80,26 +80,8 @@ export class IntentLearningRepository {
     return row ? mapIntentLearningEvent(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; limit?: number } = {}): IntentLearningEventRecord[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.status) {
-      clauses.push("status = ?");
-      params.push(filters.status);
-    }
-    if (filters.suggestedIntent) {
-      clauses.push("suggested_intent = ?");
-      params.push(filters.suggestedIntent);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+    const { where, params } = this.buildListWhere(filters);
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
     params.push(limit);
     return this.db.sqlite
@@ -112,6 +94,12 @@ export class IntentLearningRepository {
       `)
       .all(...params)
       .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));
+  }
+
+  count(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string } = {}): number {
+    const { where, params } = this.buildListWhere(filters);
+    const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM intent_learning_events ${where}`).get(...params) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
   }
 
   listPromoted(filters: { merchantId: string; countryId: string; limit?: number }): IntentLearningEventRecord[] {
@@ -150,5 +138,42 @@ export class IntentLearningRepository {
       .prepare(`UPDATE intent_learning_events SET ${assignments.join(", ")}, updated_at = CURRENT_TIMESTAMP ${where}`)
       .run(...values, id, ...(merchantId ? [merchantId] : []));
     return this.get(id, merchantId);
+  }
+
+  private buildListWhere(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string }): { where: string; params: Array<string | number> } {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.countryId) {
+      clauses.push("country_id = ?");
+      params.push(filters.countryId);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (filters.suggestedIntent) {
+      clauses.push("suggested_intent = ?");
+      params.push(filters.suggestedIntent);
+    }
+    const q = filters.q?.trim();
+    if (q) {
+      const like = `%${q}%`;
+      clauses.push(`(
+        display_name LIKE ?
+        OR suggested_intent LIKE ?
+        OR customer_text LIKE ?
+        OR detected_intent LIKE ?
+        OR inferred_intent LIKE ?
+        OR contextual_intent LIKE ?
+        OR flow_step LIKE ?
+        OR description LIKE ?
+      )`);
+      params.push(like, like, like, like, like, like, like, like);
+    }
+    return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
   }
 }

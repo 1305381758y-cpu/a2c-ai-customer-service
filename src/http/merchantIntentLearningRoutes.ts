@@ -12,7 +12,7 @@ type MerchantIntentLearningRoutesDeps = {
 };
 
 export function registerMerchantIntentLearningRoutes(app: FastifyInstance, deps: MerchantIntentLearningRoutesDeps): void {
-  app.get<{ Querystring: { countryId?: string; status?: string; suggestedIntent?: string; limit?: string } }>("/api/merchant/intent-learning", { preHandler: deps.merchantRoles }, async (request) => (
+  app.get<{ Querystring: { countryId?: string; status?: string; suggestedIntent?: string; q?: string; limit?: string } }>("/api/merchant/intent-learning", { preHandler: deps.merchantRoles }, async (request) => (
     listMerchantIntentLearningEvents(deps.repos, scopedMerchantId(request), request.query)
   ));
 

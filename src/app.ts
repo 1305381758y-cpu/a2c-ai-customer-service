@@ -10,6 +10,7 @@ import { registerRoutes } from "./routes.js";
 import { ConversationEngine } from "./services/conversationEngine.js";
 import { createConversationApplication } from "./services/conversationApplication.js";
 import { hashPassword } from "./auth.js";
+import { setAiCallRecorder } from "./clients/aiProviderRuntime.js";
 
 const UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 
@@ -17,6 +18,7 @@ export function buildApp(config: AppConfig) {
   const app = Fastify({ logger: true, bodyLimit: UPLOAD_LIMIT_BYTES });
   const db = openDb(config.DATABASE_URL);
   const repos = new Repositories(db);
+  setAiCallRecorder((input) => repos.recordAiCall(input));
   repos.ensureBootstrapAdmin({
     email: config.DEFAULT_ADMIN_EMAIL,
     passwordHash: hashPassword(config.DEFAULT_ADMIN_PASSWORD)

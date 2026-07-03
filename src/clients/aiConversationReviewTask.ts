@@ -32,6 +32,7 @@ export async function generateConversationReviewDraftWithAi(
     }))
   }), {
     temperature: 0.15,
+    taskType: "conversation_review",
     systemInstruction: conversationReviewSystemInstruction
   });
   return JSON.parse(stripJsonFence(text)) as ConversationReviewInput;

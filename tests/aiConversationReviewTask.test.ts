@@ -71,6 +71,7 @@ describe("AI conversation review task", () => {
     expect(result.mainConcerns).toEqual(["安全疑虑"]);
     expect(generateText).toHaveBeenCalledWith(expect.any(Object), expect.any(String), {
       temperature: 0.15,
+      taskType: "conversation_review",
       systemInstruction: conversationReviewSystemInstruction
     });
 

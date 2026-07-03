@@ -33,6 +33,7 @@ export type AdminCustomerListQuery = {
   countryId?: string;
   status?: string;
   language?: string;
+  q?: string;
   startAt?: string;
   endAt?: string;
   limit?: string;
@@ -43,6 +44,7 @@ export type AdminIntentLearningListQuery = {
   countryId?: string;
   status?: string;
   suggestedIntent?: string;
+  q?: string;
   limit?: string;
 };
 
@@ -61,33 +63,43 @@ export function listAdminConversations(repos: Repositories, query: AdminConversa
   };
 }
 
-export function listAdminCustomers(repos: Repositories, query: AdminCustomerListQuery): { rows: CustomerRecord[] } {
+export function listAdminCustomers(repos: Repositories, query: AdminCustomerListQuery): { rows: CustomerRecord[]; total: number } {
   const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt });
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    status: query.status,
+    language: query.language,
+    q: query.q,
+    startAt: range.startAt,
+    endAt: range.endAt
+  };
   return {
     rows: repos.listCustomers({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      status: query.status,
-      language: query.language,
-      startAt: range.startAt,
-      endAt: range.endAt,
+      ...filters,
       limit: query.limit ? Number(query.limit) : undefined
-    })
+    }),
+    total: repos.countCustomers(filters)
   };
 }
 
 export function listAdminIntentLearningEvents(
   repos: Repositories,
   query: AdminIntentLearningListQuery
-): { rows: IntentLearningEventRecord[] } {
+): { rows: IntentLearningEventRecord[]; total: number } {
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    status: query.status,
+    suggestedIntent: query.suggestedIntent,
+    q: query.q
+  };
   return {
     rows: repos.listIntentLearningEvents({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      status: query.status,
-      suggestedIntent: query.suggestedIntent,
+      ...filters,
       limit: query.limit ? Number(query.limit) : undefined
-    })
+    }),
+    total: repos.countIntentLearningEvents(filters)
   };
 }
 

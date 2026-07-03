@@ -2,6 +2,7 @@ import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
 
 export type CountryRuntimeConfig = {
+  id?: string;
   platformRegisterUrl?: string;
   tgRegisterGuideUrl?: string;
 };
@@ -27,7 +28,9 @@ export function appConfigForMerchant(config: AppConfig, merchantConfig: Merchant
     TELEGRAM_HANDOFF_CHAT_ID: merchantConfig.telegramHandoffChatId || config.TELEGRAM_HANDOFF_CHAT_ID,
     PLATFORM_REGISTER_URL: country?.platformRegisterUrl || merchantConfig.platformRegisterUrl || config.PLATFORM_REGISTER_URL,
     TG_REGISTER_GUIDE_URL: country?.tgRegisterGuideUrl || merchantConfig.tgRegisterGuideUrl || config.TG_REGISTER_GUIDE_URL,
-    REGISTRATION_TUTORIAL_IMAGE_URL: merchantConfig.registrationTutorialImageUrl || config.REGISTRATION_TUTORIAL_IMAGE_URL
+    REGISTRATION_TUTORIAL_IMAGE_URL: merchantConfig.registrationTutorialImageUrl || config.REGISTRATION_TUTORIAL_IMAGE_URL,
+    AI_TELEMETRY_MERCHANT_ID: merchantConfig.merchantId,
+    AI_TELEMETRY_COUNTRY_ID: country?.id || ""
   };
 }
 

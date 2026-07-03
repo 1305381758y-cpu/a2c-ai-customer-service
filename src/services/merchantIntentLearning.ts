@@ -8,6 +8,7 @@ export type MerchantIntentLearningListQuery = {
   countryId?: string;
   status?: string;
   suggestedIntent?: string;
+  q?: string;
   limit?: string;
 };
 
@@ -15,15 +16,20 @@ export function listMerchantIntentLearningEvents(
   repos: Repositories,
   merchantId: string,
   query: MerchantIntentLearningListQuery
-): { rows: IntentLearningEventRecord[] } {
+): { rows: IntentLearningEventRecord[]; total: number } {
+  const filters = {
+    merchantId,
+    countryId: query.countryId,
+    status: query.status,
+    suggestedIntent: query.suggestedIntent,
+    q: query.q
+  };
   return {
     rows: repos.listIntentLearningEvents({
-      merchantId,
-      countryId: query.countryId,
-      status: query.status,
-      suggestedIntent: query.suggestedIntent,
+      ...filters,
       limit: query.limit ? Number(query.limit) : undefined
-    })
+    }),
+    total: repos.countIntentLearningEvents(filters)
   };
 }
 

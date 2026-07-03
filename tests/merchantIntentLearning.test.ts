@@ -54,6 +54,20 @@ describe("merchantIntentLearning service", () => {
     expect(result.rows[0]).toMatchObject({ id: workflow.id, status: "promoted", suggestedIntent: "workflow_question" });
   });
 
+  it("searches event text and returns total independent of the list limit", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("意图搜索商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "链接打不开", candidateKey: "link-1", suggestedIntent: "need_help" });
+    recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "还是链接打不开", candidateKey: "link-2", suggestedIntent: "need_help" });
+
+    const result = listMerchantIntentLearningEvents(repos, merchant.id, { q: "链接", limit: "1" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.total).toBe(2);
+  });
+
   it("patches only events that belong to the merchant", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

@@ -1,5 +1,6 @@
 import type { Db } from "./db.js";
 import { MerchantA2CAccountRepository } from "./repositoryA2CAccounts.js";
+import { AiCallRepository } from "./repositoryAiCalls.js";
 import { ConversationReviewRepository } from "./repositoryConversationReviews.js";
 import { ConversationRepository } from "./repositoryConversations.js";
 import { CustomerRepository } from "./repositoryCustomers.js";
@@ -37,6 +38,7 @@ export interface RepositoryModules {
   scriptFlows: ScriptFlowRepository;
   trainingContent: TrainingContentRepository;
   users: UserRepository;
+  aiCalls: AiCallRepository;
 }
 
 export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallbacks): RepositoryModules {
@@ -73,6 +75,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     validCountryId: callbacks.validCountryId
   });
   const users = new UserRepository(db);
+  const aiCalls = new AiCallRepository(db);
 
   return {
     settings,
@@ -87,6 +90,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     reviews,
     scriptFlows,
     trainingContent,
-    users
+    users,
+    aiCalls
   };
 }

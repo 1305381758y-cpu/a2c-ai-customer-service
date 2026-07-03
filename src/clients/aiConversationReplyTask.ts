@@ -32,6 +32,7 @@ export async function generateConversationReply(
     }), {
       temperature: 0.45,
       maxOutputTokens: 900,
+      taskType: "conversation_reply",
       systemInstruction: buildReplySystemPrompt(input.agentProfile)
     });
     return normalizeAiReply(JSON.parse(stripJsonFence(text)) as Partial<AiReply>, input, config);

@@ -45,7 +45,7 @@ describe("AI training image text task", () => {
     expect(generateText).toHaveBeenCalledWith(expect.objectContaining({ AI_PROVIDER: "minimax" }), [
       { inlineData: { mimeType: "image/jpeg", data: Buffer.from("image").toString("base64") } },
       { text: "请只提取图片中的全部可读文字，保持原语言和换行，不要解释。" }
-    ]);
+    ], { taskType: "training_image_ocr" });
   });
 
   it("honors Gemini when Gemini is selected and configured", async () => {

@@ -351,6 +351,38 @@ section p { color: var(--muted-strong); line-height: 1.55; }
   color: var(--muted);
   font-size: 13px;
 }
+.dashboard-page {
+  display: grid;
+  gap: 14px;
+}
+.dashboard-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.dashboard-filter h3 {
+  margin: 0 0 4px;
+}
+.dashboard-filter p,
+.metric-section-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.metric-section-title {
+  font-weight: 750;
+  color: var(--text);
+}
+.ai-call-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
 .filters {
   padding: 10px;
   background: var(--surface-soft);
@@ -1842,6 +1874,13 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   .work-panel .table { max-height: 560px; }
 }
 @media (max-width: 900px) {
+  .dashboard-filter,
+  .ai-call-columns {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-filter {
+    display: grid;
+  }
   .app { grid-template-columns: 1fr; }
   .training-center-hero { grid-template-columns: 1fr; }
   aside { position: static; height: auto; }

@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { type InternalIntentLabel } from "../domain/analyzer.js";
-import { generateMiniMaxText, minimaxApiKey } from "./aiProviderTransport.js";
+import { minimaxApiKey } from "./aiProviderTransport.js";
 import { detectAiLanguage as detectAiLanguageWithRuntime, type AiLanguageDetectionInput } from "./aiLanguageDetection.js";
 import { classifyAiIntent as classifyAiIntentWithRuntime, type AiIntentClassificationInput } from "./aiIntentClassification.js";
 import { classifyAiContextualIntent as classifyAiContextualIntentWithRuntime, type AiContextualIntentClassificationInput, type AiContextualIntentResult } from "./aiContextualIntentClassification.js";
@@ -17,7 +17,7 @@ export async function analyzeAiImage(config: AppConfig, imageUrl: string): Promi
   return analyzeCustomerImageWithRuntime(config, imageUrl, {
     selectedProvider: selectedAiProvider,
     hasMiniMaxKey: (runtimeConfig) => Boolean(minimaxApiKey(runtimeConfig)),
-    generateMiniMaxText
+    generateMiniMaxText: generateAiText
   });
 }
 

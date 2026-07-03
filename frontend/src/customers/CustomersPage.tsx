@@ -18,9 +18,11 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: filters.limit });
-  const [rows, setRows] = useRows<Customer>(rowsUrl);
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
+  const queryFilters = platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, limit: filters.limit };
+  const rowsUrl = withQuery(base, queryFilters);
+  const [rows, setRows] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Customer | null>(null);
   const compactColumns = platform
@@ -31,9 +33,12 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
     : ["countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"];
   const columns = selected ? compactColumns : fullColumns;
   const reload = async () => {
-    setRows(await loadRows(rowsUrl));
+    const result = await api<{ rows: Customer[]; total: number }>(rowsUrl);
+    setRows(result.rows);
+    setTotal(result.total);
     pager.setPage(1);
   };
+  React.useEffect(() => { reload().catch(() => { setRows([]); setTotal(0); }); }, [rowsUrl]);
   const deleteSelected = async () => {
     if (!selected) return;
     if (!window.confirm(`确认彻底删除客户 ${selected.customerKey}？该客户的所有会话、聊天记录、记忆和接管记录都会一起删除。`)) return;
@@ -56,11 +61,11 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
         <div className="customer-export-top">
           <ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />
         </div>
-        <div className="table-helper">默认显示北京时间今天有过消息或更新的客户，可调整开始日期和结束日期筛选。</div>
+        <div className="table-helper">默认显示北京时间今天有过消息或更新的客户；可搜索客户账号、昵称、接收账号、手机号、TG/WhatsApp。当前筛选共 {total} 个客户。</div>
         <FilterBar
           filters={filters}
           setFilters={setFilters}
-          fields={platform ? ["merchantId", "countryId", "status", "language", "startAt", "endAt", "limit"] : ["countryId", "status", "language", "startAt", "endAt", "limit"]}
+          fields={platform ? ["merchantId", "q", "countryId", "status", "language", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "language", "startAt", "endAt", "limit"]}
           selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }}
           onApply={reload}
         />

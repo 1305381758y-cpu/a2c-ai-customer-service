@@ -9,6 +9,10 @@ export function todayBeijingSqlRange(now = new Date()): Required<SqlTimeRange> {
   return beijingDateSqlRange(beijingDateKey(now));
 }
 
+export function yesterdayBeijingSqlRange(now = new Date()): Required<SqlTimeRange> {
+  return beijingDateSqlRange(beijingDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000)));
+}
+
 export function beijingDateSqlRange(dateKey: string): Required<SqlTimeRange> {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey.trim());
   if (!match) return todayBeijingSqlRange();

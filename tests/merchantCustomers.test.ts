@@ -34,6 +34,22 @@ describe("merchantCustomers service", () => {
     const result = listMerchantCustomers(repos, merchant.id, { startAt: "2026-07-03T00:00:00Z", endAt: "2026-07-04T00:00:00Z" });
 
     expect(result.rows.map((row) => row.customerKey)).toEqual(["today-customer"]);
+    expect(result.total).toBe(1);
+  });
+
+  it("searches customers and returns a count independent of the list limit", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("客户搜索商户");
+    for (let i = 0; i < 3; i += 1) {
+      const conversation = repos.getOrCreateConversation(`search-target-${i}`, "a2c-a", `搜索客户${i}`, merchant.id);
+      repos.upsertCustomerFromConversation({ ...conversation, extractedTelegram: `@target_${i}` });
+    }
+
+    const result = listMerchantCustomers(repos, merchant.id, { q: "target", limit: "1" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.total).toBe(3);
   });
 
   it("hard deletes a merchant customer and all of their conversations", () => {

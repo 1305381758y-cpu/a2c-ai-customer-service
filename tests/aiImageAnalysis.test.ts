@@ -29,7 +29,7 @@ describe("AI customer image analysis task", () => {
     expect(generateMiniMaxText).toHaveBeenCalledWith(expect.any(Object), [
       expect.objectContaining({ text: expect.stringContaining("不要提取或猜测手机号") }),
       { inlineData: { mimeType: "image/jpeg", data: "https://cdn.example/register.png" } }
-    ], { temperature: 0, maxOutputTokens: 160 });
+    ], { temperature: 0, maxOutputTokens: 160, taskType: "customer_image_analysis" });
   });
 
   it("skips MiniMax image analysis when the merchant has no MiniMax key", async () => {

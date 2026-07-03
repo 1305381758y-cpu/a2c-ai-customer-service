@@ -11,7 +11,7 @@ type MerchantCustomerRoutesDeps = {
 };
 
 export function registerMerchantCustomerRoutes(app: FastifyInstance, deps: MerchantCustomerRoutesDeps): void {
-  app.get<{ Querystring: { countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string; limit?: string } }>("/api/merchant/customers", { preHandler: deps.merchantRoles }, async (request) => (
+  app.get<{ Querystring: { countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: string } }>("/api/merchant/customers", { preHandler: deps.merchantRoles }, async (request) => (
     listMerchantCustomers(deps.repos, scopedMerchantId(request), request.query)
   ));
 

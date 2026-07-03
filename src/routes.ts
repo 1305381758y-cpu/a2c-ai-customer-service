@@ -20,6 +20,7 @@ import { registerMerchantSettingsRoutes, registerStaticFrontendRoute } from "./h
 import { registerTelegramWebhookRoutes } from "./http/merchantTelegramRoutes.js";
 import { registerAdminMerchantRoutes } from "./http/adminMerchantRoutes.js";
 import { registerInternalMaintenanceRoutes } from "./http/internalMaintenanceRoutes.js";
+import { registerAiCallStatsRoutes } from "./http/aiCallStatsRoutes.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -44,6 +45,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerMerchantIntentLearningRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantConversationRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
+  registerAiCallStatsRoutes(app, { repos: deps.repos, adminOnly, merchantRoles });
 
   registerInternalMaintenanceRoutes(app, { config: deps.config, repos: deps.repos });
   registerConversationIngressRoutes(app, deps);

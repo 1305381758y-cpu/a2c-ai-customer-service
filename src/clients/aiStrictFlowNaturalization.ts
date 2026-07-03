@@ -44,6 +44,7 @@ export async function naturalizeStrictFlowText(
     }), {
       temperature: 0.55,
       maxOutputTokens: 800,
+      taskType: "strict_flow_naturalize",
       systemInstruction: `
 你只负责把开户注册接待回复改写得更像真人客服，不能改变业务含义。
 角色：有 10 年经验的开户注册接待专员。语气自然、耐心、生活化，像真人接待回复。

@@ -451,6 +451,19 @@ export function migrate(db: DatabaseSync): void {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(review_id) REFERENCES conversation_reviews(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS ai_call_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT DEFAULT '',
+      country_id TEXT DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      task_type TEXT NOT NULL DEFAULT 'unknown',
+      status TEXT NOT NULL DEFAULT 'success',
+      duration_ms INTEGER DEFAULT 0,
+      error TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 	  `);
 
   db.exec("DROP TABLE IF EXISTS vector_documents;");
@@ -530,6 +543,14 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversation_reviews", "status", "TEXT DEFAULT 'generated'");
   ensureColumn(db, "conversation_review_items", "applied_target_type", "TEXT DEFAULT ''");
   ensureColumn(db, "conversation_review_items", "applied_target_id", "INTEGER");
+  ensureColumn(db, "ai_call_logs", "merchant_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "ai_call_logs", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "ai_call_logs", "provider", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "ai_call_logs", "model", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "ai_call_logs", "task_type", "TEXT NOT NULL DEFAULT 'unknown'");
+  ensureColumn(db, "ai_call_logs", "status", "TEXT NOT NULL DEFAULT 'success'");
+  ensureColumn(db, "ai_call_logs", "duration_ms", "INTEGER DEFAULT 0");
+  ensureColumn(db, "ai_call_logs", "error", "TEXT DEFAULT ''");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();

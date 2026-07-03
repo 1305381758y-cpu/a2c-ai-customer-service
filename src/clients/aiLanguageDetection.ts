@@ -33,6 +33,7 @@ export async function detectAiLanguage(
     }), {
       temperature: 0,
       maxOutputTokens: 24,
+      taskType: "language_detection",
       systemInstruction: `
 你只负责判断客户当前这条消息主要使用什么语言，不要翻译，不要解释。
 只输出一个语言代码，必须从以下代码中选择：

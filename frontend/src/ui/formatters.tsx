@@ -70,7 +70,7 @@ export function displayValue(column: string, value: unknown) {
   if (isDateTimeColumn(column)) return formatDateTime(String(value));
   if (["countryId", "countryName", "countryCode"].includes(column)) return countryLabel(value);
   if (["language", "defaultLanguage"].includes(column)) return languageName(String(value));
-  if (["status", "enabled", "role", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind"].includes(column)) {
+  if (["status", "enabled", "role", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind", "taskType", "provider"].includes(column)) {
     const text = label(String(value));
     if (["status", "enabled", "handoffStatus", "stage", "intent"].includes(column)) return <span className={`status-pill ${statusTone(String(value))}`}>{text}</span>;
     return text;
@@ -238,13 +238,14 @@ export function label(key: string) {
     platformRegisterUrl: "开户链接", tgRegisterGuideUrl: "TG注册说明", registrationTutorialImageUrl: "注册教程图片", type: "类型", title: "标题", content: "内容", password: "新密码",
     inviteCode: "邀请码", registerUrl: "注册链接", assignedCustomerKey: "绑定客户", assignedConversationId: "绑定会话", platformAccount: "注册账号", assignedAt: "分配时间", usedAt: "使用时间", updatedAt: "更新时间",
     candidateKey: "候选键", suggestedIntent: "建议意图", displayName: "意图名称", description: "说明", customerText: "客户表达", detectedIntent: "原始意图", inferredIntent: "推断意图", contextualIntent: "上下文意图", occurrenceCount: "出现次数",
-    limit: "数量", startAt: "开始日期", endAt: "结束日期", version: "版本", stepCount: "节点数", draft: "草稿", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
+    limit: "数量", q: "关键词搜索", startAt: "开始日期", endAt: "结束日期", version: "版本", stepCount: "节点数", draft: "草稿", true: "启用", false: "停用", faq: "问答", script: "话术", rule: "规则", forbidden: "禁用表达", human_handoff: "已接管",
     pending: "待处理", processing: "处理中", done: "已完成", sourceType: "资料类型", count: "数量", filename: "文件名", itemCount: "学习数", sampleCount: "样本数",
     knowledgeCount: "知识数", createdAt: "导入时间", csv: "表格", xlsx: "表格", docx: "文档", txt: "文本", image: "图片",
     lastA2CAccountPhone: "最近接收账号", firstA2CAccountPhone: "首次接收账号", extractedPhone: "手机号", extractedTelegram: "Telegram",
     extractedWhatsApp: "WhatsApp", countryId: "国家", countryName: "国家", countryCode: "国家代码", code: "国家代码", defaultLanguage: "默认语言",
     requirePlatformAccount: "需平台开户", requirePhone: "需手机号", requireTelegram: "需TG", requireWhatsApp: "需WS",
     conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID",
+    totalCalls: "调用总数", successCalls: "成功", errorCalls: "失败", averageDurationMs: "平均耗时ms", taskType: "调用类型", provider: "供应商",
     ok: "正常", missing: "未配置", error: "异常", unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效", apiPhone: "客服账号", verifiedName: "显示名称",
     wabaId: "业务账号ID", numberStatus: "号码状态", qualityRating: "质量评分", messagingLimit: "消息额度", syncedAt: "同步时间",
     platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营",
@@ -258,6 +259,7 @@ export function label(key: string) {
     greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册",
     provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
     ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息",
-    custom_unknown_question: "未知问题", contextual_acknowledgement: "上下文短确认", custom_unclassified_or_noise: "待判断噪声", custom_unclassified: "待识别新意图"
+    custom_unknown_question: "未知问题", contextual_acknowledgement: "上下文短确认", custom_unclassified_or_noise: "待判断噪声", custom_unclassified: "待识别新意图",
+    language_detection: "语言识别", intent_classification: "意图识别", contextual_intent: "上下文理解", strict_flow_naturalize: "口语化改写", translation: "翻译", availability_check: "配置检测", conversation_review: "对话复盘", training_image_ocr: "素材图片识别", conversation_reply: "普通回复", customer_image_analysis: "客户图片分析", minimax: "MiniMax", gemini: "Gemini", deepseek: "DeepSeek"
   } as Record<string, string>)[key] || key;
 }

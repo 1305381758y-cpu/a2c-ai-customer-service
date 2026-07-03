@@ -17,6 +17,7 @@ describe("AI translation task", () => {
       targetLanguage: "es",
       text: "你好"
     }), {
+      taskType: "translation",
       systemInstruction: "Translate to the target language."
     });
   });

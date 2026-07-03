@@ -1,7 +1,24 @@
 import type { AppConfig } from "../config.js";
 import { generateGeminiText, geminiApiKey } from "./gemini.js";
-import { deepseekApiKey, generateDeepSeekText, generateMiniMaxText, minimaxApiKey } from "./aiProviderTransport.js";
+import { deepseekApiKey, deepseekModel, generateDeepSeekText, generateMiniMaxText, minimaxApiKey, minimaxModel } from "./aiProviderTransport.js";
 import type { AiProviderName, AiTextOptions, AiTextPart } from "./aiProviderTypes.js";
+
+export type AiCallTelemetryInput = {
+  merchantId?: string;
+  countryId?: string;
+  provider: AiProviderName;
+  model: string;
+  taskType: string;
+  status: "success" | "error";
+  durationMs: number;
+  error?: string;
+};
+
+let aiCallRecorder: ((input: AiCallTelemetryInput) => void) | undefined;
+
+export function setAiCallRecorder(recorder: ((input: AiCallTelemetryInput) => void) | undefined): void {
+  aiCallRecorder = recorder;
+}
 
 export function selectedAiProvider(config: Pick<AppConfig, "AI_PROVIDER" | "MINIMAX_API_KEY" | "DEEPSEEK_API_KEY" | "GOOGLE_AI_API_KEY" | "GOOGLE_AI_MODEL">): AiProviderName {
   if (config.AI_PROVIDER === "gemini") return "gemini";
@@ -24,11 +41,27 @@ export async function generateAiText(
   options: AiTextOptions = {}
 ): Promise<string> {
   const provider = selectedAiProvider(config);
-  if (provider === "gemini") {
-    return generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options);
+  const startedAt = Date.now();
+  const model = aiModelName(config, provider);
+  try {
+    const text = provider === "gemini"
+      ? await generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options)
+      : provider === "deepseek"
+        ? await generateDeepSeekText(config, contents, options)
+        : await generateMiniMaxText(config, contents, options);
+    recordAiCall(config, { provider, model, taskType: options.taskType || "unknown", status: "success", durationMs: Date.now() - startedAt });
+    return text;
+  } catch (error) {
+    recordAiCall(config, {
+      provider,
+      model,
+      taskType: options.taskType || "unknown",
+      status: "error",
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
   }
-  if (provider === "deepseek") return generateDeepSeekText(config, contents, options);
-  return generateMiniMaxText(config, contents, options);
 }
 
 export async function generateAiJson<T>(
@@ -48,4 +81,26 @@ export function hasUsableAiKey(config: AppConfig): boolean {
 
 export function stripJsonFence(text: string): string {
   return text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+}
+
+function aiModelName(config: AppConfig, provider: AiProviderName): string {
+  if (provider === "gemini") return config.GOOGLE_AI_MODEL || "gemini";
+  if (provider === "deepseek") return deepseekModel(config);
+  return minimaxModel(config);
+}
+
+function recordAiCall(
+  config: AppConfig,
+  input: Omit<AiCallTelemetryInput, "merchantId" | "countryId">
+): void {
+  if (!aiCallRecorder) return;
+  try {
+    aiCallRecorder({
+      ...input,
+      merchantId: config.AI_TELEMETRY_MERCHANT_ID,
+      countryId: config.AI_TELEMETRY_COUNTRY_ID
+    });
+  } catch {
+    // AI telemetry must never affect customer replies.
+  }
 }

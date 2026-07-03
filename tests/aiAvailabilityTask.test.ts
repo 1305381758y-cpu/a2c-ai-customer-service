@@ -9,7 +9,7 @@ describe("AI availability task", () => {
 
     await checkAiAvailability(config, { generateText });
 
-    expect(generateText).toHaveBeenCalledWith(config, "Reply with OK only.");
+    expect(generateText).toHaveBeenCalledWith(config, "Reply with OK only.", { taskType: "availability_check" });
   });
 
   it("lets provider errors bubble up to the config check caller", async () => {
