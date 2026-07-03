@@ -1,5 +1,5 @@
-import { api, loadRows } from "../app/api.js";
-import type { A2CAccount, ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, UnreadSummary } from "../types.js";
+import { api, loadRows, withQuery } from "../app/api.js";
+import type { A2CAccount, ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, Filters, UnreadSummary } from "../types.js";
 
 export type ConversationSendDraft = {
   type: string;
@@ -23,6 +23,14 @@ export async function loadMerchantA2CAccounts(): Promise<A2CAccount[]> {
 
 export async function loadMerchantConversations(url: string): Promise<Conversation[]> {
   return await loadRows<Conversation>(url);
+}
+
+export async function loadConversationRows(url: string): Promise<Conversation[]> {
+  return await loadRows<Conversation>(url);
+}
+
+export function buildPlatformConversationsUrl(filters: Filters): string {
+  return withQuery("/api/admin/conversations", filters);
 }
 
 export async function markAllConversationsRead(a2cAccountPhone: string): Promise<{ updated: number }> {

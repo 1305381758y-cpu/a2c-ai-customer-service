@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyConversationReviewItem,
+  buildPlatformConversationsUrl,
   deleteConversation,
   generateConversationReview,
+  loadConversationRows,
   loadMerchantA2CAccounts,
   loadMerchantConversations,
   loadConversationMessages,
@@ -48,6 +50,18 @@ describe("merchant conversation API helpers", () => {
 
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/merchant/a2c/accounts", { headers: {} });
     expect(fetcher).toHaveBeenNthCalledWith(2, "/api/merchant/conversations?a2cAccountPhone=agent-1", { headers: {} });
+    fetcher.mockRestore();
+  });
+
+  it("builds and loads platform conversation rows through the conversation API module", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      rows: [{ id: "platform-conversation-1", merchantId: "merchant-1" }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const url = buildPlatformConversationsUrl({ merchantId: "merchant-1", status: "active", language: "es", limit: "50" });
+
+    expect(url).toBe("/api/admin/conversations?merchantId=merchant-1&status=active&language=es&limit=50");
+    await expect(loadConversationRows(url)).resolves.toEqual([{ id: "platform-conversation-1", merchantId: "merchant-1" }]);
+    expect(fetcher).toHaveBeenCalledWith(url, { headers: {} });
     fetcher.mockRestore();
   });
 
