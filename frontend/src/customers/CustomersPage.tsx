@@ -113,7 +113,7 @@ function todayBeijingDateRange() {
   const today = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
   beijing.setUTCDate(beijing.getUTCDate() + 1);
   const tomorrow = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
-  return { startAt: today, endAt: tomorrow };
+  return { startAt: `${today}T00:00:00`, endAt: `${tomorrow}T00:00:00` };
 }
 
 function pad(value: number) {

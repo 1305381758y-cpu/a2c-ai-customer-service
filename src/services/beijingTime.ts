@@ -1,4 +1,6 @@
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const BEIJING_LOCAL_DATETIME_RE = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 export type SqlTimeRange = {
   startAt?: string;
@@ -14,7 +16,7 @@ export function yesterdayBeijingSqlRange(now = new Date()): Required<SqlTimeRang
 }
 
 export function beijingDateSqlRange(dateKey: string): Required<SqlTimeRange> {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey.trim());
+  const match = DATE_ONLY_RE.exec(dateKey.trim());
   if (!match) return todayBeijingSqlRange();
   const [, year, month, day] = match;
   const beijingMidnightUtcMs = Date.UTC(Number(year), Number(month) - 1, Number(day)) - BEIJING_OFFSET_MS;
@@ -38,8 +40,15 @@ function beijingDateKey(date: Date): string {
 
 function normalizeBoundary(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return beijingDateSqlRange(value).startAt;
-  const date = new Date(value);
+  const trimmed = value.trim();
+  if (DATE_ONLY_RE.test(trimmed)) return beijingDateSqlRange(trimmed).startAt;
+  const localDateTime = BEIJING_LOCAL_DATETIME_RE.exec(trimmed);
+  if (localDateTime) {
+    const [, year, month, day, hour, minute, second = "0"] = localDateTime;
+    const beijingUtcMs = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) - BEIJING_OFFSET_MS;
+    return toSqlTimestamp(new Date(beijingUtcMs));
+  }
+  const date = new Date(trimmed);
   if (Number.isNaN(date.getTime())) return undefined;
   return toSqlTimestamp(date);
 }

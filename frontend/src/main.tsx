@@ -147,8 +147,8 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
       </div>
       <div className="toolbar wrap filters">
         {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} />}
-        <input type="date" placeholder="开始日期" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
-        <input type="date" placeholder="结束日期" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
+        <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
+        <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
         <button onClick={reload}><Search size={16}/>筛选</button>
       </div>
       <div className="grid metrics">

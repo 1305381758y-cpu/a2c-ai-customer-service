@@ -22,8 +22,8 @@ export function Dashboard({ platform, api }: { platform: boolean; api: ApiClient
         <p>所有总量都使用数据库 COUNT(*) 统计，不受列表分页或展示数量限制。</p>
       </div>
       <div className="toolbar wrap">
-        <input type="date" aria-label="开始日期" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
-        <input type="date" aria-label="结束日期" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
+        <input type="datetime-local" step={1} aria-label="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
+        <input type="datetime-local" step={1} aria-label="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
         <button onClick={reload}><Search size={16}/>筛选时间</button>
       </div>
     </section>
