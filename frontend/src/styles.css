@@ -90,59 +90,6 @@ small { color: var(--muted); }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.boot-screen {
-  min-height: 100vh;
-  display: grid;
-  grid-auto-flow: column;
-  place-content: center;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted-strong);
-}
-
-.login {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, .10), transparent 34%),
-    linear-gradient(315deg, rgba(2, 122, 72, .10), transparent 32%),
-    var(--bg);
-}
-
-.login-panel {
-  width: min(440px, 100%);
-  background: rgba(255, 255, 255, .94);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 28px;
-  box-shadow: var(--shadow);
-  display: grid;
-  gap: 15px;
-}
-
-.brand-lockup, .side-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-lockup > span, .side-brand > span {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: #111827;
-  color: #fff;
-  font-weight: 800;
-}
-
-.brand-lockup h1, .brand-lockup p, .side-brand h2, .side-brand small { margin: 0; }
-.brand-lockup h1 { font-size: 25px; }
-.brand-lockup p { color: var(--muted); margin-top: 3px; }
-
 .error, .notice, .warning {
   padding: 10px 12px;
   border-radius: 7px;
@@ -181,91 +128,6 @@ small { color: var(--muted); }
 .toast.success { border-color: #abefc6; background: rgba(236, 253, 243, .96); }
 .toast.error { border-color: #fecdca; background: rgba(255, 241, 241, .97); }
 .toast.info { border-color: #bfdbfe; background: rgba(239, 246, 255, .97); }
-
-.app {
-  display: grid;
-  grid-template-columns: 264px 1fr;
-  min-height: 100vh;
-}
-
-aside {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-  color: #fff;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  border-right: 1px solid rgba(255, 255, 255, .08);
-}
-
-.side-brand > span { background: #2563eb; }
-.side-brand h2 { font-size: 18px; }
-.side-brand small { color: #b8c4d6; }
-.side-user {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .05);
-}
-.side-user span { color: #b8c4d6; font-size: 12px; }
-aside nav { display: grid; gap: 5px; }
-aside button {
-  width: 100%;
-  background: transparent;
-  color: #cbd5e1;
-  justify-content: flex-start;
-  border-color: transparent;
-  box-shadow: none;
-}
-aside button.active, aside button:hover {
-  background: rgba(59, 130, 246, .17);
-  color: #fff;
-  box-shadow: none;
-  border-color: rgba(147, 197, 253, .22);
-}
-aside .logout { margin-top: auto; }
-
-main {
-  padding: 24px;
-  overflow: auto;
-  min-width: 0;
-}
-
-header {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin: -24px -24px 18px;
-  padding: 22px 24px 16px;
-  background: rgba(247, 249, 252, .88);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(219, 227, 238, .78);
-}
-header h1 { margin: 0; font-size: 30px; line-height: 1.15; }
-header p { margin: 5px 0 0; color: var(--muted); }
-
-.live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  white-space: nowrap;
-  color: var(--green);
-  background: var(--green-soft);
-  border: 1px solid #abefc6;
-  border-radius: 999px;
-  padding: 7px 11px;
-  font-size: 13px;
-  font-weight: 700;
-}
 
 section {
   background: var(--surface);
@@ -568,12 +430,7 @@ tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand);
   .work-panel .table { max-height: 560px; }
 }
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
-  aside { position: static; height: auto; }
-  aside nav { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .split { grid-template-columns: 1fr; }
-  header { align-items: flex-start; flex-direction: column; }
-  main { padding: 16px; }
   .sticky-actions { position: static; }
 }
 
@@ -638,83 +495,6 @@ label {
   font-weight: 800;
 }
 textarea { min-height: 82px; }
-
-.app {
-  grid-template-columns: 250px minmax(0, 1fr);
-  background: transparent;
-}
-
-aside {
-  padding: 16px 14px;
-  gap: 12px;
-  background:
-    linear-gradient(180deg, rgba(47, 100, 214, .14) 0%, rgba(47, 100, 214, 0) 240px),
-    #101828;
-  border-right: 1px solid rgba(255, 255, 255, .10);
-}
-.side-brand {
-  min-height: 48px;
-  padding: 2px 4px 10px;
-}
-.side-brand > span {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #4778f0, #214cb6);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, .30);
-}
-.side-brand h2 {
-  font-size: 18px;
-  line-height: 1.1;
-}
-.side-user {
-  padding: 12px;
-  border-radius: 10px;
-  background: rgba(255,255,255,.065);
-  border-color: rgba(255,255,255,.11);
-}
-aside nav {
-  gap: 4px;
-  margin-top: 2px;
-}
-aside button {
-  min-height: 38px;
-  border-radius: 9px;
-  padding: 8px 10px;
-  color: #c8d2e0;
-  font-size: 14px;
-}
-aside button.active {
-  background: linear-gradient(90deg, rgba(71,120,240,.28), rgba(71,120,240,.10));
-  border-color: rgba(147,197,253,.28);
-}
-aside button:hover {
-  transform: none;
-  background: rgba(255,255,255,.075);
-}
-
-main {
-  padding: 20px 22px 28px;
-}
-header {
-  margin: -20px -22px 16px;
-  padding: 18px 22px 14px;
-  background: rgba(246, 248, 251, .92);
-}
-header h1 {
-  font-size: 24px;
-  font-weight: 900;
-}
-header p {
-  font-size: 13px;
-  margin-top: 4px;
-}
-.live-pill {
-  min-height: 32px;
-  padding: 6px 11px;
-  border-radius: 999px;
-  font-size: 12px;
-}
 
 section {
   border-radius: 10px;
@@ -824,17 +604,7 @@ tbody tr:hover td {
   grid-column: 1 / -1;
 }
 
-@media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
-  main { padding: 14px; }
-  header { margin: -14px -14px 14px; padding: 16px 14px 12px; }
-}
-
 /* 2026-06 UI fit pass: keep operator pages usable without hidden right-side panels. */
-main {
-  overflow-x: hidden;
-}
-
 .work-panel,
 .detail-panel,
 .memory,
