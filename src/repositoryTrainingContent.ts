@@ -10,6 +10,7 @@ import {
   clampTrainingLimit
 } from "./repositoryTrainingFilters.js";
 import { deleteTrainingMaterialRecord } from "./repositoryTrainingMaterialDeletion.js";
+import { buildKnowledgeItemPatch, buildTrainingSamplePatch } from "./repositoryTrainingPatches.js";
 import {
   mapKnowledgeItem,
   mapTrainingMaterial,
@@ -90,23 +91,10 @@ export class TrainingContentRepository {
   }
 
   patchTrainingSample(id: number, patch: Record<string, unknown>, merchantId?: string): Record<string, unknown> | undefined {
-    const allowed: Record<string, string> = {
-      customerMessage: "customer_message",
-      standardReply: "standard_reply",
-      stage: "stage",
-      intent: "intent",
-      language: "language",
-      keywords: "keywords",
-      priority: "priority",
-      enabled: "enabled",
-      countryId: "country_id"
-    };
-    const entries = Object.entries(patch).filter(([key]) => key in allowed);
-    if (entries.length) {
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      const values = entries.map(([key, value]) => (key === "enabled" ? (value ? 1 : 0) : value)) as Array<string | number | null>;
+    const sqlPatch = buildTrainingSamplePatch(patch);
+    if (sqlPatch) {
       const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-      this.db.sqlite.prepare(`UPDATE training_samples SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
+      this.db.sqlite.prepare(`UPDATE training_samples SET ${sqlPatch.assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...sqlPatch.values, id, ...(merchantId ? [merchantId] : []));
     }
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     return this.db.sqlite.prepare(`SELECT * FROM training_samples ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
@@ -160,26 +148,10 @@ export class TrainingContentRepository {
   }
 
   patchKnowledgeItem(id: number, patch: Record<string, unknown>, merchantId?: string): KnowledgeItemRecord | undefined {
-    const allowed: Record<string, string> = {
-      type: "type",
-      title: "title",
-      content: "content",
-      language: "language",
-      priority: "priority",
-      enabled: "enabled",
-      countryId: "country_id"
-    };
-    const entries = Object.entries(patch).filter(([key]) => key in allowed);
-    if (entries.length) {
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
-      const values = entries.map(([key, value]) => {
-        if (key === "enabled") return value ? 1 : 0;
-        if (key === "priority") return Number(value || 0);
-        if (key === "type") return normalizeKnowledgeType(value);
-        return String(value ?? "");
-      }) as Array<string | number>;
+    const sqlPatch = buildKnowledgeItemPatch(patch);
+    if (sqlPatch) {
       const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-      this.db.sqlite.prepare(`UPDATE knowledge_items SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
+      this.db.sqlite.prepare(`UPDATE knowledge_items SET ${sqlPatch.assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...sqlPatch.values, id, ...(merchantId ? [merchantId] : []));
     }
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     const row = this.db.sqlite.prepare(`SELECT * FROM knowledge_items ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
