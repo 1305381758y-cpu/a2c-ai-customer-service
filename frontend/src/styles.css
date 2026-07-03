@@ -4573,3 +4573,87 @@ header p {
     max-width: 220px;
   }
 }
+
+/* Merchant conversation workspace repair: three usable columns first, assistant
+   context below on normal screens; only very wide monitors keep four panes. */
+.conversation-workspace,
+.conversation-workspace.customers-collapsed {
+  grid-template-columns: minmax(190px, 220px) minmax(300px, 360px) minmax(0, 1fr) !important;
+  width: 100%;
+  max-width: 100%;
+}
+
+.conversation-workspace.customers-collapsed {
+  grid-template-columns: minmax(190px, 220px) 56px minmax(0, 1fr) !important;
+}
+
+.conversation-detail.wechat-detail {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(620px, 1fr) auto;
+  overflow: hidden;
+}
+
+.wechat-chat-column {
+  border-right: 0;
+}
+
+.training-loop-panel {
+  height: auto !important;
+  max-height: 380px !important;
+  border-top: 1px solid var(--desk-line);
+  border-left: 0;
+}
+
+.training-loop-panel .assistant-card {
+  padding: 12px 14px;
+}
+
+.training-loop-panel .review-card[open],
+.conversation-workspace .review-card[open] {
+  max-height: 260px;
+}
+
+@media (min-width: 2140px) {
+  .conversation-workspace,
+  .conversation-workspace.customers-collapsed {
+    grid-template-columns: minmax(210px, 240px) minmax(340px, 400px) minmax(0, 1fr) !important;
+  }
+
+  .conversation-detail.wechat-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px) !important;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .wechat-chat-column {
+    border-right: 1px solid var(--desk-line);
+  }
+
+  .training-loop-panel {
+    height: 100% !important;
+    max-height: 100% !important;
+    border-top: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 1480px) {
+  .conversation-workspace,
+  .conversation-workspace.customers-collapsed {
+    grid-template-columns: minmax(170px, 200px) minmax(280px, 330px) minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .conversation-workspace,
+  .conversation-workspace.customers-collapsed {
+    grid-template-columns: 1fr !important;
+  }
+
+  .conversation-detail.wechat-detail {
+    grid-template-rows: auto auto;
+  }
+
+  .training-loop-panel {
+    max-height: none !important;
+  }
+}
