@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db.js";
+import { buildCustomerMemorySummary, clipText } from "./repositoryJson.js";
 import {
-  buildCustomerMemorySummary,
-  clipText,
   mapConversation,
   mapConversationExportRecord,
   mapConversationMessage,

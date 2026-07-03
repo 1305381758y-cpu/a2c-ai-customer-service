@@ -1,12 +1,11 @@
 import type { Db } from "./db.js";
 import type { IntentLabel } from "./domain/intents.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
+import { clipText, parseJsonObject } from "./repositoryJson.js";
 import {
-  clipText,
   mapConversationReview,
   mapConversationReviewItem,
-  normalizeReviewSampleStage,
-  parseJsonObject
+  normalizeReviewSampleStage
 } from "./repositoryMappers.js";
 import type {
   ConversationReviewInput,
