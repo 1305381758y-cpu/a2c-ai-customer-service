@@ -23,6 +23,7 @@ import "./styles.css";
 import "./agent/agent-profile.css";
 import "./customers/customers.css";
 import "./config/config.css";
+import "./training/training.css";
 import "./script-flows/script-flows.css";
 import "./intent-learning/intent-learning.css";
 import "./simulator/simulator.css";
