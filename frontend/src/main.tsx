@@ -117,7 +117,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "scriptFlows" && <ScriptFlowsPage platform={user.role === "platform_admin"} />}
         {activeView === "intentLearning" && <IntentLearningPage platform={user.role === "platform_admin"} />}
         {activeView === "training" && <TrainingMaterialsPage platform={false} simple />}
-        {activeView === "simulator" && <TrainingSimulator api={api} notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} />}
+        {activeView === "simulator" && <TrainingSimulator notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} />}
         {activeView === "materials" && <TrainingMaterialsPage platform={user.role === "platform_admin"} />}
         {activeView === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
         {activeView === "samples" && <SamplesPage platform={user.role === "platform_admin"} />}
