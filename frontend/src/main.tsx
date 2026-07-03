@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCircle2, Contact, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Settings, Upload, Users, Workflow } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
 import { MerchantsPage } from "./admin/MerchantsPage.js";
 import { UsersPage } from "./admin/UsersPage.js";
+import { AppShell } from "./app/AppShell.js";
+import { getNavSections, normalizeViewForUser, type AppView } from "./app/navigation.js";
 import { loadCurrentUser, login, logout } from "./auth/authApi.js";
 import { ConversationDetail } from "./conversations/ConversationDetail.js";
 import { ConversationsPage } from "./conversations/ConversationsPage.js";
@@ -89,24 +91,19 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 }
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
-  const merchantTrainingViews = ["materials", "knowledge", "samples"];
-  const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "Agent配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["training", "训练中心", Upload], ["simulator", "模拟训练", MessageSquare], ["agentProfile", "Agent配置", Bot], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
-  const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
+  const nav = getNavSections(user);
+  const activeView = normalizeViewForUser(user, view);
   useEffect(() => {
-    if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
-  }, [user.role, view, setView]);
+    if (activeView !== view) setView(activeView);
+  }, [activeView, view, setView]);
   return (
-    <div className="app">
-      <aside>
-        <div className="side-brand"><span>AI</span><div><h2>A2C AI</h2><small>智能客服工作台</small></div></div>
-        <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
-        <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={activeView === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
-        <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await logout(); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
-      </aside>
-      <main>
-        <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
+    <AppShell
+      user={user}
+      sections={nav}
+      activeView={activeView}
+      onNavigate={(nextView: AppView) => setView(nextView)}
+      onLogout={async () => { if (!window.confirm("确认退出当前账号？")) return; await logout(); notify("success", "已退出登录"); onLogout(); }}
+    >
         {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <MerchantsPage />}
         {activeView === "users" && <UsersPage />}
@@ -122,17 +119,12 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "samples" && <SamplesPage platform={user.role === "platform_admin"} />}
         {activeView === "conversations" && <ConversationsPage platform={user.role === "platform_admin"} />}
         {activeView === "handoffs" && <ConversationsPage platform={user.role === "platform_admin"} handoffs />}
-      </main>
-    </div>
+    </AppShell>
   );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
-}
-
-function roleName(role: string) {
-  return ({ platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营" } as Record<string, string>)[role] || role;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
