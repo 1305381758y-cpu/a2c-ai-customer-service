@@ -1,10 +1,17 @@
 import { Plus } from "lucide-react";
 
-import { api, loadRows } from "../app/api.js";
 import type { Merchant, MerchantCountry, User } from "../types.js";
 import { AsyncButton, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
-import { coercePatch } from "../ui/form.js";
 import { notify } from "../ui/toast.js";
+import {
+  createMerchantUser,
+  deleteMerchant,
+  deleteMerchantUser,
+  loadAdminMerchants,
+  updateMerchant,
+  updateMerchantCountry,
+  updateMerchantUser
+} from "./adminMerchantsApi.js";
 
 type UserForm = {
   email: string;
@@ -33,20 +40,20 @@ export function MerchantDetailPanel({ selected, selectedCountry, selectedUser, u
 
   return <section className="detail-panel"><div className="merchant-detail">
     <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => {
-      const saved = await api<Merchant>(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      const saved = await updateMerchant(selected.id, patch);
       onSetMerchant(saved);
-      onSetRows(await loadRows("/api/admin/merchants"));
+      onSetRows(await loadAdminMerchants());
     }} onDelete={selected.id === "default" ? undefined : async () => {
       if (!window.confirm(`确认彻底删除商户“${selected.name}”？该商户的账号、国家、客户、会话、样本、知识库、素材和配置都会被删除。`)) return;
-      await api(`/api/admin/merchants/${selected.id}`, { method: "DELETE" });
+      await deleteMerchant(selected.id);
       onClearSelection();
-      onSetRows(await loadRows("/api/admin/merchants"));
+      onSetRows(await loadAdminMerchants());
       notify("success", "商户已彻底删除");
     }} />
     <div className="form-section">
       <h4>国家 / 市场配置</h4>
       {selectedCountry ? <CountrySettingsEditor value={selectedCountry} onSave={async (patch) => {
-        const saved = await api<MerchantCountry>(`/api/admin/merchants/${selected.id}/countries/${selectedCountry.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
+        const saved = await updateMerchantCountry(selected.id, selectedCountry.id, patch);
         onSetSelectedCountry(saved);
         await onReloadDetail(selected.id);
       }} /> : <div className="empty-state compact">暂无国家配置</div>}
@@ -59,20 +66,18 @@ export function MerchantDetailPanel({ selected, selectedCountry, selectedUser, u
         <input placeholder="初始密码" value={userForm.password} onChange={(e) => onSetUserForm({ ...userForm, password: e.target.value })} />
         <select value={userForm.role} onChange={(e) => onSetUserForm({ ...userForm, role: e.target.value })}><option value="merchant_admin">商户管理员</option><option value="merchant_operator">商户运营</option></select>
         <AsyncButton disabled={!userForm.email.trim() || !userForm.name.trim() || userForm.password.length < 8} busyText="新增中..." onClick={async () => {
-          await api("/api/admin/users", { method: "POST", body: JSON.stringify({ ...userForm, merchantId: selected.id }) });
+          await createMerchantUser(selected.id, userForm);
           onSetUserForm({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
           await onReloadDetail(selected.id);
         }}><Plus size={16}/>新增账号</AsyncButton>
       </div>
       <Table rows={users as any[]} columns={["email", "name", "role", "status"]} onRow={(row) => onSelectUser(row as User)} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
       {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: (selectedUser as any).status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} onSave={async (patch) => {
-        if (!patch.password) delete patch.password;
-        const saved = await api<User>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
-        onSelectUser(saved);
+        await updateMerchantUser(selected.id, selectedUser.id, patch);
         await onReloadDetail(selected.id);
       }} onDelete={async () => {
         if (!window.confirm(`确认删除账号 ${selectedUser.email}？`)) return;
-        await api(`/api/admin/users/${selectedUser.id}`, { method: "DELETE" });
+        await deleteMerchantUser(selectedUser.id);
         onSelectUser(null);
         await onReloadDetail(selected.id);
         notify("success", "账号已删除");
