@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyConversationReviewItem,
+  buildConversationExportUrl,
   buildPlatformConversationsUrl,
   deleteConversation,
   generateConversationReview,
@@ -63,6 +64,22 @@ describe("merchant conversation API helpers", () => {
     await expect(loadConversationRows(url)).resolves.toEqual([{ id: "platform-conversation-1", merchantId: "merchant-1" }]);
     expect(fetcher).toHaveBeenCalledWith(url, { headers: {} });
     fetcher.mockRestore();
+  });
+
+  it("builds conversation export URLs with format and scoped filters", () => {
+    expect(buildConversationExportUrl("/api/merchant/conversations/export", {
+      limit: "50000",
+      status: "",
+      language: "es"
+    }, "csv")).toBe("/api/merchant/conversations/export?limit=50000&language=es&format=csv");
+
+    expect(buildConversationExportUrl("/api/admin/conversations/export", {
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      a2cAccountPhone: "agent-1",
+      customerPhone: "",
+      limit: "100"
+    }, "jsonl")).toBe("/api/admin/conversations/export?merchantId=merchant-1&countryId=country-1&a2cAccountPhone=agent-1&limit=100&format=jsonl");
   });
 
   it("marks all conversations read with the selected A2C account scope", async () => {

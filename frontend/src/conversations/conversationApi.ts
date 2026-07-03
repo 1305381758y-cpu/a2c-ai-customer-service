@@ -33,6 +33,10 @@ export function buildPlatformConversationsUrl(filters: Filters): string {
   return withQuery("/api/admin/conversations", filters);
 }
 
+export function buildConversationExportUrl(base: string, filters: Filters, format: "csv" | "jsonl"): string {
+  return withQuery(base, { ...filters, format });
+}
+
 export async function markAllConversationsRead(a2cAccountPhone: string): Promise<{ updated: number }> {
   return await api<{ updated: number }>("/api/merchant/conversations/read-all", {
     method: "POST",
