@@ -129,14 +129,19 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
 }
 
 function AiCallsPage({ platform = false }: { platform?: boolean }) {
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", startAt: "", endAt: "" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
-  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, averageDurationMs: 0, byType: [], byProvider: [] });
+  const [selectedTaskType, setSelectedTaskType] = useState("");
+  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [] });
   const reload = async () => {
-    const query = platform ? filters : { startAt: filters.startAt, endAt: filters.endAt };
-    setData(await api<AiCallStats>(withQuery(endpoint, query)));
+    const query = platform ? filters : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt };
+    const nextData = await api<AiCallStats>(withQuery(endpoint, query));
+    setData(nextData);
+    if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
   };
   useEffect(() => { reload().catch(() => undefined); }, [platform]);
+  const detailTaskType = selectedTaskType || data.byType[0]?.taskType || "";
+  const detailRows = data.byTypeDetails.filter((row) => row.taskType === detailTaskType);
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
       <div className="training-center-hero compact">
@@ -147,6 +152,10 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
       </div>
       <div className="toolbar wrap filters">
         {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} />}
+        <select aria-label="AI供应商" value={filters.provider || ""} onChange={(event) => setFilters({ ...filters, provider: event.target.value })}>
+          <option value="">全部供应商</option>
+          {data.availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}
+        </select>
         <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
         <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
         <button onClick={reload}><Search size={16}/>筛选</button>
@@ -160,13 +169,17 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
       <div className="ai-call-columns">
         <section className="assistant-card">
           <h3>按调用类型</h3>
-          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} />
+          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={detailTaskType} rowKey={(row) => row.taskType} />
         </section>
         <section className="assistant-card">
           <h3>按供应商</h3>
           <Table rows={data.byProvider} columns={["provider", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} />
         </section>
       </div>
+      <section className="assistant-card">
+        <h3>调用类型明细{detailTaskType ? ` · ${label(detailTaskType)}` : ""}</h3>
+        <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "averageDurationMs", "lastCalledAt"]} />
+      </section>
     </section>
   </div>;
 }

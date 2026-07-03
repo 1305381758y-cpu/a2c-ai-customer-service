@@ -596,7 +596,7 @@ export class Repositories {
     this.aiCalls.record(input);
   }
 
-  aiCallStats(filters: { merchantId?: string; startAt?: string; endAt?: string } = {}): AiCallStats {
+  aiCallStats(filters: { merchantId?: string; provider?: string; startAt?: string; endAt?: string } = {}): AiCallStats {
     return this.aiCalls.stats(filters);
   }
 }
