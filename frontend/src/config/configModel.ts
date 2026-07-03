@@ -53,3 +53,15 @@ export function configEndpoints(platform: boolean, merchantId: string) {
 export function buildA2CWebhookUrl(origin: string, platform: boolean, merchantId: string, form: ConfigForm) {
   return `${origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
 }
+
+export function buildConfigSavedMessage(config: Pick<ConfigForm, "a2cAppId" | "a2cAppSecret">): string {
+  if (!config.a2cAppId || !config.a2cAppSecret) {
+    return "配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。";
+  }
+  return "配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。";
+}
+
+export function buildA2CSyncMessage(result: { imported: number; stale?: boolean; warning?: string }): string {
+  if (result.stale) return result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。";
+  return `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`;
+}

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import type { MerchantCountry } from "../frontend/src/types.js";
-import { applyCountryNameInference, buildA2CWebhookUrl, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "../frontend/src/config/configModel.js";
+import {
+  applyCountryNameInference,
+  buildA2CSyncMessage,
+  buildA2CWebhookUrl,
+  buildConfigSavedMessage,
+  configEndpoints,
+  countryToDraft,
+  DEFAULT_COUNTRY_DRAFT,
+  reinferCountryDraft
+} from "../frontend/src/config/configModel.js";
 
 const makeCountry = (overrides: Partial<MerchantCountry>): MerchantCountry => ({
   id: "country-1",
@@ -67,5 +76,16 @@ describe("configModel", () => {
     expect(buildA2CWebhookUrl("https://service.example", true, "merchant-1", {})).toBe("https://service.example/webhooks/a2c/merchant-1");
     expect(buildA2CWebhookUrl("https://service.example", false, "ignored", { merchantId: "merchant-2" })).toBe("https://service.example/webhooks/a2c/merchant-2");
     expect(buildA2CWebhookUrl("https://service.example", false, "ignored", {})).toBe("https://service.example/webhooks/a2c/default");
+  });
+
+  it("builds save messages without triggering A2C sync", () => {
+    expect(buildConfigSavedMessage({ a2cAppId: "", a2cAppSecret: "" })).toContain("填写 A2C App ID 和密钥");
+    expect(buildConfigSavedMessage({ a2cAppId: "app", a2cAppSecret: "secret" })).toContain("保存配置不会自动同步账号");
+  });
+
+  it("builds A2C sync messages for success and stale fallback", () => {
+    expect(buildA2CSyncMessage({ imported: 139 })).toBe("已同步 139 个 A2C 客服账号，已自动写入接收账号。");
+    expect(buildA2CSyncMessage({ imported: 0, stale: true })).toBe("A2C 暂时限频，已继续使用本地保存的客服账号。");
+    expect(buildA2CSyncMessage({ imported: 0, stale: true, warning: "A2C 正在限频，请稍后再试。" })).toBe("A2C 正在限频，请稍后再试。");
   });
 });

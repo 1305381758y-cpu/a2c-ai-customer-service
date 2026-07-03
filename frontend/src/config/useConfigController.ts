@@ -6,7 +6,7 @@ import { coercePatch } from "../ui/form.js";
 import { languageName, translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
-import { applyCountryNameInference, buildA2CWebhookUrl, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
+import { applyCountryNameInference, buildA2CWebhookUrl, buildA2CSyncMessage, buildConfigSavedMessage, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
 import type { ConfigForm } from "./types.js";
 
 export function useConfigController({ platform }: { platform: boolean }) {
@@ -76,11 +76,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     try {
       const saved = await api<ConfigForm>(configUrl, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
-      if (!saved.a2cAppId || !saved.a2cAppSecret) {
-        setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
-        return;
-      }
-      setMessage("配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。");
+      setMessage(buildConfigSavedMessage(saved));
     } catch (error) {
       setError(error instanceof Error ? error.message : "保存配置失败");
     }
@@ -93,7 +89,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
       const result = await api<{ imported: number; rows: A2CAccount[]; config: ConfigForm; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
       setForm(result.config);
-      setMessage(result.stale ? result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。" : `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
+      setMessage(buildA2CSyncMessage(result));
     } catch (err) {
       setError(err instanceof Error ? err.message : "同步 A2C 客服账号失败");
     }
