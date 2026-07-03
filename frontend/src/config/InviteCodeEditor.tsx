@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { api } from "../app/api.js";
 import type { InviteCode } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
 import { displayValue, formatDateTime, label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
+import { deleteInviteCode, updateInviteCode } from "./inviteCodesApi.js";
 
 export function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoint: string; reload: () => Promise<void> }) {
   const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
@@ -22,8 +22,8 @@ export function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode;
       <span>使用时间：{code.usedAt ? formatDateTime(code.usedAt) : "未使用"}</span>
     </div>
     <div className="invite-editor-actions">
-      <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
-      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</AsyncButton>
+      <AsyncButton busyText="保存中..." onClick={async () => { await updateInviteCode(endpoint, code.id, draft); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
+      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await deleteInviteCode(endpoint, code.id); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</AsyncButton>
     </div>
   </div>;
 }

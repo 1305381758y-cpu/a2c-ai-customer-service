@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { api, loadRows } from "../app/api.js";
 import type { A2CAccount, InviteCode, MerchantCountry } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
 import { countryLabel, displayValue } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { InviteCodeEditor } from "./InviteCodeEditor.js";
+import { importInviteCodes, inviteCodeItemEndpoint, inviteCodeListEndpoint, loadInviteCodes } from "./inviteCodesApi.js";
 
 export function A2CAccountCard({ account, countries, platform, onToggle }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void> }) {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [draft, setDraft] = useState({ codes: "", registerUrl: "" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const endpoint = platform ? `/api/admin/a2c/accounts/${account.id}/invite-codes` : `/api/merchant/a2c/accounts/${account.id}/invite-codes`;
-  const codeEndpoint = platform ? "/api/admin/invite-codes" : "/api/merchant/invite-codes";
-  const reload = async () => setCodes(await loadRows<InviteCode>(endpoint));
+  const endpoint = inviteCodeListEndpoint(platform, account.id);
+  const codeEndpoint = inviteCodeItemEndpoint(platform);
+  const reload = async () => setCodes(await loadInviteCodes(endpoint));
   useEffect(() => { reload().catch(() => setCodes([])); }, [endpoint]);
   const selectedCode = codes.find((item) => item.id === selectedId) || codes[0] || null;
   useEffect(() => {
@@ -45,7 +45,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle }: { acc
         <div className="invite-import">
           <label>批量导入<textarea placeholder="一行一个邀请码；也支持逗号、空格分隔" value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })} /></label>
           <label>注册链接模板<input placeholder="例如 https://example.com/register?code={code}" value={draft.registerUrl} onChange={(e) => setDraft({ ...draft, registerUrl: e.target.value })} /></label>
-          <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>导入</AsyncButton>
+          <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await importInviteCodes(endpoint, draft); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>导入</AsyncButton>
         </div>
         <div className="invite-manager">
           <div className="invite-list">
