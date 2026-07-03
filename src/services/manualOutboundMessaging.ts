@@ -1,7 +1,7 @@
 import { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantConfigRecord, Repositories } from "../repositories.js";
-import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
+import { recordOutboundConversationMessage, type OutboundConversationRecordResult } from "./outboundConversationRecorder.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 import { translateForCustomer, type TranslationResult } from "./translation.js";
 
@@ -27,6 +27,9 @@ export type ManualOutboundSendResult =
 export type ManualOutboundDeps = {
   config: AppConfig;
   repos: Repositories;
+  a2cClientFactory?: (runtimeConfig: AppConfig, merchantId: string) => Pick<A2CClient, "sendMessage">;
+  outboundRecorder?: typeof recordOutboundConversationMessage;
+  customerTranslator?: typeof translateForCustomer;
 };
 
 export async function sendManualOutboundMessage(
@@ -42,12 +45,16 @@ export async function sendManualOutboundMessage(
   const cfg = deps.repos.getMerchantConfig(input.merchantId);
   const country = deps.repos.getMerchantCountry(input.conversation.countryId);
   const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
-  const client = new A2CClient(runtimeConfig, deps.repos.a2cTokenStore(input.merchantId));
+  const client = deps.a2cClientFactory
+    ? deps.a2cClientFactory(runtimeConfig, input.merchantId)
+    : new A2CClient(runtimeConfig, deps.repos.a2cTokenStore(input.merchantId));
   const type = input.body.type ?? "text";
-  const translation = type === "text" ? await translateForCustomer(runtimeConfig, input.body.content || "", input.conversation.language) : undefined;
+  const translateCustomer = deps.customerTranslator || translateForCustomer;
+  const translation = type === "text" ? await translateCustomer(runtimeConfig, input.body.content || "", input.conversation.language) : undefined;
   const outgoingContent = translation?.translatedText || input.body.content;
   const content = outgoingContent || input.body.caption || input.body.url || "";
-  const outbound = await recordOutboundConversationMessage({
+  const recordOutbound = deps.outboundRecorder || recordOutboundConversationMessage;
+  const outbound: OutboundConversationRecordResult = await recordOutbound({
     repos: deps.repos,
     runtimeConfig,
     a2c: client,
