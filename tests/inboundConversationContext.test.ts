@@ -98,4 +98,78 @@ describe("inbound conversation context", () => {
     expect(context.simulation).toBe(true);
     expect(ai.analyzeImage).toHaveBeenCalledOnce();
   });
+
+  it("can resolve merchant session through an injected directory", async () => {
+    const merchant = { id: "merchant-directory", name: "目录商户", status: "active" as const };
+    const merchantConfig = {
+      merchantId: merchant.id,
+      a2cBaseUrl: "https://directory-a2c.test",
+      a2cAppId: "directory-app",
+      a2cAppSecret: "directory-secret",
+      trainingSimulationEnabled: false
+    };
+    const country = {
+      id: "country-directory",
+      merchantId: merchant.id,
+      code: "BO",
+      name: "玻利维亚",
+      defaultLanguage: "es",
+      platformRegisterUrl: "https://bo.example/register",
+      tgRegisterGuideUrl: "",
+      requirePlatformAccount: true,
+      requirePhone: true,
+      requireTelegram: true,
+      requireWhatsApp: false,
+      status: "active" as const
+    };
+    const conversation = {
+      id: "conversation-directory",
+      merchantId: merchant.id,
+      countryId: country.id,
+      customerPhone: "customer-directory",
+      a2cAccountPhone: "agent-directory",
+      nickname: "目录客户",
+      language: "es",
+      stage: "new",
+      status: "active" as const
+    };
+    const directory = {
+      resolve: vi.fn(() => ({
+        merchant,
+        merchantConfig,
+        agentProfile: { merchantId: merchant.id, agentName: "目录客服" },
+        country,
+        conversation,
+        tokenStore: {
+          get: vi.fn(),
+          set: vi.fn()
+        }
+      }))
+    };
+
+    const context = await prepareInboundConversationContext({
+      repos: {} as never,
+      ai: { analyzeImage: vi.fn() },
+      config: config(),
+      payload: payload({
+        from: "customer-directory",
+        to: "agent-directory",
+        content: "Información",
+        nickname: "目录客户"
+      }),
+      merchantId: merchant.id,
+      directory: directory as never
+    });
+
+    expect(directory.resolve).toHaveBeenCalledWith({
+      customerPhone: "customer-directory",
+      a2cAccountPhone: "agent-directory",
+      nickname: "目录客户",
+      merchantId: merchant.id
+    });
+    expect(context.merchant).toBe(merchant);
+    expect(context.conversation).toBe(conversation);
+    expect(context.runtimeConfig.A2C_APP_ID).toBe("directory-app");
+    expect(context.runtimeConfig.PLATFORM_REGISTER_URL).toBe("https://bo.example/register");
+  });
 });

@@ -1,4 +1,4 @@
-import { A2CClient } from "../clients/a2c.js";
+import { A2CClient, type A2CTokenStore } from "../clients/a2c.js";
 import { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantAgentProfileRecord, MerchantConfigRecord, MerchantCountryRecord, MerchantRecord, Repositories } from "../repositories.js";
@@ -20,6 +20,44 @@ export interface PreparedInboundConversationContext extends NormalizedInboundMes
   simulation: boolean;
 }
 
+export interface ResolvedInboundConversationSession {
+  merchant: MerchantRecord;
+  merchantConfig: MerchantConfigRecord;
+  agentProfile: MerchantAgentProfileRecord;
+  country: MerchantCountryRecord;
+  conversation: Conversation;
+  tokenStore?: A2CTokenStore;
+}
+
+export interface InboundConversationDirectory {
+  resolve(input: {
+    customerPhone: string;
+    a2cAccountPhone: string;
+    nickname: string;
+    merchantId?: string;
+  }): ResolvedInboundConversationSession;
+}
+
+export class RepositoryInboundConversationDirectory implements InboundConversationDirectory {
+  constructor(private readonly repos: Repositories) {}
+
+  resolve(input: { customerPhone: string; a2cAccountPhone: string; nickname: string; merchantId?: string }): ResolvedInboundConversationSession {
+    const merchant = resolveMerchant(this.repos, input.a2cAccountPhone, input.merchantId);
+    const merchantConfig = this.repos.getMerchantConfig(merchant.id);
+    const agentProfile = this.repos.getMerchantAgentProfile(merchant.id);
+    const country = this.repos.ensurePrimaryCountry(merchant.id);
+    const conversation = this.repos.getOrCreateConversation(input.customerPhone, input.a2cAccountPhone, input.nickname, merchant.id, country.id);
+    return {
+      merchant,
+      merchantConfig,
+      agentProfile,
+      country,
+      conversation,
+      tokenStore: this.repos.a2cTokenStore(merchant.id)
+    };
+  }
+}
+
 export async function prepareInboundConversationContext(input: {
   repos: Repositories;
   ai: Pick<AiTasks, "analyzeImage">;
@@ -27,16 +65,19 @@ export async function prepareInboundConversationContext(input: {
   payload: A2CWebhookPayload;
   merchantId?: string;
   simulation?: boolean;
+  directory?: InboundConversationDirectory;
 }): Promise<PreparedInboundConversationContext> {
   const normalized = normalizeA2CWebhookPayload(input.payload);
   const { data, mediaUrl, shouldAnalyzeImage, analysisText, content } = normalized;
-  const merchant = resolveMerchant(input.repos, data.to, input.merchantId);
-  const merchantConfig = input.repos.getMerchantConfig(merchant.id);
-  const agentProfile = input.repos.getMerchantAgentProfile(merchant.id);
+  const directory = input.directory || new RepositoryInboundConversationDirectory(input.repos);
+  const { merchant, merchantConfig, agentProfile, country, conversation, tokenStore } = directory.resolve({
+    customerPhone: data.from,
+    a2cAccountPhone: data.to,
+    nickname: data.nickname ?? "",
+    merchantId: input.merchantId
+  });
   const simulation = Boolean(input.simulation || merchantConfig.trainingSimulationEnabled);
-  const country = input.repos.ensurePrimaryCountry(merchant.id);
   const runtimeConfig = appConfigForMerchant(input.config, merchantConfig, country);
-  const conversation = input.repos.getOrCreateConversation(data.from, data.to, data.nickname ?? "", merchant.id, country.id);
   const imageAnalysis = shouldAnalyzeImage
     ? await input.ai.analyzeImage(runtimeConfig, mediaUrl)
     : { text: "", status: "skipped" as const };
@@ -49,7 +90,7 @@ export async function prepareInboundConversationContext(input: {
     agentProfile,
     country,
     runtimeConfig,
-    a2c: new A2CClient(runtimeConfig, input.repos.a2cTokenStore(merchant.id)),
+    a2c: new A2CClient(runtimeConfig, tokenStore),
     telegram: new TelegramClient(runtimeConfig),
     conversation,
     imageAnalysis,
