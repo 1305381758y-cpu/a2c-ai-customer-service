@@ -1,5 +1,5 @@
 import type { MerchantCountry } from "../types.js";
-import { inferCountryProfile } from "../ui/formatters.js";
+import { inferCountryProfile } from "../ui/country.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
 import type { ConfigForm } from "./types.js";
 
