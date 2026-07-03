@@ -69,6 +69,18 @@ export async function deleteScriptFlow(base: string, flowId: number): Promise<vo
   await api(`${base}/${flowId}`, { method: "DELETE" });
 }
 
+export async function updateScriptFlow(base: string, flowId: number, patch: Record<string, unknown>): Promise<void> {
+  await api(`${base}/${flowId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export async function enableScriptFlow(base: string, flowId: number): Promise<void> {
+  await api(`${base}/${flowId}/enable`, { method: "POST" });
+}
+
+export async function restoreScriptFlowVersion(base: string, flowId: number, versionId: number): Promise<void> {
+  await api(`${base}/${flowId}/versions/${versionId}/restore`, { method: "POST" });
+}
+
 export async function updateScriptFlowStep(endpoint: string, stepId: number, patch: Record<string, unknown>): Promise<void> {
   await api(`${endpoint}/${stepId}`, { method: "PATCH", body: JSON.stringify(patch) });
 }

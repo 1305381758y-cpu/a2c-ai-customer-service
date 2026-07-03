@@ -5,11 +5,14 @@ import {
   deleteScriptFlow,
   deleteScriptFlowStep,
   duplicateScriptFlowStep,
+  enableScriptFlow,
   importScriptFlow,
   loadScriptFlowDetail,
+  restoreScriptFlowVersion,
   scriptFlowBase,
   scriptFlowRowsUrl,
   scriptFlowStepBase,
+  updateScriptFlow,
   updateScriptFlowStep
 } from "../frontend/src/script-flows/scriptFlowApi.js";
 
@@ -110,9 +113,15 @@ describe("script flow API helpers", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     await expect(createScriptFlowStep("/api/merchant/script-flows", 11, 4)).resolves.toMatchObject({ id: 21 });
+    await expect(updateScriptFlow("/api/merchant/script-flows", 11, { name: "新版流程" })).resolves.toBeUndefined();
+    await expect(enableScriptFlow("/api/merchant/script-flows", 11)).resolves.toBeUndefined();
+    await expect(restoreScriptFlowVersion("/api/merchant/script-flows", 11, 3)).resolves.toBeUndefined();
     await expect(updateScriptFlowStep("/api/merchant/script-flow-steps", 21, { standardReply: "更新" })).resolves.toBeUndefined();
     await expect(duplicateScriptFlowStep("/api/merchant/script-flow-steps", 21)).resolves.toBeUndefined();
     await expect(deleteScriptFlowStep("/api/merchant/script-flow-steps", 21)).resolves.toBeUndefined();
@@ -122,13 +131,19 @@ describe("script flow API helpers", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" }
     }));
-    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/merchant/script-flow-steps/21", expect.objectContaining({
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/merchant/script-flows/11", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ name: "新版流程" })
+    }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "/api/merchant/script-flows/11/enable", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(4, "/api/merchant/script-flows/11/versions/3/restore", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(5, "/api/merchant/script-flow-steps/21", expect.objectContaining({
       method: "PATCH",
       body: JSON.stringify({ standardReply: "更新" })
     }));
-    expect(fetcher).toHaveBeenNthCalledWith(3, "/api/merchant/script-flow-steps/21/duplicate", expect.objectContaining({ method: "POST" }));
-    expect(fetcher).toHaveBeenNthCalledWith(4, "/api/merchant/script-flow-steps/21", expect.objectContaining({ method: "DELETE" }));
-    expect(fetcher).toHaveBeenNthCalledWith(5, "/api/merchant/script-flows/11", expect.objectContaining({ method: "DELETE" }));
+    expect(fetcher).toHaveBeenNthCalledWith(6, "/api/merchant/script-flow-steps/21/duplicate", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(7, "/api/merchant/script-flow-steps/21", expect.objectContaining({ method: "DELETE" }));
+    expect(fetcher).toHaveBeenNthCalledWith(8, "/api/merchant/script-flows/11", expect.objectContaining({ method: "DELETE" }));
     fetcher.mockRestore();
   });
 });
