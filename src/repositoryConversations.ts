@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db.js";
 import {
+  exportConversationMessages,
+  type ConversationExportFilters
+} from "./repositoryConversationExports.js";
+import {
   mapConversation,
-  mapConversationExportRecord,
   mapConversationMessage,
   mapCustomerMemory
 } from "./repositoryConversationMappers.js";
@@ -167,104 +170,8 @@ export class ConversationRepository {
       .map((row) => mapConversationMessage(row as Record<string, unknown>));
   }
 
-  exportMessages(filters: {
-    merchantId?: string;
-    countryId?: string;
-    status?: string;
-    handoffStatus?: string;
-    language?: string;
-    a2cAccountPhone?: string;
-    customerPhone?: string;
-    direction?: string;
-    startAt?: string;
-    endAt?: string;
-    limit?: number;
-  } = {}): ConversationExportRecord[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("c.merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("c.country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.status) {
-      clauses.push("c.status = ?");
-      params.push(filters.status);
-    }
-    if (filters.handoffStatus) {
-      clauses.push("c.handoff_status = ?");
-      params.push(filters.handoffStatus);
-    }
-    if (filters.language) {
-      clauses.push("c.language = ?");
-      params.push(filters.language);
-    }
-    if (filters.a2cAccountPhone) {
-      clauses.push("c.a2c_account_phone = ?");
-      params.push(filters.a2cAccountPhone);
-    }
-    if (filters.customerPhone) {
-      clauses.push("c.customer_phone = ?");
-      params.push(filters.customerPhone);
-    }
-    if (filters.direction) {
-      clauses.push("m.direction = ?");
-      params.push(filters.direction);
-    }
-    if (filters.startAt) {
-      clauses.push("m.created_at >= ?");
-      params.push(filters.startAt);
-    }
-    if (filters.endAt) {
-      clauses.push("m.created_at <= ?");
-      params.push(filters.endAt);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 5000, 1), 50000);
-    params.push(limit);
-
-    return this.db.sqlite
-      .prepare(`
-        SELECT
-          c.merchant_id,
-          c.country_id,
-          co.code AS country_code,
-          co.name AS country_name,
-          c.id AS conversation_id,
-          c.customer_phone,
-          c.nickname,
-          c.a2c_account_phone,
-          c.language AS conversation_language,
-          c.stage AS conversation_stage,
-          c.flow_step,
-          c.status AS conversation_status,
-          c.handoff_status,
-          c.extracted_phone,
-          c.extracted_telegram,
-          c.extracted_whatsapp,
-          m.id AS message_id,
-          m.direction,
-          m.external_id,
-          m.content,
-          m.msg_type,
-          m.language AS message_language,
-          m.intent,
-          m.phone_detected,
-          m.telegram_detected,
-          m.raw_payload,
-          m.created_at
-        FROM messages m
-        JOIN conversations c ON c.id = m.conversation_id
-        LEFT JOIN merchant_countries co ON co.id = c.country_id
-        ${where}
-        ORDER BY m.id ASC
-        LIMIT ?
-      `)
-      .all(...params)
-      .map((row) => mapConversationExportRecord(row as Record<string, unknown>));
+  exportMessages(filters: ConversationExportFilters = {}): ConversationExportRecord[] {
+    return exportConversationMessages(this.db, filters);
   }
 
   getCustomerMemoryByConversation(conversationId: string): CustomerMemoryRecord | undefined {
