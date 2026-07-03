@@ -19,6 +19,47 @@
   font-weight: 650;
 }
 
+.setup-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.setup-strip div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 9px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+}
+
+.setup-strip span {
+  grid-row: span 2;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--brand);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.setup-strip strong { font-size: 14px; }
+.setup-strip small { font-size: 12px; }
+
+.copy-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
 .tutorial-upload-layout {
   display: grid;
   grid-template-columns: minmax(220px, 320px) 1fr;
@@ -444,6 +485,11 @@
 }
 
 @media (max-width: 900px) {
+  .setup-strip,
+  .copy-row {
+    grid-template-columns: 1fr;
+  }
+
   .account-grid {
     grid-template-columns: 1fr;
   }

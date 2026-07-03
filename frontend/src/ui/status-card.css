@@ -1,0 +1,42 @@
+.smart-reply-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: #fff;
+}
+
+.smart-reply-card h3,
+.smart-reply-card p {
+  margin: 0;
+}
+
+.smart-reply-card h3 {
+  font-size: 15px;
+}
+
+.smart-reply-card p {
+  margin-top: 4px;
+  color: var(--muted-strong);
+}
+
+.smart-reply-card.on {
+  border-color: #abefc6;
+  background: linear-gradient(180deg, #f5fffa 0%, #fff 100%);
+}
+
+.smart-reply-card.off {
+  border-color: #fedf89;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 100%);
+}
+
+@media (max-width: 900px) {
+  .smart-reply-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
