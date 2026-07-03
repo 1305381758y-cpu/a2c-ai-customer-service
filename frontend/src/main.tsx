@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCircle2, Contact, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Settings, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
-import { api, loadRows } from "./app/api.js";
+import { api } from "./app/api.js";
 import { MerchantsPage } from "./admin/MerchantsPage.js";
 import { UsersPage } from "./admin/UsersPage.js";
+import { loadCurrentUser, login, logout } from "./auth/authApi.js";
 import { ConversationDetail } from "./conversations/ConversationDetail.js";
 import { ConversationsPage } from "./conversations/ConversationsPage.js";
 import { CustomersPage } from "./customers/CustomersPage.js";
@@ -49,7 +50,7 @@ function App() {
   const [view, setView] = useState(() => window.location.hash.replace("#", "") || window.localStorage.getItem("a2c_view") || "dashboard");
 
   useEffect(() => {
-    api<{ user: User }>("/api/auth/me").then((res) => setUser(res.user)).catch(() => null).finally(() => setLoading(false));
+    loadCurrentUser().then(setUser).catch(() => null).finally(() => setLoading(false));
   }, []);
   useEffect(() => {
     if (!user) return;
@@ -76,8 +77,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
           {error && <div className="error">{error}</div>}
           <button className="primary wide" onClick={async () => {
             try {
-              const res = await api<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
-              onLogin(res.user);
+              onLogin(await login({ email, password }));
             } catch (err) {
               setError(err instanceof Error ? err.message : "登录失败");
             }
@@ -104,7 +104,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         <div className="side-brand"><span>AI</span><div><h2>A2C AI</h2><small>智能客服工作台</small></div></div>
         <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
         <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={activeView === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
-        <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
+        <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await logout(); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
       </aside>
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
