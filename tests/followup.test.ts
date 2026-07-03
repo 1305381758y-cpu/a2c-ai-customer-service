@@ -124,6 +124,66 @@ describe("follow-up candidates", () => {
     expect(repos.listDueFollowUpCandidates()).toHaveLength(0);
   });
 
+  it("can use an injected follow-up content builder without changing delivery", async () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("跟进文案商户");
+    repos.patchMerchantConfig(merchant.id, {
+      a2cBaseUrl: "https://a2c.test",
+      a2cAppId: "app-id",
+      a2cAppSecret: "app-secret",
+      smartReplyEnabled: true
+    });
+    const conversation = repos.getOrCreateConversation("customer-custom", "agent-custom", "", merchant.id);
+    conversation.language = "zh";
+    conversation.flowStep = "collect_telegram";
+    repos.updateConversation(conversation);
+    repos.insertMessage({
+      conversationId: conversation.id,
+      direction: "outbound",
+      externalId: "followup-custom-seed",
+      content: "请把 Telegram 用户名发给我。",
+      msgType: "text",
+      language: "zh",
+      intent: "unknown",
+      rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
+    });
+    db.sqlite
+      .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
+      .run("followup-custom-seed");
+    const sender = {
+      send: vi.fn(async () => ({
+        sendResult: {
+          externalId: "custom-followup-message-id",
+          a2cSendStatus: "sent" as const,
+          a2cSendError: ""
+        },
+        inserted: true,
+        messageId: 101
+      }))
+    };
+    const contentBuilder = {
+      build: vi.fn(() => "这是注入的跟进话术")
+    };
+    const processor = new FollowUpProcessor(repos, loadConfig({
+      DATABASE_URL: ":memory:",
+      A2C_BASE_URL: "https://a2c.test",
+      A2C_APP_ID: "app-id",
+      A2C_APP_SECRET: "app-secret"
+    }), sender, contentBuilder);
+
+    await expect(processor.processDueFollowUps()).resolves.toEqual({ scanned: 1, sent: 1, skipped: 0, failed: 0 });
+
+    expect(contentBuilder.build).toHaveBeenCalledWith({
+      flowStep: "collect_telegram",
+      language: "zh"
+    });
+    expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({
+      content: "这是注入的跟进话术",
+      flowStep: "collect_telegram"
+    }));
+  });
+
   it("keeps the default A2C follow-up sender behind an adapter seam", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const target = String(url);

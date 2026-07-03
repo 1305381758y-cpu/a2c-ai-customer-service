@@ -7,11 +7,27 @@ import { appConfigForMerchant } from "./runtimeConfig.js";
 
 export type FollowUpProcessingResult = ConversationFollowUpResult;
 
+export interface FollowUpContentInput {
+  flowStep: string;
+  language: string;
+}
+
+export interface FollowUpContentBuilder {
+  build(input: FollowUpContentInput): string;
+}
+
+export const strictFlowFollowUpContentBuilder: FollowUpContentBuilder = {
+  build(input) {
+    return buildStrictFlowFollowUp(input.flowStep, input.language);
+  }
+};
+
 export class FollowUpProcessor {
   constructor(
     private readonly repos: Repositories,
     private readonly config: AppConfig,
-    private readonly sender: FollowUpSender = createA2CFollowUpSender(repos)
+    private readonly sender: FollowUpSender = createA2CFollowUpSender(repos),
+    private readonly contentBuilder: FollowUpContentBuilder = strictFlowFollowUpContentBuilder
   ) {}
 
   async processDueFollowUps(limit = 50): Promise<FollowUpProcessingResult> {
@@ -33,8 +49,11 @@ export class FollowUpProcessor {
       }
       const country = this.repos.getMerchantCountry(conversation.countryId);
       const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
-      const content = buildStrictFlowFollowUp(conversation.flowStep || conversation.stage, conversation.language || country?.defaultLanguage || "zh");
       const flowStep = conversation.flowStep || conversation.stage || "unknown";
+      const content = this.contentBuilder.build({
+        flowStep,
+        language: conversation.language || country?.defaultLanguage || "zh"
+      });
       const sendResult = await this.sender.send({
         runtimeConfig,
         conversation,
