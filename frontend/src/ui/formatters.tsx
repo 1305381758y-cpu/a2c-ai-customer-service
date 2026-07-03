@@ -77,7 +77,7 @@ export function displayValue(column: string, value: unknown) {
   return String(value);
 }
 
-export function countryLabel(value: unknown) {
+export function countryLabel(value: unknown): string {
   const text = String(value || "").trim();
   if (!text) return "";
   const normalized = text.toLowerCase();

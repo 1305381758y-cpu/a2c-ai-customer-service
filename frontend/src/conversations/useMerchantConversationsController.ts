@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { buildMerchantConversationsUrl, filterA2CAccounts, findAccountUnread, findConversationUnread } from "./merchantConversationSelectors.js";
 
 type DraftCustomer = {
   customerPhone: string;
@@ -22,21 +23,10 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
   const [accountKeyword, setAccountKeywordState] = useState("");
   const [accountStatus, setAccountStatusState] = useState("");
   const [error, setError] = useState("");
-  const rowsUrl = selectedAccount
-    ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
-    : "";
+  const rowsUrl = buildMerchantConversationsUrl(selectedAccount, filters);
   const [rows, setRows] = useRows<Conversation>(rowsUrl || "/api/merchant/conversations?limit=1&a2cAccountPhone=__none__");
   const pager = useClientPagination(rows, 10);
-  const filteredAccounts = useMemo(() => {
-    const keyword = accountKeyword.trim().toLowerCase();
-    return accounts.filter((account) => {
-      const text = [account.verifiedName, account.apiPhone, account.countryName, account.countryCode, account.wabaId].join(" ").toLowerCase();
-      if (keyword && !text.includes(keyword)) return false;
-      if (accountStatus === "enabled" && !account.enabled) return false;
-      if (accountStatus === "disabled" && account.enabled) return false;
-      return true;
-    });
-  }, [accounts, accountKeyword, accountStatus]);
+  const filteredAccounts = useMemo(() => filterA2CAccounts(accounts, accountKeyword, accountStatus), [accounts, accountKeyword, accountStatus]);
   const accountPager = useClientPagination(filteredAccounts, 10);
 
   useEffect(() => {
@@ -99,8 +89,8 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
     notify("success", pinned ? "会话已置顶" : "已取消置顶");
     await reloadRows();
   };
-  const accountUnread = (apiPhone: string) => unread.find((item) => item.a2cAccountPhone === apiPhone)?.unreadCount || 0;
-  const conversationUnread = (conversationId: string) => unread.flatMap((item) => item.conversations).find((item) => item.conversationId === conversationId)?.unreadCount || 0;
+  const accountUnread = (apiPhone: string) => findAccountUnread(unread, apiPhone);
+  const conversationUnread = (conversationId: string) => findConversationUnread(unread, conversationId);
   const markConversationRead = async (conversationId: string) => {
     await api(`/api/merchant/conversations/${conversationId}/read`, { method: "POST" });
     await reloadRows();
