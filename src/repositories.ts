@@ -3,19 +3,8 @@ import type { A2CAccount, A2CTokenStore } from "./clients/a2c.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
 import type { UserRole } from "./auth.js";
-import { MerchantA2CAccountRepository } from "./repositoryA2CAccounts.js";
-import { ConversationReviewRepository } from "./repositoryConversationReviews.js";
-import { ConversationRepository } from "./repositoryConversations.js";
-import { CustomerRepository } from "./repositoryCustomers.js";
-import { HandoffRepository } from "./repositoryHandoffs.js";
-import { IntentLearningRepository } from "./repositoryIntentLearning.js";
-import { MaintenanceRepository, type ClearLearningAndCustomerDataResult } from "./repositoryMaintenance.js";
-import { MerchantAgentProfileRepository } from "./repositoryMerchantAgentProfiles.js";
-import { MerchantRepository } from "./repositoryMerchants.js";
-import { MerchantSettingsRepository } from "./repositoryMerchantSettings.js";
-import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
-import { TrainingContentRepository } from "./repositoryTrainingContent.js";
-import { UserRepository } from "./repositoryUsers.js";
+import { createRepositoryModules, type RepositoryModules } from "./repositoryModules.js";
+import type { ClearLearningAndCustomerDataResult } from "./repositoryMaintenance.js";
 
 import type {
   Conversation,
@@ -77,55 +66,31 @@ export type {
 } from "./repositoryTypes.js";
 
 export class Repositories {
-  private readonly settings: MerchantSettingsRepository;
-  private readonly a2cAccounts: MerchantA2CAccountRepository;
-  private readonly conversations: ConversationRepository;
-  private readonly customers: CustomerRepository;
-  private readonly handoffs: HandoffRepository;
-  private readonly intentLearning: IntentLearningRepository;
-  private readonly agentProfiles: MerchantAgentProfileRepository;
-  private readonly maintenance: MaintenanceRepository;
-  private readonly merchants: MerchantRepository;
-  private readonly reviews: ConversationReviewRepository;
-  private readonly scriptFlows: ScriptFlowRepository;
-  private readonly trainingContent: TrainingContentRepository;
-  private readonly users: UserRepository;
+  private readonly modules: RepositoryModules;
 
   constructor(private readonly db: Db) {
-    this.settings = new MerchantSettingsRepository(db);
-    this.a2cAccounts = new MerchantA2CAccountRepository(
-      db,
-      { defaultCountryId: (merchantId) => this.settings.defaultCountryId(merchantId) },
-      { getMerchantConfig: (merchantId) => this.settings.getConfig(merchantId) }
-    );
-    this.conversations = new ConversationRepository(db, {
-      refreshCustomerAfterConversationDelete: (merchantId, countryId, customerKey) => this.refreshCustomerAfterConversationDelete(merchantId, countryId, customerKey)
-    });
-    this.customers = new CustomerRepository(db);
-    this.handoffs = new HandoffRepository(db);
-    this.intentLearning = new IntentLearningRepository(db);
-    this.agentProfiles = new MerchantAgentProfileRepository(db);
-    this.maintenance = new MaintenanceRepository(db);
-    this.merchants = new MerchantRepository(db, {
-      ensureDefaultCountry: (merchantId) => {
-        this.settings.ensureDefaultCountry(merchantId);
-      }
-    });
-    this.reviews = new ConversationReviewRepository(db, {
+    this.modules = createRepositoryModules(db, {
+      refreshCustomerAfterConversationDelete: (merchantId, countryId, customerKey) => this.refreshCustomerAfterConversationDelete(merchantId, countryId, customerKey),
       createTrainingSample: (merchantId, sample, countryId) => this.createTrainingSample(merchantId, sample, countryId),
       createKnowledgeItem: (merchantId, input) => this.createKnowledgeItem(merchantId, input),
-      defaultCountryId: (merchantId) => this.defaultCountryId(merchantId)
-    });
-    this.scriptFlows = new ScriptFlowRepository(db, {
       defaultCountryId: (merchantId) => this.defaultCountryId(merchantId),
       validCountryId: (merchantId, countryId) => this.validCountryId(merchantId, countryId)
     });
-    this.trainingContent = new TrainingContentRepository(db, {
-      defaultCountryId: (merchantId) => this.defaultCountryId(merchantId),
-      validCountryId: (merchantId, countryId) => this.validCountryId(merchantId, countryId)
-    });
-    this.users = new UserRepository(db);
   }
+
+  private get settings() { return this.modules.settings; }
+  private get a2cAccounts() { return this.modules.a2cAccounts; }
+  private get conversations() { return this.modules.conversations; }
+  private get customers() { return this.modules.customers; }
+  private get handoffs() { return this.modules.handoffs; }
+  private get intentLearning() { return this.modules.intentLearning; }
+  private get agentProfiles() { return this.modules.agentProfiles; }
+  private get maintenance() { return this.modules.maintenance; }
+  private get merchants() { return this.modules.merchants; }
+  private get reviews() { return this.modules.reviews; }
+  private get scriptFlows() { return this.modules.scriptFlows; }
+  private get trainingContent() { return this.modules.trainingContent; }
+  private get users() { return this.modules.users; }
 
   insertTrainingSamples(samples: ImportedTrainingSample[], merchantId = "default", countryId = this.defaultCountryId(merchantId)): number {
     return this.trainingContent.insertTrainingSamples(samples, merchantId, countryId);
