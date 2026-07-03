@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { api, loadRows, useRows } from "../app/api.js";
+import { loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import {
+  loadUnreadSummary,
+  markAllConversationsRead,
+  markConversationRead as markConversationReadRequest,
+  setConversationPinned,
+  syncMerchantA2CAccounts
+} from "./conversationApi.js";
 import { buildMerchantConversationsUrl, filterA2CAccounts, findAccountUnread, findConversationUnread } from "./merchantConversationSelectors.js";
 
 type DraftCustomer = {
@@ -33,7 +40,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
     if (!selectedAccount && accounts.length) setSelectedAccount(accounts.find((account) => account.enabled) || accounts[0]);
   }, [accounts, selectedAccount]);
   useEffect(() => {
-    const loadUnread = () => api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary").then((res) => setUnread(res.rows)).catch(() => null);
+    const loadUnread = () => loadUnreadSummary().then(setUnread).catch(() => null);
     loadUnread();
     const timer = window.setInterval(loadUnread, 4000);
     return () => window.clearInterval(timer);
@@ -49,8 +56,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
     accountPager.setPage(1);
   };
   const reloadUnread = async () => {
-    const res = await api<{ rows: UnreadSummary[] }>("/api/merchant/conversations/unread-summary");
-    setUnread(res.rows);
+    setUnread(await loadUnreadSummary());
   };
   const reloadRows = async () => {
     if (!selectedAccount) return;
@@ -75,24 +81,21 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
   }, [rowsUrl, selectedAccount?.apiPhone]);
   const markAllRead = async () => {
     if (!selectedAccount) return;
-    const result = await api<{ updated: number }>("/api/merchant/conversations/read-all", {
-      method: "POST",
-      body: JSON.stringify({ a2cAccountPhone: selectedAccount.apiPhone })
-    });
+    const result = await markAllConversationsRead(selectedAccount.apiPhone);
     notify("success", "已全部标为已读", `已处理 ${result.updated} 个未读会话`);
     await reloadRows();
     await reloadUnread();
   };
   const togglePin = async (conversation: Conversation) => {
     const pinned = !conversation.pinnedAt;
-    await api(`/api/merchant/conversations/${conversation.id}/pin`, { method: "POST", body: JSON.stringify({ pinned }) });
+    await setConversationPinned(conversation.id, pinned);
     notify("success", pinned ? "会话已置顶" : "已取消置顶");
     await reloadRows();
   };
   const accountUnread = (apiPhone: string) => findAccountUnread(unread, apiPhone);
   const conversationUnread = (conversationId: string) => findConversationUnread(unread, conversationId);
   const markConversationRead = async (conversationId: string) => {
-    await api(`/api/merchant/conversations/${conversationId}/read`, { method: "POST" });
+    await markConversationReadRequest(conversationId);
     await reloadRows();
     await reloadUnread();
   };
@@ -131,7 +134,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
   const syncAccounts = async () => {
-    await api("/api/merchant/a2c/accounts/sync", { method: "POST" });
+    await syncMerchantA2CAccounts();
     await reloadAccounts();
   };
   const onConversationCreated = async (conversation: Conversation) => {
