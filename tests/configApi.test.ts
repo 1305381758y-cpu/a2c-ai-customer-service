@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  a2cAccountEndpoint,
   checkConfig,
+  loadA2CAccounts,
+  loadConfig,
+  loadCountries,
   saveConfig,
   saveCountry,
   setupTelegramWebhook,
@@ -10,6 +14,11 @@ import {
 } from "../frontend/src/config/configApi.js";
 
 describe("config API helpers", () => {
+  it("builds scoped A2C account endpoints", () => {
+    expect(a2cAccountEndpoint(false, 8)).toBe("/api/merchant/a2c/accounts/8");
+    expect(a2cAccountEndpoint(true, 8)).toBe("/api/admin/a2c/accounts/8");
+  });
+
   it("uploads registration tutorial images with multipart form data", async () => {
     const file = new File(["image"], "tutorial.png", { type: "image/png" });
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
@@ -49,6 +58,22 @@ describe("config API helpers", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledWith("/api/merchant/config/check", { headers: {} });
+    fetcher.mockRestore();
+  });
+
+  it("loads config, countries and A2C accounts through shared helpers", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ aiProvider: "minimax" }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ rows: [{ id: "country-1", name: "巴西" }] }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ rows: [{ id: 1, apiPhone: "551199999" }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(loadConfig("/api/merchant/config")).resolves.toMatchObject({ aiProvider: "minimax" });
+    await expect(loadCountries("/api/merchant/countries")).resolves.toEqual([{ id: "country-1", name: "巴西" }]);
+    await expect(loadA2CAccounts("/api/merchant/a2c/accounts")).resolves.toEqual([{ id: 1, apiPhone: "551199999" }]);
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/merchant/config", { headers: {} });
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/merchant/countries", { headers: {} });
+    expect(fetcher).toHaveBeenNthCalledWith(3, "/api/merchant/a2c/accounts", { headers: {} });
     fetcher.mockRestore();
   });
 

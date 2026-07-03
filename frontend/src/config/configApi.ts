@@ -1,5 +1,6 @@
 import { api } from "../app/api.js";
-import type { A2CAccount, ConfigCheck } from "../types.js";
+import { loadRows } from "../app/api.js";
+import type { A2CAccount, ConfigCheck, MerchantCountry } from "../types.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 import type { ConfigForm } from "./types.js";
 
@@ -27,6 +28,18 @@ export async function checkConfig(url: string): Promise<{ rows: ConfigCheck[]; c
   return await api<{ rows: ConfigCheck[]; checkedAt: string }>(url);
 }
 
+export async function loadConfig(url: string): Promise<ConfigForm> {
+  return await api<ConfigForm>(url);
+}
+
+export async function loadCountries(url: string): Promise<MerchantCountry[]> {
+  return await loadRows<MerchantCountry>(url);
+}
+
+export async function loadA2CAccounts(url: string): Promise<A2CAccount[]> {
+  return await loadRows<A2CAccount>(url);
+}
+
 export async function saveConfig(url: string, form: ConfigForm): Promise<ConfigForm> {
   return await api<ConfigForm>(url, { method: "PATCH", body: JSON.stringify(form) });
 }
@@ -39,6 +52,10 @@ export async function syncA2CAccounts(
 
 export async function toggleA2CAccount(url: string, enabled: boolean): Promise<{ config: ConfigForm }> {
   return await api<{ config: ConfigForm }>(url, { method: "PATCH", body: JSON.stringify({ enabled }) });
+}
+
+export function a2cAccountEndpoint(platform: boolean, accountId: number): string {
+  return platform ? `/api/admin/a2c/accounts/${accountId}` : `/api/merchant/a2c/accounts/${accountId}`;
 }
 
 export async function saveCountry(url: string, patch: Record<string, unknown>): Promise<void> {

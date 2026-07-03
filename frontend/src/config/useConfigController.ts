@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { api, loadRows, useRows } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../types.js";
 import { coercePatch } from "../ui/form.js";
 import { languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import {
+  a2cAccountEndpoint,
   checkConfig,
+  loadA2CAccounts,
+  loadConfig,
+  loadCountries,
   saveConfig as saveConfigRequest,
   saveCountry as saveCountryRequest,
   setupTelegramWebhook,
@@ -31,11 +35,11 @@ export function useConfigController({ platform }: { platform: boolean }) {
   const a2cWebhookUrl = buildA2CWebhookUrl(window.location.origin, platform, merchantId, form);
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
-  const reloadConfig = async () => setForm(await api<ConfigForm>(configUrl));
+  const reloadConfig = async () => setForm(await loadConfig(configUrl));
 
   useEffect(() => { reloadConfig().catch(() => null); }, [configUrl]);
-  useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
-  useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
+  useEffect(() => { loadCountries(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
+  useEffect(() => { loadA2CAccounts(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
   useEffect(() => { setChecks([]); }, [merchantId]);
 
   const applyCountryDraft = (country: MerchantCountry) => {
@@ -46,9 +50,9 @@ export function useConfigController({ platform }: { platform: boolean }) {
     if (!country) return;
     applyCountryDraft(country);
   }, [countries]);
-  const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
+  const reloadCountries = async () => setCountries(await loadCountries(countriesUrl));
   const reloadA2CAccounts = async () => {
-    setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+    setA2CAccounts(await loadA2CAccounts(a2cAccountsUrl));
   };
   const uploadTutorialImage = async () => {
     if (!tutorialImageFile) return;
@@ -97,7 +101,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     }
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
-    const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
+    const endpoint = a2cAccountEndpoint(platform, row.id);
     const result = await toggleA2CAccountRequest(endpoint, !row.enabled);
     setForm(result.config);
     await reloadA2CAccounts();
