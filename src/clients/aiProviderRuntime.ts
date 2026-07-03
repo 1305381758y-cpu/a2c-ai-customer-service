@@ -46,7 +46,7 @@ export async function generateAiText(
   const provider = selectedAiProvider(config);
   const startedAt = Date.now();
   const model = aiModelName(config, provider);
-  const requestSummary = summarizeAiRequest(contents, options);
+  const requestSummary = summarizeAiRequest(contents, options, provider);
   try {
     const text = provider === "gemini"
       ? await generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options)
@@ -122,7 +122,7 @@ function extractErrorTelemetry(error: unknown): { httpStatus?: number; responseS
   };
 }
 
-function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOptions): string {
+function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOptions, provider: AiProviderName): string {
   const userText = typeof contents === "string"
     ? contents
     : contents.map((part) => part.text || (part.inlineData ? "[image]" : "")).join("\n").trim();
@@ -130,6 +130,7 @@ function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOpti
     taskType: options.taskType || "unknown",
     temperature: options.temperature ?? 0.2,
     maxOutputTokens: options.maxOutputTokens ?? 1200,
+    effectiveMaxOutputTokens: effectiveMaxOutputTokens(provider, options),
     hasSystemInstruction: Boolean(options.systemInstruction),
     systemInstructionLength: options.systemInstruction?.length ?? 0,
     systemInstructionPreview: safeTelemetryPreview(options.systemInstruction || ""),
@@ -137,6 +138,13 @@ function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOpti
     userContentPreview: safeTelemetryPreview(userText)
   };
   return JSON.stringify(summary);
+}
+
+function effectiveMaxOutputTokens(provider: AiProviderName, options: AiTextOptions): number {
+  const requested = options.maxOutputTokens ?? 1200;
+  if (provider === "deepseek" && options.taskType === "intent_classification") return Math.max(requested, 512);
+  if (provider === "deepseek" && options.taskType === "contextual_intent") return Math.max(requested, 900);
+  return requested;
 }
 
 function safeTelemetryPreview(text: string): string {

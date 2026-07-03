@@ -31,6 +31,7 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
   const apiKey = deepseekApiKey(config);
   if (!apiKey) throw new Error("DeepSeek Key 未配置");
   if (hasImagePart(contents)) throw new Error("DeepSeek 暂不支持图片输入，请切换 MiniMax/Gemini 处理图片");
+  const maxTokens = deepSeekMaxTokens(options);
   const response = await fetch(`${normalizeDeepSeekBaseUrl(config)}/chat/completions`, {
     method: "POST",
     headers: {
@@ -44,7 +45,7 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
         { role: "user", content: toPlainTextContent(contents) }
       ],
       temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxOutputTokens ?? 1200
+      max_tokens: maxTokens
     }),
     signal: AbortSignal.timeout(AI_TIMEOUT_MS)
   });
@@ -62,6 +63,13 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
     summarizeChatCompletionPayload(payload)
   );
   return text;
+}
+
+function deepSeekMaxTokens(options: AiTextOptions): number {
+  const requested = options.maxOutputTokens ?? 1200;
+  if (options.taskType === "intent_classification") return Math.max(requested, 512);
+  if (options.taskType === "contextual_intent") return Math.max(requested, 900);
+  return requested;
 }
 
 export async function generateMiniMaxText(config: AppConfig, contents: string | AiTextPart[], options: AiTextOptions): Promise<string> {
@@ -321,6 +329,7 @@ function summarizeChatCompletionPayload(payload: Record<string, unknown>): strin
   const first = choices[0] as Record<string, unknown> | undefined;
   const message = first?.message as Record<string, unknown> | undefined;
   const content = message?.content ?? first?.text ?? payload.reply ?? payload.output;
+  const reasoningContent = message?.reasoning_content;
   const summary = {
     topKeys: Object.keys(payload).slice(0, 12),
     choicesCount: choices.length,
@@ -329,6 +338,8 @@ function summarizeChatCompletionPayload(payload: Record<string, unknown>): strin
     contentType: Array.isArray(content) ? "array" : typeof content,
     contentLength: typeof content === "string" ? content.length : Array.isArray(content) ? content.length : 0,
     contentPreview: typeof content === "string" ? safePreview(content) : "",
+    reasoningContentLength: typeof reasoningContent === "string" ? reasoningContent.length : 0,
+    reasoningContentPreview: typeof reasoningContent === "string" ? safePreview(reasoningContent) : "",
     providerError: extractProviderError(payload)
   };
   return JSON.stringify(summary);

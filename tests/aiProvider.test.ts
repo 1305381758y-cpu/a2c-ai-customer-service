@@ -111,6 +111,56 @@ describe("DeepSeek provider", () => {
     expect(body.max_tokens).toBe(32);
   });
 
+  it("raises DeepSeek token budget for short classification tasks that may emit reasoning content", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "positive_confirmation"
+            }
+          }
+        ]
+      })
+    } as Response);
+
+    await generateAiText(loadConfig({
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "sk-deepseek-test",
+      DEEPSEEK_MODEL: "deepseek-v4-flash"
+    }), "classify", { taskType: "intent_classification", maxOutputTokens: 80 });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.max_tokens).toBe(512);
+  });
+
+  it("raises DeepSeek token budget for contextual intent JSON classification", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "{\"intent\":\"unknown\"}"
+            }
+          }
+        ]
+      })
+    } as Response);
+
+    await generateAiText(loadConfig({
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "sk-deepseek-test",
+      DEEPSEEK_MODEL: "deepseek-v4-flash"
+    }), "classify context", { taskType: "contextual_intent", maxOutputTokens: 260 });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.max_tokens).toBe(900);
+  });
+
   it("does not treat top-level OK message as a provider error when choices exist", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -173,13 +223,15 @@ describe("DeepSeek provider", () => {
     expect(JSON.parse(calls[0].requestSummary || "{}")).toMatchObject({
       taskType: "intent_classification",
       maxOutputTokens: 32,
+      effectiveMaxOutputTokens: 512,
       userContentLength: 8
     });
     expect(JSON.parse(calls[0].responseSummary || "{}")).toMatchObject({
       choicesCount: 1,
       finishReason: "stop",
       contentType: "string",
-      contentLength: 0
+      contentLength: 0,
+      reasoningContentLength: 0
     });
   });
 });
