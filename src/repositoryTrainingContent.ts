@@ -7,7 +7,7 @@ import {
   mapKnowledgeItem,
   mapTrainingMaterial,
   mapTrainingMaterialItem,
-} from "./repositoryMappers.js";
+} from "./repositoryTrainingMappers.js";
 import type {
   KnowledgeItemRecord,
   TrainingMaterialItemRecord,
