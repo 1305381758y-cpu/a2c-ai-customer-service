@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { api, loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../types.js";
 import { coercePatch } from "../ui/form.js";
-import { languageName, translateSystemMessage } from "../ui/formatters.js";
+import { languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
+import { uploadRegistrationTutorialImage } from "./configApi.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
 import { applyCountryNameInference, buildA2CWebhookUrl, buildA2CSyncMessage, buildConfigSavedMessage, buildTelegramSetupMessage, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
 import type { ConfigForm } from "./types.js";
@@ -45,14 +46,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     if (!tutorialImageFile) return;
     setMessage("");
     setError("");
-    const body = new FormData();
-    body.append("file", tutorialImageFile);
-    const response = await fetch(registrationTutorialImageUrl, { method: "POST", body });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));
-    }
-    const result = await response.json() as { imageUrl: string; config: ConfigForm };
+    const result = await uploadRegistrationTutorialImage(registrationTutorialImageUrl, tutorialImageFile);
     setForm(result.config);
     setTutorialImageFile(null);
     setMessage("注册教程图片已上传。客户问怎么注册、不会注册、有教程吗时会自动发送这张图片。");
