@@ -370,128 +370,6 @@
   box-shadow: none;
 }
 
-.conversation-tools .export-panel {
-  display: grid;
-  gap: 10px;
-  padding: 10px;
-  background: #fff;
-}
-
-.conversation-tools .export-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.conversation-tools .export-panel .toolbar {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.conversation-tools.export-tool .conversation-export-bar {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  background: #fff;
-  padding: 10px;
-}
-
-.conversation-tools.export-tool .conversation-export-copy span {
-  display: none;
-}
-
-.conversation-tools.export-tool .conversation-export-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-}
-
-.conversation-tools.export-tool .conversation-export-actions button {
-  width: 100%;
-  min-width: 0;
-  white-space: normal;
-  line-height: 1.2;
-}
-
-.conversation-tools.export-tool .conversation-export-actions .export-primary {
-  grid-column: 1 / -1;
-}
-
-.conversation-export-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  min-width: 0;
-  border: 1px solid #bcd2ff;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f7faff 0%, #eef5ff 100%);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
-  padding: 12px;
-}
-
-.conversation-export-bar.compact {
-  grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 10px;
-}
-
-.conversation-export-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  text-align: left;
-}
-
-.conversation-export-copy strong {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.conversation-export-copy span {
-  color: var(--muted-strong);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.conversation-export-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.conversation-export-bar.compact .conversation-export-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.conversation-export-actions button {
-  min-height: 34px;
-  min-width: 0;
-  border-radius: 8px;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 850;
-  white-space: nowrap;
-  box-shadow: none;
-}
-
-.conversation-export-actions button.export-primary {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-}
-
-.conversation-export-bar.compact .conversation-export-actions button.export-primary {
-  grid-column: 1 / -1;
-}
-
 .proactive-panel {
   display: grid;
   gap: 8px;
@@ -508,173 +386,6 @@
 .proactive-panel.compact {
   padding: 10px;
   background: #fff;
-}
-
-.export-empty-state .conversation-export-bar {
-  width: min(760px, 100%);
-  margin-top: 10px;
-  text-align: left;
-}
-
-.review-card {
-  display: grid;
-  gap: 12px;
-}
-
-.review-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.review-score {
-  min-width: 72px;
-  min-height: 62px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #f8fbff;
-  color: var(--text);
-}
-
-.review-score strong {
-  font-size: 28px;
-  line-height: 1;
-}
-
-.review-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.review-grid > div,
-.review-items article {
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  padding: 12px;
-  background: #fff;
-}
-
-.review-grid ul {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  color: var(--muted-strong);
-}
-
-.review-grid p {
-  color: var(--muted-strong);
-}
-
-.review-items {
-  display: grid;
-  gap: 8px;
-}
-
-.review-items article {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.review-items small {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted-strong);
-}
-
-.review-card-collapsible {
-  padding: 0;
-  overflow: hidden;
-}
-
-.review-card-collapsible[open] {
-  overflow: auto;
-}
-
-.review-summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.review-summary::-webkit-details-marker {
-  display: none;
-}
-
-.review-summary::before {
-  content: "展开";
-  justify-self: start;
-  width: fit-content;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: #eef5ff;
-  color: #2f64d6;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.review-card-collapsible[open] .review-summary::before {
-  content: "收起";
-}
-
-.review-summary h3,
-.review-summary p {
-  margin: 0;
-}
-
-.review-summary p {
-  color: var(--muted-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-score.compact {
-  min-width: 74px;
-  min-height: 48px;
-  border-radius: 12px;
-}
-
-.review-score.compact strong {
-  font-size: 22px;
-}
-
-.review-card-body {
-  display: grid;
-  gap: 12px;
-  padding: 0 14px 14px;
-}
-
-.conversation-workspace .review-card {
-  flex: 0 0 auto;
-  max-height: 62px;
-  overflow: auto;
-}
-
-.conversation-workspace .review-card[open] {
-  max-height: 230px;
-}
-
-.conversation-workspace .review-head {
-  align-items: center;
-}
-
-.conversation-workspace .review-grid,
-.conversation-workspace .review-items {
-  gap: 8px;
-}
-
-.conversation-workspace .review-grid > div,
-.conversation-workspace .review-items article {
-  padding: 9px;
 }
 
 .account-mini-pager,
@@ -1005,8 +716,7 @@
 .chat-header,
 .chat-actions,
 .send.chat-composer,
-.compact-memory,
-.conversation-workspace .review-card {
+.compact-memory {
   flex: 0 0 auto;
 }
 
@@ -1056,12 +766,6 @@
   }
 }
 
-@media (max-width: 1320px) {
-  .review-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 1180px) {
   .conversation-workspace,
   .conversation-workspace.customers-collapsed {
@@ -1075,15 +779,6 @@
   .conversation-workspace section {
     min-height: 420px;
     overflow: visible;
-  }
-
-  .conversation-topbar .conversation-export-bar {
-    grid-template-columns: 1fr;
-  }
-
-  .conversation-topbar .conversation-export-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
   }
 }
 
