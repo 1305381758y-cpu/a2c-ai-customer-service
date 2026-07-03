@@ -3,6 +3,8 @@ import {
   applyConversationReviewItem,
   deleteConversation,
   generateConversationReview,
+  loadMerchantA2CAccounts,
+  loadMerchantConversations,
   loadConversationMessages,
   loadConversationReview,
   loadCustomerMemory,
@@ -27,6 +29,25 @@ describe("merchant conversation API helpers", () => {
       { a2cAccountPhone: "agent-1", conversationId: "conversation-1", unreadCount: 2 }
     ]);
     expect(fetcher).toHaveBeenCalledWith("/api/merchant/conversations/unread-summary", { headers: {} });
+    fetcher.mockRestore();
+  });
+
+  it("loads A2C accounts and conversation rows through focused helpers", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        rows: [{ id: 1, apiPhone: "agent-1" }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        rows: [{ id: "conversation-1", customerPhone: "5511913586749" }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(loadMerchantA2CAccounts()).resolves.toEqual([{ id: 1, apiPhone: "agent-1" }]);
+    await expect(loadMerchantConversations("/api/merchant/conversations?a2cAccountPhone=agent-1")).resolves.toEqual([
+      { id: "conversation-1", customerPhone: "5511913586749" }
+    ]);
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/merchant/a2c/accounts", { headers: {} });
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/merchant/conversations?a2cAccountPhone=agent-1", { headers: {} });
     fetcher.mockRestore();
   });
 

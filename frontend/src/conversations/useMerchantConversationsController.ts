@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { loadRows, useRows } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import {
+  loadMerchantA2CAccounts,
+  loadMerchantConversations,
   loadUnreadSummary,
   markAllConversationsRead,
   markConversationRead as markConversationReadRequest,
@@ -52,7 +54,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
   }, [selectedAccount?.apiPhone]);
 
   const reloadAccounts = async () => {
-    setAccounts(await loadRows("/api/merchant/a2c/accounts"));
+    setAccounts(await loadMerchantA2CAccounts());
     accountPager.setPage(1);
   };
   const reloadUnread = async () => {
@@ -60,7 +62,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
   };
   const reloadRows = async () => {
     if (!selectedAccount) return;
-    const nextRows = await loadRows<Conversation>(rowsUrl);
+    const nextRows = await loadMerchantConversations(rowsUrl);
     setRows(nextRows);
     setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
   };
@@ -68,7 +70,7 @@ export function useMerchantConversationsController({ handoffs = false }: { hando
     if (!selectedAccount) return;
     let cancelled = false;
     const pollRows = async () => {
-      const nextRows = await loadRows<Conversation>(rowsUrl).catch(() => null);
+      const nextRows = await loadMerchantConversations(rowsUrl).catch(() => null);
       if (!nextRows || cancelled) return;
       setRows(nextRows);
       setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
