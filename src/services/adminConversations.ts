@@ -9,6 +9,7 @@ import type {
   IntentLearningEventRecord,
   Repositories
 } from "../repositories.js";
+import { normalizeSqlTimeRange } from "./beijingTime.js";
 import { generateConversationReview } from "./conversationReview.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 
@@ -32,6 +33,8 @@ export type AdminCustomerListQuery = {
   countryId?: string;
   status?: string;
   language?: string;
+  startAt?: string;
+  endAt?: string;
   limit?: string;
 };
 
@@ -59,12 +62,15 @@ export function listAdminConversations(repos: Repositories, query: AdminConversa
 }
 
 export function listAdminCustomers(repos: Repositories, query: AdminCustomerListQuery): { rows: CustomerRecord[] } {
+  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt });
   return {
     rows: repos.listCustomers({
       merchantId: query.merchantId,
       countryId: query.countryId,
       status: query.status,
       language: query.language,
+      startAt: range.startAt,
+      endAt: range.endAt,
       limit: query.limit ? Number(query.limit) : undefined
     })
   };

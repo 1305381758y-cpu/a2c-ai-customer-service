@@ -29,7 +29,7 @@ describe("auth api", () => {
       headers: { cookie: String(login.headers["set-cookie"]) }
     });
     expect(dashboard.statusCode).toBe(200);
-    expect(dashboard.json()).toHaveProperty("conversations");
+    expect(dashboard.json()).toHaveProperty("todayConversations");
 
     await app.close();
   });

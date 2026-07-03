@@ -132,8 +132,12 @@ export class Repositories {
     return this.customers.get(merchantId, customerKey);
   }
 
-  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; limit?: number } = {}): CustomerRecord[] {
+  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
     return this.customers.list(filters);
+  }
+
+  countCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string } = {}): number {
+    return this.customers.count(filters);
   }
 
   deleteCustomer(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {
@@ -218,6 +222,14 @@ export class Repositories {
 
   listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: number } = {}): Conversation[] {
     return this.conversations.list(filters);
+  }
+
+  countConversations(filters: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; startAt?: string; endAt?: string } = {}): number {
+    return this.conversations.count(filters);
+  }
+
+  countMessages(filters: { merchantId?: string; direction?: "inbound" | "outbound"; startAt?: string; endAt?: string } = {}): number {
+    return this.conversations.countMessages(filters);
   }
 
   deleteConversation(id: string, merchantId?: string): boolean {

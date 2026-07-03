@@ -185,6 +185,30 @@ export class ConversationRepository {
     return listConversations(this.db, filters);
   }
 
+  count(filters: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; startAt?: string; endAt?: string } = {}): number {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    addFilter(clauses, params, "merchant_id", filters.merchantId);
+    addFilter(clauses, params, "country_id", filters.countryId);
+    addFilter(clauses, params, "status", filters.status);
+    addFilter(clauses, params, "handoff_status", filters.handoffStatus);
+    addRangeFilter(clauses, params, "created_at", filters.startAt, filters.endAt);
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM conversations ${where}`).get(...params) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
+  }
+
+  countMessages(filters: { merchantId?: string; direction?: "inbound" | "outbound"; startAt?: string; endAt?: string } = {}): number {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    addFilter(clauses, params, "merchant_id", filters.merchantId);
+    addFilter(clauses, params, "direction", filters.direction);
+    addRangeFilter(clauses, params, "created_at", filters.startAt, filters.endAt);
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM messages ${where}`).get(...params) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
+  }
+
   delete(id: string, merchantId?: string): boolean {
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     const conversation = this.db.sqlite.prepare(`SELECT * FROM conversations ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
@@ -256,4 +280,21 @@ export class ConversationRepository {
       );
   }
 
+}
+
+function addFilter(clauses: string[], params: Array<string | number>, column: string, value: string | undefined): void {
+  if (!value) return;
+  clauses.push(`${column} = ?`);
+  params.push(value);
+}
+
+function addRangeFilter(clauses: string[], params: Array<string | number>, column: string, startAt: string | undefined, endAt: string | undefined): void {
+  if (startAt) {
+    clauses.push(`${column} >= ?`);
+    params.push(startAt);
+  }
+  if (endAt) {
+    clauses.push(`${column} < ?`);
+    params.push(endAt);
+  }
 }

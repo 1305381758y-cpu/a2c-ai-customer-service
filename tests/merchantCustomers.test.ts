@@ -20,6 +20,22 @@ describe("merchantCustomers service", () => {
     expect(result.rows[0]).toMatchObject({ merchantId: merchantA.id, customerKey: "customer-a" });
   });
 
+  it("filters customers by their latest activity time", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("客户时间筛选商户");
+    const todayConversation = repos.getOrCreateConversation("today-customer", "a2c-a", "今日客户", merchant.id);
+    const oldConversation = repos.getOrCreateConversation("old-customer", "a2c-a", "历史客户", merchant.id);
+    repos.upsertCustomerFromConversation(todayConversation);
+    repos.upsertCustomerFromConversation(oldConversation);
+    db.sqlite.prepare("UPDATE customers SET last_seen_at = ? WHERE customer_key = ?").run("2026-07-03 01:20:00", "today-customer");
+    db.sqlite.prepare("UPDATE customers SET last_seen_at = ? WHERE customer_key = ?").run("2026-07-01 23:59:00", "old-customer");
+
+    const result = listMerchantCustomers(repos, merchant.id, { startAt: "2026-07-03T00:00:00Z", endAt: "2026-07-04T00:00:00Z" });
+
+    expect(result.rows.map((row) => row.customerKey)).toEqual(["today-customer"]);
+  });
+
   it("hard deletes a merchant customer and all of their conversations", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

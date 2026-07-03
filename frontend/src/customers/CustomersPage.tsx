@@ -17,8 +17,9 @@ type CustomersPageProps = {
 export function CustomersPage({ platform = false, renderConversation }: CustomersPageProps) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", limit: "50000" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: filters.limit });
+  const defaultRange = todayBeijingDateRange();
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
+  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: filters.limit });
   const [rows, setRows] = useRows<Customer>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Customer | null>(null);
@@ -46,8 +47,8 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
   };
   const exportBase = platform ? "/api/admin/conversations/export" : "/api/merchant/conversations/export";
   const scopedExportFilters = platform
-    ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" }
-    : { countryId: filters.countryId, status: filters.status, language: filters.language, limit: "50000" };
+    ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: "50000" }
+    : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: "50000" };
 
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
@@ -55,10 +56,11 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
         <div className="customer-export-top">
           <ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />
         </div>
+        <div className="table-helper">默认显示北京时间今天有过消息或更新的客户，可调整开始日期和结束日期筛选。</div>
         <FilterBar
           filters={filters}
           setFilters={setFilters}
-          fields={platform ? ["merchantId", "countryId", "status", "language", "limit"] : ["countryId", "status", "language", "limit"]}
+          fields={platform ? ["merchantId", "countryId", "status", "language", "startAt", "endAt", "limit"] : ["countryId", "status", "language", "startAt", "endAt", "limit"]}
           selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }}
           onApply={reload}
         />
@@ -98,4 +100,17 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
       )}
     </div>
   );
+}
+
+function todayBeijingDateRange() {
+  const now = new Date();
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const today = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
+  beijing.setUTCDate(beijing.getUTCDate() + 1);
+  const tomorrow = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
+  return { startAt: today, endAt: tomorrow };
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
 }

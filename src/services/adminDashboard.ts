@@ -1,19 +1,19 @@
 import type { Repositories } from "../repositories.js";
+import { todayBeijingSqlRange } from "./beijingTime.js";
 
 export type AdminDashboard = {
-  merchants: number;
   customers: number;
-  conversations: number;
-  handoffs: number;
-  samples: number;
+  todayCustomers: number;
+  todayConversations: number;
+  todayReplies: number;
 };
 
 export function buildAdminDashboard(repos: Repositories): AdminDashboard {
+  const today = todayBeijingSqlRange();
   return {
-    merchants: repos.listMerchants().length,
-    customers: repos.listCustomers({ limit: 500 }).length,
-    conversations: repos.listConversations({ limit: 500 }).length,
-    handoffs: repos.listConversations({ status: "human_handoff", limit: 500 }).length,
-    samples: repos.listTrainingSamples({ enabled: true }).length
+    customers: repos.countCustomers(),
+    todayCustomers: repos.countCustomers({ startAt: today.startAt, endAt: today.endAt }),
+    todayConversations: repos.countConversations({ startAt: today.startAt, endAt: today.endAt }),
+    todayReplies: repos.countMessages({ direction: "outbound", startAt: today.startAt, endAt: today.endAt })
   };
 }

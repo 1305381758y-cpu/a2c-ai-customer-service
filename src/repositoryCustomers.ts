@@ -63,7 +63,7 @@ export class CustomerRepository {
     return row ? mapCustomer(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; limit?: number } = {}): CustomerRecord[] {
+  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -82,6 +82,14 @@ export class CustomerRepository {
       clauses.push("cu.language = ?");
       params.push(filters.language);
     }
+    if (filters.startAt) {
+      clauses.push("cu.last_seen_at >= ?");
+      params.push(filters.startAt);
+    }
+    if (filters.endAt) {
+      clauses.push("cu.last_seen_at < ?");
+      params.push(filters.endAt);
+    }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
     params.push(limit);
@@ -96,6 +104,38 @@ export class CustomerRepository {
       `)
       .all(...params)
       .map((row) => mapCustomer(row as Record<string, unknown>));
+  }
+
+  count(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; startAt?: string; endAt?: string } = {}): number {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (filters.merchantId) {
+      clauses.push("merchant_id = ?");
+      params.push(filters.merchantId);
+    }
+    if (filters.countryId) {
+      clauses.push("country_id = ?");
+      params.push(filters.countryId);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (filters.language) {
+      clauses.push("language = ?");
+      params.push(filters.language);
+    }
+    if (filters.startAt) {
+      clauses.push("last_seen_at >= ?");
+      params.push(filters.startAt);
+    }
+    if (filters.endAt) {
+      clauses.push("last_seen_at < ?");
+      params.push(filters.endAt);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM customers ${where}`).get(...params) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
   }
 
   delete(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {

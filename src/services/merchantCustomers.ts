@@ -1,4 +1,5 @@
 import type { CustomerRecord, Repositories } from "../repositories.js";
+import { normalizeSqlTimeRange } from "./beijingTime.js";
 
 export type MerchantCustomerResult<T> =
   | { ok: true; value: T }
@@ -11,15 +12,20 @@ export function listMerchantCustomers(
     countryId?: string;
     status?: string;
     language?: string;
+    startAt?: string;
+    endAt?: string;
     limit?: string;
   }
 ): { rows: CustomerRecord[] } {
+  const range = normalizeSqlTimeRange({ startAt: filters.startAt, endAt: filters.endAt });
   return {
     rows: repos.listCustomers({
       merchantId,
       countryId: filters.countryId,
       status: filters.status,
       language: filters.language,
+      startAt: range.startAt,
+      endAt: range.endAt,
       limit: filters.limit ? Number(filters.limit) : undefined
     })
   };
