@@ -1,25 +1,32 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { loadRows, useRows, withQuery } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
 import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, label } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import { createKnowledgeItem, deleteKnowledgeItem, updateKnowledgeItem } from "./knowledgeApi.js";
+import {
+  buildKnowledgeUrl,
+  createKnowledgeItem,
+  deleteKnowledgeItem,
+  knowledgeBase,
+  loadKnowledgeItems,
+  updateKnowledgeItem
+} from "./knowledgeApi.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
-  const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
+  const base = knowledgeBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled });
+  const rowsUrl = buildKnowledgeUrl(platform, filters);
   const [rows, setRows] = useRows<Knowledge>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
   const reload = async () => {
-    setRows(await loadRows(rowsUrl));
+    setRows(await loadKnowledgeItems(rowsUrl));
     pager.setPage(1);
   };
 
