@@ -1,5 +1,5 @@
 import { api } from "../app/api.js";
-import type { ChatMessage, ConversationReviewResponse, CustomerMemory, UnreadSummary } from "../types.js";
+import type { ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, UnreadSummary } from "../types.js";
 
 export type ConversationSendDraft = {
   type: string;
@@ -85,4 +85,14 @@ export async function sendConversationMessage(conversationId: string, draft: Con
     method: "POST",
     body: JSON.stringify(draft)
   });
+}
+
+export async function sendProactiveConversationMessage(
+  a2cAccountPhone: string,
+  draft: ConversationSendDraft & { customerPhone: string; nickname: string }
+): Promise<Conversation> {
+  return (await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(a2cAccountPhone)}/send`, {
+    method: "POST",
+    body: JSON.stringify(draft)
+  })).conversation;
 }

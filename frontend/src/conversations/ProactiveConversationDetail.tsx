@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { api } from "../app/api.js";
 import type { A2CAccount, Conversation } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
 import { countryLabel } from "../ui/formatters.js";
 import { ConversationComposer } from "./ConversationComposer.js";
+import { sendProactiveConversationMessage } from "./conversationApi.js";
 
 export function ProactiveConversationDetail({
   account,
@@ -31,9 +31,9 @@ export function ProactiveConversationDetail({
       setError("");
       setStatusMessage("");
       try {
-        const res = await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(account.apiPhone)}/send`, { method: "POST", body: JSON.stringify({ ...send, customerPhone: target.customerPhone, nickname: target.nickname }) });
+        const conversation = await sendProactiveConversationMessage(account.apiPhone, { ...send, customerPhone: target.customerPhone, nickname: target.nickname });
         setStatusMessage("消息已发送，会话已创建。");
-        await onCreated(res.conversation);
+        await onCreated(conversation);
       } catch (err) {
         setError(err instanceof Error ? err.message : "发送失败");
       }

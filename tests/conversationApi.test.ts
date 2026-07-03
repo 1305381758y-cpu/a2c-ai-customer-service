@@ -11,6 +11,7 @@ import {
   markConversationRead,
   saveCustomerMemoryNotes,
   sendConversationMessage,
+  sendProactiveConversationMessage,
   setConversationPinned,
   syncMerchantA2CAccounts,
   updateConversationHandoffStatus
@@ -119,6 +120,36 @@ describe("merchant conversation API helpers", () => {
     expect(fetcher).toHaveBeenNthCalledWith(6, "/api/merchant/conversations/conversation-1/send", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ type: "text", content: "您好", url: "", caption: "", fileName: "" })
+    }));
+    fetcher.mockRestore();
+  });
+
+  it("starts proactive conversations through the selected A2C account", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      conversation: { id: "conversation-new", customerPhone: "5511913586749" }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(sendProactiveConversationMessage("agent +55", {
+      type: "text",
+      content: "您好",
+      url: "",
+      caption: "",
+      fileName: "",
+      customerPhone: "5511913586749",
+      nickname: "张三"
+    })).resolves.toMatchObject({ id: "conversation-new" });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/merchant/a2c/accounts/agent%20%2B55/send", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        type: "text",
+        content: "您好",
+        url: "",
+        caption: "",
+        fileName: "",
+        customerPhone: "5511913586749",
+        nickname: "张三"
+      })
     }));
     fetcher.mockRestore();
   });
