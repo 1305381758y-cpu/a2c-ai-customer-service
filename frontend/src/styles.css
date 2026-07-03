@@ -4573,3 +4573,38 @@ header p {
     max-width: 220px;
   }
 }
+
+/* Scroll safety: fixed-height split layouts are useful for chat workspaces, but
+   single-column analytical pages must use the main page scroll instead. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+main {
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.single-column.work-split,
+.dashboard-page,
+.ai-calls-page {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  align-items: start;
+}
+
+.single-column.work-split > .work-panel,
+.dashboard-page > .work-panel,
+.ai-calls-page > .work-panel {
+  overflow: visible;
+}
+
+@media (min-width: 1181px) {
+  .ai-call-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
