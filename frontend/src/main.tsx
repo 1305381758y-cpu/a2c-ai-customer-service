@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bot, Building2, CheckCircle2, Contact, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Settings, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
-import { api } from "./app/api.js";
 import { MerchantsPage } from "./admin/MerchantsPage.js";
 import { UsersPage } from "./admin/UsersPage.js";
 import { loadCurrentUser, login, logout } from "./auth/authApi.js";
@@ -108,7 +107,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       </aside>
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
-        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} />}
+        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <MerchantsPage />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <ConfigPage platform={user.role === "platform_admin"} />}

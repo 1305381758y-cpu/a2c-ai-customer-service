@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Bot, Building2, Contact, MessageSquare, Upload, Users, Workflow } from "lucide-react";
 
-type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
+import { loadDashboardMetrics, type DashboardMetrics } from "./dashboardApi.js";
 
-export function Dashboard({ platform, api }: { platform: boolean; api: ApiClient }) {
-  const [data, setData] = useState<Record<string, number>>({});
+export function Dashboard({ platform }: { platform: boolean }) {
+  const [data, setData] = useState<DashboardMetrics>({});
 
   useEffect(() => {
-    api<Record<string, number>>(platform ? "/api/admin/dashboard" : "/api/merchant/dashboard").then(setData);
-  }, [api, platform]);
+    loadDashboardMetrics(platform).then(setData);
+  }, [platform]);
 
   return <div className="grid metrics">
     {Object.entries(data).map(([key, value]) => {
