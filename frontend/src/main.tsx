@@ -800,10 +800,13 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
         <div className="script-flow-columns">
           <div className="script-step-list">
             <div className="panel-title"><h3>流程节点</h3><AsyncButton busyText="新增中..." onClick={addStep}><Plus size={16}/>新增节点</AsyncButton></div>
-            {detail.steps.map((step) => <button key={step.id} className={`script-step-card ${selectedStep?.id === step.id ? "active" : ""}`} onClick={() => setSelectedStep(step)}>
-              <strong>{step.flowCode} · {step.flowName || label(step.flowStep)}</strong>
-              <span>{label(step.flowStep)} · 顺序 {step.sortOrder} · {step.enabled ? "启用" : "停用"}</span>
-              <small>{step.standardReply}</small>
+            {detail.steps.map((step) => <button key={step.id} className={`script-step-card ${selectedStep?.id === step.id ? "active" : ""} ${step.enabled ? "enabled" : "disabled"}`} onClick={() => setSelectedStep(step)}>
+              <span className="script-step-card-head">
+                <strong>{step.flowCode || "未编号"} · {step.flowName || label(step.flowStep)}</strong>
+                <span className={`script-step-status ${step.enabled ? "on" : "off"}`}>{step.enabled ? "启用" : "停用"}</span>
+              </span>
+              <span className="script-step-meta">{label(step.flowStep)} · 顺序 {step.sortOrder}</span>
+              <small className="script-step-reply">{step.standardReply || "暂无标准话术，请点击右侧补充。"}</small>
             </button>)}
             {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入话本文件。</div>}
           </div>
