@@ -65,3 +65,7 @@ export function buildA2CSyncMessage(result: { imported: number; stale?: boolean;
   if (result.stale) return result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。";
   return `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`;
 }
+
+export function buildTelegramSetupMessage(result: { webhookUrl?: string }): string {
+  return `TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`;
+}

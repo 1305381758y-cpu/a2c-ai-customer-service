@@ -6,7 +6,7 @@ import { coercePatch } from "../ui/form.js";
 import { languageName, translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
-import { applyCountryNameInference, buildA2CWebhookUrl, buildA2CSyncMessage, buildConfigSavedMessage, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
+import { applyCountryNameInference, buildA2CWebhookUrl, buildA2CSyncMessage, buildConfigSavedMessage, buildTelegramSetupMessage, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
 import type { ConfigForm } from "./types.js";
 
 export function useConfigController({ platform }: { platform: boolean }) {
@@ -133,7 +133,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
       await api(configUrl, { method: "PATCH", body: JSON.stringify(form) });
       const result = await api<{ config: ConfigForm; webhookUrl?: string }>(telegramSetupUrl, { method: "POST" });
       setForm(result.config);
-      setMessage(`TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`);
+      setMessage(buildTelegramSetupMessage(result));
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "TG 绑定失败");

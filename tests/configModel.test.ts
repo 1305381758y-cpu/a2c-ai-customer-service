@@ -6,6 +6,7 @@ import {
   buildA2CSyncMessage,
   buildA2CWebhookUrl,
   buildConfigSavedMessage,
+  buildTelegramSetupMessage,
   configEndpoints,
   countryToDraft,
   DEFAULT_COUNTRY_DRAFT,
@@ -87,5 +88,10 @@ describe("configModel", () => {
     expect(buildA2CSyncMessage({ imported: 139 })).toBe("已同步 139 个 A2C 客服账号，已自动写入接收账号。");
     expect(buildA2CSyncMessage({ imported: 0, stale: true })).toBe("A2C 暂时限频，已继续使用本地保存的客服账号。");
     expect(buildA2CSyncMessage({ imported: 0, stale: true, warning: "A2C 正在限频，请稍后再试。" })).toBe("A2C 正在限频，请稍后再试。");
+  });
+
+  it("builds Telegram setup instructions with optional webhook url", () => {
+    expect(buildTelegramSetupMessage({})).toBe("TG绑定已开启。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。");
+    expect(buildTelegramSetupMessage({ webhookUrl: "https://service.example/webhooks/telegram" })).toBe("TG绑定已开启：https://service.example/webhooks/telegram。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。");
   });
 });
