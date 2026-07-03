@@ -25,6 +25,14 @@ describe("AI call stats", () => {
       errorCalls: 1,
       successRate: 50
     });
+    expect(stats.byError).toEqual([{
+      taskType: "translation",
+      provider: "minimax",
+      model: "MiniMax-M3",
+      errorMessage: "rate limit",
+      errorCalls: 1,
+      lastFailedAt: expect.any(String)
+    }]);
   });
 
   it("filters model calls by provider while keeping provider choices available", () => {
@@ -33,13 +41,14 @@ describe("AI call stats", () => {
     const merchant = repos.createMerchant("供应商筛选商户");
     repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "success", durationMs: 120 });
     repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "intent_classification", status: "success", durationMs: 80 });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "contextual_intent", status: "error", durationMs: 15000, error: "DeepSeek 返回内容为空" });
 
     const stats = getMerchantAiCallStats(repos, merchant.id, { provider: "deepseek" });
 
-    expect(stats).toMatchObject({ totalCalls: 1, successCalls: 1, errorCalls: 0, successRate: 100 });
+    expect(stats).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50 });
     expect(stats.availableProviders).toEqual(["deepseek", "minimax"]);
-    expect(stats.byProvider).toEqual([{ provider: "deepseek", totalCalls: 1, successCalls: 1, errorCalls: 0, successRate: 100, averageDurationMs: 80 }]);
-    expect(stats.byTypeDetails).toEqual([{
+    expect(stats.byProvider).toEqual([{ provider: "deepseek", totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50, averageDurationMs: 7540 }]);
+    expect(stats.byTypeDetails).toEqual(expect.arrayContaining([{
       taskType: "intent_classification",
       provider: "deepseek",
       model: "deepseek-chat",
@@ -49,6 +58,14 @@ describe("AI call stats", () => {
       successRate: 100,
       averageDurationMs: 80,
       lastCalledAt: expect.any(String)
+    }]));
+    expect(stats.byError).toEqual([{
+      taskType: "contextual_intent",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      errorMessage: "DeepSeek 返回内容为空",
+      errorCalls: 1,
+      lastFailedAt: expect.any(String)
     }]);
   });
 });

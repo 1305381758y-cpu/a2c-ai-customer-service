@@ -28,6 +28,7 @@ export interface AiCallStats {
   byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
+  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; errorCalls: number; lastFailedAt: string }>;
 }
 
 export class AiCallRepository {
@@ -102,6 +103,20 @@ export class AiCallRepository {
       GROUP BY task_type, provider, model
       ORDER BY task_type ASC, total_calls DESC, provider ASC, model ASC
     `).all(...params).map(mapDetailRow);
+    const byError = this.db.sqlite.prepare(`
+      SELECT
+        task_type,
+        provider,
+        model,
+        COALESCE(NULLIF(error, ''), '未知错误') AS error,
+        COUNT(*) AS error_calls,
+        MAX(created_at) AS last_failed_at
+      FROM ai_call_logs
+      ${where ? `${where} AND status = 'error'` : "WHERE status = 'error'"}
+      GROUP BY task_type, provider, model, error
+      ORDER BY error_calls DESC, last_failed_at DESC
+      LIMIT 50
+    `).all(...params).map(mapErrorRow);
     const providerWhere = buildWhere({ ...filters, provider: undefined });
     const availableProviders = this.db.sqlite.prepare(`
       SELECT provider
@@ -121,7 +136,8 @@ export class AiCallRepository {
       availableProviders,
       byType,
       byProvider,
-      byTypeDetails
+      byTypeDetails,
+      byError
     };
   }
 }
@@ -187,6 +203,17 @@ function mapDetailRow(row: Record<string, unknown>) {
     successRate: successRate(successCalls, totalCalls),
     averageDurationMs: Math.round(Number(row.average_duration_ms ?? 0)),
     lastCalledAt: String(row.last_called_at || "")
+  };
+}
+
+function mapErrorRow(row: Record<string, unknown>) {
+  return {
+    taskType: String(row.task_type || "unknown"),
+    provider: String(row.provider || "unknown"),
+    model: String(row.model || "unknown"),
+    errorMessage: String(row.error || "未知错误"),
+    errorCalls: Number(row.error_calls ?? 0),
+    lastFailedAt: String(row.last_failed_at || "")
   };
 }
 

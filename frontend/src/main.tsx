@@ -132,7 +132,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
-  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [] });
+  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
   const reload = async () => {
     const query = platform ? filters : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
@@ -182,6 +182,10 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
           {selectedTaskType && <button className="ghost" onClick={() => setSelectedTaskType("")}>查看全部类型</button>}
         </div>
         <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs", "lastCalledAt"]} />
+      </section>
+      <section className="assistant-card">
+        <h3>失败原因明细</h3>
+        <Table rows={data.byError} columns={["taskType", "provider", "model", "errorMessage", "errorCalls", "lastFailedAt"]} />
       </section>
     </section>
   </div>;
