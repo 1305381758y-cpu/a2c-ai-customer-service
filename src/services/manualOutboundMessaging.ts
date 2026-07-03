@@ -36,6 +36,7 @@ export async function sendManualOutboundMessage(
     conversation: Conversation;
     body: ManualOutboundBody;
     rawPayload: Record<string, unknown>;
+    recordMemory?: boolean;
   }
 ): Promise<ManualOutboundSendResult> {
   const cfg = deps.repos.getMerchantConfig(input.merchantId);
@@ -74,7 +75,12 @@ export async function sendManualOutboundMessage(
       rawPayload: input.rawPayload,
       customerTranslation: translation
     },
-    operatorTranslation: type === "text" && Boolean(outgoingContent)
+    operatorTranslation: type === "text" && Boolean(outgoingContent),
+    memory: input.recordMemory ? {
+      intent: "unknown",
+      content,
+      direction: "outbound"
+    } : undefined
   });
   if (outbound.sendResult.a2cSendStatus === "failed") {
     return { ok: false, statusCode: 502, error: outbound.sendResult.a2cSendError || "send failed" };

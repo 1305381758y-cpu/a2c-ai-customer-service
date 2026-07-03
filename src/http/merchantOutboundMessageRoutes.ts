@@ -57,16 +57,10 @@ export function registerMerchantOutboundMessageRoutes(app: FastifyInstance, deps
       merchantId,
       conversation,
       body,
-      rawPayload: { replyMode: "manual", manual: true, proactive: true }
+      rawPayload: { replyMode: "manual", manual: true, proactive: true },
+      recordMemory: true
     });
     if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-    if ("externalId" in result.value) {
-      deps.repos.updateCustomerMemoryFromMessage(conversation, {
-        intent: "unknown",
-        content: result.value.content,
-        direction: "outbound"
-      });
-    }
     return result.value;
   });
 }

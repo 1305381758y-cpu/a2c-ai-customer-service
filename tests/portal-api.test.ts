@@ -3573,6 +3573,15 @@ describe("portal api", () => {
       });
       expect(conversations.json().rows).toHaveLength(1);
       expect(conversations.json().rows[0]).toMatchObject({ customerPhone: "proactive-customer", a2cAccountPhone: "proactive-a2c" });
+      const memory = await app.inject({
+        method: "GET",
+        url: `/api/merchant/conversations/${conversations.json().rows[0].id}/memory`,
+        headers: { cookie: merchantCookie }
+      });
+      expect(memory.statusCode).toBe(200);
+      expect(memory.json().facts.recentSignals).toEqual(expect.arrayContaining([
+        expect.objectContaining({ direction: "outbound", content: "Hello, please register first." })
+      ]));
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;
