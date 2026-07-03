@@ -1,13 +1,13 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
 import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
-import { coercePatch } from "../ui/form.js";
 import { countryLabel, label } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { createKnowledgeItem, deleteKnowledgeItem, updateKnowledgeItem } from "./knowledgeApi.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
   const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
@@ -50,7 +50,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             disabled={!form.title.trim() || !form.content.trim()}
             busyText="新增中..."
             onClick={async () => {
-              await api(base, { method: "POST", body: JSON.stringify(coercePatch({ ...form, countryId: form.countryId || filters.countryId || countries[0]?.id || "" })) });
+              await createKnowledgeItem(base, form, form.countryId || filters.countryId || countries[0]?.id || "");
               setForm({ ...form, title: "", content: "" });
               await reload();
             }}
@@ -69,12 +69,12 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
             selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }}
             onSave={async (patch) => {
-              await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
+              await updateKnowledgeItem(base, selected.id, patch);
               await reload();
             }}
             onDelete={async () => {
               if (!window.confirm("确认彻底删除这条知识？删除后 AI 不会再引用它。")) return;
-              await api(`${base}/${selected.id}`, { method: "DELETE" });
+              await deleteKnowledgeItem(base, selected.id);
               setSelected(null);
               await reload();
               notify("success", "知识已彻底删除");
