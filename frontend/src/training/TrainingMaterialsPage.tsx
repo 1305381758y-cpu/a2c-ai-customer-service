@@ -1,12 +1,13 @@
 import { FileText, Upload } from "lucide-react";
 import { useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, TrainingMaterial, TrainingMaterialItem } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { deleteTrainingMaterial, importTrainingMaterial, loadTrainingMaterialDetail } from "./trainingApi.js";
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
@@ -26,15 +27,10 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
   };
   const loadDetail = async (row: TrainingMaterial) => {
     setSelected(row);
-    setDetail(await api<{ material: TrainingMaterial; items: TrainingMaterialItem[] }>(`${base}/${row.id}`));
+    setDetail(await loadTrainingMaterialDetail(base, row.id));
   };
   const uploadFile = async (upload: File) => {
-    const body = new FormData();
-    body.append("file", upload);
-    body.append("countryId", filters.countryId || countries[0]?.id || "");
-    const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
-    const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
+    const result = await importTrainingMaterial("/api/merchant/training-materials/import", upload, filters.countryId || countries[0]?.id || "");
     setMessage(simple ? `已学习 ${result.imported} 条内容，后续回复会自动参考${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}` : `已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
     await reload();
   };
@@ -95,7 +91,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
                 busyText="删除中..."
                 onClick={async () => {
                   if (!window.confirm(simple ? "确认彻底删除这份学习资料？删除后系统不会再参考它。" : "确认彻底删除这个素材？它生成的样本和知识会一起删除。")) return;
-                  await api(`${base}/${detail.material.id}`, { method: "DELETE" });
+                  await deleteTrainingMaterial(base, detail.material.id);
                   setSelected(null);
                   setDetail(null);
                   await reload();
