@@ -1,13 +1,13 @@
 import { Upload } from "lucide-react";
 import { useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, Sample } from "../types.js";
 import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
-import { coercePatch } from "../ui/form.js";
 import { countryLabel } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { deleteSample, importSampleTrainingFile, updateSample } from "./samplesApi.js";
 
 export function SamplesPage({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
@@ -45,12 +45,7 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
                 busyText="上传中..."
                 onClick={async () => {
                   if (!file) return;
-                  const body = new FormData();
-                  body.append("file", file);
-                  body.append("countryId", filters.countryId || countries[0]?.id || "");
-                  const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
-                  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
-                  const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
+                  const result = await importSampleTrainingFile(file, filters.countryId || countries[0]?.id || "");
                   notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
                   setFile(null);
                   await reload();
@@ -73,12 +68,12 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
             fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]}
             selects={{ enabled: ["true", "false"] }}
             onSave={async (patch) => {
-              await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
+              await updateSample(base, selected.id, patch);
               await reload();
             }}
             onDelete={async () => {
               if (!window.confirm("确认彻底删除这个样本？删除后 AI 不会再引用它。")) return;
-              await api(`${base}/${selected.id}`, { method: "DELETE" });
+              await deleteSample(base, selected.id);
               setSelected(null);
               await reload();
               notify("success", "样本已彻底删除");
