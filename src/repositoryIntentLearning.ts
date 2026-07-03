@@ -1,6 +1,7 @@
 import type { Db } from "./db.js";
+import { buildIntentLearningExample, mergeIntentLearningExamples } from "./repositoryIntentLearningExamples.js";
 import { mapIntentLearningEvent } from "./repositoryIntentLearningMappers.js";
-import { clipText, parseJsonRecordArray } from "./repositoryJson.js";
+import { clipText } from "./repositoryJson.js";
 import type { IntentLearningEventRecord, IntentLearningInput } from "./repositoryTypes.js";
 
 export class IntentLearningRepository {
@@ -10,23 +11,9 @@ export class IntentLearningRepository {
     const existing = this.db.sqlite
       .prepare("SELECT * FROM intent_learning_events WHERE merchant_id = ? AND country_id = ? AND candidate_key = ?")
       .get(input.merchantId, input.countryId, input.candidateKey) as Record<string, unknown> | undefined;
-    const example = {
-      text: clipText(input.customerText, 300),
-      conversationId: input.conversationId,
-      messageId: input.messageId ?? null,
-      detectedIntent: input.detectedIntent,
-      inferredIntent: input.inferredIntent,
-      contextualIntent: input.contextualIntent,
-      flowStep: input.flowStep,
-      at: new Date().toISOString()
-    };
+    const example = buildIntentLearningExample(input);
     if (existing) {
-      const examples = [example, ...parseJsonRecordArray(existing.examples_json)]
-        .filter((item, index, array) => {
-          const text = String((item as Record<string, unknown>).text ?? "");
-          return text && array.findIndex((candidate) => String((candidate as Record<string, unknown>).text ?? "") === text) === index;
-        })
-        .slice(0, 8);
+      const examples = mergeIntentLearningExamples(example, existing.examples_json);
       this.db.sqlite
         .prepare(`
           UPDATE intent_learning_events
