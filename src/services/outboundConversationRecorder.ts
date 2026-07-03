@@ -2,6 +2,7 @@ import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MessageInput, Repositories } from "../repositories.js";
 import { sendOutboundMessage, type OutboundIdPolicy, type OutboundPayload, type OutboundSendResult } from "./outboundMessageSender.js";
+import { buildOutboundConversationRawPayload } from "./outboundConversationPayload.js";
 import { translateForOperator } from "./translation.js";
 
 export interface OutboundConversationRecordResult {
@@ -49,19 +50,12 @@ export async function recordOutboundConversationMessage(input: {
     msgType: input.message.msgType,
     language: input.message.language,
     intent: input.message.intent,
-    rawPayload: {
-      ...input.message.rawPayload,
-      ...(operatorTranslation ? {
-        originalContent: operatorTranslation.originalText,
-        operatorTranslatedContent: operatorTranslation.translatedText,
-        operatorTranslationTargetLanguage: operatorTranslation.targetLanguage,
-        operatorTranslationStatus: operatorTranslation.status,
-        operatorTranslationError: operatorTranslation.error || ""
-      } : {}),
-      a2cSendStatus: sendResult.a2cSendStatus,
-      a2cSendError: sendResult.a2cSendError,
-      simulation: Boolean(input.simulation)
-    }
+    rawPayload: buildOutboundConversationRawPayload({
+      basePayload: input.message.rawPayload,
+      operatorTranslation,
+      sendResult,
+      simulation: input.simulation
+    })
   });
   if (input.memory) {
     input.repos.updateCustomerMemoryFromMessage(input.conversation, input.memory);
