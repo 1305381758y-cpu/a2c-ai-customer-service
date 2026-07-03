@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { strictFlowNeedsInviteCode, type StrictContextualIntent, type StrictFlowReply } from "../domain/strictFlow.js";
-import { nextStrictFlowTurn } from "../domain/strictFlowRuntime.js";
+import { defaultStrictFlowRuntime, type StrictFlowRuntimeEngine } from "../domain/strictFlowRuntime.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
 import type {
   A2CInviteCodeRecord,
@@ -29,6 +29,7 @@ export function buildStrictFlowTurn(input: {
   scriptFlow?: ScriptFlowRuntime;
   inferredIntent: InternalIntentLabel;
   contextualIntent: StrictContextualIntent;
+  strictFlowRuntime?: StrictFlowRuntimeEngine;
 }): StrictFlowTurnBuildResult {
   const needsInviteCode = strictFlowNeedsInviteCode({
     merchant: input.merchant,
@@ -42,7 +43,7 @@ export function buildStrictFlowTurn(input: {
   const inviteCode = needsInviteCode
     ? input.repos.reserveInviteCodeForConversation(input.conversation)
     : undefined;
-  const strictReply = nextStrictFlowTurn({
+  const strictReply = (input.strictFlowRuntime || defaultStrictFlowRuntime).nextTurn({
     merchant: input.merchant,
     country: input.country,
     conversation: input.conversation,

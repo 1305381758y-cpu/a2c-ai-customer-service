@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
+import type { StrictFlowRuntimeContext, StrictFlowRuntimeEngine } from "../src/domain/strictFlowRuntime.js";
 import { Repositories } from "../src/repositories.js";
 import { buildStrictFlowTurn } from "../src/services/strictFlowTurnBuilder.js";
 
@@ -95,5 +96,42 @@ describe("strict flow turn builder", () => {
     expect(result.needsInviteCode).toBe(false);
     expect(result.inviteCode).toBeUndefined();
     expect(result.strictReply.needsInviteCode).toBe(false);
+  });
+
+  it("can delegate the state transition to an injected strict-flow runtime", () => {
+    const context = setupConversation("registration_intent");
+    const analysis = analyzeMessage("可以", "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "可以",
+      inferredIntent: "positive_confirmation"
+    });
+    const nextTurn = vi.fn((input: StrictFlowRuntimeContext) => ({
+      enabled: true,
+      reply: `runtime saw invite ${input.inviteCode?.code}`,
+      language: "zh",
+      nextFlowStep: "wait_registration" as const,
+      stage: "need_platform_register" as const,
+      needsInviteCode: Boolean(input.inviteCode)
+    }));
+    const strictFlowRuntime: StrictFlowRuntimeEngine = {
+      nextTurn
+    };
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "可以",
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      strictFlowRuntime
+    });
+
+    expect(nextTurn).toHaveBeenCalledOnce();
+    expect(nextTurn.mock.calls[0]?.[0].inviteCode?.code).toBe("INV-TURN");
+    expect(result.strictReply.reply).toBe("runtime saw invite INV-TURN");
   });
 });
