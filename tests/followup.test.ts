@@ -95,9 +95,13 @@ describe("follow-up candidates", () => {
       .run("followup-send-seed");
     const sender = {
       send: vi.fn(async () => ({
-        externalId: "followup-message-id",
-        a2cSendStatus: "sent" as const,
-        a2cSendError: ""
+        sendResult: {
+          externalId: "followup-message-id",
+          a2cSendStatus: "sent" as const,
+          a2cSendError: ""
+        },
+        inserted: true,
+        messageId: 100
       }))
     };
     const processor = new FollowUpProcessor(repos, loadConfig({
@@ -111,15 +115,12 @@ describe("follow-up candidates", () => {
 
     expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({
       content: "您注册到哪一步了？如果卡住，把页面情况发我就行。",
+      flowStep: "wait_registration",
       conversation: expect.objectContaining({
         customerPhone: "5511913586749",
         a2cAccountPhone: "18507251675"
       })
     }));
-    const messages = repos.listConversationMessages(conversation.id, 10);
-    const followup = messages.find((message) => message.rawPayload?.followupSent === true);
-    expect(followup?.rawPayload?.followupSent).toBe(true);
-    expect(followup?.rawPayload?.a2cSendStatus).toBe("sent");
     expect(repos.listDueFollowUpCandidates()).toHaveLength(0);
   });
 
@@ -147,13 +148,26 @@ describe("follow-up candidates", () => {
         A2C_APP_SECRET: "app-secret"
       }),
       conversation,
+      flowStep: "wait_registration",
       content: "您注册到哪一步了？"
-    })).resolves.toEqual({
-      externalId: "followup-message-id",
-      a2cSendStatus: "sent",
-      a2cSendError: ""
+    })).resolves.toMatchObject({
+      sendResult: {
+        externalId: "followup-message-id",
+        a2cSendStatus: "sent",
+        a2cSendError: ""
+      },
+      inserted: true
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const messages = repos.listConversationMessages(conversation.id, 10);
+    const followup = messages.find((message) => message.rawPayload?.followupSent === true);
+    expect(followup?.rawPayload).toMatchObject({
+      followupSent: true,
+      followupReason: "idle_2m",
+      followupStep: "wait_registration",
+      a2cSendStatus: "sent",
+      simulation: false
+    });
   });
 });

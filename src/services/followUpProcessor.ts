@@ -38,34 +38,16 @@ export class FollowUpProcessor {
       const sendResult = await this.sender.send({
         runtimeConfig,
         conversation,
+        country,
+        flowStep,
         content
       });
-      if (sendResult.a2cSendStatus === "failed") {
-        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: sendResult.a2cSendError || "follow-up send failed" });
+      if (sendResult.sendResult.a2cSendStatus === "failed") {
+        this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: false, error: sendResult.sendResult.a2cSendError || "follow-up send failed" });
         failed += 1;
         continue;
       }
-      this.repos.insertMessage({
-        conversationId: conversation.id,
-        direction: "outbound",
-        externalId: sendResult.externalId,
-        content,
-        msgType: "text",
-        language: conversation.language || country?.defaultLanguage || "unknown",
-        intent: "unknown",
-        rawPayload: {
-          replyMode: "strict_flow",
-          followupSent: true,
-          followupReason: "idle_2m",
-          followupStep: flowStep,
-          strictFlow: true,
-          strictFlowStep: flowStep,
-          a2cSendStatus: sendResult.a2cSendStatus,
-          a2cSendError: sendResult.a2cSendError
-        }
-      });
       this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
-      this.repos.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content, direction: "outbound" });
       sent += 1;
     }
     return { scanned: candidates.length, sent, skipped, failed };
