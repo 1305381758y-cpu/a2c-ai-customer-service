@@ -23,7 +23,7 @@ import {
   mapConversation,
   mapConversationMessage,
 } from "./repositoryConversationMappers.js";
-import { clipText } from "./repositoryJson.js";
+import { learnFromConversationReply } from "./repositoryConversationLearning.js";
 import type {
   Conversation,
   ConversationExportRecord,
@@ -105,7 +105,7 @@ export class ConversationRepository {
       if (input.direction === "inbound") {
         this.db.sqlite.prepare("UPDATE conversations SET unread_count = unread_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(input.conversationId);
       } else {
-        this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
+        learnFromConversationReply(this.db, { getConversation: (id) => this.get(id) }, input.conversationId, Number(result.lastInsertRowid ?? 0), input);
       }
       return { inserted: true, id: Number(result.lastInsertRowid ?? 0) || undefined };
     } catch (error) {
@@ -114,7 +114,7 @@ export class ConversationRepository {
           const result = this.insertMessageRow(input, `local_outbound:${input.conversationId}:${Date.now()}:${Math.random().toString(36).slice(2)}`, {
             externalIdConflict: input.externalId ?? ""
           });
-          this.learnFromConversationReply(input.conversationId, Number(result.lastInsertRowid ?? 0), input);
+          learnFromConversationReply(this.db, { getConversation: (id) => this.get(id) }, input.conversationId, Number(result.lastInsertRowid ?? 0), input);
           return { inserted: true, id: Number(result.lastInsertRowid ?? 0) || undefined };
         }
         return { inserted: false };
@@ -256,54 +256,4 @@ export class ConversationRepository {
       );
   }
 
-  private learnFromConversationReply(conversationId: string, outboundMessageId: number, input: MessageInput): void {
-    const reply = String(input.content || "").trim();
-    if (input.direction !== "outbound" || input.msgType !== "text" || !reply || reply.length < 2) return;
-    const conversation = this.get(conversationId);
-    if (!conversation) return;
-    const inbound = this.db.sqlite
-      .prepare(`
-        SELECT id, content, language, intent
-        FROM messages
-        WHERE conversation_id = ? AND direction = 'inbound' AND id < ?
-        ORDER BY id DESC
-        LIMIT 1
-      `)
-      .get(conversationId, outboundMessageId || Number.MAX_SAFE_INTEGER) as { id: number; content: string; language: string; intent: string } | undefined;
-    const customerMessage = String(inbound?.content || "").trim();
-    if (!inbound || !customerMessage || customerMessage.length < 2) return;
-    const marker = `conversation_sample:${conversationId}:${inbound.id}`;
-    const existing = this.db.sqlite
-      .prepare("SELECT id FROM training_samples WHERE merchant_id = ? AND keywords LIKE ? LIMIT 1")
-      .get(conversation.merchantId, `%${marker}%`) as { id: number } | undefined;
-    const language = String(inbound.language || input.language || conversation.language || "unknown");
-    const intent = String(inbound.intent || input.intent || "unknown");
-    const keywords = `${marker},真实对话,自动沉淀,${conversation.a2cAccountPhone},${conversation.customerPhone}`;
-    if (existing) {
-      this.db.sqlite
-        .prepare(`
-          UPDATE training_samples
-          SET standard_reply = ?, language = ?, intent = ?, stage = ?, enabled = 1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND merchant_id = ?
-        `)
-        .run(clipText(reply, 1200), language, intent, conversation.stage, existing.id, conversation.merchantId);
-      return;
-    }
-    this.db.sqlite
-      .prepare(`
-        INSERT INTO training_samples
-          (merchant_id, country_id, customer_message, standard_reply, stage, intent, language, keywords, priority, enabled)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-      `)
-      .run(
-        conversation.merchantId,
-        conversation.countryId,
-        clipText(customerMessage, 1200),
-        clipText(reply, 1200),
-        conversation.stage,
-        intent,
-        language,
-        keywords
-      );
-  }
 }
