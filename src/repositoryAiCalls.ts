@@ -22,11 +22,12 @@ export interface AiCallStats {
   totalCalls: number;
   successCalls: number;
   errorCalls: number;
+  successRate: number;
   averageDurationMs: number;
   availableProviders: string[];
-  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
-  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
-  byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number; lastCalledAt: string }>;
+  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
+  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
+  byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
 }
 
 export class AiCallRepository {
@@ -109,10 +110,13 @@ export class AiCallRepository {
       GROUP BY provider
       ORDER BY provider ASC
     `).all(...providerWhere.params).map((row) => String((row as Record<string, unknown>).provider || "unknown"));
+    const totalCalls = Number(total?.total_calls ?? 0);
+    const successCalls = Number(total?.success_calls ?? 0);
     return {
-      totalCalls: Number(total?.total_calls ?? 0),
-      successCalls: Number(total?.success_calls ?? 0),
+      totalCalls,
+      successCalls,
       errorCalls: Number(total?.error_calls ?? 0),
+      successRate: successRate(successCalls, totalCalls),
       averageDurationMs: Math.round(Number(total?.average_duration_ms ?? 0)),
       availableProviders,
       byType,
@@ -145,34 +149,48 @@ function buildWhere(filters: AiCallStatsFilters): { where: string; params: Array
 }
 
 function mapTaskRow(row: Record<string, unknown>) {
+  const totalCalls = Number(row.total_calls ?? 0);
+  const successCalls = Number(row.success_calls ?? 0);
   return {
     taskType: String(row.task_type || "unknown"),
-    totalCalls: Number(row.total_calls ?? 0),
-    successCalls: Number(row.success_calls ?? 0),
+    totalCalls,
+    successCalls,
     errorCalls: Number(row.error_calls ?? 0),
+    successRate: successRate(successCalls, totalCalls),
     averageDurationMs: Math.round(Number(row.average_duration_ms ?? 0))
   };
 }
 
 function mapProviderRow(row: Record<string, unknown>) {
+  const totalCalls = Number(row.total_calls ?? 0);
+  const successCalls = Number(row.success_calls ?? 0);
   return {
     provider: String(row.provider || "unknown"),
-    totalCalls: Number(row.total_calls ?? 0),
-    successCalls: Number(row.success_calls ?? 0),
+    totalCalls,
+    successCalls,
     errorCalls: Number(row.error_calls ?? 0),
+    successRate: successRate(successCalls, totalCalls),
     averageDurationMs: Math.round(Number(row.average_duration_ms ?? 0))
   };
 }
 
 function mapDetailRow(row: Record<string, unknown>) {
+  const totalCalls = Number(row.total_calls ?? 0);
+  const successCalls = Number(row.success_calls ?? 0);
   return {
     taskType: String(row.task_type || "unknown"),
     provider: String(row.provider || "unknown"),
     model: String(row.model || "unknown"),
-    totalCalls: Number(row.total_calls ?? 0),
-    successCalls: Number(row.success_calls ?? 0),
+    totalCalls,
+    successCalls,
     errorCalls: Number(row.error_calls ?? 0),
+    successRate: successRate(successCalls, totalCalls),
     averageDurationMs: Math.round(Number(row.average_duration_ms ?? 0)),
     lastCalledAt: String(row.last_called_at || "")
   };
+}
+
+function successRate(successCalls: number, totalCalls: number): number {
+  if (!totalCalls) return 0;
+  return Math.round((successCalls / totalCalls) * 1000) / 10;
 }

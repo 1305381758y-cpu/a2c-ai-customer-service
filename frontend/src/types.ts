@@ -29,9 +29,10 @@ export type AiCallStats = {
   totalCalls: number;
   successCalls: number;
   errorCalls: number;
+  successRate: number;
   averageDurationMs: number;
   availableProviders: string[];
-  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
-  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number }>;
-  byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; averageDurationMs: number; lastCalledAt: string }>;
+  byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
+  byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
+  byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
 };

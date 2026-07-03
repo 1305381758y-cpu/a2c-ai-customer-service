@@ -132,7 +132,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
-  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [] });
+  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [] });
   const reload = async () => {
     const query = platform ? filters : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
@@ -163,16 +163,17 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
         <MetricCard title="总调用" value={data.totalCalls} detail="所有供应商、所有任务类型" />
         <MetricCard title="成功调用" value={data.successCalls} detail="已正常返回内容" />
         <MetricCard title="失败调用" value={data.errorCalls} detail="Key、限流、超时或返回异常" />
+        <MetricCard title="成功率" value={`${data.successRate}%`} detail="成功调用 / 总调用" />
         <MetricCard title="平均耗时" value={`${data.averageDurationMs} ms`} detail="按筛选范围计算" />
       </div>
       <div className="ai-call-columns">
         <section className="assistant-card">
           <h3>按调用类型</h3>
-          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={selectedTaskType} rowKey={(row) => row.taskType} />
+          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={selectedTaskType} rowKey={(row) => row.taskType} />
         </section>
         <section className="assistant-card">
           <h3>按供应商</h3>
-          <Table rows={data.byProvider} columns={["provider", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} />
+          <Table rows={data.byProvider} columns={["provider", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs"]} />
         </section>
       </div>
       <section className="assistant-card">
@@ -180,7 +181,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
           <h3>调用类型明细 · {selectedTaskType ? label(selectedTaskType) : "全部类型"}</h3>
           {selectedTaskType && <button className="ghost" onClick={() => setSelectedTaskType("")}>查看全部类型</button>}
         </div>
-        <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "averageDurationMs", "lastCalledAt"]} />
+        <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs", "lastCalledAt"]} />
       </section>
     </section>
   </div>;

@@ -67,6 +67,7 @@ export function normalizeText(value: string) {
 export function displayValue(column: string, value: unknown) {
   if (typeof value === "boolean") return value ? "是" : "否";
   if (value === null || value === undefined || value === "") return "";
+  if (column === "successRate") return `${value}%`;
   if (isDateTimeColumn(column)) return formatDateTime(String(value));
   if (["countryId", "countryName", "countryCode"].includes(column)) return countryLabel(value);
   if (["language", "defaultLanguage"].includes(column)) return languageName(String(value));
@@ -247,7 +248,7 @@ export function label(key: string) {
     extractedWhatsApp: "WhatsApp", countryId: "国家", countryName: "国家", countryCode: "国家代码", code: "国家代码", defaultLanguage: "默认语言",
     requirePlatformAccount: "需平台开户", requirePhone: "需手机号", requireTelegram: "需TG", requireWhatsApp: "需WS",
     conversationCount: "会话数", lastSeenAt: "最近消息时间", firstSeenAt: "首次消息时间", lastConversationId: "最近会话ID",
-    totalCalls: "调用总数", successCalls: "成功", errorCalls: "失败", averageDurationMs: "平均耗时ms", taskType: "调用类型", provider: "供应商", model: "模型", lastCalledAt: "最近调用时间",
+    totalCalls: "调用总数", successCalls: "成功", errorCalls: "失败", successRate: "成功率", averageDurationMs: "平均耗时ms", taskType: "调用类型", provider: "供应商", model: "模型", lastCalledAt: "最近调用时间",
     ok: "正常", missing: "未配置", error: "异常", unbound: "未绑定", waiting: "等待入群", bound: "已绑定", invalid: "已失效", apiPhone: "客服账号", verifiedName: "显示名称",
     wabaId: "业务账号ID", numberStatus: "号码状态", qualityRating: "质量评分", messagingLimit: "消息额度", syncedAt: "同步时间",
     platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营",

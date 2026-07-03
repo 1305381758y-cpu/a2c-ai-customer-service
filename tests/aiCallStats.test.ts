@@ -14,15 +14,16 @@ describe("AI call stats", () => {
 
     const stats = getMerchantAiCallStats(repos, merchant.id, {});
 
-    expect(stats).toMatchObject({ totalCalls: 3, successCalls: 2, errorCalls: 1 });
+    expect(stats).toMatchObject({ totalCalls: 3, successCalls: 2, errorCalls: 1, successRate: 66.7 });
     expect(stats.availableProviders).toEqual(["deepseek", "minimax"]);
-    expect(stats.byType.find((row) => row.taskType === "translation")).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1 });
-    expect(stats.byProvider.find((row) => row.provider === "minimax")).toMatchObject({ totalCalls: 2 });
+    expect(stats.byType.find((row) => row.taskType === "translation")).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50 });
+    expect(stats.byProvider.find((row) => row.provider === "minimax")).toMatchObject({ totalCalls: 2, successRate: 50 });
     expect(stats.byTypeDetails.find((row) => row.taskType === "translation" && row.provider === "minimax")).toMatchObject({
       model: "MiniMax-M3",
       totalCalls: 2,
       successCalls: 1,
-      errorCalls: 1
+      errorCalls: 1,
+      successRate: 50
     });
   });
 
@@ -35,9 +36,9 @@ describe("AI call stats", () => {
 
     const stats = getMerchantAiCallStats(repos, merchant.id, { provider: "deepseek" });
 
-    expect(stats).toMatchObject({ totalCalls: 1, successCalls: 1, errorCalls: 0 });
+    expect(stats).toMatchObject({ totalCalls: 1, successCalls: 1, errorCalls: 0, successRate: 100 });
     expect(stats.availableProviders).toEqual(["deepseek", "minimax"]);
-    expect(stats.byProvider).toEqual([{ provider: "deepseek", totalCalls: 1, successCalls: 1, errorCalls: 0, averageDurationMs: 80 }]);
+    expect(stats.byProvider).toEqual([{ provider: "deepseek", totalCalls: 1, successCalls: 1, errorCalls: 0, successRate: 100, averageDurationMs: 80 }]);
     expect(stats.byTypeDetails).toEqual([{
       taskType: "intent_classification",
       provider: "deepseek",
@@ -45,6 +46,7 @@ describe("AI call stats", () => {
       totalCalls: 1,
       successCalls: 1,
       errorCalls: 0,
+      successRate: 100,
       averageDurationMs: 80,
       lastCalledAt: expect.any(String)
     }]);
