@@ -1,13 +1,12 @@
 import type { Db } from "./db.js";
 import { parseJsonObject } from "./repositoryJson.js";
+import { normalizeScriptFlowStep, normalizeScriptFlowStepValue } from "./repositoryScriptFlowSteps.js";
 import {
   booleanPatchValue,
   mapScriptFlow,
   mapScriptFlowStep,
   mapScriptFlowVersion,
-  normalizeScriptFlowStatus,
-  normalizeScriptFlowStep,
-  normalizeScriptFlowStepValue
+  normalizeScriptFlowStatus
 } from "./repositoryMappers.js";
 import type { ScriptFlowRecord, ScriptFlowRuntime, ScriptFlowStepRecord, ScriptFlowVersionRecord } from "./repositoryTypes.js";
 
