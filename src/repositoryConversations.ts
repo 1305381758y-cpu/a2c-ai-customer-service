@@ -5,11 +5,16 @@ import {
   type ConversationExportFilters
 } from "./repositoryConversationExports.js";
 import {
+  getCustomerMemory,
+  patchCustomerMemory,
+  updateCustomerMemoryFromMessage,
+  type CustomerMemoryMessageInput
+} from "./repositoryCustomerMemory.js";
+import {
   mapConversation,
   mapConversationMessage,
-  mapCustomerMemory
 } from "./repositoryConversationMappers.js";
-import { buildCustomerMemorySummary, clipText } from "./repositoryJson.js";
+import { clipText } from "./repositoryJson.js";
 import type {
   Conversation,
   ConversationExportRecord,
@@ -181,94 +186,17 @@ export class ConversationRepository {
   }
 
   getCustomerMemory(merchantId: string, countryId: string, customerKey: string): CustomerMemoryRecord | undefined {
-    const row = this.db.sqlite
-      .prepare(`
-        SELECT cm.*, co.code AS country_code, co.name AS country_name
-        FROM customer_memories cm
-        LEFT JOIN merchant_countries co ON co.id = cm.country_id
-        WHERE cm.merchant_id = ? AND cm.country_id = ? AND cm.customer_key = ?
-      `)
-      .get(merchantId, countryId, customerKey) as Record<string, unknown> | undefined;
-    return row ? mapCustomerMemory(row) : undefined;
+    return getCustomerMemory(this.db, merchantId, countryId, customerKey);
   }
 
-  updateCustomerMemoryFromMessage(conversation: Conversation, input: { intent: string; content: string; direction: "inbound" | "outbound" }): CustomerMemoryRecord {
-    const existing = this.getCustomerMemory(conversation.merchantId, conversation.countryId, conversation.customerPhone);
-    const facts = existing?.facts ?? {};
-    const recentSignals = Array.isArray(facts.recentSignals) ? facts.recentSignals as Array<Record<string, unknown>> : [];
-    const signal = {
-      direction: input.direction,
-      intent: input.intent,
-      content: clipText(input.content, 180),
-      at: new Date().toISOString()
-    };
-    const lastIntent = input.direction === "inbound" || input.intent !== "unknown" ? input.intent : existing?.lastIntent ?? "unknown";
-    const nextFacts = {
-      ...facts,
-      customerPhone: conversation.customerPhone,
-      a2cAccountPhone: conversation.a2cAccountPhone,
-      countryId: conversation.countryId,
-      countryName: conversation.countryName,
-      nickname: conversation.nickname,
-      lastIntent,
-      lastMessage: clipText(input.content, 180),
-      recentSignals: [...recentSignals, signal].slice(-10)
-    };
-    const summary = buildCustomerMemorySummary(conversation, lastIntent, existing?.operatorNotes ?? "");
-
-    this.db.sqlite
-      .prepare(`
-        INSERT INTO customer_memories
-          (merchant_id, country_id, customer_key, conversation_id, language, stage, extracted_phone, extracted_telegram, extracted_whatsapp, last_intent, summary, facts_json, operator_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(merchant_id, country_id, customer_key) DO UPDATE SET
-          conversation_id = excluded.conversation_id,
-          language = excluded.language,
-          stage = excluded.stage,
-          extracted_phone = excluded.extracted_phone,
-          extracted_telegram = excluded.extracted_telegram,
-          extracted_whatsapp = excluded.extracted_whatsapp,
-          last_intent = excluded.last_intent,
-          summary = excluded.summary,
-          facts_json = excluded.facts_json,
-          updated_at = CURRENT_TIMESTAMP
-      `)
-      .run(
-        conversation.merchantId,
-        conversation.countryId,
-        conversation.customerPhone,
-        conversation.id,
-        conversation.language,
-        conversation.stage,
-        conversation.extractedPhone,
-        conversation.extractedTelegram,
-        conversation.extractedWhatsApp,
-        lastIntent,
-        summary,
-        JSON.stringify(nextFacts),
-        existing?.operatorNotes ?? ""
-      );
-    return this.getCustomerMemory(conversation.merchantId, conversation.countryId, conversation.customerPhone)!;
+  updateCustomerMemoryFromMessage(conversation: Conversation, input: CustomerMemoryMessageInput): CustomerMemoryRecord {
+    return updateCustomerMemoryFromMessage(this.db, conversation, input);
   }
 
   patchCustomerMemory(conversationId: string, merchantId: string | undefined, patch: Record<string, unknown>): CustomerMemoryRecord | undefined {
     const conversation = this.get(conversationId);
     if (!conversation || (merchantId && conversation.merchantId !== merchantId)) return undefined;
-    const existing = this.getCustomerMemory(conversation.merchantId, conversation.countryId, conversation.customerPhone)
-      ?? this.updateCustomerMemoryFromMessage(conversation, { intent: "unknown", content: "", direction: "inbound" });
-    const facts = typeof patch.facts === "object" && patch.facts !== null && !Array.isArray(patch.facts)
-      ? patch.facts as Record<string, unknown>
-      : existing.facts;
-    const operatorNotes = typeof patch.operatorNotes === "string" ? patch.operatorNotes : existing.operatorNotes;
-    const summary = buildCustomerMemorySummary(conversation, existing.lastIntent, operatorNotes);
-    this.db.sqlite
-      .prepare(`
-        UPDATE customer_memories
-        SET facts_json = ?, operator_notes = ?, summary = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE merchant_id = ? AND country_id = ? AND customer_key = ?
-      `)
-      .run(JSON.stringify(facts), operatorNotes, summary, conversation.merchantId, conversation.countryId, conversation.customerPhone);
-    return this.getCustomerMemory(conversation.merchantId, conversation.countryId, conversation.customerPhone);
+    return patchCustomerMemory(this.db, conversation, patch);
   }
 
   list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: number } = {}): Conversation[] {
