@@ -1,6 +1,7 @@
 import { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantConfigRecord, Repositories } from "../repositories.js";
+import { buildOutboundConversationRawPayload } from "./outboundConversationPayload.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
 import { translateForCustomer, translateForOperator, type TranslationResult } from "./translation.js";
 
@@ -64,18 +65,16 @@ export async function sendManualOutboundMessage(
       msgType: type,
       language: input.conversation.language,
       intent: "unknown",
-      rawPayload: {
-        ...input.rawPayload,
-        originalContent: translation?.originalText,
-        translatedContent: translation?.translatedText,
-        targetLanguage: translation?.targetLanguage,
-        translationStatus: translation?.status,
-        translationError: translation?.error || "",
-        operatorTranslatedContent: operatorTranslation?.translatedText,
-        operatorTranslationTargetLanguage: operatorTranslation?.targetLanguage,
-        operatorTranslationStatus: operatorTranslation?.status,
-        operatorTranslationError: operatorTranslation?.error || ""
-      }
+      rawPayload: buildOutboundConversationRawPayload({
+        basePayload: input.rawPayload,
+        customerTranslation: translation,
+        operatorTranslation,
+        sendResult: {
+          externalId,
+          a2cSendStatus: "sent",
+          a2cSendError: ""
+        }
+      })
     });
     return { ok: true, value: { externalId, conversation: input.conversation, content, translation } };
   } catch (error) {

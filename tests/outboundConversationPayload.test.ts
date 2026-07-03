@@ -47,4 +47,40 @@ describe("buildOutboundConversationRawPayload", () => {
       simulation: true
     });
   });
+
+  it("keeps customer-facing translation separate from operator translation", () => {
+    expect(buildOutboundConversationRawPayload({
+      basePayload: { replyMode: "manual" },
+      customerTranslation: {
+        originalText: "请发送手机号",
+        translatedText: "Por favor, envie seu telefone",
+        targetLanguage: "pt-BR",
+        status: "translated",
+        error: ""
+      },
+      operatorTranslation: {
+        originalText: "Por favor, envie seu telefone",
+        translatedText: "请发送手机号",
+        targetLanguage: "zh-CN",
+        status: "translated",
+        error: ""
+      },
+      sendResult: {
+        externalId: "manual-message-id",
+        a2cSendStatus: "sent",
+        a2cSendError: ""
+      }
+    })).toMatchObject({
+      replyMode: "manual",
+      originalContent: "请发送手机号",
+      translatedContent: "Por favor, envie seu telefone",
+      targetLanguage: "pt-BR",
+      translationStatus: "translated",
+      operatorTranslatedContent: "请发送手机号",
+      operatorTranslationTargetLanguage: "zh-CN",
+      operatorTranslationStatus: "translated",
+      a2cSendStatus: "sent",
+      simulation: false
+    });
+  });
 });
