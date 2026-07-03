@@ -9,6 +9,7 @@ import {
   buildTrainingSampleWhere,
   clampTrainingLimit
 } from "./repositoryTrainingFilters.js";
+import { deleteTrainingMaterialRecord } from "./repositoryTrainingMaterialDeletion.js";
 import {
   mapKnowledgeItem,
   mapTrainingMaterial,
@@ -273,26 +274,7 @@ export class TrainingContentRepository {
   }
 
   deleteTrainingMaterial(id: number, merchantId?: string): boolean {
-    const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-    const material = this.db.sqlite.prepare(`SELECT id FROM training_materials ${where}`).get(id, ...(merchantId ? [merchantId] : [])) as { id: number } | undefined;
-    if (!material) return false;
-    const sampleIds = this.db.sqlite
-      .prepare("SELECT sample_id AS id FROM training_material_items WHERE material_id = ? AND sample_id IS NOT NULL")
-      .all(id)
-      .map((row) => Number((row as { id: number }).id));
-    const knowledgeIds = this.db.sqlite
-      .prepare("SELECT knowledge_id AS id FROM training_material_items WHERE material_id = ? AND knowledge_id IS NOT NULL")
-      .all(id)
-      .map((row) => Number((row as { id: number }).id));
-    this.db.sqlite.prepare("DELETE FROM training_material_items WHERE material_id = ?").run(id);
-    if (sampleIds.length) {
-      this.db.sqlite.prepare(`DELETE FROM training_samples WHERE id IN (${sampleIds.map(() => "?").join(",")})`).run(...sampleIds);
-    }
-    if (knowledgeIds.length) {
-      this.db.sqlite.prepare(`DELETE FROM knowledge_items WHERE id IN (${knowledgeIds.map(() => "?").join(",")})`).run(...knowledgeIds);
-    }
-    this.db.sqlite.prepare(`DELETE FROM training_materials ${where}`).run(id, ...(merchantId ? [merchantId] : []));
-    return true;
+    return deleteTrainingMaterialRecord(this.db, id, merchantId);
   }
 
   listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {

@@ -83,4 +83,71 @@ describe("TrainingContentRepository", () => {
       })
     ]);
   });
+
+  it("deletes a material and its generated sample and knowledge records within merchant scope", () => {
+    const { merchant, country, training } = setup();
+    const other = setup();
+    const material = training.createTrainingMaterial({
+      merchantId: merchant.id,
+      countryId: country.id,
+      sourceType: "txt",
+      filename: "script.txt",
+      mimeType: "text/plain",
+      rawText: "话本",
+      warnings: []
+    });
+    const sample = training.createTrainingSample(merchant.id, {
+      customerMessage: "怎么注册",
+      standardReply: "打开链接",
+      stage: "need_platform_register",
+      intent: "ask_platform_register",
+      language: "zh",
+      keywords: "注册",
+      priority: 1,
+      enabled: true
+    }, country.id);
+    const knowledge = training.createKnowledgeItem(merchant.id, {
+      countryId: country.id,
+      title: "注册说明",
+      content: "按页面提示填写",
+      type: "faq"
+    });
+    training.addTrainingMaterialItem({
+      materialId: material.id,
+      merchantId: merchant.id,
+      countryId: country.id,
+      kind: "sample",
+      sampleId: sample.id,
+      title: "样本",
+      content: "怎么注册 -> 打开链接"
+    });
+    training.addTrainingMaterialItem({
+      materialId: material.id,
+      merchantId: merchant.id,
+      countryId: country.id,
+      kind: "knowledge",
+      knowledgeId: knowledge.id,
+      title: "知识",
+      content: "按页面提示填写"
+    });
+    const otherMaterial = other.training.createTrainingMaterial({
+      merchantId: other.merchant.id,
+      countryId: other.country.id,
+      sourceType: "txt",
+      filename: "other.txt",
+      mimeType: "text/plain",
+      rawText: "其他素材",
+      warnings: []
+    });
+
+    expect(training.deleteTrainingMaterial(material.id, merchant.id)).toBe(true);
+    expect(training.getTrainingMaterial(material.id, merchant.id)).toBeUndefined();
+    expect(training.listTrainingMaterialItems(material.id, merchant.id)).toEqual([]);
+    expect(training.listTrainingSamples({ merchantId: merchant.id, countryId: country.id })).toEqual([]);
+    expect(training.listKnowledgeItems({ merchantId: merchant.id, countryId: country.id })).toEqual([]);
+    expect(other.training.getTrainingMaterial(otherMaterial.id, other.merchant.id)).toEqual(expect.objectContaining({
+      id: otherMaterial.id
+    }));
+    expect(training.deleteTrainingMaterial(material.id, merchant.id)).toBe(false);
+  });
 });
