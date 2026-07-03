@@ -15,6 +15,11 @@ import {
   type ConversationListFilters
 } from "./repositoryConversationLists.js";
 import {
+  markAllConversationsRead,
+  unreadConversationSummary,
+  type MarkAllReadFilters
+} from "./repositoryConversationUnread.js";
+import {
   mapConversation,
   mapConversationMessage,
 } from "./repositoryConversationMappers.js";
@@ -123,17 +128,8 @@ export class ConversationRepository {
     return this.get(conversationId);
   }
 
-  markAllRead(merchantId: string, filters: { a2cAccountPhone?: string } = {}): { updated: number } {
-    const clauses = ["merchant_id = ?", "unread_count > 0"];
-    const params: Array<string | number> = [merchantId];
-    if (filters.a2cAccountPhone) {
-      clauses.push("a2c_account_phone = ?");
-      params.push(filters.a2cAccountPhone);
-    }
-    const result = this.db.sqlite
-      .prepare(`UPDATE conversations SET unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE ${clauses.join(" AND ")}`)
-      .run(...params);
-    return { updated: Number(result.changes ?? 0) };
+  markAllRead(merchantId: string, filters: MarkAllReadFilters = {}): { updated: number } {
+    return markAllConversationsRead(this.db, merchantId, filters);
   }
 
   pin(conversationId: string, merchantId: string, pinned: boolean): Conversation | undefined {
@@ -144,25 +140,7 @@ export class ConversationRepository {
   }
 
   unreadSummary(merchantId: string): UnreadSummaryRecord[] {
-    const rows = this.db.sqlite.prepare(`
-      SELECT a2c_account_phone, id AS conversation_id, customer_phone, unread_count
-      FROM conversations
-      WHERE merchant_id = ? AND unread_count > 0
-      ORDER BY updated_at DESC
-    `).all(merchantId) as Array<{ a2c_account_phone: string; conversation_id: string; customer_phone: string; unread_count: number }>;
-    const grouped = new Map<string, UnreadSummaryRecord>();
-    for (const row of rows) {
-      const account = String(row.a2c_account_phone);
-      const existing = grouped.get(account) ?? { a2cAccountPhone: account, unreadCount: 0, conversations: [] };
-      existing.unreadCount += Number(row.unread_count || 0);
-      existing.conversations.push({
-        conversationId: String(row.conversation_id),
-        customerPhone: String(row.customer_phone),
-        unreadCount: Number(row.unread_count || 0)
-      });
-      grouped.set(account, existing);
-    }
-    return [...grouped.values()];
+    return unreadConversationSummary(this.db, merchantId);
   }
 
   listMessages(conversationId: string, limit = 20): ConversationMessageRecord[] {
