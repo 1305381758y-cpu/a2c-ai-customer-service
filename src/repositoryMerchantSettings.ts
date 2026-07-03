@@ -1,7 +1,8 @@
 import type { A2CTokenStore } from "./clients/a2c.js";
 import type { Db } from "./db.js";
 import { inferCountryProfile } from "./repositoryCountryProfile.js";
-import { booleanPatchValue, mapMerchantConfig, mapMerchantCountry } from "./repositoryMappers.js";
+import { mapMerchantConfig, mapMerchantCountry } from "./repositoryMerchantMappers.js";
+import { booleanPatchValue } from "./repositoryPatchValues.js";
 import type { MerchantConfigRecord, MerchantCountryRecord } from "./repositoryTypes.js";
 
 export class MerchantSettingsRepository {

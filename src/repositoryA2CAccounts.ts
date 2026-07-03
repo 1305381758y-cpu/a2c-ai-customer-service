@@ -4,7 +4,7 @@ import { inviteCodeAccountMatches, normalizeInviteCodeStatus } from "./repositor
 import {
   mapA2CInviteCode,
   mapMerchantA2CAccount
-} from "./repositoryMappers.js";
+} from "./repositoryMerchantMappers.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantA2CAccountRecord, MerchantConfigRecord } from "./repositoryTypes.js";
 
 export class MerchantA2CAccountRepository {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db.js";
-import { mapMerchant } from "./repositoryMappers.js";
+import { mapMerchant } from "./repositoryMerchantMappers.js";
 import type { MerchantRecord } from "./repositoryTypes.js";
 
 export class MerchantRepository {

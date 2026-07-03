@@ -1,5 +1,6 @@
 import type { Db } from "./db.js";
-import { booleanPatchValue, mapMerchantAgentProfile } from "./repositoryMappers.js";
+import { mapMerchantAgentProfile } from "./repositoryMerchantMappers.js";
+import { booleanPatchValue } from "./repositoryPatchValues.js";
 import type { MerchantAgentProfileRecord } from "./repositoryTypes.js";
 
 export class MerchantAgentProfileRepository {
