@@ -462,6 +462,8 @@ export function migrate(db: DatabaseSync): void {
       status TEXT NOT NULL DEFAULT 'success',
       duration_ms INTEGER DEFAULT 0,
       error TEXT DEFAULT '',
+      http_status INTEGER,
+      response_summary TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 	  `);
@@ -551,6 +553,8 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "ai_call_logs", "status", "TEXT NOT NULL DEFAULT 'success'");
   ensureColumn(db, "ai_call_logs", "duration_ms", "INTEGER DEFAULT 0");
   ensureColumn(db, "ai_call_logs", "error", "TEXT DEFAULT ''");
+  ensureColumn(db, "ai_call_logs", "http_status", "INTEGER");
+  ensureColumn(db, "ai_call_logs", "response_summary", "TEXT DEFAULT ''");
   migrateCustomerMemoriesCountryKey(db);
 
   db.prepare("INSERT OR IGNORE INTO merchants (id, name, status) VALUES ('default', '默认商户', 'active')").run();

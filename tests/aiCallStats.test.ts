@@ -9,7 +9,7 @@ describe("AI call stats", () => {
     const repos = new Repositories(db);
     const merchant = repos.createMerchant("模型调用统计商户");
     repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "success", durationMs: 120 });
-    repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "error", durationMs: 300, error: "rate limit" });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "error", durationMs: 300, error: "rate limit", httpStatus: 429, responseSummary: "{\"providerError\":\"rate limit\"}" });
     repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "intent_classification", status: "success", durationMs: 80 });
 
     const stats = getMerchantAiCallStats(repos, merchant.id, {});
@@ -30,6 +30,8 @@ describe("AI call stats", () => {
       provider: "minimax",
       model: "MiniMax-M3",
       errorMessage: "rate limit",
+      httpStatus: 429,
+      responseSummary: "{\"providerError\":\"rate limit\"}",
       errorCalls: 1,
       lastFailedAt: expect.any(String)
     }]);
@@ -41,7 +43,7 @@ describe("AI call stats", () => {
     const merchant = repos.createMerchant("供应商筛选商户");
     repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "success", durationMs: 120 });
     repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "intent_classification", status: "success", durationMs: 80 });
-    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "contextual_intent", status: "error", durationMs: 15000, error: "DeepSeek 返回内容为空" });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "contextual_intent", status: "error", durationMs: 15000, error: "DeepSeek 返回内容为空", httpStatus: 200, responseSummary: "{\"choicesCount\":1,\"contentLength\":0}" });
 
     const stats = getMerchantAiCallStats(repos, merchant.id, { provider: "deepseek" });
 
@@ -64,6 +66,8 @@ describe("AI call stats", () => {
       provider: "deepseek",
       model: "deepseek-chat",
       errorMessage: "DeepSeek 返回内容为空",
+      httpStatus: 200,
+      responseSummary: "{\"choicesCount\":1,\"contentLength\":0}",
       errorCalls: 1,
       lastFailedAt: expect.any(String)
     }]);

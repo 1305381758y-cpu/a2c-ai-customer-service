@@ -185,7 +185,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
       </section>
       <section className="assistant-card">
         <h3>失败原因明细</h3>
-        <Table rows={data.byError} columns={["taskType", "provider", "model", "errorMessage", "errorCalls", "lastFailedAt"]} />
+        <Table rows={data.byError} columns={["taskType", "provider", "model", "errorMessage", "httpStatus", "responseSummary", "errorCalls", "lastFailedAt"]} />
       </section>
     </section>
   </div>;

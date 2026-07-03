@@ -50,9 +50,17 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
   });
   const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
   const providerError = extractProviderError(payload);
-  if (!response.ok || providerError) throw new Error(`DeepSeek 调用失败：${providerError || response.statusText}`);
+  if (!response.ok || providerError) throw aiProviderResponseError(
+    `DeepSeek 调用失败：${providerError || response.statusText}`,
+    response.status,
+    summarizeChatCompletionPayload(payload)
+  );
   const text = extractTextFromChatCompletion(payload).trim();
-  if (!text) throw new Error("DeepSeek 返回内容为空");
+  if (!text) throw aiProviderResponseError(
+    "DeepSeek 返回内容为空",
+    response.status,
+    summarizeChatCompletionPayload(payload)
+  );
   return text;
 }
 
@@ -298,6 +306,38 @@ function extractProviderError(payload: Record<string, unknown>): string {
         ? payload.message
         : "";
   return normalizeProviderError(raw, payload);
+}
+
+function aiProviderResponseError(message: string, httpStatus: number, responseSummary: string): Error {
+  const error = new Error(message) as Error & { httpStatus?: number; responseSummary?: string };
+  error.httpStatus = httpStatus;
+  error.responseSummary = responseSummary;
+  return error;
+}
+
+function summarizeChatCompletionPayload(payload: Record<string, unknown>): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const first = choices[0] as Record<string, unknown> | undefined;
+  const message = first?.message as Record<string, unknown> | undefined;
+  const content = message?.content ?? first?.text ?? payload.reply ?? payload.output;
+  const summary = {
+    topKeys: Object.keys(payload).slice(0, 12),
+    choicesCount: choices.length,
+    finishReason: typeof first?.finish_reason === "string" ? first.finish_reason : "",
+    messageKeys: message ? Object.keys(message).slice(0, 12) : [],
+    contentType: Array.isArray(content) ? "array" : typeof content,
+    contentLength: typeof content === "string" ? content.length : Array.isArray(content) ? content.length : 0,
+    contentPreview: typeof content === "string" ? safePreview(content) : "",
+    providerError: extractProviderError(payload)
+  };
+  return JSON.stringify(summary);
+}
+
+function safePreview(text: string): string {
+  return text
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]")
+    .replace(/(?<!\d)\+?\d[\d\s().-]{5,}\d(?!\d)/g, "[number]")
+    .slice(0, 180);
 }
 
 function normalizeProviderError(raw: string, payload: Record<string, unknown>): string {

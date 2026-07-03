@@ -12,6 +12,8 @@ export type AiCallTelemetryInput = {
   status: "success" | "error";
   durationMs: number;
   error?: string;
+  httpStatus?: number;
+  responseSummary?: string;
 };
 
 let aiCallRecorder: ((input: AiCallTelemetryInput) => void) | undefined;
@@ -52,13 +54,16 @@ export async function generateAiText(
     recordAiCall(config, { provider, model, taskType: options.taskType || "unknown", status: "success", durationMs: Date.now() - startedAt });
     return text;
   } catch (error) {
+    const telemetry = extractErrorTelemetry(error);
     recordAiCall(config, {
       provider,
       model,
       taskType: options.taskType || "unknown",
       status: "error",
       durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      httpStatus: telemetry.httpStatus,
+      responseSummary: telemetry.responseSummary
     });
     throw error;
   }
@@ -103,4 +108,13 @@ function recordAiCall(
   } catch {
     // AI telemetry must never affect customer replies.
   }
+}
+
+function extractErrorTelemetry(error: unknown): { httpStatus?: number; responseSummary?: string } {
+  if (!error || typeof error !== "object") return {};
+  const candidate = error as { httpStatus?: unknown; responseSummary?: unknown };
+  return {
+    httpStatus: typeof candidate.httpStatus === "number" ? candidate.httpStatus : undefined,
+    responseSummary: typeof candidate.responseSummary === "string" ? candidate.responseSummary : undefined
+  };
 }

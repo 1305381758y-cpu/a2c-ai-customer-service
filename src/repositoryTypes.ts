@@ -456,6 +456,8 @@ export interface AiCallLogInput {
   status: "success" | "error";
   durationMs: number;
   error?: string;
+  httpStatus?: number;
+  responseSummary?: string;
 }
 
 export interface AiCallStats {
@@ -468,5 +470,5 @@ export interface AiCallStats {
   byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
-  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; errorCalls: number; lastFailedAt: string }>;
+  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; httpStatus: number | null; responseSummary: string; errorCalls: number; lastFailedAt: string }>;
 }

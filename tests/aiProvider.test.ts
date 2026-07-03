@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { detectAiLanguage, generateAiText } from "../src/clients/aiProvider.js";
+import { setAiCallRecorder, type AiCallTelemetryInput } from "../src/clients/aiProviderRuntime.js";
 import { loadConfig } from "../src/config.js";
 
 function config() {
@@ -11,6 +12,7 @@ function config() {
 }
 
 afterEach(() => {
+  setAiCallRecorder(undefined);
   vi.restoreAllMocks();
 });
 
@@ -107,5 +109,47 @@ describe("DeepSeek provider", () => {
       { role: "user", content: "hello" }
     ]);
     expect(body.max_tokens).toBe(32);
+  });
+
+  it("records a response summary when DeepSeek returns an empty message", async () => {
+    const calls: AiCallTelemetryInput[] = [];
+    setAiCallRecorder((input) => calls.push(input));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "chatcmpl-empty",
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              role: "assistant",
+              content: ""
+            }
+          }
+        ]
+      })
+    } as Response);
+
+    await expect(generateAiText(loadConfig({
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "sk-deepseek-test",
+      DEEPSEEK_MODEL: "deepseek-chat"
+    }), "classify", { taskType: "intent_classification", maxOutputTokens: 32 })).rejects.toThrow("DeepSeek 返回内容为空");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      provider: "deepseek",
+      model: "deepseek-chat",
+      taskType: "intent_classification",
+      status: "error",
+      httpStatus: 200
+    });
+    expect(JSON.parse(calls[0].responseSummary || "{}")).toMatchObject({
+      choicesCount: 1,
+      finishReason: "stop",
+      contentType: "string",
+      contentLength: 0
+    });
   });
 });
