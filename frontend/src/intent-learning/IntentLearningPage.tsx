@@ -1,17 +1,23 @@
 import { useEffect, useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { Filters, IntentLearningEvent, MerchantCountry } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, formatDateTime, label, languageName, statusTone } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import {
+  intentLearningBase,
+  intentLearningRowsUrl,
+  loadIntentLearningEvents,
+  patchIntentLearningEvent
+} from "./intentLearningApi.js";
 
 export function IntentLearningPage({ platform = false }: { platform?: boolean }) {
-  const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
+  const base = intentLearningBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, limit: filters.limit });
+  const rowsUrl = intentLearningRowsUrl(platform, filters);
   const [rows, setRows] = useRows<IntentLearningEvent>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<IntentLearningEvent | null>(null);
@@ -23,14 +29,14 @@ export function IntentLearningPage({ platform = false }: { platform?: boolean })
   }, [selected]);
 
   const reload = async () => {
-    const next = await loadRows<IntentLearningEvent>(rowsUrl);
+    const next = await loadIntentLearningEvents(rowsUrl);
     setRows(next);
     pager.setPage(1);
     setSelected((current) => current ? next.find((item) => item.id === current.id) || null : null);
   };
   const patchSelected = async (patch: Record<string, unknown>, message = "意图候选已更新") => {
     if (!selected) return;
-    const saved = await api<IntentLearningEvent>(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    const saved = await patchIntentLearningEvent(base, selected.id, patch);
     setRows((current) => current.map((item) => item.id === saved.id ? saved : item));
     setSelected(saved);
     notify("success", message);
