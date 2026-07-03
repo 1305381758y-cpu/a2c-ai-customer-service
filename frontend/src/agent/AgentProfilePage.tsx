@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 import type { AgentProfile, Merchant, Toast } from "../types.js";
-import { loadAgentProfile, loadAgentProfileMerchants, saveAgentProfile } from "./agentProfileApi.js";
 
+type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
 type Notify = (type: Toast["type"], title: string, detail?: string) => void;
 type AsyncButtonComponent = React.ComponentType<{
   children: React.ReactNode;
@@ -16,29 +16,38 @@ type AsyncButtonComponent = React.ComponentType<{
 export function AgentProfilePage({
   platform,
   canEdit,
+  api,
   notify,
-  AsyncButton
+  AsyncButton,
+  loadRows
 }: {
   platform: boolean;
   canEdit: boolean;
+  api: ApiClient;
   notify: Notify;
   AsyncButton: AsyncButtonComponent;
+  loadRows: <T>(url: string) => Promise<T[]>;
 }) {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<AgentProfile | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const url = platform ? `/api/admin/merchants/${merchantId}/agent-profile` : "/api/merchant/agent-profile";
 
   useEffect(() => {
-    loadAgentProfileMerchants(platform).then(setMerchants).catch(() => setMerchants([]));
-  }, [platform]);
+    if (!platform) {
+      setMerchants([]);
+      return;
+    }
+    loadRows<Merchant>("/api/admin/merchants").then(setMerchants).catch(() => setMerchants([]));
+  }, [loadRows, platform]);
 
-  const load = async () => setForm(await loadAgentProfile(platform, merchantId));
+  const load = async () => setForm(await api<AgentProfile>(url));
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "加载 Agent 配置失败"));
-  }, [platform, merchantId]);
+  }, [url]);
 
   const fields: Array<[keyof AgentProfile, string, string]> = [
     ["agentName", "Agent名称", "例如：开户注册接待专员"],
@@ -56,7 +65,7 @@ export function AgentProfilePage({
     setMessage("");
     setError("");
     try {
-      const saved = await saveAgentProfile(platform, merchantId, form);
+      const saved = await api<AgentProfile>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       setMessage("Agent 配置已保存，后续严格流程、普通回复和模拟训练都会使用这份设定。");
       notify("success", "Agent 配置已保存");

@@ -1,32 +1,25 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { useRows } from "../app/api.js";
+import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
 import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
+import { coercePatch } from "../ui/form.js";
 import { countryLabel, label } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import {
-  buildKnowledgeUrl,
-  createKnowledgeItem,
-  deleteKnowledgeItem,
-  knowledgeBase,
-  loadKnowledgeItems,
-  updateKnowledgeItem
-} from "./knowledgeApi.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
-  const base = knowledgeBase(platform);
+  const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
-  const rowsUrl = buildKnowledgeUrl(platform, filters);
+  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled });
   const [rows, setRows] = useRows<Knowledge>(rowsUrl);
   const pager = useClientPagination(rows, 20);
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
   const reload = async () => {
-    setRows(await loadKnowledgeItems(rowsUrl));
+    setRows(await loadRows(rowsUrl));
     pager.setPage(1);
   };
 
@@ -57,7 +50,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             disabled={!form.title.trim() || !form.content.trim()}
             busyText="新增中..."
             onClick={async () => {
-              await createKnowledgeItem(base, form, form.countryId || filters.countryId || countries[0]?.id || "");
+              await api(base, { method: "POST", body: JSON.stringify(coercePatch({ ...form, countryId: form.countryId || filters.countryId || countries[0]?.id || "" })) });
               setForm({ ...form, title: "", content: "" });
               await reload();
             }}
@@ -76,12 +69,12 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
             selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }}
             onSave={async (patch) => {
-              await updateKnowledgeItem(base, selected.id, patch);
+              await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
               await reload();
             }}
             onDelete={async () => {
               if (!window.confirm("确认彻底删除这条知识？删除后 AI 不会再引用它。")) return;
-              await deleteKnowledgeItem(base, selected.id);
+              await api(`${base}/${selected.id}`, { method: "DELETE" });
               setSelected(null);
               await reload();
               notify("success", "知识已彻底删除");

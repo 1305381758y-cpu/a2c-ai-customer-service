@@ -1,6 +1,5 @@
 import { FileText } from "lucide-react";
 import type { Filters } from "../types.js";
-import { buildConversationExportUrl } from "./conversationApi.js";
 
 export const EXPORT_ALL_FILTERS: Filters = { limit: "50000" };
 
@@ -9,7 +8,7 @@ type ExportFormat = "csv" | "jsonl";
 type ExportStartedHandler = (format: ExportFormat) => void;
 
 export function downloadConversationExport(base: string, filters: Filters, format: ExportFormat, onStarted?: ExportStartedHandler) {
-  const url = buildConversationExportUrl(base, filters, format);
+  const url = withQuery(base, { ...filters, format });
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = "";
@@ -46,4 +45,13 @@ export function ConversationExportBar({
       {scopedFilters && <button onClick={() => downloadConversationExport(base, scopedFilters, "jsonl", onExportStarted)}><FileText size={15}/>{scopedLabel} JSONL</button>}
     </div>
   </div>;
+}
+
+function withQuery(base: string, filters: Filters): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== "") params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
 }

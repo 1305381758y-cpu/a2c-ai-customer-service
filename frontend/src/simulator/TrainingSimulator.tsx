@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 
 import { ConversationComposer } from "../conversations/ConversationComposer.js";
-import type { A2CAccount, ChatMessage, Conversation, Toast } from "../types.js";
-import { loadSimulatorA2CAccounts, sendSimulatorMessage } from "./simulatorApi.js";
+import type { A2CAccount, ChatMessage, Conversation, SimulatorResponse, Toast } from "../types.js";
 
+type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
 type Notify = (type: Toast["type"], title: string, detail?: string) => void;
 type AsyncButtonComponent = React.ComponentType<{
   children: React.ReactNode;
@@ -15,12 +15,14 @@ type AsyncButtonComponent = React.ComponentType<{
 }>;
 
 export function TrainingSimulator({
+  api,
   notify,
   AsyncButton,
   formatDateTime,
   displayValue,
   countryLabel
 }: {
+  api: ApiClient;
   notify: Notify;
   AsyncButton: AsyncButtonComponent;
   formatDateTime: (value: string) => string;
@@ -40,10 +42,10 @@ export function TrainingSimulator({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    loadSimulatorA2CAccounts()
-      .then(setAccounts)
+    api<{ rows: A2CAccount[] }>("/api/merchant/a2c/accounts")
+      .then((res) => setAccounts(res.rows || []))
       .catch(() => setAccounts([]));
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     if (!form.a2cAccountPhone && accounts[0]?.apiPhone) {
@@ -53,11 +55,15 @@ export function TrainingSimulator({
 
   const send = async () => {
     setError("");
-    const res = await sendSimulatorMessage({
-      customerPhone: form.customerPhone,
-      nickname: form.nickname,
-      a2cAccountPhone: form.a2cAccountPhone,
-      content: form.content
+    const res = await api<SimulatorResponse>("/api/merchant/training-simulator/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        customerPhone: form.customerPhone,
+        nickname: form.nickname,
+        a2cAccountPhone: form.a2cAccountPhone || undefined,
+        content: form.content,
+        msgType: "text"
+      })
     });
     setRows(res.rows || []);
     setConversation(res.conversation || null);
