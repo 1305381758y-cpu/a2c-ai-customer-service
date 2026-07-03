@@ -11,6 +11,10 @@ import {
   type CustomerMemoryMessageInput
 } from "./repositoryCustomerMemory.js";
 import {
+  listConversations,
+  type ConversationListFilters
+} from "./repositoryConversationLists.js";
+import {
   mapConversation,
   mapConversationMessage,
 } from "./repositoryConversationMappers.js";
@@ -199,55 +203,8 @@ export class ConversationRepository {
     return patchCustomerMemory(this.db, conversation, patch);
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: number } = {}): Conversation[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("c.merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("c.country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.status) {
-      clauses.push("c.status = ?");
-      params.push(filters.status);
-    }
-    if (filters.language) {
-      clauses.push("c.language = ?");
-      params.push(filters.language);
-    }
-    if (filters.handoffStatus) {
-      clauses.push("c.handoff_status = ?");
-      params.push(filters.handoffStatus);
-    }
-    if (filters.a2cAccountPhone) {
-      clauses.push("c.a2c_account_phone = ?");
-      params.push(filters.a2cAccountPhone);
-    }
-    if (filters.customerPhone) {
-      clauses.push("c.customer_phone = ?");
-      params.push(filters.customerPhone);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
-    params.push(limit);
-
-    return this.db.sqlite
-      .prepare(`
-        SELECT c.*, co.code AS country_code, co.name AS country_name
-        FROM conversations c
-        LEFT JOIN merchant_countries co ON co.id = c.country_id
-        ${where}
-        ORDER BY CASE WHEN COALESCE(c.pinned_at, '') != '' THEN 0 ELSE 1 END,
-                 c.pinned_at DESC,
-                 CASE WHEN c.unread_count > 0 THEN 0 ELSE 1 END,
-                 c.updated_at DESC
-        LIMIT ?
-      `)
-      .all(...params)
-      .map((row) => mapConversation(row as Record<string, unknown>));
+  list(filters: ConversationListFilters = {}): Conversation[] {
+    return listConversations(this.db, filters);
   }
 
   delete(id: string, merchantId?: string): boolean {
