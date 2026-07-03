@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, RefreshCw } from "lucide-react";
 
 import { api, loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../types.js";
-import { AsyncButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
-import { inferCountryProfile, label, languageName, translateSystemMessage } from "../ui/formatters.js";
+import { inferCountryProfile, languageName, translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { A2CAccountsSection } from "./A2CAccountsSection.js";
+import { ConfigActionsPanel } from "./ConfigActionsPanel.js";
 import { ConfigOverviewSection } from "./ConfigOverviewSection.js";
 import { CountrySettingsCard, type CountryDraft } from "./CountrySettingsCard.js";
 import { RegistrationTutorialImageCard } from "./RegistrationTutorialImageCard.js";
@@ -167,9 +166,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
     <ConfigOverviewSection form={form} webhookUrl={a2cWebhookUrl} onFormChange={setForm} onCopied={() => setMessage("Webhook 地址已复制。")} />
     <RegistrationTutorialImageCard imageUrl={form.registrationTutorialImageUrl} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
-    <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
-    {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
-    {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
+    <ConfigActionsPanel checks={checks} error={error} message={message} onSave={saveConfig} onSyncA2C={() => syncA2CAccounts()} onCheck={runConfigCheck} />
     <CountrySettingsCard countries={countries} draft={countryDraft} onDraftChange={updateCountryDraft} onLoadCountry={loadCountryDraft} onReInfer={reInferCountryDraft} onSave={saveCountry} />
     <A2CAccountsSection accounts={a2cAccounts} countries={countries} platform={platform} onToggleAccount={toggleA2CAccount} />
     <TelegramBindingCard form={form} onSetup={setupTelegram} onRefresh={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
