@@ -17,7 +17,7 @@ import {
   pinMerchantConversation,
   updateMerchantHandoffStatus
 } from "../services/merchantConversations.js";
-import { normalizeConversationExportQuery, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
+import { listConversationExportRows, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
 import { registerMerchantOutboundMessageRoutes } from "./merchantOutboundMessageRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
@@ -36,10 +36,7 @@ export function registerMerchantConversationRoutes(app: FastifyInstance, deps: M
   }));
 
   app.get<{ Querystring: ConversationExportQuery }>("/api/merchant/conversations/export", { preHandler: deps.merchantRoles }, async (request, reply) => {
-    const rows = deps.repos.exportConversationMessages({
-      ...normalizeConversationExportQuery(request.query),
-      merchantId: scopedMerchantId(request)
-    });
+    const rows = listConversationExportRows(deps.repos, request.query, { merchantId: scopedMerchantId(request) });
     return sendConversationExport(reply, rows, request.query.format, "merchant-conversations");
   });
 

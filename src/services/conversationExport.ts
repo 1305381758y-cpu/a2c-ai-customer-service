@@ -1,4 +1,4 @@
-import type { ConversationExportRecord } from "../repositories.js";
+import type { ConversationExportRecord, Repositories } from "../repositories.js";
 
 export type ConversationExportQuery = {
   merchantId?: string;
@@ -22,6 +22,18 @@ export type ConversationExportFile = {
   filename: string;
   body: string;
 };
+
+export function listConversationExportRows(
+  repos: Repositories,
+  query: ConversationExportQuery,
+  scope: { merchantId?: string } = {}
+): ConversationExportRecord[] {
+  const filters = normalizeConversationExportQuery(query);
+  return repos.exportConversationMessages({
+    ...filters,
+    merchantId: scope.merchantId ?? filters.merchantId
+  });
+}
 
 export function normalizeConversationExportQuery(query: ConversationExportQuery) {
   const direction = query.direction === "inbound" || query.direction === "outbound" ? query.direction : undefined;

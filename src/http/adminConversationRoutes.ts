@@ -19,7 +19,7 @@ import {
   type AdminCustomerListQuery,
   type AdminIntentLearningListQuery
 } from "../services/adminConversations.js";
-import { normalizeConversationExportQuery, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
+import { listConversationExportRows, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
 
 type AdminConversationRoutesDeps = {
   config: AppConfig;
@@ -33,7 +33,7 @@ export function registerAdminConversationRoutes(app: FastifyInstance, deps: Admi
   );
 
   app.get<{ Querystring: ConversationExportQuery }>("/api/admin/conversations/export", { preHandler: deps.adminOnly }, async (request, reply) => {
-    const rows = deps.repos.exportConversationMessages(normalizeConversationExportQuery(request.query));
+    const rows = listConversationExportRows(deps.repos, request.query);
     return sendConversationExport(reply, rows, request.query.format, "admin-conversations");
   });
 

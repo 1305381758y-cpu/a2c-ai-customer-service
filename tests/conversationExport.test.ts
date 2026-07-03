@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationExportRecord } from "../src/repositories.js";
-import { buildConversationExportFile, normalizeConversationExportQuery } from "../src/services/conversationExport.js";
+import { buildConversationExportFile, listConversationExportRows, normalizeConversationExportQuery } from "../src/services/conversationExport.js";
 
 describe("conversation export service", () => {
   it("normalizes query filters and ignores unsupported enum values", () => {
@@ -63,6 +63,54 @@ describe("conversation export service", () => {
     expect(file.filename).toBe("admin-conversations-2026-07-03-16-30-05.jsonl");
     expect(file.body.endsWith("\n")).toBe(true);
     expect(JSON.parse(file.body)).toMatchObject({ createdAt: "2026-07-03 16:00:00" });
+  });
+
+  it("lists admin export rows with normalized filters", () => {
+    const calls: unknown[] = [];
+    const repos = {
+      exportConversationMessages(filters: unknown) {
+        calls.push(filters);
+        return [exportRow({ merchantId: "merchant-2" })];
+      }
+    };
+
+    const rows = listConversationExportRows(
+      repos as never,
+      { merchantId: " merchant-2 ", direction: "inbound", status: "active", limit: "20" }
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(calls).toEqual([
+      expect.objectContaining({
+        merchantId: "merchant-2",
+        direction: "inbound",
+        status: "active",
+        limit: 20
+      })
+    ]);
+  });
+
+  it("forces merchant scoped exports to the current merchant", () => {
+    const calls: unknown[] = [];
+    const repos = {
+      exportConversationMessages(filters: unknown) {
+        calls.push(filters);
+        return [exportRow({ merchantId: "merchant-safe" })];
+      }
+    };
+
+    listConversationExportRows(
+      repos as never,
+      { merchantId: "merchant-from-query", customerPhone: " 591000 " },
+      { merchantId: "merchant-safe" }
+    );
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        merchantId: "merchant-safe",
+        customerPhone: "591000"
+      })
+    ]);
   });
 });
 

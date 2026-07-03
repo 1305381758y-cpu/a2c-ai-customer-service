@@ -2,11 +2,11 @@ import type { FastifyReply } from "fastify";
 import type { ConversationExportRecord } from "../repositories.js";
 import {
   buildConversationExportFile,
-  normalizeConversationExportQuery,
+  listConversationExportRows,
   type ConversationExportQuery
 } from "../services/conversationExport.js";
 
-export { normalizeConversationExportQuery, type ConversationExportQuery };
+export { listConversationExportRows, type ConversationExportQuery };
 
 export function sendConversationExport(reply: FastifyReply, rows: ConversationExportRecord[], format: string | undefined, prefix: string) {
   const file = buildConversationExportFile(rows, format, prefix);
