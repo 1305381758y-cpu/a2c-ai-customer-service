@@ -170,6 +170,11 @@ describe("DeepSeek provider", () => {
       status: "error",
       httpStatus: 200
     });
+    expect(JSON.parse(calls[0].requestSummary || "{}")).toMatchObject({
+      taskType: "intent_classification",
+      maxOutputTokens: 32,
+      userContentLength: 8
+    });
     expect(JSON.parse(calls[0].responseSummary || "{}")).toMatchObject({
       choicesCount: 1,
       finishReason: "stop",

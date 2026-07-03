@@ -10,6 +10,7 @@ export interface AiCallLogInput {
   durationMs: number;
   error?: string;
   httpStatus?: number;
+  requestSummary?: string;
   responseSummary?: string;
 }
 
@@ -30,7 +31,7 @@ export interface AiCallStats {
   byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
-  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; httpStatus: number | null; responseSummary: string; errorCalls: number; lastFailedAt: string }>;
+  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; httpStatus: number | null; requestSummary: string; responseSummary: string; errorCalls: number; lastFailedAt: string }>;
 }
 
 export class AiCallRepository {
@@ -40,8 +41,8 @@ export class AiCallRepository {
     this.db.sqlite
       .prepare(`
         INSERT INTO ai_call_logs
-          (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, http_status, response_summary)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, http_status, request_summary, response_summary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         input.merchantId || "",
@@ -53,6 +54,7 @@ export class AiCallRepository {
         Math.max(0, Math.round(input.durationMs || 0)),
         (input.error || "").slice(0, 500),
         input.httpStatus ?? null,
+        (input.requestSummary || "").slice(0, 2000),
         (input.responseSummary || "").slice(0, 1500)
       );
   }
@@ -114,12 +116,13 @@ export class AiCallRepository {
         model,
         COALESCE(NULLIF(error, ''), '未知错误') AS error,
         http_status,
+        COALESCE(NULLIF(request_summary, ''), '') AS request_summary,
         COALESCE(NULLIF(response_summary, ''), '') AS response_summary,
         COUNT(*) AS error_calls,
         MAX(created_at) AS last_failed_at
       FROM ai_call_logs
       ${where ? `${where} AND status = 'error'` : "WHERE status = 'error'"}
-      GROUP BY task_type, provider, model, error, http_status, response_summary
+      GROUP BY task_type, provider, model, error, http_status, request_summary, response_summary
       ORDER BY error_calls DESC, last_failed_at DESC
       LIMIT 50
     `).all(...params).map(mapErrorRow);
@@ -219,6 +222,7 @@ function mapErrorRow(row: Record<string, unknown>) {
     model: String(row.model || "unknown"),
     errorMessage: String(row.error || "未知错误"),
     httpStatus: row.http_status === null || row.http_status === undefined ? null : Number(row.http_status),
+    requestSummary: String(row.request_summary || ""),
     responseSummary: String(row.response_summary || ""),
     errorCalls: Number(row.error_calls ?? 0),
     lastFailedAt: String(row.last_failed_at || "")

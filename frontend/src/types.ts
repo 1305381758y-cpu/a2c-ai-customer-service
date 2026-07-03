@@ -35,5 +35,5 @@ export type AiCallStats = {
   byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
-  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; httpStatus: number | null; responseSummary: string; errorCalls: number; lastFailedAt: string }>;
+  byError: Array<{ taskType: string; provider: string; model: string; errorMessage: string; httpStatus: number | null; requestSummary: string; responseSummary: string; errorCalls: number; lastFailedAt: string }>;
 };

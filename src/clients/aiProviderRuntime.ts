@@ -13,6 +13,7 @@ export type AiCallTelemetryInput = {
   durationMs: number;
   error?: string;
   httpStatus?: number;
+  requestSummary?: string;
   responseSummary?: string;
 };
 
@@ -45,13 +46,14 @@ export async function generateAiText(
   const provider = selectedAiProvider(config);
   const startedAt = Date.now();
   const model = aiModelName(config, provider);
+  const requestSummary = summarizeAiRequest(contents, options);
   try {
     const text = provider === "gemini"
       ? await generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options)
       : provider === "deepseek"
         ? await generateDeepSeekText(config, contents, options)
         : await generateMiniMaxText(config, contents, options);
-    recordAiCall(config, { provider, model, taskType: options.taskType || "unknown", status: "success", durationMs: Date.now() - startedAt });
+    recordAiCall(config, { provider, model, taskType: options.taskType || "unknown", status: "success", durationMs: Date.now() - startedAt, requestSummary });
     return text;
   } catch (error) {
     const telemetry = extractErrorTelemetry(error);
@@ -63,6 +65,7 @@ export async function generateAiText(
       durationMs: Date.now() - startedAt,
       error: error instanceof Error ? error.message : String(error),
       httpStatus: telemetry.httpStatus,
+      requestSummary,
       responseSummary: telemetry.responseSummary
     });
     throw error;
@@ -117,4 +120,28 @@ function extractErrorTelemetry(error: unknown): { httpStatus?: number; responseS
     httpStatus: typeof candidate.httpStatus === "number" ? candidate.httpStatus : undefined,
     responseSummary: typeof candidate.responseSummary === "string" ? candidate.responseSummary : undefined
   };
+}
+
+function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOptions): string {
+  const userText = typeof contents === "string"
+    ? contents
+    : contents.map((part) => part.text || (part.inlineData ? "[image]" : "")).join("\n").trim();
+  const summary = {
+    taskType: options.taskType || "unknown",
+    temperature: options.temperature ?? 0.2,
+    maxOutputTokens: options.maxOutputTokens ?? 1200,
+    hasSystemInstruction: Boolean(options.systemInstruction),
+    systemInstructionLength: options.systemInstruction?.length ?? 0,
+    systemInstructionPreview: safeTelemetryPreview(options.systemInstruction || ""),
+    userContentLength: userText.length,
+    userContentPreview: safeTelemetryPreview(userText)
+  };
+  return JSON.stringify(summary);
+}
+
+function safeTelemetryPreview(text: string): string {
+  return text
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]")
+    .replace(/(?<!\d)\+?\d[\d\s().-]{5,}\d(?!\d)/g, "[number]")
+    .slice(0, 500);
 }

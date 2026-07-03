@@ -463,6 +463,7 @@ export function migrate(db: DatabaseSync): void {
       duration_ms INTEGER DEFAULT 0,
       error TEXT DEFAULT '',
       http_status INTEGER,
+      request_summary TEXT DEFAULT '',
       response_summary TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -554,6 +555,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "ai_call_logs", "duration_ms", "INTEGER DEFAULT 0");
   ensureColumn(db, "ai_call_logs", "error", "TEXT DEFAULT ''");
   ensureColumn(db, "ai_call_logs", "http_status", "INTEGER");
+  ensureColumn(db, "ai_call_logs", "request_summary", "TEXT DEFAULT ''");
   ensureColumn(db, "ai_call_logs", "response_summary", "TEXT DEFAULT ''");
   migrateCustomerMemoriesCountryKey(db);
 
