@@ -2,11 +2,11 @@ import { insertTrainingSamples } from "./db.js";
 import type { Db } from "./db.js";
 import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
+import { normalizeKnowledgeType } from "./repositoryStatuses.js";
 import {
   mapKnowledgeItem,
   mapTrainingMaterial,
   mapTrainingMaterialItem,
-  normalizeKnowledgeType
 } from "./repositoryMappers.js";
 import type {
   KnowledgeItemRecord,
