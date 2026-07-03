@@ -140,8 +140,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
     if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
   };
   useEffect(() => { reload().catch(() => undefined); }, [platform]);
-  const detailTaskType = selectedTaskType || data.byType[0]?.taskType || "";
-  const detailRows = data.byTypeDetails.filter((row) => row.taskType === detailTaskType);
+  const detailRows = selectedTaskType ? data.byTypeDetails.filter((row) => row.taskType === selectedTaskType) : data.byTypeDetails;
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
       <div className="training-center-hero compact">
@@ -169,7 +168,7 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
       <div className="ai-call-columns">
         <section className="assistant-card">
           <h3>按调用类型</h3>
-          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={detailTaskType} rowKey={(row) => row.taskType} />
+          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={selectedTaskType} rowKey={(row) => row.taskType} />
         </section>
         <section className="assistant-card">
           <h3>按供应商</h3>
@@ -177,7 +176,10 @@ function AiCallsPage({ platform = false }: { platform?: boolean }) {
         </section>
       </div>
       <section className="assistant-card">
-        <h3>调用类型明细{detailTaskType ? ` · ${label(detailTaskType)}` : ""}</h3>
+        <div className="section-heading-row">
+          <h3>调用类型明细 · {selectedTaskType ? label(selectedTaskType) : "全部类型"}</h3>
+          {selectedTaskType && <button className="ghost" onClick={() => setSelectedTaskType("")}>查看全部类型</button>}
+        </div>
         <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "averageDurationMs", "lastCalledAt"]} />
       </section>
     </section>

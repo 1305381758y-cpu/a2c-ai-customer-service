@@ -4603,6 +4603,18 @@ main {
   overflow: visible;
 }
 
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-heading-row h3 {
+  margin: 0;
+}
+
 @media (min-width: 1181px) {
   .ai-call-columns {
     grid-template-columns: repeat(2, minmax(0, 1fr));
