@@ -15,7 +15,7 @@ export async function importScriptFlow(request: FastifyRequest, reply: FastifyRe
   const fields = (file as unknown as { fields?: Record<string, { value?: string }> }).fields || {};
   const merchantId = scopedMerchantId || query.merchantId || fields.merchantId?.value || "default";
   const countryId = query.countryId || fields.countryId?.value || deps.repos.defaultCountryId(merchantId);
-  const name = query.name || fields.name?.value || file.filename.replace(/\.(xlsx|xls|docx)$/i, "") || "话本流程";
+  const name = query.name || fields.name?.value || file.filename.replace(/\.(xlsx|xls|docx|txt|md|csv)$/i, "") || "话本流程";
   const buffer = await file.toBuffer().catch(() => null);
   if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
   try {

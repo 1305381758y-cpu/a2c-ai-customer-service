@@ -707,10 +707,11 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
     const response = await fetch(`${base}/import${params.toString() ? `?${params}` : ""}`, { method: "POST", body });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || "上传失败");
     const result = await response.json() as { flow: ScriptFlow; imported: number };
-    notify("success", "话本流程已导入", `已生成 ${result.imported} 个流程节点`);
+    notify("success", "话本流程已导入", `已生成 ${result.imported} 个流程节点。当前为草稿，请检查后再启用。`);
     setFile(null);
     setFlowName("");
     await reload();
+    await loadDetail(result.flow);
   };
   const refreshDetail = async () => {
     if (!selected) return;
@@ -750,16 +751,16 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   return <div className="script-flow-page work-split">
     <section className="script-flow-list work-panel">
       <div className="training-center-hero compact">
-        <div><h3>话本流程</h3><p>这里维护“客户下一步该怎么走”。上传 Excel 或 Word 后可直接编辑节点，启用后客户会话优先按该流程推进。</p></div>
+        <div><h3>话本流程</h3><p>上传话本后，系统会自动分析并生成可编辑流程节点。检查无误后再启用，客户会话才会按新流程推进。</p></div>
       </div>
       <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status"] : ["countryId", "status"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "draft", "active", "disabled"] }} onApply={reload} />
       <div className="material-uploader compact-uploader">
         <div className="toolbar wrap">
           <input placeholder="话本名称，可选" value={flowName} onChange={(event) => setFlowName(event.target.value)} />
-          <input type="file" accept=".xlsx,.xls,.docx" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-          <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="导入中..." onClick={upload}><Upload size={16}/>导入话本流程</AsyncButton>
+          <input type="file" accept=".xlsx,.xls,.docx,.txt,.md,.csv" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="分析中..." onClick={upload}><Upload size={16}/>上传并生成节点</AsyncButton>
         </div>
-        <small>Excel 表头需包含“客服标准话术”；Word 会按段落自动拆成流程节点，导入后可在右侧继续编辑。</small>
+        <small>支持 Excel/CSV 标准表头，也支持 Word/TXT/MD 自由话本。导入后默认是草稿，右侧可继续新增、编辑、复制、删除节点。</small>
       </div>
       <Table rows={rows} columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]} onRow={loadDetail} selectedKey={selected?.id} rowKey={(row) => row.id} />
     </section>
@@ -784,7 +785,7 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
               <span>{label(step.flowStep)} · 顺序 {step.sortOrder} · {step.enabled ? "启用" : "停用"}</span>
               <small>{step.standardReply}</small>
             </button>)}
-            {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入 Excel。</div>}
+            {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入话本文件。</div>}
           </div>
           <div className="script-step-editor">
             {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后编辑话术和跳转规则。</div>}
