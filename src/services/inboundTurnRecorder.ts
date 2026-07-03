@@ -9,20 +9,13 @@ import type {
 } from "../repositories.js";
 import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import type { InboundTurnAnalysisResult } from "./inboundTurnAnalysis.js";
+import { buildInboundTurnRawPayload, type InboundTranslationPayload } from "./inboundTurnPayload.js";
 
 export interface InboundTurnRecordResult {
   inserted: boolean;
   messageId?: number;
   inboundMemory?: CustomerMemoryRecord;
 }
-
-type InboundTranslation = {
-  originalText: string;
-  translatedText: string;
-  targetLanguage: string;
-  status: string;
-  error?: string;
-};
 
 type IntentLearningCandidate = Pick<
   IntentLearningInput,
@@ -42,7 +35,7 @@ export function recordInboundTurn(input: {
   simulation: boolean;
   analysis: MessageAnalysis;
   customerTextForAi: string;
-  inboundTranslation: InboundTranslation;
+  inboundTranslation: InboundTranslationPayload;
   inferredIntent: InboundTurnAnalysisResult["inferredIntent"];
   contextualIntent: InboundTurnAnalysisResult["contextualIntent"];
   learnedIntentDebug: LearnedIntentDebugInfo | null;
@@ -61,7 +54,7 @@ export function recordInboundTurn(input: {
     phoneDetected: input.analysis.phone,
     telegramDetected: input.analysis.telegram,
     whatsappDetected: input.analysis.whatsapp,
-    rawPayload: inboundRawPayload(input)
+    rawPayload: buildInboundTurnRawPayload(input)
   });
   if (!inserted.inserted) return { inserted: false };
 
@@ -100,38 +93,5 @@ export function recordInboundTurn(input: {
     inserted: true,
     messageId: inserted.id,
     inboundMemory
-  };
-}
-
-function inboundRawPayload(input: {
-  payload: A2CWebhookPayload;
-  inferredIntent: InboundTurnAnalysisResult["inferredIntent"];
-  contextualIntent: InboundTurnAnalysisResult["contextualIntent"];
-  learnedIntentDebug: LearnedIntentDebugInfo | null;
-  strictFlowEnabled: boolean;
-  strictFlowStepBefore: string;
-  inboundTranslation: InboundTranslation;
-  mediaUrl: string;
-  fileName: string;
-  imageAnalysis: unknown;
-  msgType: string;
-  simulation: boolean;
-}): Record<string, unknown> {
-  return {
-    ...input.payload,
-    inferredIntent: input.inferredIntent,
-    contextualIntent: input.contextualIntent,
-    learnedIntent: input.learnedIntentDebug,
-    strictFlowEnabled: input.strictFlowEnabled,
-    strictFlowStepBefore: input.strictFlowStepBefore,
-    originalContent: input.inboundTranslation.originalText,
-    translatedContent: input.inboundTranslation.translatedText,
-    targetLanguage: input.inboundTranslation.targetLanguage,
-    translationStatus: input.inboundTranslation.status,
-    translationError: input.inboundTranslation.error || "",
-    mediaUrl: input.mediaUrl,
-    fileName: input.fileName || "",
-    imageAnalysis: input.msgType === "image" ? input.imageAnalysis : null,
-    simulation: input.simulation
   };
 }
