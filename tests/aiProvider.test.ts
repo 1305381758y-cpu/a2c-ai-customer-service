@@ -111,6 +111,31 @@ describe("DeepSeek provider", () => {
     expect(body.max_tokens).toBe(32);
   });
 
+  it("does not treat top-level OK message as a provider error when choices exist", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        message: "OK",
+        choices: [
+          {
+            message: {
+              content: "positive_confirmation"
+            }
+          }
+        ]
+      })
+    } as Response);
+
+    const text = await generateAiText(loadConfig({
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "sk-deepseek-test",
+      DEEPSEEK_MODEL: "deepseek-chat"
+    }), "classify", { taskType: "intent_classification", maxOutputTokens: 32 });
+
+    expect(text).toBe("positive_confirmation");
+  });
+
   it("records a response summary when DeepSeek returns an empty message", async () => {
     const calls: AiCallTelemetryInput[] = [];
     setAiCallRecorder((input) => calls.push(input));

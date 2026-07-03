@@ -298,11 +298,12 @@ function extractProviderError(payload: Record<string, unknown>): string {
     }
   }
   const error = payload.error;
+  const hasChoices = Array.isArray(payload.choices);
   const raw = typeof error === "string"
     ? error
     : error && typeof error === "object" && "message" in error
       ? String((error as { message?: unknown }).message ?? "")
-      : typeof payload.message === "string"
+      : typeof payload.message === "string" && !hasChoices && !/^ok$/i.test(payload.message.trim())
         ? payload.message
         : "";
   return normalizeProviderError(raw, payload);
