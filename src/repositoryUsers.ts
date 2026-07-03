@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { UserRole } from "./auth.js";
 import type { Db } from "./db.js";
-import { mapUser } from "./repositoryMappers.js";
+import { mapUser } from "./repositoryUserMappers.js";
 import type { UserRecord } from "./repositoryTypes.js";
 
 export class UserRepository {

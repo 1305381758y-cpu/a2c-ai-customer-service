@@ -1,5 +1,5 @@
 import type { Db } from "./db.js";
-import { mapCustomer } from "./repositoryMappers.js";
+import { mapCustomer } from "./repositoryCustomerMappers.js";
 import type { Conversation, CustomerRecord } from "./repositoryTypes.js";
 
 export class CustomerRepository {

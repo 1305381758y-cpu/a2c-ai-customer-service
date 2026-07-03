@@ -1,5 +1,5 @@
 import type { Db } from "./db.js";
-import { mapIntentLearningEvent } from "./repositoryMappers.js";
+import { mapIntentLearningEvent } from "./repositoryIntentLearningMappers.js";
 import { clipText, parseJsonRecordArray } from "./repositoryJson.js";
 import type { IntentLearningEventRecord, IntentLearningInput } from "./repositoryTypes.js";
 
