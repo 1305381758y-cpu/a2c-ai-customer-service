@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
@@ -20,6 +20,7 @@ import {
   type AdminIntentLearningListQuery
 } from "../services/adminConversations.js";
 import { listConversationExportRows, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
+import { sendResult } from "./routeResponses.js";
 
 type AdminConversationRoutesDeps = {
   config: AppConfig;
@@ -80,12 +81,4 @@ export function registerAdminConversationRoutes(app: FastifyInstance, deps: Admi
   app.post<{ Params: { id: string } }>("/api/admin/conversations/:id/review", { preHandler: deps.adminOnly }, async (request, reply) => {
     return sendResult(reply, await generateAdminConversationReview(deps.repos, deps.config, request.params.id));
   });
-}
-
-function sendResult<T>(
-  reply: FastifyReply,
-  result: { ok: true; value: T } | { ok: false; statusCode: 400 | 404; error: string }
-): T | FastifyReply {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

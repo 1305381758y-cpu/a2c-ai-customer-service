@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
@@ -19,6 +19,7 @@ import {
 } from "../services/merchantConversations.js";
 import { listConversationExportRows, sendConversationExport, type ConversationExportQuery } from "./conversationExport.js";
 import { registerMerchantOutboundMessageRoutes } from "./merchantOutboundMessageRoutes.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantConversationRoutesDeps = {
@@ -88,9 +89,4 @@ export function registerMerchantConversationRoutes(app: FastifyInstance, deps: M
     return sendResult(reply, await updateMerchantHandoffStatus(deps.repos, deps.config, scopedMerchantId(request), request.params.conversationId, request.body?.handoffStatus, (error) => app.log.warn({ err: error }, "conversation review generation failed")));
   });
 
-}
-
-function sendResult<T>(reply: FastifyReply, result: { ok: true; value: T } | { ok: false; statusCode: 400 | 404; error: string }) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }
