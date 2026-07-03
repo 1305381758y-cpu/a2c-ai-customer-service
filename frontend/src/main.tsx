@@ -21,6 +21,7 @@ import { countryLabel, displayValue, formatDateTime } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
 import "./ui/app-shell.css";
+import "./ui/primitives.css";
 import "./ui/pagination.css";
 import "./ui/status-card.css";
 import "./admin/merchants.css";
