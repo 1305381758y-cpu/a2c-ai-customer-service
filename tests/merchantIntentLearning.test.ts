@@ -1,0 +1,87 @@
+import { describe, expect, it } from "vitest";
+import { openDb } from "../src/db.js";
+import { Repositories } from "../src/repositories.js";
+import { listMerchantIntentLearningEvents, patchMerchantIntentLearningEvent } from "../src/services/merchantIntentLearning.js";
+
+function recordEvent(repos: Repositories, input: { merchantId: string; countryId: string; customerText: string; candidateKey: string; suggestedIntent?: string }) {
+  return repos.recordIntentLearningEvent({
+    merchantId: input.merchantId,
+    countryId: input.countryId,
+    conversationId: `${input.merchantId}:conversation`,
+    customerText: input.customerText,
+    language: "zh",
+    detectedIntent: "unknown",
+    inferredIntent: "unknown",
+    contextualIntent: input.suggestedIntent ?? "workflow_question",
+    flowStep: "wait_registration",
+    candidateKey: input.candidateKey,
+    suggestedIntent: input.suggestedIntent ?? "workflow_question",
+    displayName: "流程问题",
+    description: "客户需要开户注册帮助"
+  });
+}
+
+describe("merchantIntentLearning service", () => {
+  it("lists intent learning events within the merchant scope", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchantA = repos.createMerchant("意图学习商户A");
+    const merchantB = repos.createMerchant("意图学习商户B");
+    const countryA = repos.ensurePrimaryCountry(merchantA.id);
+    const countryB = repos.ensurePrimaryCountry(merchantB.id);
+    recordEvent(repos, { merchantId: merchantA.id, countryId: countryA.id, customerText: "怎么注册", candidateKey: "a:workflow" });
+    recordEvent(repos, { merchantId: merchantB.id, countryId: countryB.id, customerText: "链接打不开", candidateKey: "b:workflow" });
+
+    const result = listMerchantIntentLearningEvents(repos, merchantA.id, {});
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ merchantId: merchantA.id, customerText: "怎么注册" });
+  });
+
+  it("filters by status and suggested intent", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("意图筛选商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    const workflow = recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "怎么注册", candidateKey: "workflow", suggestedIntent: "workflow_question" });
+    const trust = recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "安全吗", candidateKey: "trust", suggestedIntent: "trust_concern" });
+    repos.patchIntentLearningEvent(workflow.id, { status: "promoted" }, merchant.id);
+    repos.patchIntentLearningEvent(trust.id, { status: "ignored" }, merchant.id);
+
+    const result = listMerchantIntentLearningEvents(repos, merchant.id, { status: "promoted", suggestedIntent: "workflow_question" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ id: workflow.id, status: "promoted", suggestedIntent: "workflow_question" });
+  });
+
+  it("patches only events that belong to the merchant", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchantA = repos.createMerchant("意图修改商户A");
+    const merchantB = repos.createMerchant("意图修改商户B");
+    const countryA = repos.ensurePrimaryCountry(merchantA.id);
+    const event = recordEvent(repos, { merchantId: merchantA.id, countryId: countryA.id, customerText: "我不会注册", candidateKey: "need-help" });
+
+    expect(patchMerchantIntentLearningEvent(repos, merchantB.id, String(event.id), { status: "promoted" })).toEqual({
+      ok: false,
+      statusCode: 404,
+      error: "intent learning event not found"
+    });
+    expect(patchMerchantIntentLearningEvent(repos, merchantA.id, String(event.id), { status: "promoted", displayName: "注册帮助" })).toMatchObject({
+      ok: true,
+      value: { id: event.id, status: "promoted", displayName: "注册帮助" }
+    });
+  });
+
+  it("rejects invalid ids before reaching the repository", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("意图非法ID商户");
+
+    expect(patchMerchantIntentLearningEvent(repos, merchant.id, "not-a-number", { status: "promoted" })).toEqual({
+      ok: false,
+      statusCode: 400,
+      error: "invalid id"
+    });
+  });
+});
