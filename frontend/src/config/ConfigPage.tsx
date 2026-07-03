@@ -5,17 +5,19 @@ import { api, loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
-import { displayValue, inferCountryProfile, label, languageName, translateSystemMessage } from "../ui/formatters.js";
+import { inferCountryProfile, label, languageName, translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { A2CAccountsSection } from "./A2CAccountsSection.js";
 import { ConfigOverviewSection } from "./ConfigOverviewSection.js";
 import { CountrySettingsCard, type CountryDraft } from "./CountrySettingsCard.js";
 import { RegistrationTutorialImageCard } from "./RegistrationTutorialImageCard.js";
+import { TelegramBindingCard } from "./TelegramBindingCard.js";
+import type { ConfigForm } from "./types.js";
 
 export function ConfigPage({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [merchantId, setMerchantId] = useState("default");
-  const [form, setForm] = useState<Record<string, string | boolean>>({});
+  const [form, setForm] = useState<ConfigForm>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
@@ -29,7 +31,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
   const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
-  const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
+  const reloadConfig = async () => setForm(await api<ConfigForm>(url));
   useEffect(() => { reloadConfig().catch(() => null); }, [url]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
@@ -68,7 +70,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));
     }
-    const result = await response.json() as { imageUrl: string; config: Record<string, string | boolean> };
+    const result = await response.json() as { imageUrl: string; config: ConfigForm };
     setForm(result.config);
     setTutorialImageFile(null);
     setMessage("注册教程图片已上传。客户问怎么注册、不会注册、有教程吗时会自动发送这张图片。");
@@ -90,7 +92,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify(form) });
+      const saved = await api<ConfigForm>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       if (!saved.a2cAppId || !saved.a2cAppSecret) {
         setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
@@ -106,7 +108,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
     setError("");
     try {
       if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean>; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
+      const result = await api<{ imported: number; rows: A2CAccount[]; config: ConfigForm; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
       setForm(result.config);
       setMessage(result.stale ? result.warning || "A2C 暂时限频，已继续使用本地保存的客服账号。" : `已同步 ${result.imported} 个 A2C 客服账号，已自动写入接收账号。`);
@@ -116,7 +118,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
     const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
-    const result = await api<{ config: Record<string, string | boolean> }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
+    const result = await api<{ config: ConfigForm }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
     setForm(result.config);
     await reloadA2CAccounts();
   };
@@ -153,7 +155,7 @@ export function ConfigPage({ platform }: { platform: boolean }) {
     try {
       await api(url, { method: "PATCH", body: JSON.stringify(form) });
       const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
-      const result = await api<{ config: Record<string, string | boolean>; webhookUrl?: string }>(endpoint, { method: "POST" });
+      const result = await api<{ config: ConfigForm; webhookUrl?: string }>(endpoint, { method: "POST" });
       setForm(result.config);
       setMessage(`TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`);
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);
@@ -170,6 +172,6 @@ export function ConfigPage({ platform }: { platform: boolean }) {
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
     <CountrySettingsCard countries={countries} draft={countryDraft} onDraftChange={updateCountryDraft} onLoadCountry={loadCountryDraft} onReInfer={reInferCountryDraft} onSave={saveCountry} />
     <A2CAccountsSection accounts={a2cAccounts} countries={countries} platform={platform} onToggleAccount={toggleA2CAccount} />
-    <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
+    <TelegramBindingCard form={form} onSetup={setupTelegram} onRefresh={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
   </section>;
 }
