@@ -1,6 +1,7 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
+import { createMerchantCountry, listMerchantCountries, patchMerchantCountry, type MerchantCountryResult } from "../services/merchantCountries.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantCountryRoutesDeps = {
@@ -16,37 +17,30 @@ export function registerMerchantCountryRoutes(app: FastifyInstance, deps: Mercha
 }
 
 function registerAdminCountryRoutes(app: FastifyInstance, deps: MerchantCountryRoutesDeps): void {
-  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request) => ({
-    rows: deps.repos.listMerchantCountries(request.params.id)
-  }));
-  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request, reply) => {
-    try {
-      return deps.repos.createMerchantCountry(request.params.id, request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
-    }
-  });
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request) => (
+    listMerchantCountries(deps.repos, request.params.id)
+  ));
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request, reply) => (
+    sendResult(reply, createMerchantCountry(deps.repos, request.params.id, request.body ?? {}))
+  ));
   app.patch<{ Params: { id: string; countryId: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/countries/:countryId", { preHandler: deps.adminOnly }, async (request, reply) => {
-    const row = deps.repos.patchMerchantCountry(request.params.countryId, request.params.id, request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "country not found" });
-    return row;
+    return sendResult(reply, patchMerchantCountry(deps.repos, request.params.id, request.params.countryId, request.body ?? {}));
   });
 }
 
 function registerMerchantOwnCountryRoutes(app: FastifyInstance, deps: MerchantCountryRoutesDeps): void {
-  app.get("/api/merchant/countries", { preHandler: deps.merchantRoles }, async (request) => ({
-    rows: deps.repos.listMerchantCountries(scopedMerchantId(request))
-  }));
-  app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    try {
-      return deps.repos.createMerchantCountry(scopedMerchantId(request), request.body ?? {});
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : "invalid country" });
-    }
-  });
+  app.get("/api/merchant/countries", { preHandler: deps.merchantRoles }, async (request) => (
+    listMerchantCountries(deps.repos, scopedMerchantId(request))
+  ));
+  app.post<{ Body: Record<string, unknown> }>("/api/merchant/countries", { preHandler: deps.merchantAdmins }, async (request, reply) => (
+    sendResult(reply, createMerchantCountry(deps.repos, scopedMerchantId(request), request.body ?? {}))
+  ));
   app.patch<{ Params: { countryId: string }; Body: Record<string, unknown> }>("/api/merchant/countries/:countryId", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    const row = deps.repos.patchMerchantCountry(request.params.countryId, scopedMerchantId(request), request.body ?? {});
-    if (!row) return reply.code(404).send({ error: "country not found" });
-    return row;
+    return sendResult(reply, patchMerchantCountry(deps.repos, scopedMerchantId(request), request.params.countryId, request.body ?? {}));
   });
+}
+
+function sendResult<T>(reply: FastifyReply, result: MerchantCountryResult<T>) {
+  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
+  return result.value;
 }
