@@ -4,6 +4,12 @@ import type { TrainingSampleForSearch } from "./domain/sampleRetrieval.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
 import { normalizeKnowledgeType } from "./repositoryStatuses.js";
 import {
+  buildKnowledgeItemWhere,
+  buildTrainingMaterialWhere,
+  buildTrainingSampleWhere,
+  clampTrainingLimit
+} from "./repositoryTrainingFilters.js";
+import {
   mapKnowledgeItem,
   mapTrainingMaterial,
   mapTrainingMaterialItem,
@@ -69,33 +75,7 @@ export class TrainingContentRepository {
   }
 
   listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.language) {
-      clauses.push("language = ?");
-      params.push(filters.language);
-    }
-    if (filters.intent) {
-      clauses.push("intent = ?");
-      params.push(filters.intent);
-    }
-    if (filters.stage) {
-      clauses.push("stage = ?");
-      params.push(filters.stage);
-    }
-    if (typeof filters.enabled === "boolean") {
-      clauses.push("enabled = ?");
-      params.push(filters.enabled ? 1 : 0);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const { where, params } = buildTrainingSampleWhere(filters);
     return this.db.sqlite
       .prepare(`
         SELECT id, country_id AS countryId, customer_message AS customerMessage, standard_reply AS standardReply,
@@ -141,25 +121,7 @@ export class TrainingContentRepository {
   }
 
   listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): KnowledgeItemRecord[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.type) {
-      clauses.push("type = ?");
-      params.push(filters.type);
-    }
-    if (typeof filters.enabled === "boolean") {
-      clauses.push("enabled = ?");
-      params.push(filters.enabled ? 1 : 0);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const { where, params } = buildKnowledgeItemWhere(filters);
     return this.db.sqlite
       .prepare(`
         SELECT id, merchant_id, country_id, type, title, content, language, priority, enabled
@@ -334,26 +296,8 @@ export class TrainingContentRepository {
   }
 
   listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (filters.merchantId) {
-      clauses.push("tm.merchant_id = ?");
-      params.push(filters.merchantId);
-    }
-    if (filters.countryId) {
-      clauses.push("tm.country_id = ?");
-      params.push(filters.countryId);
-    }
-    if (filters.sourceType) {
-      clauses.push("tm.source_type = ?");
-      params.push(filters.sourceType);
-    }
-    if (filters.status) {
-      clauses.push("tm.status = ?");
-      params.push(filters.status);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    const { where, params } = buildTrainingMaterialWhere(filters);
+    const limit = clampTrainingLimit(filters.limit, 100, 500);
     params.push(limit);
     return this.db.sqlite
       .prepare(`
