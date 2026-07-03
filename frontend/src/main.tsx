@@ -36,6 +36,7 @@ import "./script-flows/script-flows.css";
 import "./intent-learning/intent-learning.css";
 import "./simulator/simulator.css";
 import "./conversations/conversations.css";
+import "./conversations/conversation-lists.css";
 import "./conversations/conversation-chat.css";
 import "./conversations/conversation-export.css";
 import "./conversations/conversation-review.css";
