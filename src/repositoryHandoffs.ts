@@ -1,5 +1,5 @@
 import type { Db } from "./db.js";
-import { mapConversation } from "./repositoryMappers.js";
+import { mapConversation } from "./repositoryConversationMappers.js";
 import type { Conversation, FollowUpCandidate } from "./repositoryTypes.js";
 
 export class HandoffRepository {

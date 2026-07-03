@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db.js";
-import { buildCustomerMemorySummary, clipText } from "./repositoryJson.js";
 import {
   mapConversation,
   mapConversationExportRecord,
   mapConversationMessage,
   mapCustomerMemory
-} from "./repositoryMappers.js";
+} from "./repositoryConversationMappers.js";
+import { buildCustomerMemorySummary, clipText } from "./repositoryJson.js";
 import type {
   Conversation,
   ConversationExportRecord,
