@@ -34,11 +34,18 @@ export type MerchantConfigCheckResult =
       error: string;
     };
 
+export interface ConfigCheckPorts {
+  checkA2C?: (config: AppConfig, repos: Repositories, merchantId: string) => Promise<ConfigCheckItem>;
+  checkAiProvider?: (config: AppConfig, ai: Pick<AiTasks, "checkAvailability">) => Promise<ConfigCheckItem>;
+  checkTelegram?: (config: AppConfig) => Promise<ConfigCheckItem>;
+}
+
 export async function checkMerchantConfig(
   repos: Repositories,
   baseConfig: AppConfig,
   merchantId: string,
-  ai: Pick<AiTasks, "checkAvailability"> = new AiTasks()
+  ai: Pick<AiTasks, "checkAvailability"> = new AiTasks(),
+  ports: ConfigCheckPorts = {}
 ): Promise<MerchantConfigCheckResult> {
   const merchant = repos.getMerchant(merchantId);
   if (!merchant) return { ok: false, statusCode: 404, error: "merchant not found" };
@@ -47,9 +54,9 @@ export async function checkMerchantConfig(
   const runtimeConfig = appConfigForMerchant(baseConfig, cfg);
   const checks: ConfigCheckItem[] = [];
 
-  checks.push(await checkA2C(runtimeConfig, repos, merchantId));
-  checks.push(await checkAiProvider(runtimeConfig, ai));
-  checks.push(await checkTelegram(runtimeConfig));
+  checks.push(await (ports.checkA2C || checkA2C)(runtimeConfig, repos, merchantId));
+  checks.push(await (ports.checkAiProvider || checkAiProvider)(runtimeConfig, ai));
+  checks.push(await (ports.checkTelegram || checkTelegram)(runtimeConfig));
   checks.push(checkPlatformRegisterUrl(runtimeConfig));
 
   return {

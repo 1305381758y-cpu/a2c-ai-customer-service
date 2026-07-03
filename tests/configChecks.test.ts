@@ -62,4 +62,49 @@ describe("merchant config checks", () => {
       detail: "MiniMax 调用失败：额度不足"
     });
   });
+
+  it("can replace external A2C and Telegram checks through config-check ports", async () => {
+    const { repos, merchant } = setup();
+    repos.patchMerchantConfig(merchant.id, {
+      a2cAppId: "app-id",
+      a2cAppSecret: "secret",
+      aiProvider: "deepseek",
+      deepseekApiKey: "deepseek-test",
+      telegramBotToken: "tg-token",
+      telegramHandoffChatId: "tg-chat",
+      platformRegisterUrl: "https://register.example"
+    });
+    const ai = {
+      checkAvailability: vi.fn(async () => undefined)
+    };
+    const ports = {
+      checkA2C: vi.fn(async () => ({
+        key: "a2c",
+        label: "A2C",
+        ok: true,
+        status: "ok" as const,
+        detail: "A2C 测试端口通过"
+      })),
+      checkTelegram: vi.fn(async () => ({
+        key: "telegram",
+        label: "Telegram",
+        ok: true,
+        status: "ok" as const,
+        detail: "Telegram 测试端口通过"
+      }))
+    };
+
+    const result = await checkMerchantConfig(repos, loadConfig({ DATABASE_URL: ":memory:" }), merchant.id, ai, ports);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected config check to succeed");
+    expect(ports.checkA2C).toHaveBeenCalledOnce();
+    expect(ports.checkTelegram).toHaveBeenCalledOnce();
+    expect(result.value.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "a2c", detail: "A2C 测试端口通过" }),
+      expect.objectContaining({ key: "telegram", detail: "Telegram 测试端口通过" }),
+      expect.objectContaining({ key: "ai", ok: true })
+    ]));
+    expect(result.value.ok).toBe(true);
+  });
 });
