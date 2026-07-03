@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, Building2, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Settings, Upload, Users, Workflow } from "lucide-react";
+import { Bot, BookOpen, Building2, Check, CheckCircle2, Contact, Copy, FileText, Lightbulb, Loader2, LogOut, MessageSquare, Plus, RefreshCw, Settings, Sparkles, ThumbsDown, ThumbsUp, Upload, Users, Workflow } from "lucide-react";
 import { AgentProfilePage } from "./agent/AgentProfilePage.js";
 import { api, loadRows, useRows, withQuery } from "./app/api.js";
 import { ConversationExportBar } from "./conversations/ConversationExport.js";
@@ -15,7 +15,7 @@ import { CustomersPage } from "./customers/CustomersPage.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { KnowledgePage } from "./knowledge/KnowledgePage.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
-import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
+import type { A2CAccount, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
 import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, statusTone, translateSystemMessage } from "./ui/formatters.js";
@@ -41,6 +41,14 @@ function App() {
 
   useEffect(() => {
     api<{ user: User }>("/api/auth/me").then((res) => setUser(res.user)).catch(() => null).finally(() => setLoading(false));
+  }, []);
+  useEffect(() => {
+    const syncViewFromHash = () => {
+      const nextView = window.location.hash.replace("#", "");
+      if (nextView) setView(nextView);
+    };
+    window.addEventListener("hashchange", syncViewFromHash);
+    return () => window.removeEventListener("hashchange", syncViewFromHash);
   }, []);
   useEffect(() => {
     if (!user) return;
@@ -1124,6 +1132,9 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memory, setMemory] = useState<CustomerMemory | null>(null);
   const [review, setReview] = useState<ConversationReviewResponse>({ review: null, items: [] });
+  const [scriptFlow, setScriptFlow] = useState<ScriptFlowDetail | null>(null);
+  const [trainingSamples, setTrainingSamples] = useState<Sample[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<Knowledge[]>([]);
   const [notes, setNotes] = useState("");
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
   const [statusMessage, setStatusMessage] = useState("");
@@ -1146,10 +1157,40 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
   useEffect(() => { api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => { setMemory(item); setNotes(item.operatorNotes || ""); }).catch(() => { setMemory(null); setNotes(""); }); }, [conversation.id, platform]);
   const loadReview = async () => setReview(await api<ConversationReviewResponse>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/review`));
   useEffect(() => { loadReview().catch(() => setReview({ review: null, items: [] })); }, [conversation.id, platform]);
+  useEffect(() => {
+    if (platform) {
+      setScriptFlow(null);
+      setTrainingSamples([]);
+      setKnowledgeItems([]);
+      return;
+    }
+    let cancelled = false;
+    const loadBusinessContext = async () => {
+      const flow = await loadActiveScriptFlow(conversation.countryId).catch(() => null);
+      const sampleFilters = {
+        countryId: conversation.countryId || "",
+        language: conversation.language || "",
+        stage: conversation.stage || "",
+        enabled: "true"
+      };
+      const [samplesResult, knowledgeResult] = await Promise.all([
+        loadRows<Sample>(withQuery("/api/merchant/training-samples", sampleFilters)).catch(() => []),
+        loadRows<Knowledge>(withQuery("/api/merchant/knowledge", { countryId: conversation.countryId || "", enabled: "true" })).catch(() => [])
+      ]);
+      if (cancelled) return;
+      setScriptFlow(flow);
+      setTrainingSamples(samplesResult);
+      setKnowledgeItems(knowledgeResult);
+    };
+    void loadBusinessContext();
+    return () => { cancelled = true; };
+  }, [conversation.countryId, conversation.stage, conversation.language, platform]);
   const memoryUrl = `${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`;
   const lastOutboundPayload = [...messages].reverse().find((item) => item.direction === "outbound")?.rawPayload || {};
   const strictEnabled = lastOutboundPayload.strictFlowEnabled;
   const flowStep = conversation.flowStep || lastOutboundPayload.strictFlowStep || "未识别";
+  const currentScriptStep = currentFlowStep(scriptFlow, flowStep);
+  const quickReplies = buildBusinessQuickReplies(currentScriptStep, trainingSamples, knowledgeItems);
   const generate = async () => {
     setError("");
     setStatusMessage("正在生成对话复盘...");
@@ -1165,32 +1206,322 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
     setStatusMessage("候选内容已加入训练中心。");
     notify("success", "已加入训练中心");
   };
-  return <div className="conversation-detail"><ConversationDetailHeader
-    platform={platform}
-    conversation={conversation}
-    lastOutboundPayload={lastOutboundPayload}
-    flowStep={flowStep}
-    strictEnabled={strictEnabled}
-    countryLabel={countryLabel}
-    languageName={languageName}
-    label={label}
-    replyModeLabel={replyModeLabel}
-    onHandoffStatusChange={async (handoffStatus) => {
-      setError("");
-      setStatusMessage("正在更新接管状态...");
-      await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus }) });
-      setStatusMessage("接管状态已更新。");
-      await loadReview().catch(() => null);
-      refresh();
-    }}
-    renderDeleteAction={() => <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton>}
-  />{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<ConversationMemoryCard
-    memory={memory}
-    notes={notes}
-    localizeSystemText={localizeSystemText}
-    onNotesChange={setNotes}
-    renderSaveAction={() => <AsyncButton busyText="保存中..." onClick={async () => { setError(""); const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) }); setMemory(item); setNotes(item.operatorNotes || ""); setStatusMessage("客户记忆已保存。"); }}>保存记忆</AsyncButton>}
-  /><ConversationReviewCard platform={platform} data={review} onGenerate={generate} onApply={apply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} /><div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: formatConversationDate, formatTime, label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>{!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={(disabled, children) => <AsyncButton disabled={disabled} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) }); setSend({ ...send, content: "", url: "", caption: "" }); setStatusMessage("消息已发送。"); await loadMessages(); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}>{children}</AsyncButton>} />}</div>;
+  const saveMemoryAction = () => <AsyncButton busyText="保存中..." onClick={async () => {
+    setError("");
+    const item = await api<CustomerMemory>(memoryUrl, { method: "PATCH", body: JSON.stringify({ operatorNotes: notes }) });
+    setMemory(item);
+    setNotes(item.operatorNotes || "");
+    setStatusMessage("客户记忆已保存。");
+  }}>保存记忆</AsyncButton>;
+  const sendAction = (disabled: boolean, children: React.ReactNode) => <AsyncButton disabled={disabled} busyText="发送中..." onClick={async () => {
+    setError("");
+    setStatusMessage("");
+    try {
+      await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) });
+      setSend({ ...send, content: "", url: "", caption: "" });
+      setStatusMessage("消息已发送。");
+      await loadMessages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "发送失败");
+    }
+  }}>{children}</AsyncButton>;
+  return <div className="conversation-detail wechat-detail">
+    <section className="wechat-chat-column">
+      <ConversationDetailHeader
+        platform={platform}
+        conversation={conversation}
+        lastOutboundPayload={lastOutboundPayload}
+        flowStep={flowStep}
+        strictEnabled={strictEnabled}
+        countryLabel={countryLabel}
+        languageName={languageName}
+        label={label}
+        replyModeLabel={replyModeLabel}
+        onHandoffStatusChange={async (handoffStatus) => {
+          setError("");
+          setStatusMessage("正在更新接管状态...");
+          await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus }) });
+          setStatusMessage("接管状态已更新。");
+          await loadReview().catch(() => null);
+          refresh();
+        }}
+        renderDeleteAction={() => <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton>}
+      />
+      {error && <div className="error" role="alert">{error}</div>}
+      {statusMessage && <div className="notice" role="status">{statusMessage}</div>}
+      <div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: formatConversationDate, formatTime, label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
+      <ScriptProgress flowStep={flowStep} scriptFlow={scriptFlow} />
+      {!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={sendAction} quickReplies={quickReplies} />}
+    </section>
+    <TrainingLoopPanel
+      platform={platform}
+      conversation={conversation}
+      flowStep={flowStep}
+      lastOutboundPayload={lastOutboundPayload}
+      scriptFlow={scriptFlow}
+      currentScriptStep={currentScriptStep}
+      trainingSamples={trainingSamples}
+      knowledgeItems={knowledgeItems}
+      review={review}
+      memory={memory}
+      notes={notes}
+      localizeSystemText={localizeSystemText}
+      onNotesChange={setNotes}
+      saveMemoryAction={saveMemoryAction}
+      onGenerate={generate}
+      onApply={apply}
+      setDraft={(content) => setSend({ ...send, type: "text", content, url: "", caption: "AI建议" })}
+    />
+  </div>;
+}
+
+async function loadActiveScriptFlow(countryId: string): Promise<ScriptFlowDetail | null> {
+  const query = countryId ? { countryId, status: "active" } : { status: "active" };
+  const result = await loadRows<ScriptFlow>(withQuery("/api/merchant/script-flows", query));
+  const active = result.find((flow) => flow.active) || result[0];
+  if (!active && countryId) {
+    const fallback = await loadRows<ScriptFlow>(withQuery("/api/merchant/script-flows", { status: "active" }));
+    const fallbackActive = fallback.find((flow) => flow.active) || fallback[0];
+    return fallbackActive ? api<ScriptFlowDetail>(`/api/merchant/script-flows/${fallbackActive.id}`) : null;
+  }
+  return active ? api<ScriptFlowDetail>(`/api/merchant/script-flows/${active.id}`) : null;
+}
+
+function currentFlowStep(scriptFlow: ScriptFlowDetail | null, flowStep: string): ScriptFlowStep | null {
+  if (!scriptFlow?.steps.length) return null;
+  const normalized = normalizeBusinessStep(flowStep);
+  return scriptFlow.steps.find((step) => normalizeBusinessStep(step.flowStep) === normalized)
+    || scriptFlow.steps.find((step) => normalizeBusinessStep(step.flowCode) === normalized)
+    || scriptFlow.steps.find((step) => step.enabled)
+    || scriptFlow.steps[0]
+    || null;
+}
+
+function buildBusinessQuickReplies(step: ScriptFlowStep | null, samples: Sample[], knowledge: Knowledge[]) {
+  const replies: Array<{ label: string; content: string }> = [];
+  if (step?.standardReply) replies.push({ label: step.flowName || label(step.flowStep) || "当前话本", content: step.standardReply });
+  for (const sample of samples.slice(0, 4)) {
+    if (!sample.standardReply) continue;
+    replies.push({ label: clipUiText(label(sample.intent) || sample.intent || "样本", 8), content: sample.standardReply });
+  }
+  for (const item of knowledge.slice(0, 2)) {
+    if (!item.content) continue;
+    replies.push({ label: clipUiText(item.title || "知识", 8), content: item.content });
+  }
+  return dedupeQuickReplies(replies).slice(0, 6);
+}
+
+function dedupeQuickReplies(rows: Array<{ label: string; content: string }>) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = normalizeText(row.content);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function ScriptProgress({ flowStep, scriptFlow }: { flowStep: string; scriptFlow: ScriptFlowDetail | null }) {
+  const runtimeSteps = scriptFlow?.steps.length
+    ? scriptFlow.steps.filter((step) => step.enabled).map((step) => [step.flowStep || step.flowCode, step.flowName || step.goal || label(step.flowStep)] as const)
+    : STRICT_FLOW_STEP_LABELS;
+  const steps = runtimeSteps.length ? runtimeSteps : STRICT_FLOW_STEP_LABELS;
+  const activeIndex = Math.max(0, steps.findIndex(([key]) => normalizeBusinessStep(key) === normalizeBusinessStep(flowStep)));
+  return <div className="script-progress">
+    <div className="script-progress-head"><strong>脚本流程：{scriptFlow?.flow.name || "严格业务流程"}</strong><span>{scriptFlow ? `版本 ${scriptFlow.flow.version}` : "系统内置"}</span></div>
+    <div className="script-rail">
+      {steps.map(([key, text], index) => <div key={key} className={index <= activeIndex ? "done" : ""}>
+        <span>{index < activeIndex ? <Check size={12}/> : index + 1}</span>
+        <small>{text}</small>
+      </div>)}
+    </div>
+  </div>;
+}
+
+const STRICT_FLOW_STEP_LABELS = [
+  ["first_greeting", "首次问候"],
+  ["interest_screening", "兴趣筛选"],
+  ["project_intro", "项目介绍"],
+  ["registration_intent", "确认意向"],
+  ["send_register_link", "发送链接"],
+  ["wait_registration", "等待注册"],
+  ["telegram_confirm", "确认TG"],
+  ["telegram_download", "下载TG"],
+  ["collect_telegram", "收集TG"],
+  ["human_handoff", "人工接管"],
+  ["ended", "结束"]
+] as const;
+
+function normalizeBusinessStep(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function clipUiText(value: string, max: number) {
+  const text = String(value || "").trim();
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function TrainingLoopPanel({
+  platform,
+  conversation,
+  flowStep,
+  lastOutboundPayload,
+  scriptFlow,
+  currentScriptStep,
+  trainingSamples,
+  knowledgeItems,
+  review,
+  memory,
+  notes,
+  localizeSystemText,
+  onNotesChange,
+  saveMemoryAction,
+  onGenerate,
+  onApply,
+  setDraft
+}: {
+  platform: boolean;
+  conversation: Conversation;
+  flowStep: string;
+  lastOutboundPayload: NonNullable<ChatMessage["rawPayload"]>;
+  scriptFlow: ScriptFlowDetail | null;
+  currentScriptStep: ScriptFlowStep | null;
+  trainingSamples: Sample[];
+  knowledgeItems: Knowledge[];
+  review: ConversationReviewResponse;
+  memory: CustomerMemory | null;
+  notes: string;
+  localizeSystemText: (value: string) => string;
+  onNotesChange: (value: string) => void;
+  saveMemoryAction: () => React.ReactNode;
+  onGenerate: () => Promise<void>;
+  onApply: (itemId: number) => Promise<void>;
+  setDraft: (content: string) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"assistant" | "profile" | "ticket" | "history">("assistant");
+  const suggestedReply = currentScriptStep?.standardReply
+    || trainingSamples.find((sample) => sample.standardReply)?.standardReply
+    || firstSuggestedReply(review)
+    || "当前节点还没有配置标准回复。可以先生成对话复盘，或到话本流程/训练中心补充样本。";
+  const firstKnowledge = knowledgeItems[0];
+  const firstSample = trainingSamples[0];
+  const firstReviewItem = review.items[0];
+  const referencedSamples = lastOutboundPayload.samples?.length || 0;
+  const referencedMaterials = lastOutboundPayload.trainingMaterials?.length || 0;
+  return <aside className="training-loop-panel">
+    <div className="assistant-tabs">
+      <button className={activeTab === "assistant" ? "active" : ""} onClick={() => setActiveTab("assistant")}>AI助手</button>
+      <button className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}>客户资料</button>
+      <button className={activeTab === "ticket" ? "active" : ""} onClick={() => setActiveTab("ticket")}>工单</button>
+      <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>历史记录</button>
+    </div>
+    {activeTab === "assistant" && <>
+      <section className="assistant-card ai-reply-card">
+        <div className="assistant-card-title"><Sparkles size={17}/><div><h3>AI 回复建议</h3><p>基于对话上下文生成</p></div></div>
+        <div className="reply-preview">{suggestedReply}</div>
+        <div className="runtime-facts">
+          <span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span>
+          <span>{lastOutboundPayload.strictFlowEnabled === true ? "严格流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "严格流程未启用" : "严格流程待判断"}</span>
+          <span>引用样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条</span>
+        </div>
+        <div className="confidence-row"><span>业务来源 <strong>{currentScriptStep ? "当前话本节点" : firstSample ? "训练样本" : firstReviewItem ? "复盘候选" : "待补充"}</strong></span><button onClick={() => setDraft(suggestedReply)}>使用回复</button><button className="ghost">微调后使用</button><ThumbsUp size={16}/><ThumbsDown size={16}/></div>
+      </section>
+      <section className="assistant-card">
+        <div className="assistant-card-title"><BookOpen size={17}/><div><h3>匹配知识</h3><p>{conversation.countryName ? `${countryLabel(conversation.countryName)} · ${languageName(conversation.language)}` : "当前客户上下文"}</p></div><span className="status-pill ok">{firstKnowledge ? "已匹配" : "待补充"}</span></div>
+        <strong>{firstKnowledge?.title || firstReviewItem?.title || "暂无直接匹配知识"}</strong>
+        <p>{firstKnowledge?.content || displayReviewItemContent(firstReviewItem) || "当前国家/语言下还没有可展示知识，可从对话复盘生成或到知识库添加。"}</p>
+        <small>来源：{firstKnowledge ? "知识库" : firstReviewItem ? "对话复盘" : "未命中"} · 当前阶段 {label(conversation.stage)}</small>
+      </section>
+      <section className="assistant-card script-guidance">
+        <div className="assistant-card-title"><Workflow size={17}/><div><h3>脚本引导</h3><p>{scriptFlow?.flow.name || "系统严格流程"} · 当前步骤：{label(flowStep)}</p></div></div>
+        {scriptGuidanceRows(currentScriptStep).map((item, index) => <div key={`${item}-${index}`} className={index < 3 ? "checked" : ""}><span>{index < 3 ? <Check size={12}/> : index + 1}</span>{item}</div>)}
+      </section>
+      <section className="assistant-card">
+        <div className="assistant-card-title"><FileText size={17}/><div><h3>样本推荐</h3><p>相似场景优秀回复</p></div></div>
+        {review.items.slice(0, 2).map((item) => <article key={item.id} className="sample-suggestion">
+          <strong>{item.title}</strong>
+          <p>{displayReviewItemContent(item)}</p>
+          {!platform && item.status !== "applied" && <AsyncButton busyText="加入中..." onClick={() => onApply(item.id)}>引用</AsyncButton>}
+        </article>)}
+        {!review.items.length && trainingSamples.slice(0, 2).map((sample) => <article key={sample.id} className="sample-suggestion">
+          <strong>{label(sample.intent)} · {label(sample.stage)}</strong>
+          <p>{sample.standardReply}</p>
+          <button className="ghost" onClick={() => setDraft(sample.standardReply)}>引用</button>
+        </article>)}
+        {!review.items.length && !trainingSamples.length && <article className="sample-suggestion"><strong>暂无样本命中</strong><p>当前阶段还没有训练样本。建议生成复盘或上传真实聊天记录。</p></article>}
+      </section>
+      <section className="assistant-card">
+        <div className="assistant-card-title"><Lightbulb size={17}/><div><h3>训练提升</h3><p>当前对话可沉淀为训练内容</p></div></div>
+        <div className="training-actions"><button className="ghost">不准确</button><button className="ghost">不完整</button>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
+        <ConversationReviewCard platform={platform} data={review} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
+      </section>
+    </>}
+    {activeTab === "profile" && <section className="assistant-card customer-profile-panel">
+      <div className="assistant-card-title"><Contact size={17}/><div><h3>客户资料</h3><p>{conversation.nickname || conversation.customerPhone}</p></div><span className="status-pill ok">{label(conversation.status)}</span></div>
+      <div className="profile-grid">
+        <span>国家</span><strong>{countryLabel(conversation.countryName)}</strong>
+        <span>语言</span><strong>{languageName(conversation.language)}</strong>
+        <span>阶段</span><strong>{label(conversation.stage)}</strong>
+        <span>当前流程</span><strong>{label(flowStep)}</strong>
+        <span>客户号码</span><strong>{conversation.customerPhone || "未识别"}</strong>
+        <span>客服账号</span><strong>{conversation.a2cAccountPhone || "未绑定"}</strong>
+        <span>手机</span><strong>{conversation.extractedPhone || "未识别"}</strong>
+        <span>Telegram</span><strong>{conversation.extractedTelegram || "未识别"}</strong>
+        <span>WhatsApp</span><strong>{conversation.extractedWhatsApp || "未识别"}</strong>
+      </div>
+      <ConversationMemoryCard memory={memory} notes={notes} localizeSystemText={localizeSystemText} onNotesChange={onNotesChange} renderSaveAction={saveMemoryAction} />
+    </section>}
+    {activeTab === "ticket" && <section className="assistant-card ticket-panel">
+      <div className="assistant-card-title"><MessageSquare size={17}/><div><h3>工单</h3><p>当前会话处理状态</p></div><span className="status-pill ok">{label(conversation.handoffStatus)}</span></div>
+      <div className="ticket-rows">
+        <div><span>会话状态</span><strong>{label(conversation.status)}</strong></div>
+        <div><span>接管状态</span><strong>{label(conversation.handoffStatus)}</strong></div>
+        <div><span>未读消息</span><strong>{conversation.unreadCount} 条</strong></div>
+        <div><span>推荐动作</span><strong>{conversation.handoffStatus === "pending" ? "尽快处理客户问题" : "保持跟进"}</strong></div>
+      </div>
+      <p>这里保持和现有接管流程一致：状态修改仍通过会话顶部的“待处理 / 处理中 / 已完成”操作完成，避免右侧面板产生第二套状态入口。</p>
+    </section>}
+    {activeTab === "history" && <section className="assistant-card history-panel">
+      <div className="assistant-card-title"><FileText size={17}/><div><h3>历史记录</h3><p>聊天、复盘与训练沉淀</p></div></div>
+      <div className="history-list">
+        <article><strong>最近聊天</strong><p>{conversation.updatedAt ? formatDateTime(conversation.updatedAt) : "暂无更新时间"} · 当前聊天窗口展示完整消息时间线</p></article>
+        <article><strong>对话复盘</strong><p>{review.review ? `${review.review.score} 分 · ${review.review.summary}` : "未生成复盘"}</p></article>
+        <article><strong>训练候选</strong><p>{review.items.length ? `${review.items.length} 条候选内容` : "暂无候选内容"}</p></article>
+        <article><strong>运行引用</strong><p>样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条 · 回复模式 {replyModeLabel(lastOutboundPayload.replyMode)}</p></article>
+      </div>
+    </section>}
+  </aside>;
+}
+
+function firstSuggestedReply(review: ConversationReviewResponse) {
+  const applied = review.items.find((item) => item.itemType === "sample" || item.itemType === "knowledge");
+  if (applied?.content) return displayReviewItemContent(applied);
+  const good = review.review?.goodReplies?.[0];
+  if (good) return good;
+  return "";
+}
+
+function displayReviewItemContent(item?: ConversationReviewItem) {
+  if (!item) return "";
+  try {
+    const parsed = JSON.parse(item.content) as Record<string, unknown>;
+    return String(parsed.standardReply || parsed.reply || parsed.content || parsed.answer || parsed.customerMessage || item.content || "");
+  } catch {
+    return item.content;
+  }
+}
+
+function scriptGuidanceRows(step: ScriptFlowStep | null) {
+  if (!step) return ["根据当前阶段判断客户问题", "查看最近客服回复与客户资料", "必要时生成复盘沉淀样本", "无法确认时转人工"];
+  return [
+    step.goal && `目标：${step.goal}`,
+    step.triggerCondition && `触发：${step.triggerCondition}`,
+    step.collectInfo && `收集：${step.collectInfo}`,
+    step.sendLink ? "需要发送开户链接或教程" : "",
+    step.sendInvite ? "需要分配或提醒邀请码" : "",
+    step.nextCondition && `下一步：${step.nextCondition}`,
+    step.forbidden && `禁止：${step.forbidden}`
+  ].filter(Boolean) as string[];
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -1201,4 +1532,6 @@ function roleName(role: string) {
   return ({ platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营" } as Record<string, string>)[role] || role;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const rootElement = document.getElementById("root")! as HTMLElement & { a2cRoot?: ReturnType<typeof createRoot> };
+rootElement.a2cRoot ||= createRoot(rootElement);
+rootElement.a2cRoot.render(<App />);
