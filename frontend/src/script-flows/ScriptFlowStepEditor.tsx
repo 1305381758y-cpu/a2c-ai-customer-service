@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 
-import { api } from "../app/api.js";
 import type { ScriptFlowStep } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
+import { deleteScriptFlowStep, duplicateScriptFlowStep, updateScriptFlowStep } from "./scriptFlowApi.js";
 
 export const STRICT_STEP_OPTIONS = [
   "interest_screening",
@@ -24,18 +24,18 @@ export function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: Script
   useEffect(() => setDraft(step), [step]);
   const set = (key: keyof ScriptFlowStep, value: string | boolean | number) => setDraft({ ...draft, [key]: value } as ScriptFlowStep);
   const save = async () => {
-    await api(`${endpoint}/${step.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(draft as unknown as Record<string, any>)) });
+    await updateScriptFlowStep(endpoint, step.id, coercePatch(draft as unknown as Record<string, any>));
     notify("success", "流程节点已保存");
     await onSaved();
   };
   const duplicate = async () => {
-    await api(`${endpoint}/${step.id}/duplicate`, { method: "POST" });
+    await duplicateScriptFlowStep(endpoint, step.id);
     notify("success", "流程节点已复制");
     await onSaved();
   };
   const remove = async () => {
     if (!window.confirm("确认删除这个流程节点？如果有其他节点引用它，需要先修改引用。")) return;
-    await api(`${endpoint}/${step.id}`, { method: "DELETE" });
+    await deleteScriptFlowStep(endpoint, step.id);
     notify("success", "流程节点已删除");
     await onSaved();
   };

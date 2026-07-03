@@ -1,43 +1,51 @@
 import { useEffect, useState } from "react";
 import { Upload } from "lucide-react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVersion } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
 import { notify } from "../ui/toast.js";
 import { ScriptFlowDetail } from "./ScriptFlowDetail.js";
+import {
+  createScriptFlowStep,
+  deleteScriptFlow,
+  importScriptFlow,
+  loadScriptFlowDetail,
+  loadScriptFlows,
+  scriptFlowBase,
+  scriptFlowRowsUrl,
+  scriptFlowStepBase
+} from "./scriptFlowApi.js";
 
 export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
-  const base = platform ? "/api/admin/script-flows" : "/api/merchant/script-flows";
-  const stepBase = platform ? "/api/admin/script-flow-steps" : "/api/merchant/script-flow-steps";
+  const base = scriptFlowBase(platform);
+  const stepBase = scriptFlowStepBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status });
+  const rowsUrl = scriptFlowRowsUrl(platform, filters);
   const [rows, setRows] = useRows<ScriptFlow>(rowsUrl);
   const [selected, setSelected] = useState<ScriptFlow | null>(null);
   const [detail, setDetail] = useState<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] } | null>(null);
   const [selectedStep, setSelectedStep] = useState<ScriptFlowStep | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [flowName, setFlowName] = useState("");
-  const reload = async () => setRows(await loadRows(rowsUrl));
+  const reload = async () => setRows(await loadScriptFlows(rowsUrl));
   const loadDetail = async (flow: ScriptFlow) => {
     setSelected(flow);
-    const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${flow.id}`);
+    const next = await loadScriptFlowDetail(base, flow.id);
     setDetail(next);
     setSelectedStep(next.steps[0] || null);
   };
   const upload = async () => {
     if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    const params = new URLSearchParams();
     const countryId = filters.countryId || countries[0]?.id || "";
-    if (flowName.trim()) params.set("name", flowName.trim());
-    if (countryId) params.set("countryId", countryId);
-    if (platform && filters.merchantId.trim()) params.set("merchantId", filters.merchantId.trim());
-    const response = await fetch(`${base}/import${params.toString() ? `?${params}` : ""}`, { method: "POST", body });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || "上传失败");
-    const result = await response.json() as { flow: ScriptFlow; imported: number };
+    const result = await importScriptFlow({
+      base,
+      file,
+      flowName,
+      countryId,
+      merchantId: platform ? filters.merchantId : ""
+    });
     notify("success", "话本流程已导入", `已生成 ${result.imported} 个流程节点`);
     setFile(null);
     setFlowName("");
@@ -45,7 +53,7 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   };
   const refreshDetail = async () => {
     if (!selected) return;
-    const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${selected.id}`);
+    const next = await loadScriptFlowDetail(base, selected.id);
     setDetail(next);
     setSelected(next.flow);
     setSelectedStep((current) => next.steps.find((step) => step.id === current?.id) || next.steps[0] || null);
@@ -54,24 +62,14 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   const addStep = async () => {
     if (!detail) return;
     const order = detail.steps.length + 1;
-    const created = await api<ScriptFlowStep>(`${base}/${detail.flow.id}/steps`, {
-      method: "POST",
-      body: JSON.stringify({
-        flowCode: `step_${order}`,
-        flowName: "新流程节点",
-        flowStep: "interest_screening",
-        standardReply: "请在这里填写客服标准话术。",
-        sortOrder: order,
-        enabled: true
-      })
-    });
+    const created = await createScriptFlowStep(base, detail.flow.id, order);
     setSelectedStep(created);
     await refreshDetail();
   };
   const deleteFlow = async () => {
     if (!selected) return;
     if (!window.confirm("确认删除这个话本流程？删除后不可恢复。当前启用的话本需要先启用其他话本后再删除。")) return;
-    await api(`${base}/${selected.id}`, { method: "DELETE" });
+    await deleteScriptFlow(base, selected.id);
     notify("success", "话本流程已删除");
     setSelected(null);
     setDetail(null);
