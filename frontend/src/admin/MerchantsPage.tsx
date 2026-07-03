@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Merchant, MerchantCountry, User } from "../types.js";
-import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
-import { coercePatch } from "../ui/form.js";
+import { CountryPresetDatalist, Table } from "../ui/components.js";
 import { inferCountryProfile } from "../ui/formatters.js";
-import { notify } from "../ui/toast.js";
 import { MerchantCreatePanel, type MerchantCreateForm } from "./MerchantCreatePanel.js";
+import { MerchantDetailPanel } from "./MerchantDetailPanel.js";
 
 export function MerchantsPage() {
   const [rows, setRows] = useRows<Merchant>("/api/admin/merchants");
@@ -87,56 +85,19 @@ export function MerchantsPage() {
       <MerchantCreatePanel form={form} createdLogin={createdLogin} onCreate={createMerchant} onUpdate={update} onUpdateCountryName={updateCountryName} />
       <Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
     </section>
-    <section className="detail-panel">{selected ? <div className="merchant-detail">
-      <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => {
-        const saved = await api<Merchant>(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-        setSelected(saved);
-        setRows(await loadRows("/api/admin/merchants"));
-      }} onDelete={selected.id === "default" ? undefined : async () => {
-        if (!window.confirm(`确认彻底删除商户“${selected.name}”？该商户的账号、国家、客户、会话、样本、知识库、素材和配置都会被删除。`)) return;
-        await api(`/api/admin/merchants/${selected.id}`, { method: "DELETE" });
-        setSelected(null);
-        setSelectedCountry(null);
-        setSelectedUser(null);
-        await setRows(await loadRows("/api/admin/merchants"));
-        notify("success", "商户已彻底删除");
-      }} />
-      <div className="form-section">
-        <h4>国家 / 市场配置</h4>
-        {selectedCountry ? <CountrySettingsEditor value={selectedCountry} onSave={async (patch) => {
-          const saved = await api<MerchantCountry>(`/api/admin/merchants/${selected.id}/countries/${selectedCountry.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
-          setSelectedCountry(saved);
-          await reloadMerchantDetail(selected.id);
-        }} /> : <div className="empty-state compact">暂无国家配置</div>}
-      </div>
-      <div className="form-section">
-        <h4>商户登录账号</h4>
-        <div className="toolbar wrap compact-create">
-          <input placeholder="登录邮箱" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-          <input placeholder="姓名" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
-          <input placeholder="初始密码" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-          <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}><option value="merchant_admin">商户管理员</option><option value="merchant_operator">商户运营</option></select>
-          <AsyncButton disabled={!userForm.email.trim() || !userForm.name.trim() || userForm.password.length < 8} busyText="新增中..." onClick={async () => {
-            await api("/api/admin/users", { method: "POST", body: JSON.stringify({ ...userForm, merchantId: selected.id }) });
-            setUserForm({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
-            await reloadMerchantDetail(selected.id);
-          }}><Plus size={16}/>新增账号</AsyncButton>
-        </div>
-        <Table rows={users as any[]} columns={["email", "name", "role", "status"]} onRow={(row) => setSelectedUser(row as User)} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
-        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: (selectedUser as any).status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} onSave={async (patch) => {
-          if (!patch.password) delete patch.password;
-          const saved = await api<User>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
-          setSelectedUser(saved);
-          await reloadMerchantDetail(selected.id);
-        }} onDelete={async () => {
-          if (!window.confirm(`确认删除账号 ${selectedUser.email}？`)) return;
-          await api(`/api/admin/users/${selectedUser.id}`, { method: "DELETE" });
-          setSelectedUser(null);
-          await reloadMerchantDetail(selected.id);
-          notify("success", "账号已删除");
-        }} />}
-      </div>
-      <div className="notice">A2C、AI供应商 和 TG 密钥仍在“配置”页维护；这里负责商户、国家和登录账号的增删改查。</div>
-    </div> : <div className="empty-state">选择商户后可修改名称和状态。新增商户时可以同时创建国家和商户端登录账号。</div>}</section>
+    <MerchantDetailPanel
+      selected={selected}
+      selectedCountry={selectedCountry}
+      selectedUser={selectedUser}
+      users={users}
+      userForm={userForm}
+      onClearSelection={() => { setSelected(null); setSelectedCountry(null); setSelectedUser(null); }}
+      onReloadDetail={reloadMerchantDetail}
+      onSelectUser={setSelectedUser}
+      onSetMerchant={setSelected}
+      onSetRows={setRows}
+      onSetSelectedCountry={setSelectedCountry}
+      onSetUserForm={setUserForm}
+    />
   </div>;
 }
