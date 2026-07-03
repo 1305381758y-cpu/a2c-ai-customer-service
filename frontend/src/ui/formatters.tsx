@@ -67,6 +67,7 @@ export function normalizeText(value: string) {
 export function displayValue(column: string, value: unknown) {
   if (typeof value === "boolean") return value ? "是" : "否";
   if (value === null || value === undefined || value === "") return "";
+  if (isDateTimeColumn(column)) return formatDateTime(String(value));
   if (["countryId", "countryName", "countryCode"].includes(column)) return countryLabel(value);
   if (["language", "defaultLanguage"].includes(column)) return languageName(String(value));
   if (["status", "enabled", "role", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind"].includes(column)) {
@@ -77,13 +78,42 @@ export function displayValue(column: string, value: unknown) {
   return String(value);
 }
 
-export function countryLabel(value: unknown) {
+const DATE_TIME_COLUMNS = new Set([
+  "assignedAt",
+  "assigned_at",
+  "createdAt",
+  "created_at",
+  "finishedAt",
+  "finished_at",
+  "firstSeenAt",
+  "first_seen_at",
+  "lastMessageAt",
+  "last_message_at",
+  "lastSeenAt",
+  "last_seen_at",
+  "pinnedAt",
+  "pinned_at",
+  "sentAt",
+  "sent_at",
+  "syncedAt",
+  "synced_at",
+  "updatedAt",
+  "updated_at",
+  "usedAt",
+  "used_at"
+]);
+
+function isDateTimeColumn(column: string) {
+  return DATE_TIME_COLUMNS.has(column);
+}
+
+export function countryLabel(value: unknown): string {
   const text = String(value || "").trim();
   if (!text) return "";
   const normalized = text.toLowerCase();
   if (normalized.includes(":")) {
     const suffix = normalized.split(":").pop() || normalized;
-    const translated = countryLabel(suffix);
+    const translated: string = countryLabel(suffix);
     if (translated !== suffix) return translated;
   }
   const dictionary: Record<string, string> = {
