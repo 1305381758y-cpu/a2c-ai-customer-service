@@ -88,6 +88,38 @@ export async function sendManualOutboundMessage(
   return { ok: true, value: { externalId: outbound.sendResult.externalId, conversation: input.conversation, content, translation } };
 }
 
+export async function sendProactiveManualOutboundMessage(
+  deps: ManualOutboundDeps,
+  input: {
+    merchantId: string;
+    apiPhone: string;
+    customerPhone: string;
+    nickname?: string;
+    body: ManualOutboundBody;
+  }
+): Promise<ManualOutboundSendResult> {
+  const cfg = deps.repos.getMerchantConfig(input.merchantId);
+  if (!a2cAccountAllowed(deps.repos, input.merchantId, cfg, input.apiPhone)) {
+    return { ok: false, statusCode: 404, error: "a2c account not found or disabled" };
+  }
+
+  const conversation = deps.repos.getOrCreateConversation(
+    input.customerPhone,
+    input.apiPhone,
+    input.nickname || "",
+    input.merchantId,
+    deps.repos.defaultCountryId(input.merchantId)
+  );
+  deps.repos.upsertCustomerFromConversation(conversation);
+  return sendManualOutboundMessage(deps, {
+    merchantId: input.merchantId,
+    conversation,
+    body: input.body,
+    rawPayload: { replyMode: "manual", manual: true, proactive: true },
+    recordMemory: true
+  });
+}
+
 export function a2cAccountAllowed(repos: Repositories, merchantId: string, config: MerchantConfigRecord, apiPhone: string): boolean {
   const enabledAccount = repos.listMerchantA2CAccounts({ merchantId, enabled: true }).some((account) => account.apiPhone === apiPhone);
   if (enabledAccount) return true;

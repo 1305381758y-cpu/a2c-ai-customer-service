@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
-import { a2cAccountAllowed, sendManualOutboundMessage } from "../services/manualOutboundMessaging.js";
+import { sendManualOutboundMessage, sendProactiveManualOutboundMessage } from "../services/manualOutboundMessaging.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantOutboundMessageRoutesDeps = {
@@ -46,19 +46,12 @@ export function registerMerchantOutboundMessageRoutes(app: FastifyInstance, deps
     const merchantId = scopedMerchantId(request);
     const apiPhone = decodeURIComponent(request.params.apiPhone);
     const body = proactiveSendSchema.parse(request.body ?? {});
-    const cfg = deps.repos.getMerchantConfig(merchantId);
-    if (!a2cAccountAllowed(deps.repos, merchantId, cfg, apiPhone)) {
-      return reply.code(404).send({ error: "a2c account not found or disabled" });
-    }
-
-    const conversation = deps.repos.getOrCreateConversation(body.customerPhone, apiPhone, body.nickname || "", merchantId, deps.repos.defaultCountryId(merchantId));
-    deps.repos.upsertCustomerFromConversation(conversation);
-    const result = await sendManualOutboundMessage(deps, {
+    const result = await sendProactiveManualOutboundMessage(deps, {
       merchantId,
-      conversation,
-      body,
-      rawPayload: { replyMode: "manual", manual: true, proactive: true },
-      recordMemory: true
+      apiPhone,
+      customerPhone: body.customerPhone,
+      nickname: body.nickname,
+      body
     });
     if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
     return result.value;
