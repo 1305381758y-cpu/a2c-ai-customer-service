@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { api, loadRows, useRows } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry } from "../types.js";
 import { coercePatch } from "../ui/form.js";
-import { inferCountryProfile, languageName, translateSystemMessage } from "../ui/formatters.js";
+import { languageName, translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import type { CountryDraft } from "./CountrySettingsCard.js";
+import { applyCountryNameInference, buildA2CWebhookUrl, configEndpoints, countryToDraft, DEFAULT_COUNTRY_DRAFT, reinferCountryDraft } from "./configModel.js";
 import type { ConfigForm } from "./types.js";
 
 export function useConfigController({ platform }: { platform: boolean }) {
@@ -16,34 +17,20 @@ export function useConfigController({ platform }: { platform: boolean }) {
   const [error, setError] = useState("");
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
-  const [countryDraft, setCountryDraft] = useState<CountryDraft>({ code: "br", name: "巴西", defaultLanguage: "pt-BR", platformRegisterUrl: "", tgRegisterGuideUrl: "", requirePlatformAccount: "true", requirePhone: "true", requireTelegram: "true", requireWhatsApp: "false" });
-  const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
-  const countriesUrl = platform ? `/api/admin/merchants/${merchantId}/countries` : "/api/merchant/countries";
-  const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
-  const a2cSyncUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts/sync` : "/api/merchant/a2c/accounts/sync";
-  const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
-  const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
+  const [countryDraft, setCountryDraft] = useState<CountryDraft>(DEFAULT_COUNTRY_DRAFT);
+  const { configUrl, countriesUrl, a2cAccountsUrl, a2cSyncUrl, checkUrl, telegramSetupUrl, registrationTutorialImageUrl } = configEndpoints(platform, merchantId);
+  const a2cWebhookUrl = buildA2CWebhookUrl(window.location.origin, platform, merchantId, form);
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
-  const reloadConfig = async () => setForm(await api<ConfigForm>(url));
+  const reloadConfig = async () => setForm(await api<ConfigForm>(configUrl));
 
-  useEffect(() => { reloadConfig().catch(() => null); }, [url]);
+  useEffect(() => { reloadConfig().catch(() => null); }, [configUrl]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
   useEffect(() => { setChecks([]); }, [merchantId]);
 
   const applyCountryDraft = (country: MerchantCountry) => {
-    setCountryDraft({
-      code: country.code || "default",
-      name: country.name || "默认国家",
-      defaultLanguage: country.defaultLanguage || "unknown",
-      platformRegisterUrl: country.platformRegisterUrl || "",
-      tgRegisterGuideUrl: country.tgRegisterGuideUrl || "",
-      requirePlatformAccount: String(country.requirePlatformAccount),
-      requirePhone: String(country.requirePhone),
-      requireTelegram: String(country.requireTelegram),
-      requireWhatsApp: String(country.requireWhatsApp)
-    });
+    setCountryDraft(countryToDraft(country));
   };
   useEffect(() => {
     const country = countries[0];
@@ -60,8 +47,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setError("");
     const body = new FormData();
     body.append("file", tutorialImageFile);
-    const endpoint = platform ? `/api/admin/merchants/${merchantId}/config/registration-tutorial-image` : "/api/merchant/config/registration-tutorial-image";
-    const response = await fetch(endpoint, { method: "POST", body });
+    const response = await fetch(registrationTutorialImageUrl, { method: "POST", body });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));
@@ -88,7 +74,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<ConfigForm>(url, { method: "PATCH", body: JSON.stringify(form) });
+      const saved = await api<ConfigForm>(configUrl, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       if (!saved.a2cAppId || !saved.a2cAppSecret) {
         setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
@@ -103,7 +89,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
+      if (!skipSave) await api(configUrl, { method: "PATCH", body: JSON.stringify(form) });
       const result = await api<{ imported: number; rows: A2CAccount[]; config: ConfigForm; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
       setA2CAccounts(result.rows);
       setForm(result.config);
@@ -126,8 +112,7 @@ export function useConfigController({ platform }: { platform: boolean }) {
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
   };
   const updateCountryDraftName = (value: string) => {
-    const inferred = inferCountryProfile(value);
-    setCountryDraft({ ...countryDraft, name: value, code: inferred.code, defaultLanguage: inferred.defaultLanguage });
+    setCountryDraft(applyCountryNameInference(countryDraft, value));
   };
   const updateCountryDraft = (draft: CountryDraft) => {
     if (draft.name !== countryDraft.name) {
@@ -141,17 +126,16 @@ export function useConfigController({ platform }: { platform: boolean }) {
     notify("success", "已载入国家设置", "修改后点击“保存国家设置”。");
   };
   const reInferCountryDraft = () => {
-    const inferred = inferCountryProfile(countryDraft.name);
-    setCountryDraft({ ...countryDraft, code: inferred.code, defaultLanguage: inferred.defaultLanguage });
-    notify("success", "已重新识别", `${countryDraft.name || "当前国家"}：${inferred.code} / ${languageName(inferred.defaultLanguage)}`);
+    const nextDraft = reinferCountryDraft(countryDraft);
+    setCountryDraft(nextDraft);
+    notify("success", "已重新识别", `${countryDraft.name || "当前国家"}：${nextDraft.code} / ${languageName(nextDraft.defaultLanguage)}`);
   };
   const setupTelegram = async () => {
     setMessage("");
     setError("");
     try {
-      await api(url, { method: "PATCH", body: JSON.stringify(form) });
-      const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
-      const result = await api<{ config: ConfigForm; webhookUrl?: string }>(endpoint, { method: "POST" });
+      await api(configUrl, { method: "PATCH", body: JSON.stringify(form) });
+      const result = await api<{ config: ConfigForm; webhookUrl?: string }>(telegramSetupUrl, { method: "POST" });
       setForm(result.config);
       setMessage(`TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`);
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);
