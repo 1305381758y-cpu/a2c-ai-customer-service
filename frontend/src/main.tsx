@@ -112,7 +112,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "merchants" && <MerchantsPage />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <ConfigPage platform={user.role === "platform_admin"} />}
-        {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />}
+        {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} notify={notify} AsyncButton={AsyncButton} />}
         {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
         {activeView === "scriptFlows" && <ScriptFlowsPage platform={user.role === "platform_admin"} />}
         {activeView === "intentLearning" && <IntentLearningPage platform={user.role === "platform_admin"} />}
