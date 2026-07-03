@@ -2,7 +2,7 @@ import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MessageInput, Repositories } from "../repositories.js";
 import { sendOutboundMessage, type OutboundIdPolicy, type OutboundPayload, type OutboundSendResult } from "./outboundMessageSender.js";
-import { buildOutboundConversationRawPayload } from "./outboundConversationPayload.js";
+import { buildOutboundConversationRawPayload, type CustomerTranslationPayload } from "./outboundConversationPayload.js";
 import { translateForOperator } from "./translation.js";
 
 export interface OutboundConversationRecordResult {
@@ -25,6 +25,7 @@ export async function recordOutboundConversationMessage(input: {
     language: string;
     intent: MessageInput["intent"];
     rawPayload: Record<string, unknown>;
+    customerTranslation?: CustomerTranslationPayload;
   };
   operatorTranslation?: boolean;
   memory?: {
@@ -52,6 +53,7 @@ export async function recordOutboundConversationMessage(input: {
     intent: input.message.intent,
     rawPayload: buildOutboundConversationRawPayload({
       basePayload: input.message.rawPayload,
+      customerTranslation: input.message.customerTranslation,
       operatorTranslation,
       sendResult,
       simulation: input.simulation

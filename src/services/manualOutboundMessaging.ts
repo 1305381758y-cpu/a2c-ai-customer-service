@@ -1,9 +1,9 @@
 import { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantConfigRecord, Repositories } from "../repositories.js";
-import { buildOutboundConversationRawPayload } from "./outboundConversationPayload.js";
+import { recordOutboundConversationMessage } from "./outboundConversationRecorder.js";
 import { appConfigForMerchant } from "./runtimeConfig.js";
-import { translateForCustomer, translateForOperator, type TranslationResult } from "./translation.js";
+import { translateForCustomer, type TranslationResult } from "./translation.js";
 
 export type ManualOutboundBody = {
   type?: "text" | "image" | "video" | "audio" | "document";
@@ -45,9 +45,13 @@ export async function sendManualOutboundMessage(
   const type = input.body.type ?? "text";
   const translation = type === "text" ? await translateForCustomer(runtimeConfig, input.body.content || "", input.conversation.language) : undefined;
   const outgoingContent = translation?.translatedText || input.body.content;
-  const operatorTranslation = type === "text" && outgoingContent ? await translateForOperator(runtimeConfig, outgoingContent, input.conversation.language) : undefined;
-  try {
-    const externalId = await client.sendMessage({
+  const content = outgoingContent || input.body.caption || input.body.url || "";
+  const outbound = await recordOutboundConversationMessage({
+    repos: deps.repos,
+    runtimeConfig,
+    a2c: client,
+    conversation: input.conversation,
+    payload: {
       to: input.conversation.customerPhone,
       senderPhoneNumber: input.conversation.a2cAccountPhone,
       type,
@@ -55,31 +59,27 @@ export async function sendManualOutboundMessage(
       url: input.body.url,
       caption: input.body.caption,
       fileName: input.body.fileName
-    });
-    const content = outgoingContent || input.body.caption || input.body.url || "";
-    deps.repos.insertMessage({
-      conversationId: input.conversation.id,
-      direction: "outbound",
-      externalId,
+    },
+    idPolicy: {
+      simulatedPrefix: "simulated_manual",
+      sentFallbackPrefix: "a2c_manual",
+      failedPrefix: "manual_send_failed",
+      contextId: input.conversation.id
+    },
+    message: {
       content,
       msgType: type,
       language: input.conversation.language,
       intent: "unknown",
-      rawPayload: buildOutboundConversationRawPayload({
-        basePayload: input.rawPayload,
-        customerTranslation: translation,
-        operatorTranslation,
-        sendResult: {
-          externalId,
-          a2cSendStatus: "sent",
-          a2cSendError: ""
-        }
-      })
-    });
-    return { ok: true, value: { externalId, conversation: input.conversation, content, translation } };
-  } catch (error) {
-    return { ok: false, statusCode: 502, error: error instanceof Error ? error.message : "send failed" };
+      rawPayload: input.rawPayload,
+      customerTranslation: translation
+    },
+    operatorTranslation: type === "text" && Boolean(outgoingContent)
+  });
+  if (outbound.sendResult.a2cSendStatus === "failed") {
+    return { ok: false, statusCode: 502, error: outbound.sendResult.a2cSendError || "send failed" };
   }
+  return { ok: true, value: { externalId: outbound.sendResult.externalId, conversation: input.conversation, content, translation } };
 }
 
 export function a2cAccountAllowed(repos: Repositories, merchantId: string, config: MerchantConfigRecord, apiPhone: string): boolean {
