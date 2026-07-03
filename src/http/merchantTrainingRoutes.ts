@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { Repositories } from "../repositories.js";
@@ -17,6 +17,7 @@ import {
   type TrainingMaterialListQuery,
   type TrainingSampleListQuery
 } from "../services/trainingContent.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 import { importMaterial, importSamples } from "./trainingImports.js";
 
@@ -71,12 +72,4 @@ export function registerMerchantTrainingRoutes(app: FastifyInstance, deps: Merch
   app.delete<{ Params: { id: string } }>("/api/merchant/training-samples/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     return sendResult(reply, deleteTrainingSample(deps.repos, request.params.id, scopedMerchantId(request)));
   });
-}
-
-function sendResult<T>(
-  reply: FastifyReply,
-  result: { ok: true; value: T } | { ok: false; statusCode: 400 | 404; error: string }
-): T | FastifyReply {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

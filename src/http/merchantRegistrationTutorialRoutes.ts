@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
-import { storeRegistrationTutorialImage, type RegistrationTutorialImageResult } from "../services/registrationTutorialImages.js";
+import { storeRegistrationTutorialImage } from "../services/registrationTutorialImages.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantRegistrationTutorialRoutesDeps = {
@@ -41,9 +42,4 @@ async function uploadRegistrationTutorialImage(request: FastifyRequest, reply: F
     buffer,
     origin: requestOrigin(request)
   }));
-}
-
-function sendResult(reply: FastifyReply, result: RegistrationTutorialImageResult) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error, message: result.message });
-  return result.value;
 }

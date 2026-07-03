@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
 import {
@@ -6,9 +6,9 @@ import {
   deleteInviteCode,
   importInviteCodes,
   listInviteCodes,
-  patchInviteCode,
-  type InviteCodeResult
+  patchInviteCode
 } from "../services/inviteCodes.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantInviteCodeRoutesDeps = {
@@ -37,9 +37,4 @@ function registerMerchantOwnInviteCodeRoutes(app: FastifyInstance, deps: Merchan
   app.post<{ Params: { id: string }; Body: { codes?: string; registerUrl?: string } }>("/api/merchant/a2c/accounts/:id/invite-codes/import", { preHandler: deps.merchantAdmins }, async (request, reply) => sendResult(reply, importInviteCodes(deps.repos, request.params.id, request.body ?? {}, scopedMerchantId(request))));
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/invite-codes/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => sendResult(reply, patchInviteCode(deps.repos, request.params.id, request.body ?? {}, scopedMerchantId(request))));
   app.delete<{ Params: { id: string } }>("/api/merchant/invite-codes/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => sendResult(reply, deleteInviteCode(deps.repos, request.params.id, scopedMerchantId(request))));
-}
-
-function sendResult<T>(reply: FastifyReply, result: InviteCodeResult<T>) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

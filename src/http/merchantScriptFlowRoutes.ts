@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requireUser, requestUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
 import {
@@ -11,9 +11,9 @@ import {
   listScriptFlows,
   patchScriptFlow,
   patchScriptFlowStep,
-  restoreScriptFlowVersion,
-  type ScriptFlowResult
+  restoreScriptFlowVersion
 } from "../services/scriptFlows.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 import { importScriptFlow } from "./scriptFlowImport.js";
 
@@ -65,9 +65,4 @@ export function registerMerchantScriptFlowRoutes(app: FastifyInstance, deps: Mer
   app.delete<{ Params: { id: string } }>("/api/merchant/script-flow-steps/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     return sendResult(reply, deleteScriptFlowStep(deps.repos, request.params.id, scopedMerchantId(request), requestUser(request).name));
   });
-}
-
-function sendResult<T>(reply: FastifyReply, result: ScriptFlowResult<T>) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

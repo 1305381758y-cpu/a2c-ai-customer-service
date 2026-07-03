@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { AppConfig } from "../config.js";
 import type { MerchantConfigRecord, Repositories } from "../repositories.js";
@@ -7,6 +7,7 @@ import {
   patchMerchantA2CAccount,
   syncMerchantA2CAccountsFromRemote
 } from "../services/merchantA2CAccounts.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantA2CAccountRoutesDeps = {
@@ -51,12 +52,4 @@ function registerMerchantOwnA2CAccountRoutes(app: FastifyInstance, deps: Merchan
       })
     );
   });
-}
-
-function sendResult<T>(
-  reply: FastifyReply,
-  result: { ok: true; value: T } | { ok: false; statusCode: 400 | 404 | 502; error: string }
-): T | FastifyReply {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

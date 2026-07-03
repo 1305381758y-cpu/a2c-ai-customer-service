@@ -1,9 +1,10 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
 import type { ConversationEngine } from "../services/conversationEngine.js";
-import { runMerchantTrainingSimulation, type TrainingSimulatorResult } from "../services/trainingSimulator.js";
+import { runMerchantTrainingSimulation } from "../services/trainingSimulator.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantTrainingSimulatorRoutesDeps = {
@@ -29,9 +30,4 @@ export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, de
     const body = simulatorMessageSchema.parse(request.body ?? {});
     return sendResult(reply, await runMerchantTrainingSimulation(deps.repos, deps.conversationEngine, merchantId, body));
   });
-}
-
-function sendResult<T>(reply: FastifyReply, result: TrainingSimulatorResult<T>) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

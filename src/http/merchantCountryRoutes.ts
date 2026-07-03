@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
-import { createMerchantCountry, listMerchantCountries, patchMerchantCountry, type MerchantCountryResult } from "../services/merchantCountries.js";
+import { createMerchantCountry, listMerchantCountries, patchMerchantCountry } from "../services/merchantCountries.js";
+import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
 type MerchantCountryRoutesDeps = {
@@ -38,9 +39,4 @@ function registerMerchantOwnCountryRoutes(app: FastifyInstance, deps: MerchantCo
   app.patch<{ Params: { countryId: string }; Body: Record<string, unknown> }>("/api/merchant/countries/:countryId", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     return sendResult(reply, patchMerchantCountry(deps.repos, scopedMerchantId(request), request.params.countryId, request.body ?? {}));
   });
-}
-
-function sendResult<T>(reply: FastifyReply, result: MerchantCountryResult<T>) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }

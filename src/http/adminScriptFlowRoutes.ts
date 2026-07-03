@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requireUser, requestUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
 import {
@@ -11,9 +11,9 @@ import {
   listScriptFlows,
   patchScriptFlow,
   patchScriptFlowStep,
-  restoreScriptFlowVersion,
-  type ScriptFlowResult
+  restoreScriptFlowVersion
 } from "../services/scriptFlows.js";
+import { sendResult } from "./routeResponses.js";
 import { importScriptFlow } from "./scriptFlowImport.js";
 
 type AdminScriptFlowRoutesDeps = {
@@ -63,9 +63,4 @@ export function registerAdminScriptFlowRoutes(app: FastifyInstance, deps: AdminS
   app.delete<{ Params: { id: string } }>("/api/admin/script-flow-steps/:id", { preHandler: deps.adminOnly }, async (request, reply) => {
     return sendResult(reply, deleteScriptFlowStep(deps.repos, request.params.id, undefined, requestUser(request).name));
   });
-}
-
-function sendResult<T>(reply: FastifyReply, result: ScriptFlowResult<T>) {
-  if (!result.ok) return reply.code(result.statusCode).send({ error: result.error });
-  return result.value;
 }
