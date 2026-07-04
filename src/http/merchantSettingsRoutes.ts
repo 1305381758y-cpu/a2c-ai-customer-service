@@ -55,7 +55,7 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
-  app.get<{ Querystring: { startAt?: string; endAt?: string } }>("/api/merchant/dashboard", { preHandler: deps.merchantRoles }, async (request) => buildMerchantDashboard(deps.repos, scopedMerchantId(request), request.query));
+  app.get<{ Querystring: { startAt?: string; endAt?: string; timeZone?: string } }>("/api/merchant/dashboard", { preHandler: deps.merchantRoles }, async (request) => buildMerchantDashboard(deps.repos, scopedMerchantId(request), request.query));
 
   app.get("/api/merchant/config", { preHandler: deps.merchantRoles }, async (request) =>
     getMaskedMerchantConfig(deps.repos, scopedMerchantId(request))

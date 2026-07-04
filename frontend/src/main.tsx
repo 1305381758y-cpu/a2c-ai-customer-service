@@ -112,7 +112,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       </aside>
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
-        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} />}
+        {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} timeMode={timeMode} />}
         {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}

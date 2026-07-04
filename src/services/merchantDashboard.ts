@@ -1,5 +1,5 @@
 import type { Repositories } from "../repositories.js";
-import { normalizeSqlTimeRange, todayBeijingSqlRange, yesterdayBeijingSqlRange, type SqlTimeRange } from "./beijingTime.js";
+import { BEIJING_TIME_ZONE, normalizeSqlTimeRange, todaySqlRange, yesterdaySqlRange, type SqlTimeRange } from "./beijingTime.js";
 
 export type MerchantDashboard = {
   customers: number;
@@ -26,10 +26,11 @@ export type MerchantDashboard = {
   rangeAverageMessagesPerConversation: number;
 };
 
-export function buildMerchantDashboard(repos: Repositories, merchantId: string, query: { startAt?: string; endAt?: string } = {}): MerchantDashboard {
-  const today = todayBeijingSqlRange();
-  const yesterday = yesterdayBeijingSqlRange();
-  const range = normalizeSqlTimeRange(query);
+export function buildMerchantDashboard(repos: Repositories, merchantId: string, query: { startAt?: string; endAt?: string; timeZone?: string } = {}): MerchantDashboard {
+  const timeZone = query.timeZone || BEIJING_TIME_ZONE;
+  const today = todaySqlRange(timeZone);
+  const yesterday = yesterdaySqlRange(timeZone);
+  const range = normalizeSqlTimeRange({ ...query, timeZone });
   const conversations = repos.countConversations({ merchantId });
   const todayConversations = repos.countConversations({ merchantId, startAt: today.startAt, endAt: today.endAt });
   const todayNewConversations = repos.countConversationsByCustomerHistory({ merchantId, startAt: today.startAt, endAt: today.endAt, repeat: false });

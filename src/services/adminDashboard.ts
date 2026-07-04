@@ -1,5 +1,5 @@
 import type { Repositories } from "../repositories.js";
-import { normalizeSqlTimeRange, todayBeijingSqlRange, yesterdayBeijingSqlRange, type SqlTimeRange } from "./beijingTime.js";
+import { BEIJING_TIME_ZONE, normalizeSqlTimeRange, todaySqlRange, yesterdaySqlRange, type SqlTimeRange } from "./beijingTime.js";
 
 export type AdminDashboard = {
   customers: number;
@@ -26,10 +26,11 @@ export type AdminDashboard = {
   rangeAverageMessagesPerConversation: number;
 };
 
-export function buildAdminDashboard(repos: Repositories, query: { startAt?: string; endAt?: string } = {}): AdminDashboard {
-  const today = todayBeijingSqlRange();
-  const yesterday = yesterdayBeijingSqlRange();
-  const range = normalizeSqlTimeRange(query);
+export function buildAdminDashboard(repos: Repositories, query: { startAt?: string; endAt?: string; timeZone?: string } = {}): AdminDashboard {
+  const timeZone = query.timeZone || BEIJING_TIME_ZONE;
+  const today = todaySqlRange(timeZone);
+  const yesterday = yesterdaySqlRange(timeZone);
+  const range = normalizeSqlTimeRange({ ...query, timeZone });
   const conversations = repos.countConversations();
   const todayConversations = repos.countConversations({ startAt: today.startAt, endAt: today.endAt });
   const todayNewConversations = repos.countConversationsByCustomerHistory({ startAt: today.startAt, endAt: today.endAt, repeat: false });

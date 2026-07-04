@@ -9,5 +9,5 @@ type AdminDashboardRoutesDeps = {
 };
 
 export function registerAdminDashboardRoutes(app: FastifyInstance, deps: AdminDashboardRoutesDeps): void {
-  app.get<{ Querystring: { startAt?: string; endAt?: string } }>("/api/admin/dashboard", { preHandler: deps.adminOnly }, async (request) => buildAdminDashboard(deps.repos, request.query));
+  app.get<{ Querystring: { startAt?: string; endAt?: string; timeZone?: string } }>("/api/admin/dashboard", { preHandler: deps.adminOnly }, async (request) => buildAdminDashboard(deps.repos, request.query));
 }

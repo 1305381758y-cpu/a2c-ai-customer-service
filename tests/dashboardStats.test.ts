@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
 import { buildMerchantDashboard } from "../src/services/merchantDashboard.js";
 
 describe("dashboard stats", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("counts all merchant customers without list limits", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);
@@ -120,5 +124,21 @@ describe("dashboard stats", () => {
     expect(dashboard.todayConversations).toBe(2);
     expect(dashboard.todayNewConversations).toBe(1);
     expect(dashboard.todayRepeatConversations).toBe(1);
+  });
+
+  it("uses the requested timezone for today's dashboard range", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T12:00:00Z"));
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("玻利维亚统计商户");
+    const conversation = repos.getOrCreateConversation("bolivia-boundary-customer", "a2c-a", "", merchant.id);
+    db.sqlite.prepare("UPDATE conversations SET created_at = '2026-07-04 02:00:00', updated_at = '2026-07-04 02:00:00' WHERE id = ?").run(conversation.id);
+
+    const beijingDashboard = buildMerchantDashboard(repos, merchant.id, { timeZone: "Asia/Shanghai" });
+    const boliviaDashboard = buildMerchantDashboard(repos, merchant.id, { timeZone: "America/La_Paz" });
+
+    expect(beijingDashboard.todayConversations).toBe(1);
+    expect(boliviaDashboard.todayConversations).toBe(0);
   });
 });
