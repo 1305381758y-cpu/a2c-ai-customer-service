@@ -8,6 +8,8 @@ export type AdminDashboard = {
   rangeCustomers: number;
   conversations: number;
   todayConversations: number;
+  todayNewConversations: number;
+  todayRepeatConversations: number;
   yesterdayConversations: number;
   rangeConversations: number;
   customerMessages: number;
@@ -30,6 +32,8 @@ export function buildAdminDashboard(repos: Repositories, query: { startAt?: stri
   const range = normalizeSqlTimeRange(query);
   const conversations = repos.countConversations();
   const todayConversations = repos.countConversations({ startAt: today.startAt, endAt: today.endAt });
+  const todayNewConversations = repos.countConversationsByCustomerHistory({ startAt: today.startAt, endAt: today.endAt, repeat: false });
+  const todayRepeatConversations = repos.countConversationsByCustomerHistory({ startAt: today.startAt, endAt: today.endAt, repeat: true });
   const yesterdayConversations = repos.countConversations({ startAt: yesterday.startAt, endAt: yesterday.endAt });
   const rangeConversations = countRange(range, () => repos.countConversations({ startAt: range.startAt, endAt: range.endAt }));
   const customerMessages = repos.countMessages({ direction: "inbound" });
@@ -47,6 +51,8 @@ export function buildAdminDashboard(repos: Repositories, query: { startAt?: stri
     rangeCustomers: countRange(range, () => repos.countCustomers({ startAt: range.startAt, endAt: range.endAt })),
     conversations,
     todayConversations,
+    todayNewConversations,
+    todayRepeatConversations,
     yesterdayConversations,
     rangeConversations,
     customerMessages,

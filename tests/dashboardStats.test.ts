@@ -104,4 +104,21 @@ describe("dashboard stats", () => {
     expect(dashboard.averageMessagesPerConversation).toBe(2);
     expect(dashboard.rangeAverageMessagesPerConversation).toBe(2);
   });
+
+  it("splits today's conversations into new and repeat customer conversations", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("新增重复会话统计商户");
+    const oldConversation = repos.getOrCreateConversation("repeat-customer", "a2c-a", "", merchant.id);
+    db.sqlite.prepare("UPDATE conversations SET created_at = '2020-01-01 00:00:00' WHERE id = ?").run(oldConversation.id);
+
+    repos.getOrCreateConversation("repeat-customer", "a2c-b", "", merchant.id);
+    repos.getOrCreateConversation("new-customer", "a2c-a", "", merchant.id);
+
+    const dashboard = buildMerchantDashboard(repos, merchant.id);
+
+    expect(dashboard.todayConversations).toBe(2);
+    expect(dashboard.todayNewConversations).toBe(1);
+    expect(dashboard.todayRepeatConversations).toBe(1);
+  });
 });

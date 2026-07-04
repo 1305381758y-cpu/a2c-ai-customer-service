@@ -30,7 +30,7 @@ export function Dashboard({ platform, api }: { platform: boolean; api: ApiClient
     <div className="metric-section-title">累计总量</div>
     <MetricGrid keys={["customers", "conversations", "customerMessages", "replies", "averageMessagesPerConversation"]} data={data} platform={platform} />
     <div className="metric-section-title">今日，北京时间</div>
-    <MetricGrid keys={["todayCustomers", "todayConversations", "todayCustomerMessages", "todayReplies", "todayAverageMessagesPerConversation"]} data={data} platform={platform} />
+    <MetricGrid keys={["todayCustomers", "todayConversations", "todayNewConversations", "todayRepeatConversations", "todayCustomerMessages", "todayReplies", "todayAverageMessagesPerConversation"]} data={data} platform={platform} />
     <div className="metric-section-title">昨日，北京时间</div>
     <MetricGrid keys={["yesterdayCustomers", "yesterdayConversations", "yesterdayCustomerMessages", "yesterdayReplies", "yesterdayAverageMessagesPerConversation"]} data={data} platform={platform} />
     <div className="metric-section-title">筛选时间</div>
@@ -62,6 +62,8 @@ function metricIcon(key: string) {
     rangeCustomers: Contact,
     conversations: MessageSquare,
     todayConversations: MessageSquare,
+    todayNewConversations: MessageSquare,
+    todayRepeatConversations: MessageSquare,
     yesterdayConversations: MessageSquare,
     rangeConversations: MessageSquare,
     customerMessages: MessageSquare,
@@ -89,6 +91,8 @@ function dashboardLabel(key: string, platform: boolean) {
     averageMessagesPerConversation: "平均每会话消息数",
     todayCustomers: "今日客户数",
     todayConversations: "今日会话数",
+    todayNewConversations: "今日新增会话数",
+    todayRepeatConversations: "今日重复会话数",
     todayCustomerMessages: "今日客户消息条数",
     todayReplies: "今日已回复消息条数",
     todayAverageMessagesPerConversation: "今日平均每会话消息数",
@@ -113,7 +117,9 @@ function dashboardHint(key: string, platform: boolean) {
     replies: "客服、自动回复和人工发送的全部消息",
     averageMessagesPerConversation: "全部客户消息和回复 / 会话总数",
     todayCustomers: "按北京时间统计今日活跃客户",
-    todayConversations: "按北京时间统计今日新增会话",
+    todayConversations: "按北京时间统计今日创建的全部会话",
+    todayNewConversations: "今天创建且客户此前没有历史会话",
+    todayRepeatConversations: "今天创建且客户此前已有历史会话",
     todayCustomerMessages: "按北京时间统计今日客户消息",
     todayReplies: "按北京时间统计今日客服已发送消息",
     todayAverageMessagesPerConversation: "今日客户消息和回复 / 今日会话数",

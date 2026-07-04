@@ -198,6 +198,27 @@ export class ConversationRepository {
     return Number(row?.count ?? 0);
   }
 
+  countByCustomerHistory(filters: { merchantId?: string; startAt?: string; endAt?: string; repeat: boolean }): number {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    addFilter(clauses, params, "c.merchant_id", filters.merchantId);
+    addRangeFilter(clauses, params, "c.created_at", filters.startAt, filters.endAt);
+    clauses.push(`${filters.repeat ? "EXISTS" : "NOT EXISTS"} (
+      SELECT 1
+      FROM conversations previous
+      WHERE previous.merchant_id = c.merchant_id
+        AND previous.customer_phone = c.customer_phone
+        AND (
+          previous.created_at < c.created_at
+          OR (previous.created_at = c.created_at AND previous.id < c.id)
+        )
+      LIMIT 1
+    )`);
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM conversations c ${where}`).get(...params) as { count: number } | undefined;
+    return Number(row?.count ?? 0);
+  }
+
   countMessages(filters: { merchantId?: string; direction?: "inbound" | "outbound"; startAt?: string; endAt?: string } = {}): number {
     const clauses: string[] = [];
     const params: Array<string | number> = [];

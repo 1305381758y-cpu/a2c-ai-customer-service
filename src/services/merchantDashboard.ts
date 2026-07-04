@@ -8,6 +8,8 @@ export type MerchantDashboard = {
   rangeCustomers: number;
   conversations: number;
   todayConversations: number;
+  todayNewConversations: number;
+  todayRepeatConversations: number;
   yesterdayConversations: number;
   rangeConversations: number;
   customerMessages: number;
@@ -30,6 +32,8 @@ export function buildMerchantDashboard(repos: Repositories, merchantId: string, 
   const range = normalizeSqlTimeRange(query);
   const conversations = repos.countConversations({ merchantId });
   const todayConversations = repos.countConversations({ merchantId, startAt: today.startAt, endAt: today.endAt });
+  const todayNewConversations = repos.countConversationsByCustomerHistory({ merchantId, startAt: today.startAt, endAt: today.endAt, repeat: false });
+  const todayRepeatConversations = repos.countConversationsByCustomerHistory({ merchantId, startAt: today.startAt, endAt: today.endAt, repeat: true });
   const yesterdayConversations = repos.countConversations({ merchantId, startAt: yesterday.startAt, endAt: yesterday.endAt });
   const rangeConversations = countRange(range, () => repos.countConversations({ merchantId, startAt: range.startAt, endAt: range.endAt }));
   const customerMessages = repos.countMessages({ merchantId, direction: "inbound" });
@@ -47,6 +51,8 @@ export function buildMerchantDashboard(repos: Repositories, merchantId: string, 
     rangeCustomers: countRange(range, () => repos.countCustomers({ merchantId, startAt: range.startAt, endAt: range.endAt })),
     conversations,
     todayConversations,
+    todayNewConversations,
+    todayRepeatConversations,
     yesterdayConversations,
     rangeConversations,
     customerMessages,

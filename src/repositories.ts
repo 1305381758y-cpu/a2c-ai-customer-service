@@ -237,6 +237,10 @@ export class Repositories {
     return this.conversations.count(filters);
   }
 
+  countConversationsByCustomerHistory(filters: { merchantId?: string; startAt?: string; endAt?: string; repeat: boolean }): number {
+    return this.conversations.countByCustomerHistory(filters);
+  }
+
   countMessages(filters: { merchantId?: string; direction?: "inbound" | "outbound"; startAt?: string; endAt?: string } = {}): number {
     return this.conversations.countMessages(filters);
   }
