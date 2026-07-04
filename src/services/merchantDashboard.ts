@@ -47,9 +47,9 @@ export function buildMerchantDashboard(repos: Repositories, merchantId: string, 
   const rangeReplies = countRange(range, () => repos.countMessages({ merchantId, direction: "outbound", startAt: range.startAt, endAt: range.endAt }));
   return {
     customers: repos.countCustomers({ merchantId }),
-    todayCustomers: repos.countCustomers({ merchantId, startAt: today.startAt, endAt: today.endAt }),
-    yesterdayCustomers: repos.countCustomers({ merchantId, startAt: yesterday.startAt, endAt: yesterday.endAt }),
-    rangeCustomers: countRange(range, () => repos.countCustomers({ merchantId, startAt: range.startAt, endAt: range.endAt })),
+    todayCustomers: repos.countCreatedCustomers({ merchantId, startAt: today.startAt, endAt: today.endAt }),
+    yesterdayCustomers: repos.countCreatedCustomers({ merchantId, startAt: yesterday.startAt, endAt: yesterday.endAt }),
+    rangeCustomers: countRange(range, () => repos.countCreatedCustomers({ merchantId, startAt: range.startAt, endAt: range.endAt })),
     conversations,
     todayConversations,
     todayNewConversations,

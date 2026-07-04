@@ -145,6 +145,10 @@ export class Repositories {
     return this.customers.count(filters);
   }
 
+  countCreatedCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
+    return this.customers.countCreated(filters);
+  }
+
   deleteCustomer(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {
     return this.customers.delete(merchantId, customerKey);
   }

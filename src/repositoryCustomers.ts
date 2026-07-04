@@ -108,6 +108,14 @@ export class CustomerRepository {
   }
 
   count(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
+    return this.countByTimeColumn("last_seen_at", filters);
+  }
+
+  countCreated(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
+    return this.countByTimeColumn("created_at", filters);
+  }
+
+  private countByTimeColumn(timeColumn: "last_seen_at" | "created_at", filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -128,11 +136,11 @@ export class CustomerRepository {
     }
     addSearchFilter(clauses, params, filters.q);
     if (filters.startAt) {
-      clauses.push("last_seen_at >= ?");
+      clauses.push(`${timeColumn} >= ?`);
       params.push(filters.startAt);
     }
     if (filters.endAt) {
-      clauses.push("last_seen_at < ?");
+      clauses.push(`${timeColumn} < ?`);
       params.push(filters.endAt);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";

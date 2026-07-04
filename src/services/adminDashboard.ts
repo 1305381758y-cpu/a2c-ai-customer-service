@@ -47,9 +47,9 @@ export function buildAdminDashboard(repos: Repositories, query: { startAt?: stri
   const rangeReplies = countRange(range, () => repos.countMessages({ direction: "outbound", startAt: range.startAt, endAt: range.endAt }));
   return {
     customers: repos.countCustomers(),
-    todayCustomers: repos.countCustomers({ startAt: today.startAt, endAt: today.endAt }),
-    yesterdayCustomers: repos.countCustomers({ startAt: yesterday.startAt, endAt: yesterday.endAt }),
-    rangeCustomers: countRange(range, () => repos.countCustomers({ startAt: range.startAt, endAt: range.endAt })),
+    todayCustomers: repos.countCreatedCustomers({ startAt: today.startAt, endAt: today.endAt }),
+    yesterdayCustomers: repos.countCreatedCustomers({ startAt: yesterday.startAt, endAt: yesterday.endAt }),
+    rangeCustomers: countRange(range, () => repos.countCreatedCustomers({ startAt: range.startAt, endAt: range.endAt })),
     conversations,
     todayConversations,
     todayNewConversations,

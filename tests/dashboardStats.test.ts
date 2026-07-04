@@ -141,4 +141,24 @@ describe("dashboard stats", () => {
     expect(beijingDashboard.todayConversations).toBe(1);
     expect(boliviaDashboard.todayConversations).toBe(0);
   });
+
+  it("counts new customers by customer creation time instead of activity time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T12:00:00Z"));
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("新增客户统计商户");
+    const oldCustomerConversation = repos.getOrCreateConversation("old-active-customer", "a2c-a", "", merchant.id);
+    repos.upsertCustomerFromConversation(oldCustomerConversation);
+    db.sqlite.prepare("UPDATE customers SET created_at = '2026-07-01 00:00:00', last_seen_at = '2026-07-04 06:00:00' WHERE customer_key = ?").run("old-active-customer");
+
+    const newCustomerConversation = repos.getOrCreateConversation("new-customer", "a2c-a", "", merchant.id);
+    repos.upsertCustomerFromConversation(newCustomerConversation);
+    db.sqlite.prepare("UPDATE customers SET created_at = '2026-07-04 06:00:00', last_seen_at = '2026-07-04 06:00:00' WHERE customer_key = ?").run("new-customer");
+
+    const dashboard = buildMerchantDashboard(repos, merchant.id, { timeZone: "Asia/Shanghai" });
+
+    expect(dashboard.customers).toBe(2);
+    expect(dashboard.todayCustomers).toBe(1);
+  });
 });
