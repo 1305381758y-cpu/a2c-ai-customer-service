@@ -38,23 +38,23 @@ export function Dashboard({ platform, api, timeMode }: { platform: boolean; api:
       </div>
     </section>
     <div className="metric-section-title">累计总量</div>
-    <MetricGrid keys={["customers", "conversations", "customerMessages", "replies", "averageMessagesPerConversation"]} data={data} platform={platform} />
+    <MetricGrid keys={["customers", "conversations", "customerMessages", "replies", "averageMessagesPerConversation"]} data={data} platform={platform} timeLabel={statsTimeLabel} />
     <div className="metric-section-title">今日，{statsTimeLabel}</div>
-    <MetricGrid keys={["todayCustomers", "todayConversations", "todayNewConversations", "todayRepeatConversations", "todayCustomerMessages", "todayReplies", "todayAverageMessagesPerConversation"]} data={data} platform={platform} />
+    <MetricGrid keys={["todayCustomers", "todayConversations", "todayNewConversations", "todayRepeatConversations", "todayCustomerMessages", "todayReplies", "todayAverageMessagesPerConversation"]} data={data} platform={platform} timeLabel={statsTimeLabel} />
     <div className="metric-section-title">昨日，{statsTimeLabel}</div>
-    <MetricGrid keys={["yesterdayCustomers", "yesterdayConversations", "yesterdayCustomerMessages", "yesterdayReplies", "yesterdayAverageMessagesPerConversation"]} data={data} platform={platform} />
+    <MetricGrid keys={["yesterdayCustomers", "yesterdayConversations", "yesterdayCustomerMessages", "yesterdayReplies", "yesterdayAverageMessagesPerConversation"]} data={data} platform={platform} timeLabel={statsTimeLabel} />
     <div className="metric-section-title">筛选时间</div>
-    <MetricGrid keys={["rangeCustomers", "rangeConversations", "rangeCustomerMessages", "rangeReplies", "rangeAverageMessagesPerConversation"]} data={data} platform={platform} />
+    <MetricGrid keys={["rangeCustomers", "rangeConversations", "rangeCustomerMessages", "rangeReplies", "rangeAverageMessagesPerConversation"]} data={data} platform={platform} timeLabel={statsTimeLabel} />
   </div>;
 }
 
-function MetricGrid({ keys, data, platform }: { keys: string[]; data: Record<string, number>; platform: boolean }) {
+function MetricGrid({ keys, data, platform, timeLabel }: { keys: string[]; data: Record<string, number>; platform: boolean; timeLabel: string }) {
   return <div className="grid metrics">{keys.map((key) => {
     const Icon = metricIcon(key);
     return <section key={key} className="metric-card">
       <div className="metric-top"><span>{dashboardLabel(key, platform)}</span><i><Icon size={19}/></i></div>
       <strong>{formatMetricValue(key, data[key] ?? 0)}</strong>
-      <small>{dashboardHint(key, platform)}</small>
+      <small>{dashboardHint(key, platform, timeLabel)}</small>
     </section>;
   })}</div>;
 }
@@ -99,15 +99,15 @@ function dashboardLabel(key: string, platform: boolean) {
     customerMessages: "客户消息总条数",
     replies: "已回复消息总条数",
     averageMessagesPerConversation: "平均每会话消息数",
-    todayCustomers: "今日客户数",
-    todayConversations: "今日会话数",
+    todayCustomers: "今日活跃客户数",
+    todayConversations: "今日创建会话数",
     todayNewConversations: "今日新增会话数",
     todayRepeatConversations: "今日重复会话数",
     todayCustomerMessages: "今日客户消息条数",
     todayReplies: "今日已回复消息条数",
     todayAverageMessagesPerConversation: "今日平均每会话消息数",
-    yesterdayCustomers: "昨日客户数",
-    yesterdayConversations: "昨日会话数",
+    yesterdayCustomers: "昨日活跃客户数",
+    yesterdayConversations: "昨日创建会话数",
     yesterdayCustomerMessages: "昨日客户消息条数",
     yesterdayReplies: "昨日已回复消息条数",
     yesterdayAverageMessagesPerConversation: "昨日平均每会话消息数",
@@ -119,29 +119,29 @@ function dashboardLabel(key: string, platform: boolean) {
   } as Record<string, string>)[key] || key;
 }
 
-function dashboardHint(key: string, platform: boolean) {
+function dashboardHint(key: string, platform: boolean, timeLabel: string) {
   return ({
     customers: "不限制数量的累计客户档案",
     conversations: "累计创建的全部会话",
     customerMessages: "客户发来的全部消息",
     replies: "客服、自动回复和人工发送的全部消息",
     averageMessagesPerConversation: "全部客户消息和回复 / 会话总数",
-    todayCustomers: "按北京时间统计今日活跃客户",
-    todayConversations: "按北京时间统计今日创建的全部会话",
-    todayNewConversations: "今天创建且客户此前没有历史会话",
-    todayRepeatConversations: "今天创建且客户此前已有历史会话",
-    todayCustomerMessages: "按北京时间统计今日客户消息",
-    todayReplies: "按北京时间统计今日客服已发送消息",
-    todayAverageMessagesPerConversation: "今日客户消息和回复 / 今日会话数",
-    yesterdayCustomers: "按北京时间统计昨日活跃客户",
-    yesterdayConversations: "按北京时间统计昨日新增会话",
-    yesterdayCustomerMessages: "按北京时间统计昨日客户消息",
-    yesterdayReplies: "按北京时间统计昨日客服已发送消息",
-    yesterdayAverageMessagesPerConversation: "昨日客户消息和回复 / 昨日会话数",
-    rangeCustomers: "按上方筛选日期统计客户",
-    rangeConversations: "按上方筛选日期统计会话",
-    rangeCustomerMessages: "按上方筛选日期统计客户消息",
-    rangeReplies: "按上方筛选日期统计客服已发送消息",
+    todayCustomers: `按${timeLabel}统计今日有消息或资料更新的客户`,
+    todayConversations: `按${timeLabel}统计今日新创建的全部会话`,
+    todayNewConversations: `按${timeLabel}统计今日创建，且客户此前没有历史会话`,
+    todayRepeatConversations: `按${timeLabel}统计今日创建，且客户此前已有历史会话`,
+    todayCustomerMessages: `按${timeLabel}统计今日客户消息`,
+    todayReplies: `按${timeLabel}统计今日客服已发送消息`,
+    todayAverageMessagesPerConversation: "今日客户消息和回复 / 今日创建会话数",
+    yesterdayCustomers: `按${timeLabel}统计昨日有消息或资料更新的客户`,
+    yesterdayConversations: `按${timeLabel}统计昨日新创建会话`,
+    yesterdayCustomerMessages: `按${timeLabel}统计昨日客户消息`,
+    yesterdayReplies: `按${timeLabel}统计昨日客服已发送消息`,
+    yesterdayAverageMessagesPerConversation: "昨日客户消息和回复 / 昨日创建会话数",
+    rangeCustomers: `按上方筛选日期和${timeLabel}统计客户`,
+    rangeConversations: `按上方筛选日期和${timeLabel}统计会话`,
+    rangeCustomerMessages: `按上方筛选日期和${timeLabel}统计客户消息`,
+    rangeReplies: `按上方筛选日期和${timeLabel}统计客服已发送消息`,
     rangeAverageMessagesPerConversation: "筛选客户消息和回复 / 筛选会话数"
   } as Record<string, string>)[key] || "实时运营指标";
 }
