@@ -113,12 +113,12 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
         {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} timeMode={timeMode} />}
-        {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} timeMode={timeMode} />}
+        {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
         {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />}
-        {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
+        {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
         {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
         {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} />}
         {activeView === "training" && <TrainingMaterials platform={false} simple />}
@@ -133,61 +133,36 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
   );
 }
 
-function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
+function AiCallsPage({ platform = false }: { platform?: boolean }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
-  const [countries, setCountries] = useState<MerchantCountry[]>([]);
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
-  const activeCountry = countries.find((country) => country.status === "active") || countries[0];
-  const statsTimeZone = timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
-  const statsTimeLabel = timeMode === "country" && activeCountry ? `${activeCountry.name || "国家"}时间` : timeDisplayModeLabel("beijing");
   const reload = async () => {
-    const query = platform ? { ...filters, timeZone: statsTimeZone } : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
+    const query = platform ? filters : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
     setData(nextData);
     if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
   };
-  useEffect(() => {
-    if (platform) return;
-    api<{ rows: MerchantCountry[] }>("/api/merchant/countries").then((result) => setCountries(result.rows || [])).catch(() => setCountries([]));
-  }, [platform]);
-  useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
+  useEffect(() => { reload().catch(() => undefined); }, [platform]);
   const detailRows = selectedTaskType ? data.byTypeDetails.filter((row) => row.taskType === selectedTaskType) : data.byTypeDetails;
-  const applyPreset = (preset: "today" | "yesterday" | "7days" | "clear") => {
-    if (preset === "clear") {
-      setFilters({ ...filters, startAt: "", endAt: "" });
-      return;
-    }
-    const range = localDateTimePreset(preset, statsTimeZone);
-    setFilters({ ...filters, ...range });
-  };
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
       <div className="training-center-hero compact">
         <div>
           <h3>大模型调用统计</h3>
-          <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。当前筛选按{statsTimeLabel}换算。</p>
+          <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。</p>
         </div>
       </div>
-      <div className="model-call-filter filters">
-        <div className="model-call-filter-grid">
-          {platform && <label>商户ID<input placeholder="输入商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} /></label>}
-          <label>AI供应商<select aria-label="AI供应商" value={filters.provider || ""} onChange={(event) => setFilters({ ...filters, provider: event.target.value })}>
-            <option value="">全部供应商</option>
-            {data.availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}
-          </select></label>
-          <label>开始时间<input type="datetime-local" step={1} aria-label="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} /></label>
-          <label>结束时间<input type="datetime-local" step={1} aria-label="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} /></label>
-          <button onClick={reload}><Search size={16}/>筛选</button>
-        </div>
-        <div className="quick-range-row">
-          <span>{statsTimeLabel}</span>
-          <button className="ghost" onClick={() => applyPreset("today")}>今天</button>
-          <button className="ghost" onClick={() => applyPreset("yesterday")}>昨天</button>
-          <button className="ghost" onClick={() => applyPreset("7days")}>近7天</button>
-          <button className="ghost" onClick={() => applyPreset("clear")}>清空时间</button>
-        </div>
+      <div className="toolbar wrap filters">
+        {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} />}
+        <select aria-label="AI供应商" value={filters.provider || ""} onChange={(event) => setFilters({ ...filters, provider: event.target.value })}>
+          <option value="">全部供应商</option>
+          {data.availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}
+        </select>
+        <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
+        <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
+        <button onClick={reload}><Search size={16}/>筛选</button>
       </div>
       <div className="grid metrics">
         <MetricCard title="总调用" value={data.totalCalls} detail="所有供应商、所有任务类型" />
@@ -227,35 +202,6 @@ function MetricCard({ title, value, detail }: { title: string; value: number | s
     <strong>{value}</strong>
     <small>{detail}</small>
   </section>;
-}
-
-function localDateTimePreset(preset: "today" | "yesterday" | "7days", timeZone: string): { startAt: string; endAt: string } {
-  const today = datePartsInTimeZone(new Date(), timeZone);
-  const endDate = preset === "yesterday" ? addLocalDays(today, 0) : addLocalDays(today, 1);
-  const startDate = preset === "today"
-    ? today
-    : preset === "yesterday"
-      ? addLocalDays(today, -1)
-      : addLocalDays(today, -6);
-  return {
-    startAt: `${formatLocalDate(startDate)}T00:00:00`,
-    endAt: `${formatLocalDate(endDate)}T00:00:00`
-  };
-}
-
-function datePartsInTimeZone(date: Date, timeZone: string): { year: number; month: number; day: number } {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
-  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
-  return { year: Number(values.year), month: Number(values.month), day: Number(values.day) };
-}
-
-function addLocalDays(value: { year: number; month: number; day: number }, days: number): { year: number; month: number; day: number } {
-  const date = new Date(Date.UTC(value.year, value.month - 1, value.day + days));
-  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
-}
-
-function formatLocalDate(value: { year: number; month: number; day: number }) {
-  return `${value.year}-${String(value.month).padStart(2, "0")}-${String(value.day).padStart(2, "0")}`;
 }
 
 function Merchants() {

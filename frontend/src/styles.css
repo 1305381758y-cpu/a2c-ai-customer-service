@@ -422,43 +422,6 @@ section p { color: var(--muted-strong); line-height: 1.55; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
-.model-call-filter {
-  display: grid;
-  gap: 10px;
-}
-.model-call-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto;
-  gap: 10px;
-  align-items: end;
-}
-.model-call-filter-grid label {
-  display: grid;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 750;
-  min-width: 0;
-}
-.model-call-filter-grid input,
-.model-call-filter-grid select {
-  width: 100%;
-}
-.model-call-filter-grid button {
-  min-height: 42px;
-}
-.quick-range-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.quick-range-row span {
-  font-weight: 750;
-  color: var(--text);
-}
 .filters {
   padding: 10px;
   background: var(--surface-soft);
@@ -4167,8 +4130,6 @@ section,
 .dashboard-page,
 .ai-calls-page,
 .ai-call-columns,
-.model-call-filter,
-.model-call-filter-grid,
 .customer-conversation-grid,
 .customer-conversation-history,
 .review-card,
