@@ -5,21 +5,25 @@ import { ConversationExportBar } from "../conversations/ConversationExport.js";
 import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
-import { countryLabel, formatConversationDate, label, languageName } from "../ui/formatters.js";
+import { countryLabel, formatConversationDate, label, languageName, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
 
 type CustomersPageProps = {
   platform?: boolean;
+  timeMode: TimeDisplayMode;
   renderConversation: (conversation: Conversation, reloadHistory: () => Promise<void>) => React.ReactNode;
 };
 
-export function CustomersPage({ platform = false, renderConversation }: CustomersPageProps) {
+export function CustomersPage({ platform = false, timeMode, renderConversation }: CustomersPageProps) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const activeCountry = countries.find((country) => country.status === "active") || countries[0];
+  const filterTimeZone = timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
+  const filterTimeLabel = timeMode === "country" && activeCountry ? `${activeCountry.name || "国家"}时间` : timeDisplayModeLabel("beijing");
   const defaultRange = todayBeijingDateRange();
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
-  const queryFilters = platform ? filters : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, limit: filters.limit };
+  const queryFilters = platform ? { ...filters, timeZone: filterTimeZone } : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: filterTimeZone, limit: filters.limit };
   const rowsUrl = withQuery(base, queryFilters);
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
@@ -52,8 +56,8 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
   };
   const exportBase = platform ? "/api/admin/conversations/export" : "/api/merchant/conversations/export";
   const scopedExportFilters = platform
-    ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: "50000" }
-    : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, limit: "50000" };
+    ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, timeZone: filterTimeZone, limit: "50000" }
+    : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, timeZone: filterTimeZone, limit: "50000" };
 
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
@@ -61,7 +65,7 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
         <div className="customer-export-top">
           <ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />
         </div>
-        <div className="table-helper">默认筛选北京时间今天有过消息或更新的客户；右上角可切换页面时间显示为北京时间或国家时间。可搜索客户账号、昵称、接收账号、手机号、TG/WhatsApp。当前筛选共 {total} 个客户。</div>
+        <div className="table-helper">默认筛选{filterTimeLabel}今天有过消息或更新的客户；右上角切换时间后，筛选也会按对应时区换算。可搜索客户账号、昵称、接收账号、手机号、TG/WhatsApp。当前筛选共 {total} 个客户。</div>
         <FilterBar
           filters={filters}
           setFilters={setFilters}

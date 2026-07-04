@@ -74,4 +74,23 @@ describe("AI call stats", () => {
       lastFailedAt: expect.any(String)
     }]);
   });
+
+  it("filters datetime-local ranges using the selected timezone", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("模型调用时区商户");
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "translation", status: "success", durationMs: 100 });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "translation", status: "success", durationMs: 100 });
+    const rows = db.sqlite.prepare("SELECT id FROM ai_call_logs ORDER BY id ASC").all() as Array<{ id: number }>;
+    db.sqlite.prepare("UPDATE ai_call_logs SET created_at = ? WHERE id = ?").run("2026-07-04 02:30:00", rows[0].id);
+    db.sqlite.prepare("UPDATE ai_call_logs SET created_at = ? WHERE id = ?").run("2026-07-04 14:30:00", rows[1].id);
+
+    const beijingStats = getMerchantAiCallStats(repos, merchant.id, { startAt: "2026-07-04T10:00:00", endAt: "2026-07-04T11:00:00", timeZone: "Asia/Shanghai" });
+    const boliviaStats = getMerchantAiCallStats(repos, merchant.id, { startAt: "2026-07-04T10:00:00", endAt: "2026-07-04T11:00:00", timeZone: "America/La_Paz" });
+
+    expect(beijingStats.totalCalls).toBe(1);
+    expect(boliviaStats.totalCalls).toBe(1);
+    expect(beijingStats.byTypeDetails[0].lastCalledAt).toBe("2026-07-04 02:30:00");
+    expect(boliviaStats.byTypeDetails[0].lastCalledAt).toBe("2026-07-04 14:30:00");
+  });
 });

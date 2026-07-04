@@ -6,6 +6,7 @@ export type AiCallStatsQuery = {
   provider?: string;
   startAt?: string;
   endAt?: string;
+  timeZone?: string;
 };
 
 export function getMerchantAiCallStats(repos: Repositories, merchantId: string, query: AiCallStatsQuery): AiCallStats {

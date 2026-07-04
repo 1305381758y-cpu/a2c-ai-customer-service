@@ -36,6 +36,7 @@ export type AdminCustomerListQuery = {
   q?: string;
   startAt?: string;
   endAt?: string;
+  timeZone?: string;
   limit?: string;
 };
 
@@ -64,7 +65,7 @@ export function listAdminConversations(repos: Repositories, query: AdminConversa
 }
 
 export function listAdminCustomers(repos: Repositories, query: AdminCustomerListQuery): { rows: CustomerRecord[]; total: number } {
-  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt });
+  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
   const filters = {
     merchantId: query.merchantId,
     countryId: query.countryId,

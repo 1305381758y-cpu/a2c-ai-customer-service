@@ -15,10 +15,11 @@ export function listMerchantCustomers(
     q?: string;
     startAt?: string;
     endAt?: string;
+    timeZone?: string;
     limit?: string;
   }
 ): { rows: CustomerRecord[]; total: number } {
-  const range = normalizeSqlTimeRange({ startAt: filters.startAt, endAt: filters.endAt });
+  const range = normalizeSqlTimeRange({ startAt: filters.startAt, endAt: filters.endAt, timeZone: filters.timeZone });
   const scopedFilters = {
     merchantId,
     countryId: filters.countryId,

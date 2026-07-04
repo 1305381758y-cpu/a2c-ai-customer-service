@@ -1,4 +1,5 @@
 import type { ConversationExportRecord, Repositories } from "../repositories.js";
+import { normalizeSqlTimeRange } from "./beijingTime.js";
 
 export type ConversationExportQuery = {
   merchantId?: string;
@@ -11,6 +12,7 @@ export type ConversationExportQuery = {
   direction?: string;
   startAt?: string;
   endAt?: string;
+  timeZone?: string;
   limit?: string;
   format?: "csv" | "jsonl";
 };
@@ -38,6 +40,7 @@ export function listConversationExportRows(
 export function normalizeConversationExportQuery(query: ConversationExportQuery) {
   const direction = query.direction === "inbound" || query.direction === "outbound" ? query.direction : undefined;
   const limit = query.limit ? Number(query.limit) : undefined;
+  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
   return {
     merchantId: cleanQueryValue(query.merchantId),
     countryId: cleanQueryValue(query.countryId),
@@ -47,8 +50,8 @@ export function normalizeConversationExportQuery(query: ConversationExportQuery)
     a2cAccountPhone: cleanQueryValue(query.a2cAccountPhone),
     customerPhone: cleanQueryValue(query.customerPhone),
     direction,
-    startAt: cleanQueryValue(query.startAt),
-    endAt: cleanQueryValue(query.endAt),
+    startAt: range.startAt,
+    endAt: range.endAt,
     limit: Number.isFinite(limit) ? limit : undefined
   };
 }
