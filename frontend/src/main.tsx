@@ -18,7 +18,7 @@ import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
 import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
-import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, statusTone, translateSystemMessage } from "./ui/formatters.js";
+import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, getTimeDisplayMode, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, setTimeDisplayMode, statusTone, timeDisplayModeLabel, translateSystemMessage, type TimeDisplayMode } from "./ui/formatters.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
 import { notify, notifyExportStarted, ToastHost } from "./ui/toast.js";
 import "./styles.css";
@@ -89,6 +89,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
 }
 
 function Portal({ user, view, setView, onLogout }: { user: User; view: string; setView: (v: string) => void; onLogout: () => void }) {
+  const [timeMode, setTimeMode] = useState<TimeDisplayMode>(() => getTimeDisplayMode());
   const merchantTrainingViews = ["materials", "knowledge", "samples"];
   const nav = user.role === "platform_admin"
     ? [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "Agent配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
@@ -97,6 +98,10 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
   useEffect(() => {
     if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
   }, [user.role, view, setView]);
+  const changeTimeMode = (mode: TimeDisplayMode) => {
+    setTimeDisplayMode(mode);
+    setTimeMode(mode);
+  };
   return (
     <div className="app">
       <aside>
@@ -106,7 +111,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
       </aside>
       <main>
-        <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></header>
+        <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
         {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} />}
         {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} />}
         {activeView === "merchants" && <Merchants />}
@@ -665,7 +670,7 @@ function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoi
   const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
   useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status }), [code.id, code.code, code.registerUrl, code.status]);
   return <div className="invite-editor">
-    <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt)}` : ""}</small></div>
+    <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt, code.countryName || code.countryId)}` : ""}</small></div>
     <div className="invite-editor-grid">
       <label>邀请码<input aria-label="邀请码" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></label>
       <label>状态<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select></label>
@@ -674,7 +679,7 @@ function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoi
     <div className="invite-meta">
       <span>绑定客户：{code.assignedCustomerKey || "未绑定"}</span>
       <span>注册账号：{code.platformAccount || "未填写"}</span>
-      <span>使用时间：{code.usedAt ? formatDateTime(code.usedAt) : "未使用"}</span>
+      <span>使用时间：{code.usedAt ? formatDateTime(code.usedAt, code.countryName || code.countryId) : "未使用"}</span>
     </div>
     <div className="invite-editor-actions">
       <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
@@ -817,7 +822,7 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
         <details className="version-panel">
           <summary>版本记录</summary>
           <div className="stack-list">
-            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt)}</span><AsyncButton busyText="恢复中..." onClick={async () => { if (!window.confirm(`确认恢复到版本 ${version.version}？`)) return; await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</AsyncButton></div>)}
+            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span><AsyncButton busyText="恢复中..." onClick={async () => { if (!window.confirm(`确认恢复到版本 ${version.version}？`)) return; await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</AsyncButton></div>)}
           </div>
         </details>
       </div> : <div className="empty-chat"><h3>选择话本流程</h3><p>上传或选择一个流程后，可以在这里编辑每一步话术、触发条件和下一步规则。</p></div>}
@@ -931,7 +936,7 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
         <div className="detail-title-row">
           <div>
             <h3>{selected.displayName || selected.suggestedIntent}</h3>
-            <p>{countryLabel(selected.countryId)} · 出现 {selected.occurrenceCount} 次 · 最近 {formatDateTime(selected.lastSeenAt)}</p>
+            <p>{countryLabel(selected.countryId)} · 出现 {selected.occurrenceCount} 次 · 最近 {formatDateTime(selected.lastSeenAt, selected.countryId)}</p>
           </div>
           <span className={`status-pill ${statusTone(selected.status)}`}>{label(selected.status)}</span>
         </div>
@@ -962,7 +967,7 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
           <div className="learning-examples">
             {selected.examples?.length ? selected.examples.map((example, index) => <article key={index}>
               <strong>{String(example.customerText || selected.customerText)}</strong>
-              <p>流程：{label(String(example.flowStep || selected.flowStep || "unknown"))} · 原识别：{label(String(example.detectedIntent || "unknown"))} · 时间：{formatDateTime(String(example.at || ""))}</p>
+              <p>流程：{label(String(example.flowStep || selected.flowStep || "unknown"))} · 原识别：{label(String(example.detectedIntent || "unknown"))} · 时间：{formatDateTime(String(example.at || ""), selected.countryId)}</p>
             </article>) : <div className="empty-state compact">暂无样例</div>}
           </div>
         </details>
@@ -1329,7 +1334,7 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
       />
       {error && <div className="error" role="alert">{error}</div>}
       {statusMessage && <div className="notice" role="status">{statusMessage}</div>}
-      <div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: formatConversationDate, formatTime, label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
+      <div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: (value) => formatConversationDate(value, conversation.countryCode || conversation.countryName || conversation.countryId), formatTime: (value) => formatTime(value, conversation.countryCode || conversation.countryName || conversation.countryId), label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
       <ScriptProgress flowStep={flowStep} scriptFlow={scriptFlow} />
       {!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={sendAction} quickReplies={quickReplies} />}
     </section>
@@ -1564,7 +1569,7 @@ function TrainingLoopPanel({
     {activeTab === "history" && <section className="assistant-card history-panel">
       <div className="assistant-card-title"><FileText size={17}/><div><h3>历史记录</h3><p>聊天、复盘与训练沉淀</p></div></div>
       <div className="history-list">
-        <article><strong>最近聊天</strong><p>{conversation.updatedAt ? formatDateTime(conversation.updatedAt) : "暂无更新时间"} · 当前聊天窗口展示完整消息时间线</p></article>
+        <article><strong>最近聊天</strong><p>{conversation.updatedAt ? formatDateTime(conversation.updatedAt, conversation.countryCode || conversation.countryName || conversation.countryId) : "暂无更新时间"} · 当前聊天窗口展示完整消息时间线</p></article>
         <article><strong>对话复盘</strong><p>{review.review ? `${review.review.score} 分 · ${review.review.summary}` : "未生成复盘"}</p></article>
         <article><strong>训练候选</strong><p>{review.items.length ? `${review.items.length} 条候选内容` : "暂无候选内容"}</p></article>
         <article><strong>运行引用</strong><p>样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条 · 回复模式 {replyModeLabel(lastOutboundPayload.replyMode)}</p></article>

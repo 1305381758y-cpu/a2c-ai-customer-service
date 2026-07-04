@@ -27,7 +27,7 @@ type ConversationCustomerListProps = {
   countryLabel: (value: unknown) => string;
   languageName: (value: string) => string;
   label: (value: string) => string;
-  formatConversationDate: (value: string) => string;
+  formatConversationDate: (value: string, country?: unknown) => string;
   onToggleCollapsed: () => void;
   onMarkAllRead: () => Promise<void>;
   onTogglePin: (conversation: Conversation) => Promise<void>;
@@ -111,7 +111,7 @@ export function ConversationCustomerList({
               <span>{languageName(row.language)}</span>
               <span>{label(row.stage)}</span>
               <span>{label(row.handoffStatus)}</span>
-              {row.updatedAt && <span>{formatConversationDate(row.updatedAt)}</span>}
+              {row.updatedAt && <span>{formatConversationDate(row.updatedAt, row.countryCode || row.countryName || row.countryId)}</span>}
             </span>
           </div>;
         })}

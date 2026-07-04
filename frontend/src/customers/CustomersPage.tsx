@@ -61,7 +61,7 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
         <div className="customer-export-top">
           <ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />
         </div>
-        <div className="table-helper">默认显示北京时间今天有过消息或更新的客户；可搜索客户账号、昵称、接收账号、手机号、TG/WhatsApp。当前筛选共 {total} 个客户。</div>
+        <div className="table-helper">默认筛选北京时间今天有过消息或更新的客户；右上角可切换页面时间显示为北京时间或国家时间。可搜索客户账号、昵称、接收账号、手机号、TG/WhatsApp。当前筛选共 {total} 个客户。</div>
         <FilterBar
           filters={filters}
           setFilters={setFilters}

@@ -10,7 +10,7 @@ type CustomerConversationHistoryProps = {
   withQuery: (base: string, filters: Record<string, string>) => string;
   renderConversation: (conversation: Conversation, reload: () => Promise<void>) => React.ReactNode;
   helpers: {
-    formatConversationDate: (value: string) => string;
+    formatConversationDate: (value: string, country?: unknown) => string;
     countryLabel: (value: unknown) => string;
     languageName: (value: unknown) => string;
     label: (value: string) => string;
@@ -72,7 +72,7 @@ export function CustomerConversationHistory({
         {pager.rows.map((row) => <button key={row.id} type="button" className={`customer-conversation-item ${selected?.id === row.id ? "active" : ""}`} onClick={() => setSelected(row)}>
           <span className="customer-conversation-item-main">
             <strong>{row.a2cAccountPhone || "未识别客服账号"}</strong>
-            <small>{row.updatedAt ? helpers.formatConversationDate(row.updatedAt) : "未知时间"}</small>
+            <small>{row.updatedAt ? helpers.formatConversationDate(row.updatedAt, row.countryCode || row.countryName || row.countryId) : "未知时间"}</small>
           </span>
           <span className="customer-conversation-tags">
             <span>{helpers.countryLabel(row.countryName)}</span>
