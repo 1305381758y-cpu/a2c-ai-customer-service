@@ -17,7 +17,7 @@ export function containsNextStepPrompt(content: string, nextStep: StrictFlowStep
     return /(https?:\/\/|邀请码[:：]|invitation code[:：]|código de convite[:：]|codigo de convite[:：]|注册手机号|注册的手机号码|registered phone|phone number you registered|telefone usado no cadastro|número de telefone usado no cadastro)/i.test(content);
   }
   if (nextStep === "collect_telegram") {
-    return /(@ 开头|@开头|Telegram 用户名|Telegram username|nome de usuário do Telegram)/i.test(content);
+    return /(老师.*Telegram|Telegram 链接|Telegram link|teacher'?s Telegram|link do Telegram da professora|enlace de Telegram de la profesora|500\s*(到|to|a)\s*2800\s*BOB)/i.test(content);
   }
   return false;
 }

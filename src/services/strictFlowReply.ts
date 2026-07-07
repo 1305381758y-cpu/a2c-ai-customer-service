@@ -1,4 +1,5 @@
 import type { A2CClient } from "../clients/a2c.js";
+import type { TelegramClient } from "../clients/telegram.js";
 import type { AppConfig } from "../config.js";
 import type { StrictContextualIntent } from "../domain/strictFlow.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
@@ -17,6 +18,7 @@ import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js";
 import { sendStrictFlowTextOutbound } from "./strictFlowTextOutbound.js";
 import { buildStrictFlowTurn } from "./strictFlowTurnBuilder.js";
+import { completeConversationGoal } from "./conversationGoalCompletion.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -35,6 +37,7 @@ export interface GenerateStrictFlowReplyInput {
   customerText: string;
   agentProfile: MerchantAgentProfileRecord;
   a2c: A2CClient;
+  telegram: Pick<TelegramClient, "sendHandoffMessage">;
   data: A2CWebhookPayload["data"];
   payloadId: string;
   simulation: boolean;
@@ -59,6 +62,7 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     customerText,
     agentProfile,
     a2c,
+    telegram,
     data,
     payloadId,
     simulation,
@@ -125,6 +129,25 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
       tutorialImageUrl: runtimeConfig.REGISTRATION_TUTORIAL_IMAGE_URL,
       simulation
     });
+  }
+
+  if (strictReply.nextFlowStep === "human_handoff") {
+    const handoff = await completeConversationGoal({
+      repos,
+      runtimeConfig,
+      conversation,
+      data,
+      language: strictReply.language,
+      a2c,
+      telegram,
+      simulation,
+      sendVerificationReply: false
+    });
+    return {
+      handled: true,
+      status: handoff.status === "handoff_simulated" ? "strict_flow_handoff_simulated" : "strict_flow_handoff",
+      conversationId: conversation.id
+    };
   }
 
   repos.updateConversation(conversation);

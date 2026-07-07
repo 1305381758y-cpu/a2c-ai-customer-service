@@ -99,6 +99,7 @@ export async function respondToInboundTurn(
       customerText: input.customerTextForAi,
       agentProfile: input.agentProfile,
       a2c: input.a2c,
+      telegram: input.telegram,
       data: input.data,
       payloadId: input.payloadId,
       simulation: input.simulation,

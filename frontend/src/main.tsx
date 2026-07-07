@@ -1448,7 +1448,7 @@ const STRICT_FLOW_STEP_LABELS = [
   ["wait_registration", "等待注册"],
   ["telegram_confirm", "确认TG"],
   ["telegram_download", "下载TG"],
-  ["collect_telegram", "收集TG"],
+  ["collect_telegram", "发送TG链接"],
   ["human_handoff", "人工接管"],
   ["ended", "结束"]
 ] as const;

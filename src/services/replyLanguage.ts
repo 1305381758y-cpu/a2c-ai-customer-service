@@ -260,8 +260,8 @@ function englishStrictFallback(flowStep: string): string {
     registration_intent: "Okay, let me briefly explain: this online part-time job helps merchants improve product sales and rankings, and commission is calculated by tasks. Earnings are subject to platform rules. Do you have time to continue registration now?",
     wait_registration: "Okay, please follow the page steps first. After registration, send me the phone number you used. If you get stuck, tell me where.",
     telegram_confirm: "Congratulations, your registration is done. Please save your username and password. You need Telegram for the next step. Do you have the Telegram app?",
-    telegram_download: "No problem. Search for Telegram in the Play Store or App Store, install it, then create an account. After that, send me your username starting with @.",
-    collect_telegram: "Please send me your Telegram username. It should start with @.",
+    telegram_download: "No problem. Search for Telegram in the Play Store or App Store, install it, then create an account. After that, tell me and I will send you the teacher's Telegram link.",
+    collect_telegram: "I will send you the teacher's Telegram link. Please follow her instructions for the next steps.",
     human_handoff: "We are verifying your information. Please wait a moment."
   };
   return map[flowStep] ?? map.registration_intent;
@@ -273,8 +273,8 @@ function portugueseStrictFallback(flowStep: string): string {
     registration_intent: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?",
     wait_registration: "Certo, siga primeiro as etapas da página. Depois do cadastro, envie o telefone usado. Se travar em alguma parte, me diga onde.",
     telegram_confirm: "Parabéns, seu cadastro foi concluído. Guarde seu nome de usuário e senha. Você precisa do Telegram para a próxima etapa. Você tem o app Telegram?",
-    telegram_download: "Sem problema. Procure Telegram na Play Store ou App Store, instale e crie uma conta. Depois envie seu nome de usuário começando com @.",
-    collect_telegram: "Por favor, envie seu nome de usuário do Telegram. Ele deve começar com @.",
+    telegram_download: "Sem problema. Procure Telegram na Play Store ou App Store, instale e crie uma conta. Depois me avise e eu envio o link da professora.",
+    collect_telegram: "Vou enviar o link do Telegram da professora. Siga as instruções dela para continuar.",
     human_handoff: "Estamos verificando suas informações. Aguarde um momento."
   };
   return map[flowStep] ?? map.registration_intent;
@@ -286,8 +286,8 @@ function spanishStrictFallback(flowStep: string): string {
     registration_intent: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento, y la comisión depende de las tareas. Las ganancias siguen las reglas de la plataforma. ¿Tiene tiempo para continuar con el registro ahora?",
     wait_registration: "De acuerdo, siga primero los pasos de la página. Cuando termine el registro, envíeme el teléfono usado. Si se queda trabado en alguna parte, dígame dónde.",
     telegram_confirm: "Felicidades, el registro está listo. Guarde su usuario y contraseña. Para el siguiente paso necesita Telegram. ¿Tiene la aplicación Telegram?",
-    telegram_download: "No hay problema. Busque Telegram en Play Store o App Store, instálelo y cree una cuenta. Después envíeme su usuario que empieza con @.",
-    collect_telegram: "Por favor envíeme su usuario de Telegram. Debe empezar con @.",
+    telegram_download: "No hay problema. Busque Telegram en Play Store o App Store, instálelo y cree una cuenta. Después avíseme y le enviaré el enlace de la profesora.",
+    collect_telegram: "Le enviaré el enlace de Telegram de la profesora. Siga sus instrucciones para continuar.",
     human_handoff: "Estamos verificando su información. Espere un momento, por favor."
   };
   return map[flowStep] ?? map.registration_intent;
@@ -299,8 +299,8 @@ function chineseStrictFallback(flowStep: string): string {
     registration_intent: "好的，我简单介绍一下：这份兼职主要是帮商家提升产品销量和排名，佣金按任务和平台规则核算。您现在方便继续开户注册吗？",
     wait_registration: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
     telegram_confirm: "恭喜，注册已完成。请保存好用户名和密码。下一步需要 Telegram，您有 Telegram 应用吗？",
-    telegram_download: "没关系，您可以在 Play Store 或 App Store 搜索 Telegram 下载并注册。完成后把 @ 开头的用户名发给我。",
-    collect_telegram: "请把您的 Telegram 用户名发送给我，需要是 @ 开头的用户名。",
+    telegram_download: "没关系，您可以在 Play Store 或 App Store 搜索 Telegram 下载并注册。完成后告诉我，我会把老师的 Telegram 链接发给您。",
+    collect_telegram: "我会把老师的 Telegram 链接发给您，您按她的指示继续操作就可以。",
     human_handoff: "我们正在核实，请稍后。"
   };
   return map[flowStep] ?? map.registration_intent;

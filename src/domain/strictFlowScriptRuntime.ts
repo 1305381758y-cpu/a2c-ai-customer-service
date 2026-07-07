@@ -52,6 +52,7 @@ export function configuredNextFlowStep(input: StrictFlowInput, currentKey: strin
 
 export function applyScriptVariables(content: string, input: StrictFlowInput, language: string, display: string): string {
   const fallbackUrl = input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL || "";
+  const telegramLink = input.country.tgRegisterGuideUrl || input.config.TG_REGISTER_GUIDE_URL || "";
   const registerUrl = input.inviteCode?.registerUrl
     ? input.inviteCode.registerUrl.includes("{code}")
       ? input.inviteCode.registerUrl.replaceAll("{code}", input.inviteCode.code)
@@ -61,6 +62,8 @@ export function applyScriptVariables(content: string, input: StrictFlowInput, la
     .replaceAll("{{REGISTER_URL}}", registerUrl)
     .replaceAll("{{INVITE_CODE}}", input.inviteCode?.code || "")
     .replaceAll("{{INVITE_DISPLAY}}", display || inviteDisplayText(input.inviteCode, language, fallbackUrl))
+    .replaceAll("{{TG_LINK}}", telegramLink)
+    .replaceAll("{{TELEGRAM_LINK}}", telegramLink)
     .replaceAll("{{CUSTOMER_PHONE}}", input.conversation.extractedPhone || input.analysis.phone || "")
     .replaceAll("{{TELEGRAM_USERNAME}}", input.conversation.extractedTelegram || input.analysis.telegram || "");
 }

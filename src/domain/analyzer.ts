@@ -152,6 +152,7 @@ function shouldKeepPreviousLanguage(text: string, fallback: string): boolean {
   if (normalizeLanguageCode(fallback) === "en" && isSpanishShortSignal(normalized)) return false;
   return isShortContextualReply(normalized) ||
     isGreeting(normalized) ||
+    /^(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|installed|downloaded|instalei|baixei)$/i.test(normalized) ||
     /^@[A-Za-z0-9_]{5,32}$/.test(normalized) ||
     /^\+?\d[\d\s-]{5,18}$/.test(normalized);
 }

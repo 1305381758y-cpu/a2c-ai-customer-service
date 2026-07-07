@@ -80,6 +80,7 @@ describe("strict flow reply module", () => {
       inferredIntent: "positive_confirmation"
     });
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -88,6 +89,7 @@ describe("strict flow reply module", () => {
       analysis,
       customerText: "是的",
       a2c,
+      telegram,
       data: {
         messageId: "inbound-1",
         content: "是的",
@@ -131,6 +133,7 @@ describe("strict flow reply module", () => {
       inferredIntent: "need_help"
     });
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -139,6 +142,7 @@ describe("strict flow reply module", () => {
       analysis,
       customerText: "我不会注册呀",
       a2c,
+      telegram,
       data: {
         messageId: "inbound-help",
         content: "我不会注册呀",
@@ -182,6 +186,7 @@ describe("strict flow reply module", () => {
     }));
     const strictFlowRuntime: StrictFlowRuntimeEngine = { nextTurn };
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -190,6 +195,7 @@ describe("strict flow reply module", () => {
       analysis,
       customerText: "可以",
       a2c,
+      telegram,
       data: {
         messageId: "inbound-runtime",
         content: "可以",
@@ -219,5 +225,56 @@ describe("strict flow reply module", () => {
       strictFlowStep: "wait_registration",
       a2cSendStatus: "simulated"
     });
+  });
+
+  it("marks the conversation as handoff after sending the teacher Telegram link", async () => {
+    const context = setupConversation("telegram_confirm");
+    context.conversation.stage = "need_tg_register";
+    context.conversation.extractedPhone = "918273718271";
+    context.country.tgRegisterGuideUrl = "https://t.me/teacher";
+    context.repos.updateConversation(context.conversation);
+    const analysis = analyzeMessage("有", "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "有",
+      inferredIntent: "positive_confirmation"
+    });
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "有",
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-tg",
+        content: "有",
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-tg",
+      simulation: false,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    expect(result).toEqual({ handled: true, status: "strict_flow_handoff", conversationId: context.conversation.id });
+    expect(telegram.sendHandoffMessage).toHaveBeenCalledOnce();
+    const stored = context.repos.getConversation(context.conversation.id);
+    expect(stored?.status).toBe("human_handoff");
+    expect(stored?.flowStep).toBe("human_handoff");
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 10).find((message) => message.direction === "outbound");
+    expect(outbound?.content).toContain("https://t.me/teacher");
+    expect(outbound?.content).toContain("500 到 2800 BOB");
   });
 });

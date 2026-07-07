@@ -15,7 +15,7 @@ const country: MerchantCountryRecord = {
   name: "巴西",
   defaultLanguage: "pt-BR",
   platformRegisterUrl: "https://register.example/?code={code}",
-  tgRegisterGuideUrl: "",
+  tgRegisterGuideUrl: "https://t.me/teacher",
   requirePlatformAccount: true,
   requirePhone: true,
   requireTelegram: true,
@@ -31,7 +31,7 @@ const defaultCountry: MerchantCountryRecord = {
 };
 const config = {
   PLATFORM_REGISTER_URL: "https://fallback.example",
-  TG_REGISTER_GUIDE_URL: ""
+  TG_REGISTER_GUIDE_URL: "https://t.me/teacher"
 } as AppConfig;
 const inviteCode: A2CInviteCodeRecord = {
   id: 1,
@@ -515,7 +515,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("telegram_download");
     expect(result.stage).toBe("need_tg_register");
     expect(result.reply).toContain("下载 Telegram");
-    expect(result.reply).toContain("@");
+    expect(result.reply).toContain("老师的 Telegram 链接");
     expect(result.reply).not.toContain("WhatsApp");
     expect(result.reply).not.toContain("register.example");
   });
@@ -657,7 +657,7 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[5]).not.toContain("WhatsApp");
     expect(replies[5]).not.toContain("register.example");
     expect(replies[6]).toContain("协助");
-    expect(replies[6]).toContain("@");
+    expect(replies[6]).toContain("老师的 Telegram 链接");
     expect(replies[6]).not.toContain("register.example");
 
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
@@ -759,7 +759,7 @@ describe("strict Aston Brazil flow", () => {
       "注册好了，手机号 99228822881",
       "没有 Telegram",
       "怎么注册",
-      "@customer_123"
+      "装好了"
     ]);
     const replies = turns.map((turn) => turn.result.reply);
     expect(turns[1].flowStep).toBe("registration_intent");
@@ -771,9 +771,11 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[4]).toContain("Telegram");
     expect(replies[4]).not.toContain("WhatsApp");
     expect(turns[5].flowStep).toBe("collect_telegram");
-    expect(replies[5]).toContain("@");
+    expect(replies[5]).toContain("老师的 Telegram 链接");
+    expect(turns[6].flowStep).toBe("human_handoff");
+    expect(replies[6]).toContain("https://t.me/teacher");
+    expect(replies[6]).toContain("老师");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
-    expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
   });
 
   it("does not stall when the customer uses short completion and Telegram confirmations", () => {
@@ -783,8 +785,7 @@ describe("strict Aston Brazil flow", () => {
       "要",
       "好了",
       "99228822881",
-      "有",
-      "@customer_456"
+      "有"
     ]);
     const replies = turns.map((turn) => turn.result.reply);
     expect(turns[1].flowStep).toBe("registration_intent");
@@ -794,10 +795,10 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[3]).toContain("手机号码");
     expect(turns[4].flowStep).toBe("telegram_confirm");
     expect(replies[4]).toContain("Telegram");
-    expect(turns[5].flowStep).toBe("collect_telegram");
-    expect(replies[5]).toContain("@");
+    expect(turns[5].flowStep).toBe("human_handoff");
+    expect(replies[5]).toContain("https://t.me/teacher");
+    expect(replies[5]).toContain("老师");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
-    expect(replies.at(-1)).toBe("我们正在核实，请稍后。");
     for (const replyText of replies) {
       expect(replyText).not.toBe("好的，我继续协助您。");
     }
@@ -813,7 +814,7 @@ describe("strict Aston Brazil flow", () => {
       "99228822881",
       "我没有 Telegram",
       "怎么弄",
-      "@customer_help"
+      "装好了"
     ]);
     const replies = turns.map((turn) => turn.result.reply);
     expect(turns[2].flowStep).toBe("registration_intent");
@@ -825,8 +826,11 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[4].flowStep).toBe("wait_registration");
     expect(turns[6].flowStep).toBe("telegram_download");
     expect(turns[7].flowStep).toBe("collect_telegram");
-    expect(replies[7]).toContain("@");
+    expect(replies[7]).toContain("老师的 Telegram 链接");
     expect(replies[7]).not.toContain("WhatsApp");
+    expect(turns[8].flowStep).toBe("human_handoff");
+    expect(replies[8]).toContain("https://t.me/teacher");
+    expect(replies[8]).toContain("老师");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
@@ -837,8 +841,7 @@ describe("strict Aston Brazil flow", () => {
       "好的",
       "99228822881",
       "你好",
-      "有",
-      "@customer_repeat"
+      "有"
     ]);
     const replies = turns.map((turn) => turn.result.reply);
     expect(turns[3].flowStep).toBe("telegram_confirm");
@@ -846,7 +849,7 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[4]).toContain("我在");
     expect(replies[4]).toContain("Telegram");
     expect(replies[4]).not.toContain("register.example");
-    expect(turns[5].flowStep).toBe("collect_telegram");
+    expect(turns[5].flowStep).toBe("human_handoff");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
@@ -875,7 +878,7 @@ describe("strict Aston Brazil flow", () => {
   });
 
   it("keeps Portuguese flow language through short confirmations", () => {
-    const turns = simulateStrictFlow(["olá", "sim", "sim", "cadastrei, telefone 119922882288", "não tenho Telegram", "como faço", "@cliente_pt_123"]);
+    const turns = simulateStrictFlow(["olá", "sim", "sim", "cadastrei, telefone 119922882288", "não tenho Telegram", "como faço", "instalei"]);
     const replies = turns.map((turn) => turn.result.reply);
     expect(turns[0].flowStep).toBe("interest_screening");
     expect("language" in turns[1].result ? turns[1].result.language : "").toBe("pt-BR");
@@ -884,9 +887,12 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[2]).toContain("Link exclusivo de cadastro");
     expect(turns[3].flowStep).toBe("telegram_confirm");
     expect(turns[4].flowStep).toBe("telegram_download");
-    expect(replies[4]).toContain("baixar o Telegram");
+    expect(replies[4]).toContain("baixe o Telegram");
     expect(turns[5].flowStep).toBe("collect_telegram");
-    expect(replies[5]).toContain("@");
+    expect(replies[5]).toContain("link do Telegram da professora");
+    expect(turns[6].flowStep).toBe("human_handoff");
+    expect(replies[6]).toContain("https://t.me/teacher");
+    expect(replies[6]).toContain("professora");
     expect(turns.at(-1)?.stage).toBe("ready_for_handoff");
   });
 
@@ -1007,7 +1013,7 @@ describe("strict Aston Brazil flow", () => {
 
     const telegramHelp = reply("怎么下载", { language: "zh", flowStep: "telegram_download", extractedPhone: "99228822881" });
     expect(telegramHelp.reply).toContain("协助您处理 Telegram");
-    expect(telegramHelp.reply).toContain("@");
+    expect(telegramHelp.reply).toContain("老师的 Telegram 链接");
     expect(telegramHelp.reply).not.toContain("WhatsApp");
 
     const refusal = reply("不需要了，别发了", { language: "zh", flowStep: "wait_registration" });
@@ -1180,17 +1186,17 @@ describe("strict Aston Brazil flow", () => {
     expect(beforePhone.nextFlowStep).toBe("wait_registration");
 
     const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
-    expect(afterPhone.reply).toContain("Telegram 是个聊天工具");
-    expect(afterPhone.reply).toContain("已经完成手机号这一步");
-    expect(afterPhone.reply).toContain("@ 开头");
+    expect(afterPhone.reply).toContain("https://t.me/teacher");
+    expect(afterPhone.reply).toContain("老师");
     expect(afterPhone.reply).not.toMatch(/微信|WeChat/i);
     expect(afterPhone.reply).not.toContain("先完成平台注册");
-    expect(afterPhone.nextFlowStep).toBe("collect_telegram");
+    expect(afterPhone.nextFlowStep).toBe("human_handoff");
 
     const phoneAlreadySent = reply("手机号我已经发给你了", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
-    expect(phoneAlreadySent.reply).toContain("@ 开头");
+    expect(phoneAlreadySent.reply).toContain("https://t.me/teacher");
+    expect(phoneAlreadySent.reply).toContain("老师");
     expect(phoneAlreadySent.reply).not.toContain("注册手机号");
-    expect(phoneAlreadySent.nextFlowStep).toBe("collect_telegram");
+    expect(phoneAlreadySent.nextFlowStep).toBe("human_handoff");
   });
 
   it("removes regional chat app comparisons from naturalized Telegram explanations", () => {
@@ -1213,19 +1219,21 @@ describe("strict Aston Brazil flow", () => {
     expect(noTelegram.contextualIntent?.intent).toBe("no_telegram");
 
     const installed = reply("装好了", { language: "zh", flowStep: "telegram_download", extractedPhone: "9876789" });
-    expect(installed.nextFlowStep).toBe("collect_telegram");
-    expect(installed.reply).toContain("@ 开头");
+    expect(installed.nextFlowStep).toBe("human_handoff");
+    expect(installed.reply).toContain("https://t.me/teacher");
+    expect(installed.reply).toContain("老师");
     expect(installed.contextualIntent?.intent).toBe("telegram_installed");
 
     const tgQuestion = reply("为什么要使用Telegram呢", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
-    expect(tgQuestion.nextFlowStep).toBe("collect_telegram");
-    expect(tgQuestion.reply).toContain("后续的沟通和指导都会通过它进行");
+    expect(tgQuestion.nextFlowStep).toBe("human_handoff");
+    expect(tgQuestion.reply).toContain("https://t.me/teacher");
+    expect(tgQuestion.reply).toContain("老师");
     expect(tgQuestion.reply).not.toMatch(/微信|WeChat/i);
-    expect(tgQuestion.reply).toContain("@ 开头");
 
     const acknowledgement = reply("ok", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
-    expect(acknowledgement.nextFlowStep).toBe("collect_telegram");
-    expect(acknowledgement.reply).toContain("我在这边等");
+    expect(acknowledgement.nextFlowStep).toBe("human_handoff");
+    expect(acknowledgement.reply).toContain("https://t.me/teacher");
+    expect(acknowledgement.reply).toContain("老师");
     expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
   });
 
@@ -1283,7 +1291,7 @@ describe("strict Aston Brazil flow", () => {
     const anotherQuestion = reply("我还有一个问题", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
     expect(anotherQuestion.nextFlowStep).toBe("collect_telegram");
     expect(anotherQuestion.reply).toContain("直接问");
-    expect(anotherQuestion.reply).toContain("Telegram 用户名");
+    expect(anotherQuestion.reply).toContain("老师的 Telegram 链接");
     expect(anotherQuestion.reply).not.toContain("充值");
   });
 

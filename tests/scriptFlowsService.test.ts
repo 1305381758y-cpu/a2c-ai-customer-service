@@ -73,7 +73,7 @@ describe("script flow service", () => {
       "等待注册",
       "确认TG",
       "下载TG",
-      "收集TG",
+      "发送TG链接",
       "人工接管",
       "结束"
     ]);

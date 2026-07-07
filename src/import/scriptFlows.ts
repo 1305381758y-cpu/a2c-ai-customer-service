@@ -291,9 +291,9 @@ function inferDocumentStep(reply: string, index: number) {
   }
   if (/telegram|tg|@|用户名|username/.test(text)) {
     if (/下载|安装|play store|app store|download|install|baixar|descargar/.test(text)) {
-      return scriptStep("telegram_download", "Telegram 下载引导", "引导客户下载/注册 Telegram", "没有 Telegram、不会下载", "Telegram 用户名", "collect_telegram", false, false, false);
+      return scriptStep("telegram_download", "Telegram 下载引导", "引导客户下载/注册 Telegram", "没有 Telegram、不会下载", "Telegram安装状态", "collect_telegram", false, false, false);
     }
-    return scriptStep("collect_telegram", "收集 Telegram 用户名", "要求客户发送 @ 开头用户名", "已安装 Telegram、找用户名", "Telegram 用户名", "human_handoff", false, false, false);
+    return scriptStep("collect_telegram", "发送 Telegram 链接", "发送老师 Telegram 链接并转人工", "已安装 Telegram、已有 Telegram", "老师Telegram链接已发送", "human_handoff", false, false, false);
   }
   if (/链接|link|邀请码|invite|convite|注册步骤|开户注册|cadastro|registro/.test(text)) {
     return scriptStep("send_register_link", "发送注册步骤", "发送开户链接、邀请码和注册步骤", "客户确认有空或索要注册步骤", "注册手机号", "wait_registration", true, true, /教程图|图片教程|圖文教程|步骤图|流程图|screenshot|image|imagem|imagen/.test(text));

@@ -15,7 +15,7 @@ const country: MerchantCountryRecord = {
   name: "巴西",
   defaultLanguage: "zh",
   platformRegisterUrl: "https://register.example",
-  tgRegisterGuideUrl: "",
+  tgRegisterGuideUrl: "https://t.me/teacher",
   requirePlatformAccount: true,
   requirePhone: true,
   requireTelegram: true,
@@ -91,20 +91,20 @@ describe("strict flow Telegram steps", () => {
     expect(result.reply).toMatch(/应用商店|Play Store|App Store/);
   });
 
-  it("moves installed Telegram customers to username collection", () => {
+  it("sends the teacher Telegram link when the customer has installed Telegram", () => {
     const result = reply("装好了", "telegram_download");
 
-    expect(result.nextFlowStep).toBe("collect_telegram");
-    expect(result.reply).toContain("@");
-    expect(result.reply).toContain("用户名");
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.reply).toContain("https://t.me/teacher");
+    expect(result.reply).toContain("500 到 2800 BOB");
   });
 
-  it("explains where to find or set the @ username without leaving collection", () => {
-    const result = reply("我没找到@开头的用户名", "collect_telegram");
+  it("sends the teacher Telegram link when the customer already has Telegram", () => {
+    const result = reply("有", "telegram_confirm");
 
-    expect(result.nextFlowStep).toBe("collect_telegram");
-    expect(result.contextualIntent?.intent).toBe("telegram_username_help");
-    expect(result.reply).toContain("Telegram");
-    expect(result.reply).toContain("@");
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.reply).toContain("https://t.me/teacher");
   });
 });

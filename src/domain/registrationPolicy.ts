@@ -31,9 +31,9 @@ export function suppressRegistrationDetailsForNonLinkStep(
     .trim();
   if (country.requireTelegram && conversation.extractedPhone && !conversation.extractedTelegram) {
     if (cleaned && !asksForAlreadyCollectedPhone(cleaned) && !isLowSignalReply(cleaned)) return cleaned;
-    if (language === "en") return "Please send me your Telegram username starting with @.";
-    if (language === "pt-BR") return "Por favor, envie seu nome de usuário do Telegram começando com @.";
-    return "请把 @ 开头的 Telegram 用户名发给我。";
+    if (language === "en") return "Please confirm Telegram first. After that, I will send you the teacher's Telegram link.";
+    if (language === "pt-BR") return "Confirme primeiro o Telegram. Depois disso, vou enviar o link do Telegram da professora.";
+    return "请先确认 Telegram，之后我会把老师的 Telegram 链接发给您。";
   }
   if (cleaned && !isLowSignalReply(cleaned)) return cleaned;
   if (language === "en") return "I am here. Please tell me whether you want to continue registration, check Telegram, or verify your phone number, and I will handle that step.";
