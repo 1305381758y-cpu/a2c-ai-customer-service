@@ -16,11 +16,5 @@ export function inviteCodeAccountMatches(inviteAccountPhone: string, conversatio
   const inviteDigits = phoneDigits(inviteAccountPhone);
   const conversationDigits = phoneDigits(conversationAccountPhone);
   if (!inviteDigits || !conversationDigits) return false;
-  if (inviteDigits === conversationDigits) return true;
-  const minComparableLength = 8;
-  return (
-    inviteDigits.length >= minComparableLength &&
-    conversationDigits.length >= minComparableLength &&
-    (inviteDigits.endsWith(conversationDigits) || conversationDigits.endsWith(inviteDigits))
-  );
+  return inviteDigits === conversationDigits;
 }

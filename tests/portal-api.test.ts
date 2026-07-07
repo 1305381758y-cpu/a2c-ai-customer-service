@@ -245,11 +245,11 @@ describe("portal api", () => {
     expect(() => repos.deleteScriptFlowStep(flow.steps[1].id, merchant.id, "测试员")).toThrow(/引用/);
   });
 
-  it("reserves invite codes when A2C account phone formats differ by country code", () => {
+  it("reserves invite codes when A2C account phone formats normalize to the same number", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);
     const merchant = repos.createMerchant("邀请码格式测试");
-    const accounts = repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "18507251675", verifiedName: "Numidia" }]);
+    const accounts = repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "+55 11 91358-6749", verifiedName: "Numidia" }]);
     const invite = repos.createInviteCodeForA2CAccount(accounts[0].id, {
       code: "BR001",
       registerUrl: "https://register.example/?code={code}"
@@ -260,7 +260,7 @@ describe("portal api", () => {
       merchantId: merchant.id,
       countryId: accounts[0].countryId,
       customerPhone: "5511913586749",
-      a2cAccountPhone: "8507251675"
+      a2cAccountPhone: "5511913586749"
     });
 
     expect(reserved).toMatchObject({
@@ -271,15 +271,15 @@ describe("portal api", () => {
     });
   });
 
-  it("falls back to an available country invite code when the receiving A2C account format does not match", () => {
+  it("does not fall back to another A2C account invite code when the receiving account does not match", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);
-    const merchant = repos.createMerchant("国家邀请码兜底测试");
+    const merchant = repos.createMerchant("账号邀请码隔离测试");
     const accounts = repos.syncMerchantA2CAccounts(merchant.id, [
       { apiPhone: "18507251675", verifiedName: "Numidia" },
       { apiPhone: "unmatched-a2c", verifiedName: "Unmatched" }
     ]);
-    const invite = repos.createInviteCodeForA2CAccount(accounts[0].id, {
+    repos.createInviteCodeForA2CAccount(accounts[0].id, {
       code: "BR-FALLBACK",
       registerUrl: "https://register.example/?code={code}"
     }, merchant.id);
@@ -292,12 +292,7 @@ describe("portal api", () => {
       a2cAccountPhone: "unmatched-a2c"
     });
 
-    expect(reserved).toMatchObject({
-      id: invite.id,
-      code: "BR-FALLBACK",
-      status: "reserved",
-      assignedConversationId: "conv-country-fallback"
-    });
+    expect(reserved).toBeUndefined();
   });
 
   it("learns missing intent candidates from webhook messages and aggregates repeats", async () => {
@@ -2380,7 +2375,7 @@ describe("portal api", () => {
     }
   });
 
-  it("sends full registration package after ok with a country invite pool fallback", async () => {
+  it("does not use another A2C account invite pool after ok", async () => {
     const originalFetch = globalThis.fetch;
     const sentMessages: Array<Record<string, unknown>> = [];
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -2409,14 +2404,14 @@ describe("portal api", () => {
         method: "POST",
         url: "/api/admin/merchants",
         headers: { cookie: adminCookie },
-        payload: { name: "国家池邀请码流程商户" }
+        payload: { name: "客服号邀请码隔离流程商户" }
       });
       const merchantId = merchant.json().id as string;
       await app.inject({
         method: "POST",
         url: "/api/admin/users",
         headers: { cookie: adminCookie },
-        payload: { merchantId, email: "country-pool@test.local", name: "国家池流程", password: "Merchant123456", role: "merchant_admin" }
+        payload: { merchantId, email: "country-pool@test.local", name: "账号隔离流程", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "country-pool@test.local", "Merchant123456");
       await app.inject({
@@ -2463,14 +2458,13 @@ describe("portal api", () => {
 
       expect(sentMessages).toHaveLength(3);
       const registrationPackage = String(sentMessages[2].content);
-      expect(registrationPackage).toContain("开户链接：https://www.google.com");
-      expect(registrationPackage).toContain("邀请码：6");
-      expect(registrationPackage).toContain("注册步骤");
-      expect(registrationPackage).toContain("填写手机号码");
-      expect(registrationPackage).not.toContain("正在确认");
+      expect(registrationPackage).toContain("正在确认");
+      expect(registrationPackage).not.toContain("开户链接：https://www.google.com");
+      expect(registrationPackage).not.toContain("邀请码：6");
+      expect(registrationPackage).not.toContain("注册步骤");
 
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
-      expect(conversations.json().rows[0]).toMatchObject({ flowStep: "wait_registration", stage: "need_platform_register" });
+      expect(conversations.json().rows[0]).toMatchObject({ flowStep: "registration_intent", stage: "need_platform_register" });
     } finally {
       await app.close();
       globalThis.fetch = originalFetch;

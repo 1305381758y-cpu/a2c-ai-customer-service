@@ -240,7 +240,9 @@ export class MerchantA2CAccountRepository {
         LIMIT 1
       `)
       .get(conversation.merchantId, conversation.id) as Record<string, unknown> | undefined;
-    if (existing) return mapA2CInviteCode(existing);
+    if (existing && inviteCodeAccountMatches(String(existing.a2c_account_phone ?? ""), conversation.a2cAccountPhone)) {
+      return mapA2CInviteCode(existing);
+    }
 
     const availableRows = this.db.sqlite
       .prepare(`
@@ -255,11 +257,7 @@ export class MerchantA2CAccountRepository {
         LIMIT 200
       `)
       .all(conversation.merchantId, conversation.countryId) as Array<Record<string, unknown>>;
-    const available =
-      availableRows.find((row) => inviteCodeAccountMatches(String(row.a2c_account_phone ?? ""), conversation.a2cAccountPhone)) ??
-      availableRows.find((row) => String(row.country_id ?? "") === conversation.countryId) ??
-      availableRows.find((row) => String(row.country_id ?? "") === "") ??
-      availableRows[0];
+    const available = availableRows.find((row) => inviteCodeAccountMatches(String(row.a2c_account_phone ?? ""), conversation.a2cAccountPhone));
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);
