@@ -42,6 +42,7 @@ describe("repositoryScriptFlowMappers", () => {
       standard_reply: "打开链接并填写邀请码",
       send_link: 1,
       send_invite: 1,
+      send_tutorial_image: 1,
       next_flow_step: "telegram_confirm",
       sort_order: 5,
       enabled: 0
@@ -56,6 +57,7 @@ describe("repositoryScriptFlowMappers", () => {
       standardReply: "打开链接并填写邀请码",
       sendLink: true,
       sendInvite: true,
+      sendTutorialImage: true,
       nextFlowStep: "telegram_confirm",
       sortOrder: 5,
       enabled: false

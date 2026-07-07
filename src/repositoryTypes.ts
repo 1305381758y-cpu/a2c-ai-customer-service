@@ -251,6 +251,7 @@ export interface ScriptFlowStepRecord {
   collectInfo: string;
   sendLink: boolean;
   sendInvite: boolean;
+  sendTutorialImage: boolean;
   nextCondition: string;
   nextFlowCode: string;
   nextFlowStep: string;

@@ -33,13 +33,13 @@ export function activeScriptStep(input: StrictFlowInput, key: string): ScriptFlo
 
   if (key === "registration_intent") {
     return (
-      enabledSteps.find((step) => step.flowStep === "registration_intent" && (step.sendLink || step.sendInvite)) ??
+      enabledSteps.find((step) => step.flowStep === "registration_intent" && (step.sendLink || step.sendInvite || step.sendTutorialImage)) ??
       enabledSteps.find((step) => step.flowStep === "registration_intent" && /注册|注册链接|开户链接|邀请码|register|invite/i.test(`${step.flowName} ${step.goal} ${step.standardReply}`))
     );
   }
 
   if (key === "wait_registration") {
-    return enabledSteps.find((step) => step.flowStep === "wait_registration" || step.sendLink || step.sendInvite);
+    return enabledSteps.find((step) => step.flowStep === "wait_registration" || step.sendLink || step.sendInvite || step.sendTutorialImage);
   }
 
   return undefined;

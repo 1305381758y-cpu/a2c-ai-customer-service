@@ -217,6 +217,7 @@ function builtInStrictScriptFlowSteps(): Array<Record<string, unknown>> {
       collectInfo: "注册手机号",
       sendLink: true,
       sendInvite: true,
+      sendTutorialImage: false,
       nextCondition: "发送链接和步骤后等待客户完成注册",
       nextFlowCode: "6",
       nextFlowStep: "wait_registration",

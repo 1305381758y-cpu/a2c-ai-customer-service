@@ -3,7 +3,7 @@ import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
 import { shouldSendRegistrationTutorialImage } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
-import { flowScriptLine } from "./strictFlowScriptRuntime.js";
+import { activeScriptStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { strictFlowScriptLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep } from "./strictFlowState.js";
 import type { StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
@@ -49,8 +49,15 @@ export function buildStrictFlowResponse(
     controlledQuestionType: controlled?.type ?? "none",
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
     contextualIntent,
-    tutorialImageRequested: shouldSendRegistrationTutorialImage(input.customerText, currentStep, needsInviteCode, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
+    tutorialImageRequested: shouldSendConfiguredRegistrationTutorialImage(input, needsInviteCode) ||
+      shouldSendRegistrationTutorialImage(input.customerText, currentStep, needsInviteCode, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
   };
+}
+
+function shouldSendConfiguredRegistrationTutorialImage(input: StrictFlowInput, needsInviteCode: boolean): boolean {
+  if (!needsInviteCode || !input.config.REGISTRATION_TUTORIAL_IMAGE_URL) return false;
+  const sendLinkStep = activeScriptStep(input, "send_register_link");
+  return Boolean(sendLinkStep?.sendTutorialImage);
 }
 
 export function normalizeReplyLanguage(detected: string, previous: string, defaultLanguage: string): string {

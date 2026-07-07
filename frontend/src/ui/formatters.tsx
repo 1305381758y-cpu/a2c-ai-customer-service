@@ -375,7 +375,7 @@ export function label(key: string) {
     first_greeting: "首次问候", interest_screening: "兴趣筛选", project_intro: "项目介绍", registration_intent: "确认注册意向", send_register_link: "发送链接邀请码",
     wait_registration: "等待完成注册", telegram_confirm: "确认TG", telegram_download: "引导下载TG", collect_telegram: "收集TG用户名", human_handoff: "人工接管", ended: "结束",
     flowCode: "流程编号", flowName: "流程名称", flowStep: "系统步骤", goal: "当前节点目标", triggerCondition: "触发条件", customerExpressions: "客户常见表达",
-    collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
+    collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", sendTutorialImage: "发教程图", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
     greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册",
     provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
     ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息",

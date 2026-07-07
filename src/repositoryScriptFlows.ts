@@ -187,6 +187,7 @@ export class ScriptFlowRepository {
       collectInfo: "collect_info",
       sendLink: "send_link",
       sendInvite: "send_invite",
+      sendTutorialImage: "send_tutorial_image",
       nextCondition: "next_condition",
       nextFlowCode: "next_flow_code",
       nextFlowStep: "next_flow_step",
@@ -278,9 +279,9 @@ export class ScriptFlowRepository {
       .prepare(`
         INSERT INTO script_flow_steps
           (flow_id, merchant_id, country_id, flow_code, flow_name, flow_step, goal, trigger_condition, customer_expressions,
-           standard_reply, collect_info, send_link, send_invite, next_condition, next_flow_code, next_flow_step,
+           standard_reply, collect_info, send_link, send_invite, send_tutorial_image, next_condition, next_flow_code, next_flow_step,
            forbidden, notes, sort_order, enabled)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         flowId,
@@ -296,6 +297,7 @@ export class ScriptFlowRepository {
         String(input.collectInfo ?? input.collect_info ?? input["需要收集的信息"] ?? "").trim(),
         booleanPatchValue(input.sendLink ?? input.send_link ?? input["是否发链接"], false),
         booleanPatchValue(input.sendInvite ?? input.send_invite ?? input["是否发邀请码"], false),
+        booleanPatchValue(input.sendTutorialImage ?? input.send_tutorial_image ?? input["是否发教程图"] ?? input["是否发送注册教程图片"], false),
         String(input.nextCondition ?? input.next_condition ?? input["下一步条件"] ?? "").trim(),
         String(input.nextFlowCode ?? input.next_flow_code ?? input["下一流程编号"] ?? "").trim(),
         normalizeScriptFlowStep(String(input.nextFlowStep ?? input.next_flow_step ?? "")),

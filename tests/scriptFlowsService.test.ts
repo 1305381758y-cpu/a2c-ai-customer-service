@@ -77,7 +77,7 @@ describe("script flow service", () => {
       "人工接管",
       "结束"
     ]);
-    expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true });
+    expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true, sendTutorialImage: false });
   });
 
   it("returns structured errors for invalid or referenced script flow steps", () => {

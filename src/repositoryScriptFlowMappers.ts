@@ -37,6 +37,7 @@ export function mapScriptFlowStep(row: Record<string, unknown>): ScriptFlowStepR
     collectInfo: String(row.collect_info ?? ""),
     sendLink: Boolean(Number(row.send_link ?? 0)),
     sendInvite: Boolean(Number(row.send_invite ?? 0)),
+    sendTutorialImage: Boolean(Number(row.send_tutorial_image ?? 0)),
     nextCondition: String(row.next_condition ?? ""),
     nextFlowCode: String(row.next_flow_code ?? ""),
     nextFlowStep: String(row.next_flow_step ?? ""),

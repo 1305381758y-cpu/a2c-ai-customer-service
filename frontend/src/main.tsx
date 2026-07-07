@@ -873,6 +873,7 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
       <label>顺序<input type="number" value={draft.sortOrder} onChange={(e) => set("sortOrder", Number(e.target.value || 0))} /></label>
       <label>是否发链接<select value={String(draft.sendLink)} onChange={(e) => set("sendLink", e.target.value === "true")}><option value="false">否</option><option value="true">是</option></select></label>
       <label>是否发邀请码<select value={String(draft.sendInvite)} onChange={(e) => set("sendInvite", e.target.value === "true")}><option value="false">否</option><option value="true">是</option></select></label>
+      <label>是否发教程图<select value={String(Boolean(draft.sendTutorialImage))} onChange={(e) => set("sendTutorialImage", e.target.value === "true")}><option value="false">否</option><option value="true">是</option></select></label>
       <label>启用<select value={String(draft.enabled)} onChange={(e) => set("enabled", e.target.value === "true")}><option value="true">启用</option><option value="false">停用</option></select></label>
       <label>下一流程编号<input value={draft.nextFlowCode} onChange={(e) => set("nextFlowCode", e.target.value)} /></label>
       <label>下一系统步骤<select value={draft.nextFlowStep || ""} onChange={(e) => set("nextFlowStep", e.target.value)}><option value="">按默认流程</option>{STRICT_STEP_OPTIONS.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select></label>
@@ -1619,6 +1620,7 @@ function scriptGuidanceRows(step: ScriptFlowStep | null) {
     step.collectInfo && `收集：${step.collectInfo}`,
     step.sendLink ? "需要发送开户链接或教程" : "",
     step.sendInvite ? "需要分配或提醒邀请码" : "",
+    step.sendTutorialImage ? "需要发送注册教程图片" : "",
     step.nextCondition && `下一步：${step.nextCondition}`,
     step.forbidden && `禁止：${step.forbidden}`
   ].filter(Boolean) as string[];

@@ -85,6 +85,7 @@ const scriptFlow: ScriptFlowRuntime = {
       collectInfo: "",
       sendLink: false,
       sendInvite: false,
+      sendTutorialImage: false,
       nextCondition: "",
       nextFlowCode: "C",
       nextFlowStep: "wait_registration",
@@ -110,6 +111,7 @@ const scriptFlow: ScriptFlowRuntime = {
       collectInfo: "",
       sendLink: true,
       sendInvite: true,
+      sendTutorialImage: false,
       nextCondition: "",
       nextFlowCode: "D",
       nextFlowStep: "telegram_confirm",
@@ -366,6 +368,7 @@ describe("strict Aston Brazil flow", () => {
           standardReply: "专属链接：{{REGISTER_URL}}\n专属码：{{INVITE_CODE}}",
           sendLink: true,
           sendInvite: true,
+          sendTutorialImage: true,
           nextFlowCode: "F",
           nextFlowStep: "wait_registration"
         },
@@ -378,6 +381,7 @@ describe("strict Aston Brazil flow", () => {
           standardReply: "注册好后把手机号发给我。",
           sendLink: false,
           sendInvite: false,
+          sendTutorialImage: false,
           nextFlowCode: "G",
           nextFlowStep: "telegram_confirm"
         }
@@ -391,13 +395,14 @@ describe("strict Aston Brazil flow", () => {
       analysis: analyzeMessage("方便", "zh"),
       customerText: "方便",
       inviteCode,
-      config,
+      config: { ...config, REGISTRATION_TUTORIAL_IMAGE_URL: "https://cdn.example/tutorial.jpg" } as AppConfig,
       scriptFlow: splitFlow
     });
 
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("专属链接：https://register.example/?code=ABC123");
     expect(result.reply).toContain("专属码：ABC123");
+    expect(result.tutorialImageRequested).toBe(true);
   });
 
   it("moves from interest screening to project intro when the customer asks for an introduction", () => {

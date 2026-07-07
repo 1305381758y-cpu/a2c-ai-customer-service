@@ -74,7 +74,7 @@ export function normalizeScriptFlowStep(value: string): string {
 }
 
 export function normalizeScriptFlowStepValue(key: string, value: unknown): string | number {
-  if (key === "sendLink" || key === "sendInvite" || key === "enabled") return booleanPatchValue(value, true);
+  if (key === "sendLink" || key === "sendInvite" || key === "sendTutorialImage" || key === "enabled") return booleanPatchValue(value, true);
   if (key === "sortOrder") return Number(value || 0);
   if (key === "flowStep" || key === "nextFlowStep") return normalizeScriptFlowStep(String(value || ""));
   return String(value ?? "");

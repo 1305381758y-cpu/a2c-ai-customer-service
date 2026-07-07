@@ -12,6 +12,7 @@ export interface ImportedScriptFlowStep {
   collectInfo: string;
   sendLink: boolean;
   sendInvite: boolean;
+  sendTutorialImage: boolean;
   nextCondition: string;
   nextFlowCode: string;
   nextFlowStep: string;
@@ -32,6 +33,7 @@ const headerAliases: Record<keyof ImportedScriptFlowStep, string[]> = {
   collectInfo: ["需要收集的信息", "收集信息", "collectInfo", "collect_info"],
   sendLink: ["是否发链接", "是否发送注册链接", "发链接", "sendLink", "send_link"],
   sendInvite: ["是否发邀请码", "是否发送邀请码", "发邀请码", "sendInvite", "send_invite"],
+  sendTutorialImage: ["是否发教程图", "是否发送注册教程图片", "发送教程图片", "注册教程图片", "sendTutorialImage", "send_tutorial_image"],
   nextCondition: ["下一步条件", "下一步触发", "nextCondition", "next_condition"],
   nextFlowCode: ["下一流程编号", "下一节点编号", "nextFlowCode", "next_flow_code"],
   nextFlowStep: ["下一流程步骤", "下一系统步骤", "nextFlowStep", "next_flow_step"],
@@ -89,6 +91,7 @@ function parseStructuredRows(rows: unknown[][], sourceName: string): ImportedScr
       collectInfo: readCell(row, index.collectInfo),
       sendLink: readBoolean(row, index.sendLink, false),
       sendInvite: readBoolean(row, index.sendInvite, false),
+      sendTutorialImage: readBoolean(row, index.sendTutorialImage, false),
       nextCondition: readCell(row, index.nextCondition),
       nextFlowCode: readCell(row, index.nextFlowCode),
       nextFlowStep: readCell(row, index.nextFlowStep),
@@ -192,6 +195,7 @@ function parseMermaidNodes(text: string): ImportedScriptFlowStep[] {
       collectInfo: inferred.collectInfo,
       sendLink: inferred.sendLink,
       sendInvite: inferred.sendInvite,
+      sendTutorialImage: inferred.sendTutorialImage,
       nextCondition: nextByCode.has(code) ? `完成后进入 ${nextByCode.get(code)}` : "",
       nextFlowCode: nextByCode.get(code) || "",
       nextFlowStep: inferred.nextStep,
@@ -215,6 +219,7 @@ function blockToImportedStep(block: PartialTextStep, index: number): ImportedScr
     collectInfo: field("collectInfo") || inferred.collectInfo,
     sendLink: readTextBoolean(field("sendLink"), inferred.sendLink),
     sendInvite: readTextBoolean(field("sendInvite"), inferred.sendInvite),
+    sendTutorialImage: readTextBoolean(field("sendTutorialImage"), inferred.sendTutorialImage),
     nextCondition: field("nextCondition"),
     nextFlowCode: field("nextFlowCode"),
     nextFlowStep: normalizeImportedFlowStep(field("nextFlowStep") || inferred.nextStep),
@@ -237,6 +242,7 @@ function buildImportedStep(input: Partial<ImportedScriptFlowStep> & Pick<Importe
     collectInfo: input.collectInfo || "",
     sendLink: Boolean(input.sendLink),
     sendInvite: Boolean(input.sendInvite),
+    sendTutorialImage: Boolean(input.sendTutorialImage),
     nextCondition: input.nextCondition || "",
     nextFlowCode: input.nextFlowCode || "",
     nextFlowStep: normalizeImportedFlowStep(input.nextFlowStep || ""),
@@ -275,37 +281,37 @@ function mergeDocumentLines(lines: string[]): string[] {
 function inferDocumentStep(reply: string, index: number) {
   const text = reply.toLowerCase();
   if (/人工|接管|核实|稍后|handoff|manual|humano/.test(text)) {
-    return scriptStep("human_handoff", "人工接管", "资料齐全后提示核实并转人工", "客户已提交完整资料", "", "ended", false, false);
+    return scriptStep("human_handoff", "人工接管", "资料齐全后提示核实并转人工", "客户已提交完整资料", "", "ended", false, false, false);
   }
   if (/首次问候|初次问候|问候|打招呼|greeting/.test(text)) {
-    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false);
+    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false, false);
   }
   if (/^(您好|你好|hello|hi|hola|olá|早上好)/i.test(reply) && /(想了解|是否|感兴趣|interested|interesse|interés|兼职|part-time|trabalho|trabajo|工作)/i.test(reply)) {
-    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false);
+    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false, false);
   }
   if (/telegram|tg|@|用户名|username/.test(text)) {
     if (/下载|安装|play store|app store|download|install|baixar|descargar/.test(text)) {
-      return scriptStep("telegram_download", "Telegram 下载引导", "引导客户下载/注册 Telegram", "没有 Telegram、不会下载", "Telegram 用户名", "collect_telegram", false, false);
+      return scriptStep("telegram_download", "Telegram 下载引导", "引导客户下载/注册 Telegram", "没有 Telegram、不会下载", "Telegram 用户名", "collect_telegram", false, false, false);
     }
-    return scriptStep("collect_telegram", "收集 Telegram 用户名", "要求客户发送 @ 开头用户名", "已安装 Telegram、找用户名", "Telegram 用户名", "human_handoff", false, false);
+    return scriptStep("collect_telegram", "收集 Telegram 用户名", "要求客户发送 @ 开头用户名", "已安装 Telegram、找用户名", "Telegram 用户名", "human_handoff", false, false, false);
   }
   if (/链接|link|邀请码|invite|convite|注册步骤|开户注册|cadastro|registro/.test(text)) {
-    return scriptStep("wait_registration", "发送注册步骤", "发送开户链接、邀请码和注册步骤", "客户确认有空或索要注册步骤", "注册手机号", "telegram_confirm", true, true);
+    return scriptStep("send_register_link", "发送注册步骤", "发送开户链接、邀请码和注册步骤", "客户确认有空或索要注册步骤", "注册手机号", "wait_registration", true, true, /教程图|图片教程|圖文教程|步骤图|流程图|screenshot|image|imagem|imagen/.test(text));
   }
   if (/手机号|手机号码|电话号码|phone|telefone|teléfono/.test(text) && /注册|verify|核对|验证|cadastro|registro|发送|提交/.test(text)) {
-    return scriptStep("telegram_confirm", "确认 Telegram", "收到手机号后确认 Telegram", "客户发送注册手机号", "Telegram 状态", "collect_telegram", false, false);
+    return scriptStep("telegram_confirm", "确认 Telegram", "收到手机号后确认 Telegram", "客户发送注册手机号", "Telegram 状态", "collect_telegram", false, false, false);
   }
   if (/收益|佣金|工作|兼职|ranking|rank|sales|income|ganancia|comisión|trabalho|comissão/.test(text)) {
-    return scriptStep("registration_intent", "项目介绍", "介绍工作并确认是否继续注册", "客户表示有兴趣或想了解工作", "", "wait_registration", false, false);
+    return scriptStep("registration_intent", "项目介绍", "介绍工作并确认是否继续注册", "客户表示有兴趣或想了解工作", "", "wait_registration", false, false, false);
   }
   if (index === 0) {
-    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false);
+    return scriptStep("interest_screening", "兴趣筛选", "问候并确认客户是否有兴趣", "客户首次打招呼", "", "registration_intent", false, false, false);
   }
-  return scriptStep("registration_intent", "流程话术", "按话本推进下一步", "客户继续对话", "", "", false, false);
+  return scriptStep("registration_intent", "流程话术", "按话本推进下一步", "客户继续对话", "", "", false, false, false);
 }
 
-function scriptStep(step: string, name: string, goal: string, customerExpressions: string, collectInfo: string, nextStep: string, sendLink: boolean, sendInvite: boolean) {
-  return { step, name, goal, triggerCondition: customerExpressions, customerExpressions, collectInfo, nextStep, sendLink, sendInvite };
+function scriptStep(step: string, name: string, goal: string, customerExpressions: string, collectInfo: string, nextStep: string, sendLink: boolean, sendInvite: boolean, sendTutorialImage: boolean) {
+  return { step, name, goal, triggerCondition: customerExpressions, customerExpressions, collectInfo, nextStep, sendLink, sendInvite, sendTutorialImage };
 }
 
 function documentStepToInput(inferred: ReturnType<typeof inferDocumentStep>): Partial<ImportedScriptFlowStep> {
@@ -318,6 +324,7 @@ function documentStepToInput(inferred: ReturnType<typeof inferDocumentStep>): Pa
     collectInfo: inferred.collectInfo,
     sendLink: inferred.sendLink,
     sendInvite: inferred.sendInvite,
+    sendTutorialImage: inferred.sendTutorialImage,
     nextFlowStep: inferred.nextStep
   };
 }
@@ -374,6 +381,10 @@ function fieldKey(label: string): string {
     是否发邀请码: "sendInvite",
     是否发送邀请码: "sendInvite",
     发邀请码: "sendInvite",
+    是否发教程图: "sendTutorialImage",
+    是否发送注册教程图片: "sendTutorialImage",
+    发送教程图片: "sendTutorialImage",
+    注册教程图片: "sendTutorialImage",
     下一步条件: "nextCondition",
     下一流程编号: "nextFlowCode",
     下一节点编号: "nextFlowCode",
