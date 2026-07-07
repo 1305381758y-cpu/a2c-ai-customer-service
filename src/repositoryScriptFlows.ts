@@ -126,14 +126,22 @@ export class ScriptFlowRepository {
     };
     const entries = Object.entries(patch).filter(([key]) => key in allowed);
     if (entries.length) {
-      const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
+      const normalizedStatusEntry = entries.find(([key]) => key === "status");
+      const normalizedStatus = normalizedStatusEntry ? normalizeScriptFlowStatus(normalizedStatusEntry[1]) : undefined;
+      const assignments = entries.map(([key]) => `${allowed[key]} = ?`);
       const values = entries.map(([key, value]) => {
-        if (key === "status") return normalizeScriptFlowStatus(value);
+        if (key === "status") return normalizedStatus || "draft";
         if (key === "countryId") return this.countries.validCountryId(flow.flow.merchantId, String(value || "")) || flow.flow.countryId;
         return String(value ?? "");
       });
+      if (normalizedStatus === "active") {
+        this.db.sqlite.prepare("UPDATE script_flows SET active = 0, status = CASE WHEN status = 'active' THEN 'draft' ELSE status END WHERE merchant_id = ? AND id <> ?").run(flow.flow.merchantId, id);
+        assignments.push("active = 1");
+      } else if (normalizedStatus === "disabled" || normalizedStatus === "draft") {
+        assignments.push("active = 0");
+      }
       const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
-      this.db.sqlite.prepare(`UPDATE script_flows SET ${assignments}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
+      this.db.sqlite.prepare(`UPDATE script_flows SET ${assignments.join(", ")}, updated_at = CURRENT_TIMESTAMP ${where}`).run(...values, id, ...(merchantId ? [merchantId] : []));
       this.saveVersion(id, flow.flow.merchantId, "修改话本基础信息", userName);
     }
     return this.get(id, merchantId);
@@ -158,7 +166,7 @@ export class ScriptFlowRepository {
   delete(id: number, merchantId?: string): boolean {
     const flow = this.get(id, merchantId);
     if (!flow) return false;
-    if (flow.flow.active) throw new Error("当前启用的话本不能直接删除，请先启用其他话本或停用该话本");
+    if (flow.flow.active && flow.flow.status === "active") throw new Error("当前启用的话本不能直接删除，请先启用其他话本或停用该话本");
     const where = merchantId ? "WHERE id = ? AND merchant_id = ?" : "WHERE id = ?";
     const result = this.db.sqlite.prepare(`DELETE FROM script_flows ${where}`).run(id, ...(merchantId ? [merchantId] : []));
     return result.changes > 0;

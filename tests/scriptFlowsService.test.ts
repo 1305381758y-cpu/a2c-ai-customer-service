@@ -3,10 +3,12 @@ import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
 import {
   createBuiltInStrictScriptFlow,
+  deleteScriptFlow,
   deleteScriptFlowStep,
   enableScriptFlow,
   getScriptFlowDetail,
   listScriptFlows,
+  patchScriptFlow,
   patchScriptFlowStep
 } from "../src/services/scriptFlows.js";
 
@@ -78,6 +80,41 @@ describe("script flow service", () => {
       "结束"
     ]);
     expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true, sendTutorialImage: false });
+  });
+
+  it("keeps script flow status and active flag consistent when editing basic info", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("状态一致商户");
+    const flow = createTwoStepFlow(repos, merchant.id);
+
+    expect(patchScriptFlow(repos, String(flow.flow.id), merchant.id, { status: "active" }, "运营")).toMatchObject({
+      ok: true,
+      value: { flow: expect.objectContaining({ status: "active", active: true }) }
+    });
+
+    expect(patchScriptFlow(repos, String(flow.flow.id), merchant.id, { status: "disabled" }, "运营")).toMatchObject({
+      ok: true,
+      value: { flow: expect.objectContaining({ status: "disabled", active: false }) }
+    });
+
+    expect(deleteScriptFlow(repos, String(flow.flow.id), merchant.id)).toEqual({
+      ok: true,
+      value: { ok: true }
+    });
+  });
+
+  it("allows deleting legacy flows that were disabled while still marked active", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("历史状态商户");
+    const flow = createTwoStepFlow(repos, merchant.id);
+    repos.enableScriptFlow(flow.flow.id, merchant.id, "运营");
+    db.sqlite.prepare("UPDATE script_flows SET status = 'disabled', active = 1 WHERE id = ?").run(flow.flow.id);
+
+    expect(deleteScriptFlow(repos, String(flow.flow.id), merchant.id)).toEqual({
+      ok: true,
+      value: { ok: true }
+    });
   });
 
   it("returns structured errors for invalid or referenced script flow steps", () => {
