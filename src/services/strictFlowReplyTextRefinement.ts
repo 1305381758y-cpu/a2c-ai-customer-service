@@ -23,24 +23,6 @@ export async function refineStrictFlowReplyText(input: {
   agentProfile: MerchantAgentProfileRecord;
   scriptFlow?: ScriptFlowRuntime;
 }): Promise<StrictFlowReplyTextRefinementResult> {
-  if (input.scriptFlow?.flow.active) {
-    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-      reply: input.strictReply.reply,
-      targetLanguage: input.strictReply.language,
-      flowStep: input.strictReply.nextFlowStep,
-      allowLinkOrInvite: input.strictReply.needsInviteCode
-    });
-    return {
-      reply: languageGuard.reply,
-      naturalized: {
-        reply: input.strictReply.reply,
-        used: false,
-        error: "已启用商户话本流程，保留节点原话术"
-      },
-      languageGuard
-    };
-  }
-
   if (input.strictReply.fallback && input.strictReply.needsInviteCode) {
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,
@@ -54,6 +36,24 @@ export async function refineStrictFlowReplyText(input: {
         reply: input.strictReply.reply,
         used: false,
         error: "邀请码未分配时跳过口语化改写"
+      },
+      languageGuard
+    };
+  }
+
+  if (input.scriptFlow?.flow.active && shouldPreserveScriptFlowNodeText(input.strictReply)) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: input.strictReply.needsInviteCode
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "已启用商户话本流程，保留节点原话术"
       },
       languageGuard
     };
@@ -82,4 +82,10 @@ export async function refineStrictFlowReplyText(input: {
     naturalized,
     languageGuard
   };
+}
+
+function shouldPreserveScriptFlowNodeText(strictReply: StrictFlowReply): boolean {
+  const questionType = strictReply.controlledQuestionType || "none";
+  if (strictReply.controlledQuestionFallback) return false;
+  return questionType === "none";
 }

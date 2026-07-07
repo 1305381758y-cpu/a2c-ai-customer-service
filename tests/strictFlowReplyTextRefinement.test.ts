@@ -180,4 +180,38 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).not.toContain("este trabajo en línea ayuda a comerciantes");
     expect(result.naturalized).toMatchObject({ used: false, error: "已启用商户话本流程，保留节点原话术" });
   });
+
+  it("still lets active script-flow replies answer customer questions inside the current node", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Entiendo su duda. La ganancia se calcula por tareas reales y reglas de la página; si quiere seguimos con el registro paso a paso.",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "Las ganancias exactas siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?",
+        language: "es",
+        nextFlowStep: "registration_intent",
+        controlledQuestionType: "earning"
+      }),
+      customerText: "¿De verdad se gana tanto?",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(ai.naturalizeStrictFlowText).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      customerText: "¿De verdad se gana tanto?",
+      draftReply: "Las ganancias exactas siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?",
+      questionType: "earning",
+      flowStep: "registration_intent"
+    }));
+    expect(result.reply).toContain("Entiendo su duda");
+    expect(result.naturalized).toMatchObject({ used: true });
+  });
 });
