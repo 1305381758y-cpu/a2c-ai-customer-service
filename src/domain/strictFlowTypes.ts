@@ -26,6 +26,7 @@ export interface StrictFlowInput {
   customerText: string;
   inviteCode?: A2CInviteCodeRecord;
   config: AppConfig;
+  teacherTelegramLink?: string;
   inferredIntent?: InternalIntentLabel;
   contextualIntent?: StrictContextualIntent;
   strictFlowEnabled?: boolean;

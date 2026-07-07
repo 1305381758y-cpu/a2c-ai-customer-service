@@ -100,7 +100,7 @@ function buildTelegramLinkReply(input: StrictFlowInput, language: string): Stric
 }
 
 function telegramLink(input: StrictFlowInput): string {
-  return (input.country.tgRegisterGuideUrl || input.config.TG_REGISTER_GUIDE_URL || "").trim();
+  return (input.teacherTelegramLink || input.country.tgRegisterGuideUrl || input.config.TG_REGISTER_GUIDE_URL || "").trim();
 }
 
 function telegramLinkInstruction(input: StrictFlowInput, language: string, link: string): string {

@@ -17,12 +17,28 @@ export interface Conversation {
   extractedPhone: string;
   extractedTelegram: string;
   extractedWhatsApp: string;
+  assignedTeacherTgLinkId?: number;
+  assignedTeacherTgLinkUrl?: string;
   status: "active" | "human_handoff";
   handoffStatus: "pending" | "processing" | "done";
   handoffNotified: number;
   unreadCount: number;
   pinnedAt?: string;
   updatedAt?: string;
+}
+
+export interface TeacherTgLinkRecord {
+  id: number;
+  merchantId: string;
+  countryId: string;
+  label: string;
+  url: string;
+  priority: number;
+  rotationCount: number;
+  assignedCount: number;
+  status: "active" | "disabled";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MerchantRecord {

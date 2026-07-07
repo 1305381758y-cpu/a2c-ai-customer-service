@@ -35,7 +35,8 @@ import type {
   IntentLearningEventRecord,
   IntentLearningInput,
   AiCallLogInput,
-  AiCallStats
+  AiCallStats,
+  TeacherTgLinkRecord
 } from "./repositoryTypes.js";
 export type {
   Conversation,
@@ -66,7 +67,8 @@ export type {
   IntentLearningEventRecord,
   IntentLearningInput,
   AiCallLogInput,
-  AiCallStats
+  AiCallStats,
+  TeacherTgLinkRecord
 } from "./repositoryTypes.js";
 
 export class Repositories {
@@ -94,6 +96,7 @@ export class Repositories {
   private get reviews() { return this.modules.reviews; }
   private get scriptFlows() { return this.modules.scriptFlows; }
   private get trainingContent() { return this.modules.trainingContent; }
+  private get teacherTgLinks() { return this.modules.teacherTgLinks; }
   private get users() { return this.modules.users; }
   private get aiCalls() { return this.modules.aiCalls; }
 
@@ -127,6 +130,30 @@ export class Repositories {
 
   updateConversation(conversation: Conversation): void {
     this.conversations.update(conversation);
+  }
+
+  listTeacherTgLinks(merchantId: string, countryId = ""): TeacherTgLinkRecord[] {
+    return this.teacherTgLinks.list(merchantId, countryId);
+  }
+
+  createTeacherTgLink(merchantId: string, countryId: string, input: Record<string, unknown>): TeacherTgLinkRecord {
+    return this.teacherTgLinks.create(merchantId, countryId || this.defaultCountryId(merchantId), input);
+  }
+
+  importTeacherTgLinks(merchantId: string, countryId: string, input: Record<string, unknown>): { imported: number; rows: TeacherTgLinkRecord[] } {
+    return this.teacherTgLinks.importMany(merchantId, countryId || this.defaultCountryId(merchantId), input);
+  }
+
+  patchTeacherTgLink(id: number, merchantId: string, patch: Record<string, unknown>): TeacherTgLinkRecord | undefined {
+    return this.teacherTgLinks.patch(id, merchantId, patch);
+  }
+
+  deleteTeacherTgLink(id: number, merchantId: string): boolean {
+    return this.teacherTgLinks.delete(id, merchantId);
+  }
+
+  assignTeacherTgLinkForConversation(conversation: Conversation, fallbackUrl = ""): TeacherTgLinkRecord | undefined {
+    return this.teacherTgLinks.assignForConversation(conversation, fallbackUrl);
   }
 
   upsertCustomerFromConversation(conversation: Conversation): CustomerRecord {

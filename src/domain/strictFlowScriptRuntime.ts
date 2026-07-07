@@ -52,7 +52,7 @@ export function configuredNextFlowStep(input: StrictFlowInput, currentKey: strin
 
 export function applyScriptVariables(content: string, input: StrictFlowInput, language: string, display: string): string {
   const fallbackUrl = input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL || "";
-  const telegramLink = input.country.tgRegisterGuideUrl || input.config.TG_REGISTER_GUIDE_URL || "";
+  const telegramLink = input.teacherTelegramLink || input.country.tgRegisterGuideUrl || input.config.TG_REGISTER_GUIDE_URL || "";
   const registerUrl = input.inviteCode?.registerUrl
     ? input.inviteCode.registerUrl.includes("{code}")
       ? input.inviteCode.registerUrl.replaceAll("{code}", input.inviteCode.code)

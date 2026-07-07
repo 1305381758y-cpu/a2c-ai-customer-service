@@ -43,6 +43,14 @@ export function buildStrictFlowTurn(input: {
   const inviteCode = needsInviteCode
     ? input.repos.reserveInviteCodeForConversation(input.conversation)
     : undefined;
+  const contextualIntent = input.contextualIntent.intent;
+  const shouldPrepareTeacherLink =
+    input.conversation.flowStep === "collect_telegram" ||
+    (input.conversation.flowStep === "telegram_download" && (contextualIntent === "telegram_installed" || contextualIntent === "positive_confirmation" || contextualIntent === "acknowledgement")) ||
+    (input.conversation.flowStep === "telegram_confirm" && (contextualIntent === "positive_confirmation" || contextualIntent === "acknowledgement"));
+  const teacherTelegramLink = shouldPrepareTeacherLink
+    ? input.repos.assignTeacherTgLinkForConversation(input.conversation, input.country.tgRegisterGuideUrl || input.runtimeConfig.TG_REGISTER_GUIDE_URL)?.url
+    : input.conversation.assignedTeacherTgLinkUrl || "";
   const strictReply = (input.strictFlowRuntime || defaultStrictFlowRuntime).nextTurn({
     merchant: input.merchant,
     country: input.country,
@@ -51,6 +59,7 @@ export function buildStrictFlowTurn(input: {
     customerText: input.customerText,
     inviteCode,
     config: input.runtimeConfig,
+    teacherTelegramLink,
     inferredIntent: input.inferredIntent,
     contextualIntent: input.contextualIntent,
     strictFlowEnabled: input.strictFlowEnabled,

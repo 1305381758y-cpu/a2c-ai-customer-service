@@ -91,6 +91,22 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS teacher_tg_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT NOT NULL DEFAULT '',
+      label TEXT DEFAULT '',
+      url TEXT NOT NULL,
+      priority INTEGER DEFAULT 0,
+      rotation_count INTEGER DEFAULT 1,
+      assigned_count INTEGER DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY(country_id) REFERENCES merchant_countries(id)
+    );
+
     CREATE TABLE IF NOT EXISTS training_samples (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT DEFAULT 'default',
@@ -120,6 +136,8 @@ export function migrate(db: DatabaseSync): void {
       extracted_phone TEXT DEFAULT '',
       extracted_telegram TEXT DEFAULT '',
       extracted_whatsapp TEXT DEFAULT '',
+      assigned_teacher_tg_link_id INTEGER,
+      assigned_teacher_tg_link_url TEXT DEFAULT '',
       status TEXT DEFAULT 'active',
       handoff_notified INTEGER DEFAULT 0,
       unread_count INTEGER DEFAULT 0,
@@ -485,6 +503,8 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "handoff_status", "TEXT DEFAULT 'pending'");
   ensureColumn(db, "conversations", "flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "extracted_whatsapp", "TEXT DEFAULT ''");
+  ensureColumn(db, "conversations", "assigned_teacher_tg_link_id", "INTEGER");
+  ensureColumn(db, "conversations", "assigned_teacher_tg_link_url", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "unread_count", "INTEGER DEFAULT 0");
   ensureColumn(db, "conversations", "pinned_at", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");

@@ -23,6 +23,8 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     extractedPhone: String(row.extracted_phone ?? ""),
     extractedTelegram: String(row.extracted_telegram ?? ""),
     extractedWhatsApp: String(row.extracted_whatsapp ?? ""),
+    assignedTeacherTgLinkId: row.assigned_teacher_tg_link_id == null ? undefined : Number(row.assigned_teacher_tg_link_id),
+    assignedTeacherTgLinkUrl: String(row.assigned_teacher_tg_link_url ?? ""),
     status: String(row.status ?? "active") as "active" | "human_handoff",
     handoffStatus: String(row.handoff_status ?? "pending") as "pending" | "processing" | "done",
     handoffNotified: Number(row.handoff_notified ?? 0),

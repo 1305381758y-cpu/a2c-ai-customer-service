@@ -81,6 +81,7 @@ export class ConversationRepository {
       .prepare(`
         UPDATE conversations
         SET country_id = ?, language = ?, stage = ?, flow_step = ?, extracted_phone = ?, extracted_telegram = ?, extracted_whatsapp = ?,
+            assigned_teacher_tg_link_id = ?, assigned_teacher_tg_link_url = ?,
             status = ?, handoff_status = ?, handoff_notified = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `)
@@ -92,6 +93,8 @@ export class ConversationRepository {
         conversation.extractedPhone,
         conversation.extractedTelegram,
         conversation.extractedWhatsApp,
+        conversation.assignedTeacherTgLinkId ?? null,
+        conversation.assignedTeacherTgLinkUrl ?? "",
         conversation.status,
         conversation.handoffStatus,
         conversation.handoffNotified,

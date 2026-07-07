@@ -15,7 +15,7 @@ import { CustomersPage } from "./customers/CustomersPage.js";
 import { Dashboard } from "./dashboard/Dashboard.js";
 import { KnowledgePage } from "./knowledge/KnowledgePage.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
-import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
+import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TeacherTgLink, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
 import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, getTimeDisplayMode, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, setTimeDisplayMode, statusTone, timeDisplayModeLabel, translateSystemMessage, type TimeDisplayMode } from "./ui/formatters.js";
@@ -397,11 +397,13 @@ function Config({ platform }: { platform: boolean }) {
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
   const [countryDraft, setCountryDraft] = useState({ code: "br", name: "巴西", defaultLanguage: "pt-BR", platformRegisterUrl: "", tgRegisterGuideUrl: "", requirePlatformAccount: "true", requirePhone: "true", requireTelegram: "true", requireWhatsApp: "false" });
-  const [bulkTgLink, setBulkTgLink] = useState("");
+  const [teacherTgLinks, setTeacherTgLinks] = useState<TeacherTgLink[]>([]);
+  const [teacherTgDraft, setTeacherTgDraft] = useState({ urls: "", priority: "0", rotationCount: "1" });
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
   const countriesUrl = platform ? `/api/admin/merchants/${merchantId}/countries` : "/api/merchant/countries";
   const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
   const a2cSyncUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts/sync` : "/api/merchant/a2c/accounts/sync";
+  const teacherTgLinksUrl = platform ? `/api/admin/merchants/${merchantId}/teacher-tg-links` : "/api/merchant/teacher-tg-links";
   const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
   const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
@@ -413,6 +415,7 @@ function Config({ platform }: { platform: boolean }) {
   useEffect(() => { reloadConfig().catch(() => null); }, [url]);
   useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
   useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
+  useEffect(() => { loadRows<TeacherTgLink>(teacherTgLinksUrl).then(setTeacherTgLinks).catch(() => setTeacherTgLinks([])); }, [teacherTgLinksUrl]);
   useEffect(() => { setChecks([]); }, [merchantId]);
   const applyCountryDraft = (country: MerchantCountry) => {
     setCountryDraft({
@@ -426,7 +429,6 @@ function Config({ platform }: { platform: boolean }) {
       requireTelegram: String(country.requireTelegram),
       requireWhatsApp: String(country.requireWhatsApp)
     });
-    setBulkTgLink(country.tgRegisterGuideUrl || "");
   };
   useEffect(() => {
     const country = countries[0];
@@ -447,6 +449,7 @@ function Config({ platform }: { platform: boolean }) {
   const accountPager = useClientPagination(filteredA2CAccounts, 12);
   const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "aiProvider", "minimaxApiKey", "minimaxModel", "deepseekApiKey", "deepseekModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
+  const reloadTeacherTgLinks = async () => setTeacherTgLinks(await loadRows<TeacherTgLink>(teacherTgLinksUrl));
   const reloadA2CAccounts = async () => {
     setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
     accountPager.setPage(1);
@@ -523,16 +526,22 @@ function Config({ platform }: { platform: boolean }) {
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
   };
-  const saveBulkTeacherTelegramLink = async () => {
+  const importTeacherTelegramLinks = async () => {
     const currentCountry = countries[0];
-    const link = bulkTgLink.trim();
     if (!currentCountry) throw new Error("请先保存国家设置，再批量设置老师TG链接。");
-    if (!link) throw new Error("请先填写老师TG链接。");
-    const saved = await api<MerchantCountry>(`${countriesUrl}/${currentCountry.id}`, { method: "PATCH", body: JSON.stringify({ tgRegisterGuideUrl: link }) });
-    setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: saved.tgRegisterGuideUrl || link });
-    setBulkTgLink(saved.tgRegisterGuideUrl || link);
-    await reloadCountries();
-    notify("success", "老师TG链接已批量设置", `当前商户 ${a2cAccounts.length || "全部"} 个客服账号都会使用这条链接。`);
+    if (!teacherTgDraft.urls.trim()) throw new Error("请先填写老师TG链接，一行一条。");
+    const result = await api<{ imported: number; rows: TeacherTgLink[] }>(`${teacherTgLinksUrl}/import`, {
+      method: "POST",
+      body: JSON.stringify({
+        countryId: currentCountry.id,
+        urls: teacherTgDraft.urls,
+        priority: Number(teacherTgDraft.priority || 0),
+        rotationCount: Number(teacherTgDraft.rotationCount || 1)
+      })
+    });
+    setTeacherTgLinks(result.rows);
+    setTeacherTgDraft({ ...teacherTgDraft, urls: "" });
+    notify("success", "老师TG链接已导入", `已新增 ${result.imported} 条，后续客户会按优先级和轮询次数自动分配。`);
   };
   const updateCountryDraftName = (value: string) => {
     const inferred = inferCountryProfile(value);
@@ -605,16 +614,22 @@ function Config({ platform }: { platform: boolean }) {
       <div className="memory compact-panel">
         <div className="section-title-row">
           <div>
-            <h3>批量设置老师TG链接</h3>
-            <p>这里设置的是严格流程第 9 步发送给客户的老师 Telegram 链接。保存后，当前商户下所有客服账号都会统一使用这条链接。</p>
+            <h3>老师TG链接池</h3>
+            <p>严格流程第 9 步会从这里自动分配老师 Telegram 链接。同一客户首次分配后会绑定固定导师，后续不会切换。</p>
           </div>
-          <span className="status-pill neutral">覆盖 {a2cAccounts.length || 0} 个客服账号</span>
+          <span className="status-pill neutral">已配置 {teacherTgLinks.length} 条</span>
         </div>
-        <div className="copy-row">
-          <label>老师TG链接<input placeholder="例如：https://t.me/teacher_username" value={bulkTgLink} onChange={(e) => setBulkTgLink(e.target.value)} /></label>
-          <AsyncButton onClick={saveBulkTeacherTelegramLink} busyText="保存中...">批量保存</AsyncButton>
+        <div className="toolbar wrap">
+          <label className="wide">批量导入<textarea placeholder="一行一个老师TG链接，例如：https://t.me/teacher_username" value={teacherTgDraft.urls} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, urls: e.target.value })} /></label>
+          <label>优先级<input type="number" value={teacherTgDraft.priority} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, priority: e.target.value })} /></label>
+          <label>轮询次数<input type="number" min="1" value={teacherTgDraft.rotationCount} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, rotationCount: e.target.value })} /></label>
+          <AsyncButton onClick={importTeacherTelegramLinks} busyText="导入中...">导入链接</AsyncButton>
         </div>
-        <small>如果每个客服账号未来要使用不同老师链接，需要再加“按客服账号绑定老师链接”的独立字段；当前版本是按商户国家统一发送。</small>
+        <small>分配规则：按优先级从高到低排列；轮询次数表示这一轮里该链接连续出现几次。例如 A 轮询 2、B 轮询 1，则分配顺序为 A、A、B，然后循环。</small>
+        <Table rows={teacherTgLinks} columns={["label", "url", "priority", "rotationCount", "assignedCount", "status"]} rowKey={(row) => row.id} />
+        <div className="messages material-items">
+          {teacherTgLinks.map((link) => <TeacherTgLinkEditor key={link.id} link={link} endpoint={teacherTgLinksUrl} reload={reloadTeacherTgLinks} />)}
+        </div>
       </div>
       <div className="toolbar wrap country-settings-form">
         <CountryPresetDatalist />
@@ -636,6 +651,23 @@ function Config({ platform }: { platform: boolean }) {
     <div className="memory"><div className="account-section-head"><div><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p></div><span>已保存 {a2cAccounts.length} 个账号</span></div><div className="account-filter-bar"><label>搜索账号<input value={accountKeyword} onChange={(e) => { setAccountKeyword(e.target.value); accountPager.setPage(1); }} placeholder="手机号、名称、WABA ID" /></label><label>状态<select value={accountStatus} onChange={(e) => { setAccountStatus(e.target.value); accountPager.setPage(1); }}><option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option></select></label><label>国家<select value={accountCountryId} onChange={(e) => { setAccountCountryId(e.target.value); accountPager.setPage(1); }}><option value="">全部国家</option>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select></label></div><div className="account-list-meta">当前筛选 {filteredA2CAccounts.length} 个账号，显示第 {(accountPager.page - 1) * accountPager.pageSize + (accountPager.total ? 1 : 0)} - {Math.min(accountPager.page * accountPager.pageSize, accountPager.total)} 个。</div><div className="account-grid">{accountPager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => toggleA2CAccount(row)} onCountry={async () => undefined} />)}{!a2cAccounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}{a2cAccounts.length > 0 && !filteredA2CAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}</div><Pagination pager={accountPager} /></div>
     <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
   </section>;
+}
+
+function TeacherTgLinkEditor({ link, endpoint, reload }: { link: TeacherTgLink; endpoint: string; reload: () => Promise<void> }) {
+  const [draft, setDraft] = useState({ label: link.label || "", url: link.url, priority: String(link.priority), rotationCount: String(link.rotationCount), status: link.status });
+  useEffect(() => setDraft({ label: link.label || "", url: link.url, priority: String(link.priority), rotationCount: String(link.rotationCount), status: link.status }), [link.id, link.label, link.url, link.priority, link.rotationCount, link.status]);
+  return <article>
+    <strong>{draft.label || "未命名导师"} · 已分配 {link.assignedCount} 次</strong>
+    <div className="toolbar wrap">
+      <input placeholder="导师备注名" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
+      <input className="wide" placeholder="老师TG链接" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+      <input type="number" placeholder="优先级" value={draft.priority} onChange={(e) => setDraft({ ...draft, priority: e.target.value })} />
+      <input type="number" min="1" placeholder="轮询次数" value={draft.rotationCount} onChange={(e) => setDraft({ ...draft, rotationCount: e.target.value })} />
+      <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="active">启用</option><option value="disabled">停用</option></select>
+      <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${link.id}`, { method: "PATCH", body: JSON.stringify({ ...draft, priority: Number(draft.priority || 0), rotationCount: Number(draft.rotationCount || 1) }) }); await reload(); notify("success", "老师TG链接已保存"); }}>保存</AsyncButton>
+      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认删除这条老师TG链接？已分配过的老客户仍保留历史绑定。")) return; await api(`${endpoint}/${link.id}`, { method: "DELETE" }); await reload(); notify("success", "老师TG链接已删除"); }}>删除</AsyncButton>
+    </div>
+  </article>;
 }
 
 function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {

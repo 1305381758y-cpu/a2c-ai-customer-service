@@ -12,6 +12,7 @@ import { MerchantRepository } from "./repositoryMerchants.js";
 import { MerchantSettingsRepository } from "./repositoryMerchantSettings.js";
 import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
 import { TrainingContentRepository } from "./repositoryTrainingContent.js";
+import { TeacherTgLinkRepository } from "./repositoryTeacherTgLinks.js";
 import { UserRepository } from "./repositoryUsers.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
 import type { KnowledgeItemRecord } from "./repositoryTypes.js";
@@ -37,6 +38,7 @@ export interface RepositoryModules {
   reviews: ConversationReviewRepository;
   scriptFlows: ScriptFlowRepository;
   trainingContent: TrainingContentRepository;
+  teacherTgLinks: TeacherTgLinkRepository;
   users: UserRepository;
   aiCalls: AiCallRepository;
 }
@@ -74,6 +76,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     defaultCountryId: callbacks.defaultCountryId,
     validCountryId: callbacks.validCountryId
   });
+  const teacherTgLinks = new TeacherTgLinkRepository(db);
   const users = new UserRepository(db);
   const aiCalls = new AiCallRepository(db);
 
@@ -90,6 +93,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     reviews,
     scriptFlows,
     trainingContent,
+    teacherTgLinks,
     users,
     aiCalls
   };
