@@ -45,11 +45,17 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
     return buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
   }
   if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
-    const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+    const configuredStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+    const nextStep = configuredStep === "project_intro"
+      ? configuredNextFlowStep(input, "project_intro", "registration_intent")
+      : configuredStep;
     return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
   }
   if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-    const nextStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+    const configuredStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
+    const nextStep = configuredStep === "project_intro"
+      ? configuredNextFlowStep(input, "project_intro", "registration_intent")
+      : configuredStep;
     return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
   }
   if (asksLink) {

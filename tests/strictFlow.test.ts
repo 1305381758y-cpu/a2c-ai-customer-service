@@ -353,6 +353,70 @@ describe("strict Aston Brazil flow", () => {
     expect(second.reply).toContain("ABC123");
   });
 
+  it("keeps editable built-in project intro nodes compatible with the strict engine", () => {
+    const builtInCompatibleFlow: ScriptFlowRuntime = {
+      ...scriptFlow,
+      steps: [
+        {
+          ...scriptFlow.steps[0],
+          flowCode: "2",
+          flowName: "兴趣筛选",
+          flowStep: "interest_screening",
+          standardReply: "您好，您想了解这份在线工作吗？",
+          nextFlowCode: "3",
+          nextFlowStep: "project_intro"
+        },
+        {
+          ...scriptFlow.steps[0],
+          id: 3,
+          flowCode: "3",
+          flowName: "项目介绍",
+          flowStep: "project_intro",
+          standardReply: "这是商户编辑后的项目介绍。收益以页面规则为准。您现在方便继续开户注册吗？",
+          nextFlowCode: "4",
+          nextFlowStep: "registration_intent"
+        },
+        {
+          ...scriptFlow.steps[0],
+          id: 4,
+          flowCode: "4",
+          flowName: "确认意向",
+          flowStep: "registration_intent",
+          standardReply: "您现在方便继续开户注册吗？",
+          nextFlowCode: "5",
+          nextFlowStep: "send_register_link"
+        },
+        {
+          ...scriptFlow.steps[1],
+          id: 5,
+          flowCode: "5",
+          flowName: "发送链接",
+          flowStep: "send_register_link",
+          standardReply: "开户链接：{{REGISTER_URL}}\n邀请码：{{INVITE_CODE}}\n完成注册后告诉我。",
+          sendLink: true,
+          sendInvite: true,
+          nextFlowCode: "6",
+          nextFlowStep: "wait_registration"
+        }
+      ]
+    };
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ flowStep: "interest_screening", language: "zh" }),
+      analysis: analyzeMessage("是的", "zh"),
+      customerText: "是的",
+      config,
+      scriptFlow: builtInCompatibleFlow
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("商户编辑后的项目介绍");
+    expect(result.reply).not.toContain("开户链接");
+    expect(result.reply).not.toContain("邀请码");
+  });
+
   it("uses script flow next system step when a node configures custom routing", () => {
     const routedFlow: ScriptFlowRuntime = {
       ...scriptFlow,

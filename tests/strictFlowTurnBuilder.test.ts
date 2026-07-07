@@ -5,6 +5,7 @@ import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
 import type { StrictFlowRuntimeContext, StrictFlowRuntimeEngine } from "../src/domain/strictFlowRuntime.js";
 import { Repositories } from "../src/repositories.js";
+import { createBuiltInStrictScriptFlow } from "../src/services/scriptFlows.js";
 import { buildStrictFlowTurn } from "../src/services/strictFlowTurnBuilder.js";
 
 function runtimeConfig() {
@@ -133,5 +134,42 @@ describe("strict flow turn builder", () => {
     expect(nextTurn).toHaveBeenCalledOnce();
     expect(nextTurn.mock.calls[0]?.[0].inviteCode?.code).toBe("INV-TURN");
     expect(result.strictReply.reply).toBe("runtime saw invite INV-TURN");
+  });
+
+  it("keeps built-in editable script flow copies as smart as the strict fallback", () => {
+    const context = setupConversation("registration_intent");
+    const flow = createBuiltInStrictScriptFlow(context.repos, context.merchant.id, {
+      countryId: context.country.id,
+      name: "商户编辑副本"
+    }, "运营");
+    if (!flow.ok) throw new Error(flow.error);
+    context.repos.enableScriptFlow(flow.value.flow.id, context.merchant.id, "运营");
+
+    const activeFlow = context.repos.getActiveScriptFlow(context.merchant.id, context.country.id);
+    const analysis = analyzeMessage("Sí", "es");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "Sí",
+      inferredIntent: "positive_confirmation"
+    });
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "Sí",
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      scriptFlow: activeFlow
+    });
+
+    expect(result.needsInviteCode).toBe(true);
+    expect(result.inviteCode?.code).toBe("INV-TURN");
+    expect(result.strictReply.nextFlowStep).toBe("wait_registration");
+    expect(result.strictReply.reply).toContain("INV-TURN");
+    expect(result.strictReply.reply).toContain("https://register.example/?code=INV-TURN");
+    expect(result.strictReply.reply).not.toContain("正在确认");
   });
 });
