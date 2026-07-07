@@ -579,8 +579,8 @@ function Config({ platform }: { platform: boolean }) {
       <button className={form.trainingSimulationEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, trainingSimulationEnabled: !form.trainingSimulationEnabled })}>{form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"}</button>
     </div>
     <div className={`smart-reply-card ${form.strictScriptFlowEnabled ? "on" : "off"}`}>
-      <div><h3>严格话本流程</h3><p>{form.strictScriptFlowEnabled ? "已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。" : "已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"}</p></div>
-      <button className={form.strictScriptFlowEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, strictScriptFlowEnabled: !form.strictScriptFlowEnabled })}>{form.strictScriptFlowEnabled ? "关闭严格流程" : "开启严格流程"}</button>
+      <div><h3>话本流程</h3><p>{form.strictScriptFlowEnabled ? "已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。" : "已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"}</p></div>
+      <button className={form.strictScriptFlowEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, strictScriptFlowEnabled: !form.strictScriptFlowEnabled })}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</button>
     </div>
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
     <div className="memory tutorial-upload-card">
@@ -615,7 +615,7 @@ function Config({ platform }: { platform: boolean }) {
         <div className="section-title-row">
           <div>
             <h3>老师TG链接池</h3>
-            <p>严格流程第 9 步会从这里自动分配老师 Telegram 链接。同一客户首次分配后会绑定固定导师，后续不会切换。</p>
+            <p>话本流程第 9 步会从这里自动分配老师 Telegram 链接。同一客户首次分配后会绑定固定导师，后续不会切换。</p>
           </div>
           <span className="status-pill neutral">已配置 {teacherTgLinks.length} 条</span>
         </div>

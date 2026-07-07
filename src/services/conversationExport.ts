@@ -129,7 +129,7 @@ const CONVERSATION_EXPORT_COLUMNS: Array<{ key: keyof ConversationExportRecord; 
   { key: "conversationStage", label: "会话阶段" },
   { key: "flowStep", label: "流程步骤" },
   { key: "replyMode", label: "回复模式" },
-  { key: "strictFlowStep", label: "严格流程步骤" },
+  { key: "strictFlowStep", label: "话本流程步骤" },
   { key: "a2cSendStatus", label: "A2C发送状态" },
   { key: "a2cSendError", label: "A2C失败原因" },
   { key: "extractedPhone", label: "已识别手机号" },

@@ -67,7 +67,7 @@ export function AgentProfilePage({
     try {
       const saved = await api<AgentProfile>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
-      setMessage("Agent 配置已保存，后续严格流程、普通回复和模拟训练都会使用这份设定。");
+      setMessage("Agent 配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。");
       notify("success", "Agent 配置已保存");
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
