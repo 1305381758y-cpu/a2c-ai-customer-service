@@ -29,6 +29,17 @@ describe("AI strict-flow naturalization task", () => {
     expect(sanitizeNaturalizedText("我是 AI，我来帮您。", fallback, false)).toBe(fallback);
   });
 
+  it("falls back when the model asks the customer to provide an invitation code", () => {
+    const fallback = "El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.";
+
+    expect(sanitizeNaturalizedText(
+      "Perfecto. Para registrarle necesito su código de invitación. ¿Me lo puede facilitar cuando lo tenga a la mano?",
+      fallback,
+      true
+    )).toBe(fallback);
+    expect(sanitizeNaturalizedText("您把邀请码发给我，我来继续处理。", "我这边正在确认专属邀请码，请稍等。", true)).toBe("我这边正在确认专属邀请码，请稍等。");
+  });
+
   it("uses the injected runtime and limits recent history", async () => {
     const generateText = vi.fn(async () => "嗯嗯，您先按这一步来，有问题直接发我。");
     const runtime: AiNaturalizeStrictFlowRuntime = {

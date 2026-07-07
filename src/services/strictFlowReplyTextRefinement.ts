@@ -22,6 +22,24 @@ export async function refineStrictFlowReplyText(input: {
   history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   agentProfile: MerchantAgentProfileRecord;
 }): Promise<StrictFlowReplyTextRefinementResult> {
+  if (input.strictReply.fallback && input.strictReply.needsInviteCode) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: false
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "邀请码未分配时跳过口语化改写"
+      },
+      languageGuard
+    };
+  }
+
   const naturalized = await naturalizeStrictReply(input.ai, input.runtimeConfig, {
     customerText: input.customerText,
     draftReply: input.strictReply.reply,

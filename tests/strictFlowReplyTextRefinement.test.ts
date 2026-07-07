@@ -96,4 +96,35 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: false });
     expect(result.languageGuard.status).toBe("matched");
   });
+
+  it("does not naturalize missing invite-code fallback into asking the customer for a code", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Perfecto. Para registrarle necesito su código de invitación. ¿Me lo puede facilitar cuando lo tenga a la mano?",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.",
+        language: "es",
+        nextFlowStep: "registration_intent",
+        needsInviteCode: true,
+        fallback: true,
+        controlledQuestionType: "none"
+      }),
+      customerText: "Sí",
+      history: [],
+      agentProfile: agentProfile()
+    });
+
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe("El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.");
+    expect(result.reply).not.toMatch(/facilitar|a mano|ya tiene/i);
+    expect(result.naturalized).toMatchObject({ used: false, error: "邀请码未分配时跳过口语化改写" });
+  });
 });
