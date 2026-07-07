@@ -335,7 +335,7 @@ export function languageName(code: unknown) {
 
 export function replyModeLabel(mode?: string) {
   return ({
-    strict_flow: "严格话本",
+    strict_flow: "话本流程",
     gemini: "普通回复",
     fallback: "兜底回复",
     manual: "人工发送"
@@ -371,7 +371,7 @@ export function label(key: string) {
     platform_admin: "平台管理员", merchant_admin: "商户管理员", merchant_operator: "商户运营",
     text: "文本", video: "视频", audio: "音频", document: "文件", sample: "样本", item: "条目", available: "可用", reserved: "已分配", used: "已使用", candidate: "待处理", reviewed: "已确认", promoted: "已沉淀", ignored: "已忽略",
     inbound: "客户", outbound: "客服", unknown: "未知",
-    strict_flow: "严格话本", fallback: "兜底回复", manual: "人工发送", ai: "智能回复",
+    strict_flow: "话本流程", fallback: "兜底回复", manual: "人工发送", ai: "智能回复",
     need_platform_register: "待开户注册", need_phone_or_tg: "待补联系方式", ready_for_handoff: "可接管",
     first_greeting: "首次问候", interest_screening: "兴趣筛选", project_intro: "项目介绍", registration_intent: "确认注册意向", send_register_link: "发送链接邀请码",
     wait_registration: "等待完成注册", telegram_confirm: "确认TG", telegram_download: "引导下载TG", collect_telegram: "发送TG链接", human_handoff: "人工接管", ended: "结束",

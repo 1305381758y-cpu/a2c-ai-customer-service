@@ -6,7 +6,8 @@ import type {
   Conversation,
   MerchantAgentProfileRecord,
   MerchantCountryRecord,
-  Repositories
+  Repositories,
+  ScriptFlowRuntime
 } from "../repositories.js";
 import type { LearnedIntentDebugInfo } from "./aiConversationReply.js";
 import type { AiTasks } from "./aiTasks.js";
@@ -34,6 +35,7 @@ export async function sendStrictFlowTextOutbound(input: {
   payloadId: string;
   simulation: boolean;
   strictFlowEnabled: boolean;
+  scriptFlow?: ScriptFlowRuntime;
   learnedIntent: LearnedIntentDebugInfo | null;
   country: MerchantCountryRecord;
   inviteCode?: A2CInviteCodeRecord;
@@ -79,6 +81,7 @@ export async function sendStrictFlowTextOutbound(input: {
         naturalized: refinedReply.naturalized,
         languageGuard: refinedReply.languageGuard,
         country: input.country,
+        scriptFlow: input.scriptFlow,
         inviteCode: input.inviteCode
       })
     },

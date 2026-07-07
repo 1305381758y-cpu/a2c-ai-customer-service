@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { A2CInviteCodeRecord, MerchantAgentProfileRecord, MerchantCountryRecord } from "../src/repositories.js";
+import type { A2CInviteCodeRecord, MerchantAgentProfileRecord, MerchantCountryRecord, ScriptFlowRuntime } from "../src/repositories.js";
 import type { StrictFlowReply } from "../src/domain/strictFlow.js";
 import { buildStrictFlowOutboundRawPayload } from "../src/services/strictFlowOutboundPayload.js";
 
@@ -86,6 +86,27 @@ function inviteCode(): A2CInviteCodeRecord {
   };
 }
 
+function scriptFlow(): ScriptFlowRuntime {
+  return {
+    flow: {
+      id: 12,
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      countryCode: "BR",
+      countryName: "巴西",
+      name: "测试2222",
+      status: "active",
+      active: true,
+      version: 3,
+      sourceFilename: "系统内置",
+      stepCount: 11,
+      createdAt: "",
+      updatedAt: ""
+    },
+    steps: []
+  };
+}
+
 describe("strict flow outbound payload builder", () => {
   it("centralizes strict-flow debug fields for recorded outbound messages", () => {
     const payload = buildStrictFlowOutboundRawPayload({
@@ -102,6 +123,7 @@ describe("strict flow outbound payload builder", () => {
         fallbackUsed: false
       },
       country: country(),
+      scriptFlow: scriptFlow(),
       inviteCode: inviteCode()
     });
 
@@ -110,6 +132,10 @@ describe("strict flow outbound payload builder", () => {
       strictFlow: true,
       strictFlowEnabled: true,
       strictFlowStep: "wait_registration",
+      scriptFlowId: 12,
+      scriptFlowName: "测试2222",
+      scriptFlowVersion: 3,
+      scriptFlowSource: "系统内置",
       controlledQuestionType: "help",
       agentProfileName: "注册专员",
       intentSource: "rule",

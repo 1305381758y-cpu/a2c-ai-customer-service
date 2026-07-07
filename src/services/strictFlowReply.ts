@@ -113,6 +113,7 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     payloadId,
     simulation,
     strictFlowEnabled,
+    scriptFlow,
     learnedIntent,
     country,
     inviteCode

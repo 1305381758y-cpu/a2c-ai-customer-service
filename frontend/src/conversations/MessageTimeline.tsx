@@ -57,8 +57,9 @@ function ChatBubble({ message, helpers }: { message: ChatMessage; helpers: Messa
     {sendIssue && <div className="translation-warning">{sendIssue}</div>}
     {isOutbound && <div className="message-diagnostics">
       <span>{helpers.replyModeLabel(payload.replyMode)}</span>
+      {payload.scriptFlowName && <span>话本：{payload.scriptFlowName}</span>}
       {payload.strictFlowStep && <span>{helpers.label(payload.strictFlowStep)}</span>}
-      {payload.strictFlowEnabled === true && <span>严格流程</span>}
+      {payload.strictFlowEnabled === true && <span>{payload.scriptFlowName ? "话本流程已命中" : "系统流程已命中"}</span>}
     </div>}
     <small>{helpers.label(message.intent)} · {helpers.languageName(message.language)}</small>
   </article>;

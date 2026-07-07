@@ -1581,7 +1581,7 @@ function TrainingLoopPanel({
         <div className="reply-preview">{suggestedReply}</div>
         <div className="runtime-facts">
           <span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span>
-          <span>{lastOutboundPayload.strictFlowEnabled === true ? "严格流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "严格流程未启用" : "严格流程待判断"}</span>
+          <span>{lastOutboundPayload.scriptFlowName ? `话本流程：${lastOutboundPayload.scriptFlowName}` : lastOutboundPayload.strictFlowEnabled === true ? "系统流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "话本流程未启用" : "话本流程待判断"}</span>
           <span>引用样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条</span>
         </div>
         <div className="confidence-row"><span>业务来源 <strong>{currentScriptStep ? "当前话本节点" : firstSample ? "训练样本" : firstReviewItem ? "复盘候选" : "待补充"}</strong></span><button onClick={() => setDraft(suggestedReply)}>使用回复</button><button className="ghost">微调后使用</button><ThumbsUp size={16}/><ThumbsDown size={16}/></div>
@@ -1593,7 +1593,7 @@ function TrainingLoopPanel({
         <small>来源：{firstKnowledge ? "知识库" : firstReviewItem ? "对话复盘" : "未命中"} · 当前阶段 {label(conversation.stage)}</small>
       </section>
       <section className="assistant-card script-guidance">
-        <div className="assistant-card-title"><Workflow size={17}/><div><h3>脚本引导</h3><p>{scriptFlow?.flow.name || "系统严格流程"} · 当前步骤：{label(flowStep)}</p></div></div>
+        <div className="assistant-card-title"><Workflow size={17}/><div><h3>脚本引导</h3><p>{scriptFlow?.flow.name || "系统流程"} · 当前步骤：{label(flowStep)}</p></div></div>
         {scriptGuidanceRows(currentScriptStep).map((item, index) => <div key={`${item}-${index}`} className={index < 3 ? "checked" : ""}><span>{index < 3 ? <Check size={12}/> : index + 1}</span>{item}</div>)}
       </section>
       <section className="assistant-card">

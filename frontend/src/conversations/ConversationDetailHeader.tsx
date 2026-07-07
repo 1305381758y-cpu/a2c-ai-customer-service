@@ -37,12 +37,12 @@ export function ConversationDetailHeader({
         <span>客服账号：{conversation.a2cAccountPhone || "未识别"}</span>
         <span>流程：{label(flowStep)}</span>
         <span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span>
-        <span>{strictEnabled === true ? "严格流程已命中" : strictEnabled === false ? "未启用严格流程" : "严格流程待判断"}</span>
+        <span>{lastOutboundPayload.scriptFlowName ? `话本：${lastOutboundPayload.scriptFlowName}` : strictEnabled === true ? "系统流程已命中" : strictEnabled === false ? "未启用话本流程" : "话本流程待判断"}</span>
         <span>手机：{conversation.extractedPhone || "未识别"}</span>
         <span>TG：{conversation.extractedTelegram || "未识别"}</span>
         <span>WS：{conversation.extractedWhatsApp || "未识别"}</span>
       </div>
-      {strictEnabled === false && <div className="warning compact">当前会话未启用严格话本流程，可能走普通回复。</div>}
+      {strictEnabled === false && <div className="warning compact">当前会话未启用话本流程，可能走普通回复。</div>}
     </div>
     <div className="chat-actions">
       {!platform && <select value={conversation.handoffStatus} onChange={(event) => void onHandoffStatusChange(event.target.value)}>
