@@ -417,6 +417,75 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("邀请码");
   });
 
+  it("uses the merchant project-intro node before the confirmation-intent node in editable 11-step flows", () => {
+    const builtInDuplicateFlow: ScriptFlowRuntime = {
+      ...scriptFlow,
+      steps: [
+        {
+          ...scriptFlow.steps[0],
+          flowCode: "2",
+          flowName: "兴趣筛选",
+          flowStep: "interest_screening",
+          standardReply: "Hola, ¿le interesa conocer un trabajo en línea?",
+          nextFlowCode: "3",
+          nextFlowStep: "project_intro",
+          sortOrder: 2
+        },
+        {
+          ...scriptFlow.steps[0],
+          id: 3,
+          flowCode: "3",
+          flowName: "项目介绍",
+          flowStep: "项目介绍",
+          standardReply: "Esta es la presentación personalizada del proyecto. Las ganancias siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?",
+          nextFlowCode: "4",
+          nextFlowStep: "registration_intent",
+          sortOrder: 3
+        },
+        {
+          ...scriptFlow.steps[0],
+          id: 4,
+          flowCode: "4",
+          flowName: "确认意向",
+          flowStep: "确认意向",
+          standardReply: "¿Le sería posible continuar con el siguiente paso del proceso de apertura de cuenta?",
+          nextFlowCode: "5",
+          nextFlowStep: "send_register_link",
+          sortOrder: 4
+        },
+        {
+          ...scriptFlow.steps[1],
+          id: 5,
+          flowCode: "5",
+          flowName: "发送链接",
+          flowStep: "send_register_link",
+          standardReply: "Enlace de registro: {{REGISTER_URL}}\nCódigo de invitación: {{INVITE_CODE}}",
+          sendLink: true,
+          sendInvite: true,
+          nextFlowCode: "6",
+          nextFlowStep: "wait_registration",
+          sortOrder: 5
+        }
+      ]
+    };
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country: { ...country, defaultLanguage: "es" },
+      conversation: conversation({ flowStep: "interest_screening", language: "es" }),
+      analysis: analyzeMessage("Sí", "es"),
+      customerText: "Sí",
+      config,
+      scriptFlow: builtInDuplicateFlow
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("presentación personalizada del proyecto");
+    expect(result.reply).not.toContain("siguiente paso del proceso de apertura de cuenta");
+    expect(result.reply).not.toContain("Enlace de registro");
+    expect(result.reply).not.toContain("Código de invitación");
+  });
+
   it("uses script flow next system step when a node configures custom routing", () => {
     const routedFlow: ScriptFlowRuntime = {
       ...scriptFlow,

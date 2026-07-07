@@ -24,15 +24,18 @@ export function activeScriptStep(input: StrictFlowInput, key: string): ScriptFlo
 
   if (key === "project_intro") {
     return (
-      enabledSteps.find((step) => step.flowStep === "registration_intent" && /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
-      enabledSteps.find((step) => /项目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
-      enabledSteps.find((step) => step.flowCode.toUpperCase() === "B" || step.flowCode.toUpperCase() === "C") ??
+      findScriptStepByName(enabledSteps, /^(项目介绍|工作介绍|項目介紹)$/i) ??
+      enabledSteps.find((step) => step.flowCode.toUpperCase() === "3" || step.flowCode.toUpperCase() === "C") ??
+      enabledSteps.find((step) => step.flowStep !== "registration_intent" && /项目|項目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
+      enabledSteps.find((step) => step.flowStep === "registration_intent" && /项目|項目|介紹|介绍|收益|工作|project|intro|income/i.test(`${step.flowName} ${step.goal} ${step.triggerCondition}`)) ??
       enabledSteps.find((step) => step.flowStep === "registration_intent")
     );
   }
 
   if (key === "registration_intent") {
     return (
+      findScriptStepByName(enabledSteps, /^(确认意向|确认注册意向|注册意向|确认有空|确认开户注册)$/i) ??
+      enabledSteps.find((step) => step.flowCode.toUpperCase() === "4" || step.flowCode.toUpperCase() === "D") ??
       enabledSteps.find((step) => step.flowStep === "registration_intent" && (step.sendLink || step.sendInvite || step.sendTutorialImage)) ??
       enabledSteps.find((step) => step.flowStep === "registration_intent" && /注册|注册链接|开户链接|邀请码|register|invite/i.test(`${step.flowName} ${step.goal} ${step.standardReply}`))
     );
@@ -43,6 +46,10 @@ export function activeScriptStep(input: StrictFlowInput, key: string): ScriptFlo
   }
 
   return undefined;
+}
+
+function findScriptStepByName(steps: ScriptFlowStepRecord[], pattern: RegExp): ScriptFlowStepRecord | undefined {
+  return steps.find((step) => pattern.test(step.flowName.trim()));
 }
 
 export function configuredNextFlowStep(input: StrictFlowInput, currentKey: string, fallback: StrictFlowStep): StrictFlowStep {

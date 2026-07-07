@@ -410,6 +410,7 @@ function normalizeImportedFlowStep(value: string): string {
     兴趣筛选: "interest_screening",
     开场筛选: "interest_screening",
     项目介绍: "project_intro",
+    确认意向: "registration_intent",
     工作介绍: "registration_intent",
     确认注册意向: "registration_intent",
     确认是否方便注册: "registration_intent",

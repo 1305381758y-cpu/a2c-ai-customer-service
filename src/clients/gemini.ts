@@ -447,6 +447,9 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
   if (/(我是|作为|身为).{0,8}(AI|人工智能|机器人|機器人|模型|自动客服|自動客服)|\b(AI|robot|bot|model)\b/i.test(cleaned)) {
     return fallback;
   }
+  if (asksCustomerForInviteCode(cleaned)) {
+    return fallback;
+  }
   if (!allowLinkOrInvite) {
     cleaned = cleaned
       .replace(/https?:\/\/\S+/gi, "")
@@ -461,6 +464,10 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
     if (fallbackInvite && !cleaned.includes(fallbackInvite)) return fallback;
   }
   return cleaned;
+}
+
+function asksCustomerForInviteCode(text: string): boolean {
+  return /(把|发|提供|告诉|给我|給我).{0,12}(邀请码|邀請碼|invite code|invitation code|c[oó]digo de invitaci[oó]n|c[oó]digo de convite)|((有|手边|手邊|a mano|tiene|tenga).{0,20}(邀请码|邀請碼|invite code|invitation code|c[oó]digo de invitaci[oó]n|c[oó]digo de convite))|(?:me lo puede facilitar|puede facilitarme|env[ií]eme|m[aá]ndeme).{0,30}(c[oó]digo|invitaci[oó]n)|(c[oó]digo|invitaci[oó]n).{0,60}(facilitar|a mano|tiene|tenga)/i.test(text);
 }
 
 function looksLikeStructuredAiPayload(text: string): boolean {

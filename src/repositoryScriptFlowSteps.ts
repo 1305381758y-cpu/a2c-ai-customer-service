@@ -17,6 +17,7 @@ export function normalizeScriptFlowStep(value: string): string {
     project_intro: "project_intro",
     d: "registration_intent",
     "注册意向": "registration_intent",
+    "确认意向": "registration_intent",
     "确认注册意向": "registration_intent",
     "确认是否方便注册": "registration_intent",
     "确认开户注册": "registration_intent",

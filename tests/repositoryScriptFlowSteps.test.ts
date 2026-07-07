@@ -7,6 +7,7 @@ describe("repositoryScriptFlowSteps", () => {
     expect(normalizeScriptFlowStep("首次问候")).toBe("first_greeting");
     expect(normalizeScriptFlowStep("first_greeting")).toBe("first_greeting");
     expect(normalizeScriptFlowStep("项目介绍")).toBe("project_intro");
+    expect(normalizeScriptFlowStep("确认意向")).toBe("registration_intent");
     expect(normalizeScriptFlowStep("发送注册链接")).toBe("send_register_link");
     expect(normalizeScriptFlowStep("TG确认")).toBe("telegram_confirm");
     expect(normalizeScriptFlowStep("获取Telegram账号")).toBe("collect_telegram");

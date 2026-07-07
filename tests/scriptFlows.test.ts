@@ -86,16 +86,21 @@ describe("script flow import", () => {
       A. 兴趣筛选
       系统步骤：兴趣筛选
       客服标准话术：您好，您是想了解一份兼职在线工作吗？
-      下一系统步骤：确认注册意向
+      下一系统步骤：确认意向
 
-      B. 发送链接邀请码
+      B. 确认意向
+      系统步骤：确认意向
+      客服标准话术：您现在方便继续开户注册吗？
+      下一系统步骤：发送链接邀请码
+
+      C. 发送链接邀请码
       系统步骤：发送链接邀请码
       客服标准话术：开户链接：{{REGISTER_URL}} 邀请码：{{INVITE_CODE}}
       是否发链接：是
       是否发邀请码：是
       下一系统步骤：确认TG
 
-      C. 收集 Telegram 用户名
+      D. 收集 Telegram 用户名
       系统步骤：收集TG用户名
       客服标准话术：请把 @ 开头的 Telegram 用户名发给我。
       下一系统步骤：人工接管
@@ -103,11 +108,13 @@ describe("script flow import", () => {
 
     expect(steps.map((step) => step.flowStep)).toEqual([
       "interest_screening",
+      "registration_intent",
       "send_register_link",
       "collect_telegram"
     ]);
     expect(steps[0].nextFlowStep).toBe("registration_intent");
-    expect(steps[1].nextFlowStep).toBe("telegram_confirm");
-    expect(steps[2].nextFlowStep).toBe("human_handoff");
+    expect(steps[1].nextFlowStep).toBe("send_register_link");
+    expect(steps[2].nextFlowStep).toBe("telegram_confirm");
+    expect(steps[3].nextFlowStep).toBe("human_handoff");
   });
 });
