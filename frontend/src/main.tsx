@@ -397,6 +397,7 @@ function Config({ platform }: { platform: boolean }) {
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
   const [countryDraft, setCountryDraft] = useState({ code: "br", name: "巴西", defaultLanguage: "pt-BR", platformRegisterUrl: "", tgRegisterGuideUrl: "", requirePlatformAccount: "true", requirePhone: "true", requireTelegram: "true", requireWhatsApp: "false" });
+  const [bulkTgLink, setBulkTgLink] = useState("");
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
   const countriesUrl = platform ? `/api/admin/merchants/${merchantId}/countries` : "/api/merchant/countries";
   const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
@@ -425,6 +426,7 @@ function Config({ platform }: { platform: boolean }) {
       requireTelegram: String(country.requireTelegram),
       requireWhatsApp: String(country.requireWhatsApp)
     });
+    setBulkTgLink(country.tgRegisterGuideUrl || "");
   };
   useEffect(() => {
     const country = countries[0];
@@ -521,6 +523,17 @@ function Config({ platform }: { platform: boolean }) {
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
   };
+  const saveBulkTeacherTelegramLink = async () => {
+    const currentCountry = countries[0];
+    const link = bulkTgLink.trim();
+    if (!currentCountry) throw new Error("请先保存国家设置，再批量设置老师TG链接。");
+    if (!link) throw new Error("请先填写老师TG链接。");
+    const saved = await api<MerchantCountry>(`${countriesUrl}/${currentCountry.id}`, { method: "PATCH", body: JSON.stringify({ tgRegisterGuideUrl: link }) });
+    setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: saved.tgRegisterGuideUrl || link });
+    setBulkTgLink(saved.tgRegisterGuideUrl || link);
+    await reloadCountries();
+    notify("success", "老师TG链接已批量设置", `当前商户 ${a2cAccounts.length || "全部"} 个客服账号都会使用这条链接。`);
+  };
   const updateCountryDraftName = (value: string) => {
     const inferred = inferCountryProfile(value);
     setCountryDraft({ ...countryDraft, name: value, code: inferred.code, defaultLanguage: inferred.defaultLanguage });
@@ -589,6 +602,20 @@ function Config({ platform }: { platform: boolean }) {
         {countries[0] && <button type="button" className="ghost" onClick={() => { applyCountryDraft(countries[0]); notify("success", "已载入当前国家", "修改后点击“保存国家设置”。"); }}>编辑当前国家</button>}
       </div>
       <div className="country-auto-note">国家代码和默认语言由国家名称自动生成，不需要手动填写；例如“玻利维亚”会自动识别为 <strong>bo / 西语</strong>。</div>
+      <div className="memory compact-panel">
+        <div className="section-title-row">
+          <div>
+            <h3>批量设置老师TG链接</h3>
+            <p>这里设置的是严格流程第 9 步发送给客户的老师 Telegram 链接。保存后，当前商户下所有客服账号都会统一使用这条链接。</p>
+          </div>
+          <span className="status-pill neutral">覆盖 {a2cAccounts.length || 0} 个客服账号</span>
+        </div>
+        <div className="copy-row">
+          <label>老师TG链接<input placeholder="例如：https://t.me/teacher_username" value={bulkTgLink} onChange={(e) => setBulkTgLink(e.target.value)} /></label>
+          <AsyncButton onClick={saveBulkTeacherTelegramLink} busyText="保存中...">批量保存</AsyncButton>
+        </div>
+        <small>如果每个客服账号未来要使用不同老师链接，需要再加“按客服账号绑定老师链接”的独立字段；当前版本是按商户国家统一发送。</small>
+      </div>
       <div className="toolbar wrap country-settings-form">
         <CountryPresetDatalist />
         <label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：玻利维亚" value={countryDraft.name} onChange={(e) => updateCountryDraftName(e.target.value)} /></label>
