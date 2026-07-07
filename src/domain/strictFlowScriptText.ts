@@ -61,7 +61,7 @@ export function strictFlowScriptLine(key: string, language: string, fallback = "
     collect_telegram: "现在我会给您老师的 Telegram 链接，她会指导您完成任务。完成后，她会告诉您如何提现。按照她的指示去做。她会继续指导您，让您每天赚取 500 到 2800 BOB 的净工资。",
     collect_telegram_wait: "好的，Telegram 准备好后告诉我，我会把老师的 Telegram 链接发给您。",
     collect_telegram_retry: "我会把老师的 Telegram 链接发给您，您按她的指示继续操作就可以。",
-    missing_invite: `注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。${fallback ? `\n开户链接：${fallback}` : ""}`
+    missing_invite: "注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。"
   };
   const en: Record<string, string> = {
     first_greeting: "Hello, are you looking for an online part-time job?",
@@ -119,7 +119,7 @@ export function strictFlowScriptLine(key: string, language: string, fallback = "
     collect_telegram: "Now I will send you the teacher's Telegram link. She will guide you to complete the tasks and then tell you how to withdraw. Please follow her instructions. She will continue guiding you so you can earn 500 to 2800 BOB net salary per day.",
     collect_telegram_wait: "Okay, after Telegram is ready, tell me and I will send you the teacher's Telegram link.",
     collect_telegram_retry: "I will send you the teacher's Telegram link. Please follow her instructions for the next steps.",
-    missing_invite: `Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment.${fallback ? `\nRegistration link: ${fallback}` : ""}`
+    missing_invite: "Registration requires an invitation code. I am confirming your dedicated invitation code now. Please wait a moment."
   };
   const pt: Record<string, string> = {
     first_greeting: "Olá, você quer conhecer um trabalho online de meio período?",
@@ -177,7 +177,7 @@ export function strictFlowScriptLine(key: string, language: string, fallback = "
     collect_telegram: "Agora vou enviar o link do Telegram da professora. Ela vai orientar você a concluir as tarefas e depois explicar como sacar. Siga as instruções dela. Ela continuará orientando você para ganhar de 500 a 2800 BOB de salário líquido por dia.",
     collect_telegram_wait: "Certo, quando o Telegram estiver pronto, me avise e eu envio o link da professora.",
     collect_telegram_retry: "Vou enviar o link do Telegram da professora. Siga as instruções dela para continuar.",
-    missing_invite: `O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento.${fallback ? `\nLink de cadastro: ${fallback}` : ""}`
+    missing_invite: "O cadastro precisa de código de convite. Estou confirmando seu código exclusivo agora. Aguarde um momento."
   };
   const es: Record<string, string> = {
     first_greeting: "Hola, ¿quiere conocer un trabajo de medio tiempo en línea?",
@@ -235,7 +235,7 @@ export function strictFlowScriptLine(key: string, language: string, fallback = "
     collect_telegram: "Ahora le voy a enviar el enlace de Telegram de la profesora. Ella le guiará para completar las tareas y después le dirá cómo retirar. Siga sus instrucciones. Ella seguirá guiándole para que pueda ganar de 500 a 2800 BOB de salario neto por día.",
     collect_telegram_wait: "De acuerdo, cuando Telegram esté listo, avíseme y le enviaré el enlace de la profesora.",
     collect_telegram_retry: "Le enviaré el enlace de Telegram de la profesora. Siga sus instrucciones para continuar.",
-    missing_invite: `El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.${fallback ? `\nEnlace de registro: ${fallback}` : ""}`
+    missing_invite: "El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento."
   };
   if (language === "en") return en[key] ?? zh[key] ?? "";
   if (language === "es") return es[key] ?? zh[key] ?? "";

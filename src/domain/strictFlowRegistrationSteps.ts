@@ -72,17 +72,21 @@ function buildRegistrationIntentReply(input: StrictFlowInput, context: Registrat
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "registration_help_before_ready", language));
   }
   if (asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text)) {
-    const configuredStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
-    const nextStep = configuredStep === "send_register_link" ? configuredNextFlowStep(input, "send_register_link", "wait_registration") : configuredStep;
+    const nextStep = nextRegistrationStep(input);
     return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
   }
   if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
   }
   if (positive || asksLink || inferredIntent === "ask_link" || inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
-    const configuredStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
-    const nextStep = configuredStep === "send_register_link" ? configuredNextFlowStep(input, "send_register_link", "wait_registration") : configuredStep;
+    const nextStep = nextRegistrationStep(input);
     return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
   }
   return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
+}
+
+function nextRegistrationStep(input: StrictFlowInput): StrictFlowStep {
+  if (!input.inviteCode) return "registration_intent";
+  const configuredStep = configuredNextFlowStep(input, "registration_intent", "wait_registration");
+  return configuredStep === "send_register_link" ? configuredNextFlowStep(input, "send_register_link", "wait_registration") : configuredStep;
 }

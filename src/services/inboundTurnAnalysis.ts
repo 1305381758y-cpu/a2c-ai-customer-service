@@ -146,5 +146,5 @@ export function detectContextualRegistrationPhone(text: string, flowStep: string
   const normalized = text.trim();
   if (!/^\+?\d[\d\s-]{5,18}$/.test(normalized)) return "";
   const digits = normalized.replace(/[^\d+]/g, "");
-  return digits.replace(/\D/g, "").length >= 6 ? digits : "";
+  return digits.replace(/\D/g, "").length >= 8 ? digits : "";
 }

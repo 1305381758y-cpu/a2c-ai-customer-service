@@ -3,6 +3,7 @@ import { sanitizeNaturalizedText } from "../src/clients/gemini.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { suppressRegistrationDetailsForNonLinkStep } from "../src/domain/registrationPolicy.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";
+import { detectContextualRegistrationPhone } from "../src/services/inboundTurnAnalysis.js";
 import { shouldBypassStrictFlowForNaturalReply } from "../src/services/inboundTurnResponder.js";
 import type { AppConfig } from "../src/config.js";
 import type { A2CInviteCodeRecord, Conversation, ConversationMessageRecord, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../src/repositories.js";
@@ -164,6 +165,31 @@ function reply(text: string, overrides: Partial<Conversation> = {}) {
     analysis,
     customerText: text,
     inviteCode,
+    config,
+    contextualIntent
+  });
+}
+
+function replyWithRuntime(
+  text: string,
+  overrides: Partial<Conversation> = {},
+  runtime: { inviteCode?: A2CInviteCodeRecord; teacherTelegramLink?: string } = {}
+) {
+  const analysis = analyzeMessage(text, overrides.language ?? "unknown");
+  const conv = conversation(overrides);
+  const contextualIntent = buildRuleContextualIntent({
+    conversation: conv,
+    analysis,
+    customerText: text
+  });
+  return buildStrictFlowReply({
+    merchant,
+    country,
+    conversation: conv,
+    analysis,
+    customerText: text,
+    inviteCode: runtime.inviteCode,
+    teacherTelegramLink: runtime.teacherTelegramLink,
     config,
     contextualIntent
   });
@@ -1235,6 +1261,35 @@ describe("strict Aston Brazil flow", () => {
     expect(acknowledgement.reply).toContain("https://t.me/teacher");
     expect(acknowledgement.reply).toContain("老师");
     expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
+  });
+
+  it("sends the teacher Telegram link when Spanish customer confirms Telegram is available", () => {
+    const result = replyWithRuntime(
+      "Sí",
+      { language: "es", flowStep: "telegram_confirm", extractedPhone: "65432345" },
+      { inviteCode, teacherTelegramLink: "https://t.me/profesora_bo" }
+    );
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.reply).toContain("https://t.me/profesora_bo");
+    expect(result.reply).toContain("profesora");
+    expect(result.reply).not.toContain("¿Tiene la aplicación Telegram?");
+    expect(result.reply).not.toContain("¿usted ya cuenta con una cuenta de Telegram");
+  });
+
+  it("does not move to wait registration when the invite code pool is empty", () => {
+    const result = replyWithRuntime("Sí", { language: "es", flowStep: "registration_intent" });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("código de invitación");
+    expect(result.reply).toContain("Espere un momento");
+    expect(result.reply).not.toContain("Enlace de registro");
+    expect(result.reply).not.toContain("¿ya completó el registro?");
+  });
+
+  it("does not treat short numeric fragments as contextual registration phones", () => {
+    expect(detectContextualRegistrationPhone("6543234", "wait_registration")).toBe("");
+    expect(detectContextualRegistrationPhone("65432345", "wait_registration")).toBe("65432345");
   });
 
   it("guides customers to find or set a Telegram username", () => {
