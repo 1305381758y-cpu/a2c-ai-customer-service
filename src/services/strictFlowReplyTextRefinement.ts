@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { StrictFlowReply } from "../domain/strictFlow.js";
-import type { MerchantAgentProfileRecord } from "../repositories.js";
+import type { MerchantAgentProfileRecord, ScriptFlowRuntime } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, type LanguageGuardResult } from "./replyLanguage.js";
 
@@ -21,7 +21,26 @@ export async function refineStrictFlowReplyText(input: {
   customerText: string;
   history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   agentProfile: MerchantAgentProfileRecord;
+  scriptFlow?: ScriptFlowRuntime;
 }): Promise<StrictFlowReplyTextRefinementResult> {
+  if (input.scriptFlow?.flow.active) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: input.strictReply.needsInviteCode
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "已启用商户话本流程，保留节点原话术"
+      },
+      languageGuard
+    };
+  }
+
   if (input.strictReply.fallback && input.strictReply.needsInviteCode) {
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import type { StrictFlowReply } from "../src/domain/strictFlow.js";
-import type { MerchantAgentProfileRecord } from "../src/repositories.js";
+import type { MerchantAgentProfileRecord, ScriptFlowRuntime } from "../src/repositories.js";
 import { refineStrictFlowReplyText } from "../src/services/strictFlowReplyTextRefinement.js";
 
 function config() {
@@ -39,6 +39,28 @@ function agentProfile(overrides: Partial<MerchantAgentProfileRecord> = {}): Merc
     enabled: true,
     createdAt: "",
     updatedAt: "",
+    ...overrides
+  };
+}
+
+function scriptFlow(overrides: Partial<ScriptFlowRuntime> = {}): ScriptFlowRuntime {
+  return {
+    flow: {
+      id: 12,
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      countryCode: "BO",
+      countryName: "玻利维亚",
+      name: "测试2222",
+      status: "active",
+      active: true,
+      version: 1,
+      sourceFilename: "商户话本",
+      stepCount: 1,
+      createdAt: "",
+      updatedAt: ""
+    },
+    steps: [],
     ...overrides
   };
 }
@@ -126,5 +148,36 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).toBe("El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento.");
     expect(result.reply).not.toMatch(/facilitar|a mano|ya tiene/i);
     expect(result.naturalized).toMatchObject({ used: false, error: "邀请码未分配时跳过口语化改写" });
+  });
+
+  it("preserves active merchant script-flow wording instead of rewriting it like built-in copy", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento. ¿Tiene tiempo para continuar con el registro ahora?",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "Soy Laura, asesora de bienvenida de Shopee. Primero le explico el proceso exacto del cliente y luego seguimos con el registro.",
+        language: "es",
+        nextFlowStep: "registration_intent",
+        controlledQuestionType: "none"
+      }),
+      customerText: "Sí",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toContain("Soy Laura");
+    expect(result.reply).toContain("proceso exacto del cliente");
+    expect(result.reply).not.toContain("este trabajo en línea ayuda a comerciantes");
+    expect(result.naturalized).toMatchObject({ used: false, error: "已启用商户话本流程，保留节点原话术" });
   });
 });

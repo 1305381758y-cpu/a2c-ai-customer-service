@@ -46,7 +46,8 @@ export async function sendStrictFlowTextOutbound(input: {
     strictReply: input.strictReply,
     customerText: input.customerText,
     history: input.history,
-    agentProfile: input.agentProfile
+    agentProfile: input.agentProfile,
+    scriptFlow: input.scriptFlow
   });
   input.strictReply.reply = refinedReply.reply;
 
