@@ -392,33 +392,58 @@ function fieldKey(label: string): string {
 }
 
 function normalizeImportedFlowStep(value: string): string {
-  const normalized = value.trim();
+  const normalized = normalizeFlowStepAlias(value);
   const aliases: Record<string, string> = {
     首次问候: "interest_screening",
     打招呼: "interest_screening",
     兴趣筛选: "interest_screening",
+    开场筛选: "interest_screening",
     项目介绍: "registration_intent",
     工作介绍: "registration_intent",
     确认注册意向: "registration_intent",
+    确认是否方便注册: "registration_intent",
+    确认开户注册: "registration_intent",
+    确认有空: "registration_intent",
     发送链接: "wait_registration",
     发送注册链接: "wait_registration",
+    发送链接邀请码: "wait_registration",
+    发送注册链接邀请码: "wait_registration",
+    发送注册步骤: "wait_registration",
+    注册步骤: "wait_registration",
     等待完成注册: "wait_registration",
     等待注册: "wait_registration",
+    等待客户注册: "wait_registration",
     收集手机号: "telegram_confirm",
+    收集注册手机号: "telegram_confirm",
+    询问telegram: "telegram_confirm",
     确认tg: "telegram_confirm",
     确认telegram: "telegram_confirm",
     下载tg: "telegram_download",
     下载telegram: "telegram_download",
     引导下载tg: "telegram_download",
     引导下载telegram: "telegram_download",
+    telegram下载引导: "telegram_download",
+    tg下载引导: "telegram_download",
     收集tg: "collect_telegram",
     收集telegram: "collect_telegram",
     收集tg用户名: "collect_telegram",
     收集telegram用户名: "collect_telegram",
+    获取tg用户名: "collect_telegram",
+    获取telegram用户名: "collect_telegram",
     人工接管: "human_handoff",
+    转交真人: "human_handoff",
+    转人工: "human_handoff",
     结束: "ended"
   };
-  return aliases[normalized.toLowerCase()] || aliases[normalized] || normalized || "registration_intent";
+  const english = value.trim().toLowerCase().replace(/\s+/g, "_");
+  return aliases[normalized] || aliases[english] || english || "registration_intent";
+}
+
+function normalizeFlowStepAlias(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\/\\|｜、，,;；:：\s_-]+/g, "");
 }
 
 function readTextBoolean(value: string, fallback: boolean): boolean {

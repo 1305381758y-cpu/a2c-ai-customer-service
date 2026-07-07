@@ -77,4 +77,34 @@ describe("script flow import", () => {
     expect(steps[1].sendInvite).toBe(true);
     expect(steps[1].collectInfo).toBe("注册手机号");
   });
+
+  it("accepts Chinese system step labels from plain text templates", () => {
+    const steps = parseScriptFlowText(`
+      A. 兴趣筛选
+      系统步骤：兴趣筛选
+      客服标准话术：您好，您是想了解一份兼职在线工作吗？
+      下一系统步骤：确认注册意向
+
+      B. 发送链接邀请码
+      系统步骤：发送链接邀请码
+      客服标准话术：开户链接：{{REGISTER_URL}} 邀请码：{{INVITE_CODE}}
+      是否发链接：是
+      是否发邀请码：是
+      下一系统步骤：确认TG
+
+      C. 收集 Telegram 用户名
+      系统步骤：收集TG用户名
+      客服标准话术：请把 @ 开头的 Telegram 用户名发给我。
+      下一系统步骤：人工接管
+    `);
+
+    expect(steps.map((step) => step.flowStep)).toEqual([
+      "interest_screening",
+      "wait_registration",
+      "collect_telegram"
+    ]);
+    expect(steps[0].nextFlowStep).toBe("registration_intent");
+    expect(steps[1].nextFlowStep).toBe("telegram_confirm");
+    expect(steps[2].nextFlowStep).toBe("human_handoff");
+  });
 });
