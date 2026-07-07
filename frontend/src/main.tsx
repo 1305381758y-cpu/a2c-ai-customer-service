@@ -24,8 +24,11 @@ import { notify, notifyExportStarted, ToastHost } from "./ui/toast.js";
 import "./styles.css";
 
 const STRICT_STEP_OPTIONS = [
+  "first_greeting",
   "interest_screening",
+  "project_intro",
   "registration_intent",
+  "send_register_link",
   "wait_registration",
   "telegram_confirm",
   "telegram_download",
@@ -738,6 +741,17 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
     await reload();
     await loadDetail(result.flow);
   };
+  const createBuiltIn = async () => {
+    const countryId = filters.countryId || countries[0]?.id || "";
+    const body: Record<string, string> = { name: flowName.trim() || "严格业务流程" };
+    if (countryId) body.countryId = countryId;
+    if (platform && filters.merchantId.trim()) body.merchantId = filters.merchantId.trim();
+    const result = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[] }>(`${base}/builtin`, { method: "POST", body: JSON.stringify(body) });
+    notify("success", "已创建内置流程", "已生成 11 个可编辑节点。请检查话术后再启用。");
+    setFlowName("");
+    await reload();
+    await loadDetail(result.flow);
+  };
   const refreshDetail = async () => {
     if (!selected) return;
     const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${selected.id}`);
@@ -784,8 +798,9 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
           <input placeholder="话本名称，可选" value={flowName} onChange={(event) => setFlowName(event.target.value)} />
           <input type="file" accept=".xlsx,.xls,.docx,.txt,.md,.csv" onChange={(event) => setFile(event.target.files?.[0] || null)} />
           <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="分析中..." onClick={upload}><Upload size={16}/>上传并生成节点</AsyncButton>
+          <AsyncButton disabled={platform && !filters.merchantId.trim()} busyText="创建中..." onClick={createBuiltIn}><Workflow size={16}/>使用内置11步创建</AsyncButton>
         </div>
-        <small>支持 Excel/CSV 标准表头，也支持 Word/TXT/MD 自由话本。导入后默认是草稿，右侧可继续新增、编辑、复制、删除节点。</small>
+        <small>支持 Excel/CSV 标准表头，也支持 Word/TXT/MD 自由话本。也可以直接使用系统内置 11 步生成草稿，右侧逐步修改后再启用。</small>
       </div>
       <Table rows={rows} columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]} onRow={loadDetail} selectedKey={selected?.id} rowKey={(row) => row.id} />
     </section>

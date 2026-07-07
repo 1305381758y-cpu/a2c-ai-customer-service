@@ -5,7 +5,7 @@ import { strictFlowScriptLine } from "./strictFlowScriptText.js";
 
 export function registerInstruction(input: StrictFlowInput, language: string, mode: "initial" | "help" = "initial"): string {
   const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
-  const customStep = activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
+  const customStep = activeScriptStep(input, "send_register_link") || activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
   if (customStep?.standardReply) {
     const withVariables = applyScriptVariables(customStep.standardReply, input, language, display);
     if (customStep.sendLink || customStep.sendInvite) {

@@ -100,7 +100,7 @@ describe("script flow import", () => {
 
     expect(steps.map((step) => step.flowStep)).toEqual([
       "interest_screening",
-      "wait_registration",
+      "send_register_link",
       "collect_telegram"
     ]);
     expect(steps[0].nextFlowStep).toBe("registration_intent");

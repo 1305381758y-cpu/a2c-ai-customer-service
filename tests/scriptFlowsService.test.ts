@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
 import {
+  createBuiltInStrictScriptFlow,
   deleteScriptFlowStep,
   enableScriptFlow,
   getScriptFlowDetail,
@@ -48,6 +49,35 @@ describe("script flow service", () => {
 
     expect(result).toMatchObject({ ok: true, value: { flow: expect.objectContaining({ active: true }) } });
     expect(repos.getMerchantConfig(merchant.id).strictScriptFlowEnabled).toBe(true);
+  });
+
+  it("creates the built-in 11-step strict business flow as editable draft", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("内置流程商户");
+
+    const result = createBuiltInStrictScriptFlow(repos, merchant.id, {}, "运营");
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        flow: expect.objectContaining({ name: "严格业务流程", status: "draft", active: false, sourceFilename: "系统内置", stepCount: 11 })
+      }
+    });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.steps.map((step) => step.flowName)).toEqual([
+      "首次问候",
+      "兴趣筛选",
+      "项目介绍",
+      "确认意向",
+      "发送链接",
+      "等待注册",
+      "确认TG",
+      "下载TG",
+      "收集TG",
+      "人工接管",
+      "结束"
+    ]);
+    expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true });
   });
 
   it("returns structured errors for invalid or referenced script flow steps", () => {

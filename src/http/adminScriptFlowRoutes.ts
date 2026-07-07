@@ -3,6 +3,7 @@ import { requireUser, requestUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
 import {
   createScriptFlowStep,
+  createBuiltInStrictScriptFlow,
   deleteScriptFlow,
   deleteScriptFlowStep,
   duplicateScriptFlowStep,
@@ -27,6 +28,10 @@ export function registerAdminScriptFlowRoutes(app: FastifyInstance, deps: AdminS
   }));
 
   app.post("/api/admin/script-flows/import", { preHandler: deps.adminOnly }, async (request, reply) => importScriptFlow(request, reply, deps, undefined));
+
+  app.post<{ Body: { merchantId?: string; countryId?: string; name?: string } }>("/api/admin/script-flows/builtin", { preHandler: deps.adminOnly }, async (request, reply) => {
+    return sendResult(reply, createBuiltInStrictScriptFlow(deps.repos, undefined, request.body ?? {}, requestUser(request).name));
+  });
 
   app.get<{ Params: { id: string } }>("/api/admin/script-flows/:id", { preHandler: deps.adminOnly }, async (request, reply) => {
     return sendResult(reply, getScriptFlowDetail(deps.repos, request.params.id));

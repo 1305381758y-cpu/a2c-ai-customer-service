@@ -345,6 +345,61 @@ describe("strict Aston Brazil flow", () => {
     expect(result.stage).toBe("need_tg_register");
   });
 
+  it("uses a configured send-link node but stores the next state as waiting registration", () => {
+    const splitFlow: ScriptFlowRuntime = {
+      ...scriptFlow,
+      steps: [
+        {
+          ...scriptFlow.steps[0],
+          flowCode: "D",
+          flowName: "确认意向",
+          flowStep: "registration_intent",
+          standardReply: "您现在方便继续开户注册吗？",
+          nextFlowCode: "E",
+          nextFlowStep: "send_register_link"
+        },
+        {
+          ...scriptFlow.steps[1],
+          flowCode: "E",
+          flowName: "发送链接",
+          flowStep: "send_register_link",
+          standardReply: "专属链接：{{REGISTER_URL}}\n专属码：{{INVITE_CODE}}",
+          sendLink: true,
+          sendInvite: true,
+          nextFlowCode: "F",
+          nextFlowStep: "wait_registration"
+        },
+        {
+          ...scriptFlow.steps[1],
+          id: 3,
+          flowCode: "F",
+          flowName: "等待注册",
+          flowStep: "wait_registration",
+          standardReply: "注册好后把手机号发给我。",
+          sendLink: false,
+          sendInvite: false,
+          nextFlowCode: "G",
+          nextFlowStep: "telegram_confirm"
+        }
+      ]
+    };
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conversation({ flowStep: "registration_intent", language: "zh" }),
+      analysis: analyzeMessage("方便", "zh"),
+      customerText: "方便",
+      inviteCode,
+      config,
+      scriptFlow: splitFlow
+    });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("专属链接：https://register.example/?code=ABC123");
+    expect(result.reply).toContain("专属码：ABC123");
+  });
+
   it("moves from interest screening to project intro when the customer asks for an introduction", () => {
     const result = reply("兼职?你介绍下", { language: "zh", flowStep: "interest_screening" });
 
