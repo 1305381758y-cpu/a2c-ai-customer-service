@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../src/db.js";
+import { strictFlowScriptLine, strictFlowVerificationLine } from "../src/domain/strictFlowScriptText.js";
 import { Repositories } from "../src/repositories.js";
 import {
   createBuiltInStrictScriptFlow,
@@ -93,6 +94,41 @@ describe("script flow service", () => {
       "ended"
     ]);
     expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true, sendTutorialImage: false });
+  });
+
+  it("keeps built-in 11-step replies aligned with strict flow fallback replies", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("内置兜底一致商户");
+
+    const result = createBuiltInStrictScriptFlow(repos, merchant.id, {}, "运营");
+
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) throw new Error(result.error);
+    const byStep = new Map(result.value.steps.map((step) => [step.flowStep, step.standardReply]));
+    expect(byStep.get("first_greeting")).toBe(strictFlowScriptLine("first_greeting", "zh"));
+    expect(byStep.get("interest_screening")).toBe(strictFlowScriptLine("interest_screening_retry", "zh"));
+    expect(byStep.get("project_intro")).toBe(strictFlowScriptLine("project_intro", "zh"));
+    expect(byStep.get("registration_intent")).toBe(strictFlowScriptLine("registration_intent", "zh"));
+    expect(byStep.get("wait_registration")).toBe(strictFlowScriptLine("wait_registration", "zh"));
+    expect(byStep.get("telegram_confirm")).toBe(strictFlowScriptLine("telegram_confirm", "zh"));
+    expect(byStep.get("telegram_download")).toBe(strictFlowScriptLine("telegram_download", "zh"));
+    expect(byStep.get("collect_telegram")).toContain(strictFlowScriptLine("collect_telegram", "zh").split("按照她的指示去做。")[0]);
+    expect(byStep.get("collect_telegram")).toContain("{{TG_LINK}}");
+    expect(byStep.get("human_handoff")).toBe(strictFlowVerificationLine("zh"));
+    expect(byStep.get("send_register_link")).toBe(
+      [
+        "好的，现在我会把链接和邀请码发给您。",
+        "开户链接：{{REGISTER_URL}}",
+        "邀请码：{{INVITE_CODE}}",
+        "注册步骤：",
+        "1. 在浏览器中打开链接。",
+        "2. 填写手机号码。",
+        "3. 设置用户名和密码。",
+        "4. 输入邀请码。",
+        "5. 提交注册。",
+        "完成注册后请告诉我。"
+      ].join("\n")
+    );
   });
 
   it("keeps script flow status and active flag consistent when editing basic info", () => {
