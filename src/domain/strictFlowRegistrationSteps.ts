@@ -9,7 +9,8 @@ import {
   asksToChat,
   complainsAboutReply,
   isExplicitRefusal,
-  isReadyToStartRegistration
+  isReadyToStartRegistration,
+  isRegistrationDoneConfirmation
 } from "./strictFlowPredicates.js";
 import { buildInterestProgressReply, buildStrictFlowResponse, naturalizeStrictReply } from "./strictFlowResponseBuilder.js";
 import { configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
@@ -72,6 +73,13 @@ function buildRegistrationIntentReply(input: StrictFlowInput, context: Registrat
   }
   if (asksForMoreJobInfo(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
+  }
+  if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
+    if (!(input.analysis.phone || input.conversation.extractedPhone)) {
+      return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_registered_phone", language));
+    }
+    const nextStep = configuredNextFlowStep(input, "wait_registration", "telegram_confirm");
+    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_confirm", language));
   }
   if ((contextualLabel === "need_help" || contextualLabel === "workflow_question" || inferredIntent === "need_help" || input.analysis.intent === "need_help" || asksForOperationHelp(text)) &&
     !(asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text))) {

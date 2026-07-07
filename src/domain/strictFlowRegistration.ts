@@ -6,6 +6,9 @@ import { strictFlowScriptLine } from "./strictFlowScriptText.js";
 export function registerInstruction(input: StrictFlowInput, language: string, mode: "initial" | "help" = "initial"): string {
   const display = inviteDisplayText(input.inviteCode, language, input.country.platformRegisterUrl || input.config.PLATFORM_REGISTER_URL);
   const customStep = activeScriptStep(input, "send_register_link") || activeScriptStep(input, "wait_registration") || activeScriptStep(input, "registration_intent");
+  if (!input.inviteCode && customStep?.sendInvite) {
+    return missingInviteInstruction(input, language);
+  }
   if (customStep?.standardReply) {
     const withVariables = applyScriptVariables(customStep.standardReply, input, language, display);
     if (customStep.sendLink || customStep.sendInvite) {
@@ -16,7 +19,13 @@ export function registerInstruction(input: StrictFlowInput, language: string, mo
     return withVariables;
   }
   if (!input.inviteCode) {
-    return strictFlowScriptLine("missing_invite", language, display);
+    return input.scriptFlow?.flow.active ? missingInviteInstruction(input, language) : strictFlowScriptLine("missing_invite", language, display);
+  }
+  if (language === "es") {
+    if (mode === "help") {
+      return `Claro, le envío de nuevo los pasos del registro${input.config.REGISTRATION_TUTORIAL_IMAGE_URL ? " junto con la imagen del tutorial" : ""}.\n${display}\nPasos para registrarse:\n1. Abra el enlace en el navegador.\n2. Ingrese su número de teléfono.\n3. Configure un nombre de usuario y una contraseña.\n4. Introduzca el código de invitación.\n5. Envíe el registro.\nCuando termine, envíeme el teléfono usado en el registro.`;
+    }
+    return `Perfecto, ahora le enviaré el enlace y el código de invitación.\n${display}\nPasos para registrarse:\n1. Abra el enlace en el navegador.\n2. Ingrese su número de teléfono.\n3. Configure un nombre de usuario y una contraseña.\n4. Introduzca el código de invitación.\n5. Envíe el registro.\nPor favor, avíseme cuando haya completado el registro.`;
   }
   if (language === "en") {
     if (mode === "help") {
@@ -38,7 +47,18 @@ export function registerInstruction(input: StrictFlowInput, language: string, mo
 
 export function registrationStartInstruction(input: StrictFlowInput, language: string): string {
   const instruction = registerInstruction(input, language);
+  if (!input.inviteCode && input.scriptFlow?.flow.active) return instruction;
+  if (language === "es") return `Perfecto, empecemos por el primer paso. Abra primero el enlace y le voy guiando paso a paso.\n${instruction}`;
   if (language === "en") return `Okay, let's start with the first step. Please open the link first, and I will guide you step by step.\n${instruction}`;
   if (language === "pt-BR") return `Certo, vamos começar pelo primeiro passo. Abra primeiro o link, e eu vou orientar você etapa por etapa.\n${instruction}`;
   return `好的，我们先从第一步开始。您先打开下面这个链接，我一步步带您操作。\n${instruction}`;
+}
+
+function missingInviteInstruction(input: StrictFlowInput, language: string): string {
+  const configured = activeScriptStep(input, "missing_invite")?.standardReply;
+  if (configured) return applyScriptVariables(configured, input, language, "");
+  if (language === "es") return "Estoy confirmando su código de invitación. En cuanto esté listo, le envío el enlace correcto para registrarse.";
+  if (language === "en") return "I am confirming your invitation code. Once it is ready, I will send you the correct registration link.";
+  if (language === "pt-BR") return "Estou confirmando seu código de convite. Assim que estiver pronto, envio o link correto de cadastro.";
+  return "我正在确认您的专属邀请码，确认好后再把正确的注册入口发给您。";
 }

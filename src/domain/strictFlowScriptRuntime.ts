@@ -80,10 +80,12 @@ export function inviteDisplayText(inviteCode: A2CInviteCodeRecord | undefined, l
   const template = inviteCode.registerUrl || fallbackUrl;
   const url = template ? template.includes("{code}") ? template.replaceAll("{code}", encodeURIComponent(inviteCode.code)) : template : "";
   if (template.includes("{code}")) {
+    if (language === "es") return `Enlace exclusivo de registro: ${url}\nCódigo de invitación: ${inviteCode.code}`;
     if (language === "en") return `Exclusive registration link: ${url}\nInvitation code: ${inviteCode.code}`;
     if (language === "pt-BR") return `Link exclusivo de cadastro: ${url}\nCódigo de convite: ${inviteCode.code}`;
     return `专属开户链接：${url}\n邀请码：${inviteCode.code}`;
   }
+  if (language === "es") return `Enlace de registro: ${url || "confirmando"}\nCódigo de invitación: ${inviteCode.code}`;
   if (language === "en") return `Registration link: ${url || "confirming"}\nInvitation code: ${inviteCode.code}`;
   if (language === "pt-BR") return `Link de cadastro: ${url || "confirmando"}\nCódigo de convite: ${inviteCode.code}`;
   return `开户链接：${url || "确认中"}\n邀请码：${inviteCode.code}`;

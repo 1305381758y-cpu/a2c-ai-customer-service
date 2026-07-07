@@ -45,7 +45,7 @@ export function buildStrictFlowResponse(
     nextFlowStep,
     stage,
     needsInviteCode,
-    fallback: !input.inviteCode && needsInviteCode,
+    fallback: !input.scriptFlow?.flow.active && !input.inviteCode && needsInviteCode,
     controlledQuestionType: controlled?.type ?? "none",
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
     contextualIntent,

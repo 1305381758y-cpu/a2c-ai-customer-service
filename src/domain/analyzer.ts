@@ -158,7 +158,7 @@ function shouldKeepPreviousLanguage(text: string, fallback: string): boolean {
 }
 
 function isSpanishShortSignal(text: string): boolean {
-  return /^(hola|buenos dias|buenos días|buenas tardes|buenas noches|si|sí|x favor|x fa|xfa|porfa|por favor|informacion|información|info|quiero informaci[oó]n|necesito informaci[oó]n)$/i.test(text);
+  return /^(hola|buenos dias|buenos días|buenas tardes|buenas noches|si|sí|x favor|x fa|xfa|porfa|por favor|informacion|información|info|quiero informaci[oó]n|necesito informaci[oó]n|finalizado|finalizada|finalic[eé]|terminado|terminada|ya\s+termin[eé]|completado|completada|ya\s+complet[eé]|registrado|registrada)$/i.test(text);
 }
 
 function detectLanguageSignals(text: string): Array<{ language: string; score: number; strong: boolean }> {
@@ -185,7 +185,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
   if (/\b(me|por favor|favor)\s+(manda|mande|envia|envía|pasa|pase)\b/.test(lower)) add("es", 6, true);
   if (/\b(el|la|un|una)\s+link\b|\blink\s+(de|del|para)\b/.test(lower)) add("es", 4, true);
   addKeywordScore(lower, add, "es", [
-    /\b(hola|buenos dias|buenos días|buen dia|buen día|buenas tardes|buenas noches|registrar|registro|registrado|telefono|teléfono|trabajo|trabajar|quiero|quisiera|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor|porfa|xfa|claro|dale|como|cómo|que|qué|hay|hacer|funciona|funcionar|llama|empresa|donde|dónde|son|esta|está|bien|empiezo|enpiezo|certificacion|certificación|legal|tiene|pruebas|empleados|trabajaron|ustedes|cuanto|cuánto|invertir|inversion|inversión|inverción|debo|devo|ingresar|mande|manda|interesa|listo|lista|termine|terminé|hice|completo|complet[oó]|ahora|momento)\b/g
+    /\b(hola|buenos dias|buenos días|buen dia|buen día|buenas tardes|buenas noches|registrar|registro|registrado|registrada|telefono|teléfono|trabajo|trabajar|quiero|quisiera|puedo|gracias|sí|si|necesito|ayuda|informacion|información|favor|porfa|xfa|claro|dale|como|cómo|que|qué|hay|hacer|funciona|funcionar|llama|empresa|donde|dónde|son|esta|está|bien|empiezo|enpiezo|certificacion|certificación|legal|tiene|pruebas|empleados|trabajaron|ustedes|cuanto|cuánto|invertir|inversion|inversión|inverción|debo|devo|ingresar|mande|manda|interesa|listo|lista|termine|terminé|hice|completo|complet[oó]|completado|completada|finalizado|finalizada|finalicé|finalice|terminado|terminada|ahora|momento)\b/g
   ]);
   addKeywordScore(lower, add, "fr", [
     /\b(bonjour|bonsoir|salut|inscription|compte|telephone|téléphone|travail|merci)\b/g
@@ -244,7 +244,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (hasPhone) return "provide_phone";
   if (isGreeting(lower)) return "greeting";
   if (/(人工|真人|客服|human|agent|operator|manual|atendente|humano|suporte)/i.test(text)) return "human_request";
-  if (/(完成|好了|注册好了|註冊好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|pronto)/i.test(text)) return "platform_register_done";
+  if (/(完成|好了|注册好了|註冊好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)/i.test(text)) return "platform_register_done";
   if (isPlatformQuestion(text)) return "ask_platform_register";
   if (/(注册|开户|sign up|signup|register|daftar|สมัคร|cadastro|cadastrar|registrar|abrir conta)/i.test(text)) return "ask_platform_register";
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";

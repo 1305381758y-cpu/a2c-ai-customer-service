@@ -117,7 +117,7 @@ export function hasIncompleteRegistrationPhone(text: string): boolean {
 }
 
 export function isRegistrationDoneConfirmation(text: string): boolean {
-  return /^(好了|好啦|完成了|注册好了|註冊好了|注册完了|註冊完了|已注册|已註冊|done|finished|registered|terminei|concluí|conclui|cadastrei|pronto)$/i.test(text.trim().replace(/[。.!?！？,，;；:：]+$/g, ""));
+  return /^(好了|好啦|完成了|注册好了|註冊好了|注册完了|註冊完了|已注册|已註冊|done|finished|registered|terminei|concluí|conclui|cadastrei|pronto|finalizado|finalizada|finalic[eé]|terminado|terminada|ya\s+termin[eé]|completado|completada|ya\s+complet[eé]|registrado|registrada)$/i.test(text.trim().replace(/[。.!?！？,，;；:：]+$/g, ""));
 }
 
 export function saysNoTelegram(text: string): boolean {

@@ -1420,6 +1420,61 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("¿ya completó el registro?");
   });
 
+  it("does not leak blank invite variables or built-in registration steps for active script flows", () => {
+    const customSpanishFlow: ScriptFlowRuntime = {
+      ...scriptFlow,
+      steps: [
+        {
+          ...scriptFlow.steps[0],
+          flowCode: "4",
+          flowName: "确认意向",
+          flowStep: "registration_intent",
+          standardReply: "¿Tiene tiempo libre ahora para continuar con el registro?",
+          nextFlowCode: "5",
+          nextFlowStep: "send_register_link"
+        },
+        {
+          ...scriptFlow.steps[1],
+          flowCode: "5",
+          flowName: "发送链接",
+          flowStep: "send_register_link",
+          standardReply: "Perfecto, ahora le enviaré el enlace y el código de invitación.\n\nEnlace de registro: {{REGISTER_URL}}\nCódigo de invitación: {{INVITE_CODE}}\n\nPasos para registrarse:\n1. Abra el enlace en el navegador.\n2. Ingrese su número de teléfono.",
+          sendLink: true,
+          sendInvite: true,
+          nextFlowCode: "6",
+          nextFlowStep: "wait_registration"
+        }
+      ]
+    };
+    const result = buildStrictFlowReply({
+      merchant,
+      country: { ...country, defaultLanguage: "es" },
+      conversation: conversation({ language: "es", flowStep: "registration_intent" }),
+      analysis: analyzeMessage("Sí", "es"),
+      customerText: "Sí",
+      config,
+      scriptFlow: customSpanishFlow
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.fallback).toBe(false);
+    expect(result.reply).toContain("código de invitación");
+    expect(result.reply).not.toContain("Código de invitación:");
+    expect(result.reply).not.toContain("Pasos para registrarse");
+    expect(result.reply).not.toContain("Abra el enlace");
+    expect(result.reply).not.toContain("¿Me lo puede facilitar");
+    expect(result.reply).not.toContain("a mano");
+  });
+
+  it("treats Spanish completed-registration words as done and asks for the registered phone", () => {
+    const result = replyWithRuntime("finalizado", { language: "es", flowStep: "registration_intent" }, { inviteCode });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toMatch(/tel[eé]fono|n[uú]mero/i);
+    expect(result.reply).not.toContain("Enlace de registro");
+    expect(result.reply).not.toContain("Código de invitación");
+  });
+
   it("does not treat short numeric fragments as contextual registration phones", () => {
     expect(detectContextualRegistrationPhone("6543234", "wait_registration")).toBe("");
     expect(detectContextualRegistrationPhone("65432345", "wait_registration")).toBe("65432345");
