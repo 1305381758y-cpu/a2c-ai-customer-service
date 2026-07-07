@@ -79,6 +79,19 @@ describe("script flow service", () => {
       "人工接管",
       "结束"
     ]);
+    expect(result.value.steps.map((step) => step.flowStep)).toEqual([
+      "first_greeting",
+      "interest_screening",
+      "project_intro",
+      "registration_intent",
+      "send_register_link",
+      "wait_registration",
+      "telegram_confirm",
+      "telegram_download",
+      "collect_telegram",
+      "human_handoff",
+      "ended"
+    ]);
     expect(result.value.steps[4]).toMatchObject({ flowStep: "send_register_link", sendLink: true, sendInvite: true, sendTutorialImage: false });
   });
 

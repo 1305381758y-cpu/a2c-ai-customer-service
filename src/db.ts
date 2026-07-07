@@ -612,6 +612,15 @@ export function migrate(db: DatabaseSync): void {
   db.prepare("UPDATE customer_memories SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE script_flows SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
   db.prepare("UPDATE script_flow_steps SET country_id = merchant_id || ':default' WHERE country_id IS NULL OR country_id = ''").run();
+  db.prepare(`
+    UPDATE script_flow_steps
+    SET flow_step = 'first_greeting'
+    WHERE flow_step = 'interest_screening'
+      AND (
+        flow_name = '首次问候'
+        OR (flow_code = '1' AND sort_order = 1)
+      )
+  `).run();
 }
 
 function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {

@@ -5,9 +5,9 @@ export function normalizeScriptFlowStep(value: string): string {
   const compact = value.trim().toLowerCase().replace(/[\/\\|｜、，,;；:：\s_-]+/g, "");
   const dictionary: Record<string, string> = {
     a: "interest_screening",
-    "首次问候": "interest_screening",
-    first_greeting: "interest_screening",
-    greeting: "interest_screening",
+    "首次问候": "first_greeting",
+    first_greeting: "first_greeting",
+    greeting: "first_greeting",
     b: "interest_screening",
     "兴趣筛选": "interest_screening",
     "开场筛选": "interest_screening",
