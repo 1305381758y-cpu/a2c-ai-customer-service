@@ -251,7 +251,7 @@ export function asksForRegistrationSteps(text: string): boolean {
 }
 
 export function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {
-  if (!tutorialUrl || step !== "wait_registration") return false;
+  if (!needsInviteCode || !tutorialUrl || step !== "wait_registration") return false;
   if (isInboundImageOrScreenshot(text) || asksLookAtCurrentProblem(text) || asksHowToOpenLink(text) || reportsRegistrationBlocker(text)) return false;
   return asksForRegistrationSteps(text) ||
     /(教程|图文|圖片教程|图片教程|步骤图|流程图|不会注册|不會註冊|不懂注册|不懂註冊|注册.*不会|註冊.*不會|注册.*不懂|註冊.*不懂|怎么注册|怎麼註冊|如何注册|如何註冊|how.*register|registration.*tutorial|passo.*cadastro|como.*cadastrar)/i.test(text);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildStrictFlowResponse, normalizeReplyLanguage } from "../src/domain/strictFlowResponseBuilder.js";
-import type { Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
+import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
 const merchant: MerchantRecord = { id: "merchant-1", name: "测试商户", status: "active" };
 const country: MerchantCountryRecord = {
@@ -26,6 +26,25 @@ const config = loadConfig({
   A2C_APP_SECRET: "secret",
   REGISTRATION_TUTORIAL_IMAGE_URL: "https://cdn.example/tutorial.jpg"
 });
+const inviteCode: A2CInviteCodeRecord = {
+  id: 1,
+  merchantId: "merchant-1",
+  countryId: "country-1",
+  countryCode: "BR",
+  countryName: "巴西",
+  a2cAccountId: 1,
+  a2cAccountPhone: "agent-1",
+  code: "INV-1",
+  registerUrl: "https://register.example/?code={code}",
+  status: "reserved",
+  assignedCustomerKey: "customer-1",
+  assignedConversationId: "conv-1",
+  platformAccount: "",
+  assignedAt: "",
+  usedAt: "",
+  createdAt: "",
+  updatedAt: ""
+};
 
 function conversation(overrides: Partial<Conversation> = {}): Conversation {
   return {
@@ -86,10 +105,28 @@ describe("strict flow response builder", () => {
       analysis,
       customerText: "我不会注册呀",
       config,
+      inviteCode,
       strictFlowEnabled: true
     }, "zh", "wait_registration", "need_platform_register", "可以，我把注册步骤给您列清楚。", true);
 
     expect(result.tutorialImageRequested).toBe(true);
     expect(result.needsInviteCode).toBe(true);
+  });
+
+  it("does not request tutorial images when the invite code is missing", () => {
+    const analysis = analyzeMessage("我不会注册呀", "zh");
+    const result = buildStrictFlowResponse({
+      merchant,
+      country,
+      conversation: conversation(),
+      analysis,
+      customerText: "我不会注册呀",
+      config,
+      strictFlowEnabled: true
+    }, "zh", "wait_registration", "need_platform_register", "注册需要邀请码。我这边正在确认您的专属邀请码，请稍等。", true);
+
+    expect(result.tutorialImageRequested).toBe(false);
+    expect(result.needsInviteCode).toBe(true);
+    expect(result.fallback).toBe(true);
   });
 });

@@ -38,6 +38,7 @@ export function buildStrictFlowResponse(
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
   const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, (key, lineLanguage) => flowScriptLine(input, key, lineLanguage), debugIntent);
   const currentStep = normalizeFlowStep(input.conversation.flowStep);
+  const canSendRegistrationTutorialImage = Boolean(needsInviteCode && input.inviteCode);
   return {
     enabled: true,
     reply: actionableContent,
@@ -49,13 +50,13 @@ export function buildStrictFlowResponse(
     controlledQuestionType: controlled?.type ?? "none",
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
     contextualIntent,
-    tutorialImageRequested: shouldSendConfiguredRegistrationTutorialImage(input, needsInviteCode) ||
-      shouldSendRegistrationTutorialImage(input.customerText, currentStep, needsInviteCode, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
+    tutorialImageRequested: shouldSendConfiguredRegistrationTutorialImage(input, canSendRegistrationTutorialImage) ||
+      shouldSendRegistrationTutorialImage(input.customerText, currentStep, canSendRegistrationTutorialImage, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
   };
 }
 
 function shouldSendConfiguredRegistrationTutorialImage(input: StrictFlowInput, needsInviteCode: boolean): boolean {
-  if (!needsInviteCode || !input.config.REGISTRATION_TUTORIAL_IMAGE_URL) return false;
+  if (!needsInviteCode || !input.inviteCode || !input.config.REGISTRATION_TUTORIAL_IMAGE_URL) return false;
   const sendLinkStep = activeScriptStep(input, "send_register_link");
   return Boolean(sendLinkStep?.sendTutorialImage);
 }

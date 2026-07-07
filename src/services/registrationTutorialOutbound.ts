@@ -55,6 +55,7 @@ export async function sendRegistrationTutorialImage(input: {
 
 export function registrationTutorialCaption(language: string): string {
   if (language === "en") return "Here is the registration tutorial image. Follow it step by step, and send me the registered phone number after you finish.";
+  if (language === "es") return "Esta es la imagen del tutorial de registro. Siga los pasos de la imagen y, al terminar, envíeme el número de teléfono usado en el registro.";
   if (language === "pt-BR") return "Esta é a imagem do tutorial de cadastro. Siga passo a passo e, quando terminar, envie o telefone usado no cadastro.";
   return "这是注册教程图片。您按图片步骤操作，完成后把注册手机号发给我就可以。";
 }

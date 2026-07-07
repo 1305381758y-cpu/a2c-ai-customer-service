@@ -59,6 +59,6 @@ describe("registration tutorial outbound module", () => {
   it("uses localized captions for supported languages", () => {
     expect(registrationTutorialCaption("en")).toContain("registration tutorial image");
     expect(registrationTutorialCaption("pt-BR")).toContain("tutorial de cadastro");
-    expect(registrationTutorialCaption("es")).toContain("这是注册教程图片");
+    expect(registrationTutorialCaption("es")).toContain("imagen del tutorial");
   });
 });
