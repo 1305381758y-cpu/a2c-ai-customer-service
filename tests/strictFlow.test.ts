@@ -1231,7 +1231,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("human_handoff");
     expect(result.stage).toBe("ready_for_handoff");
     expect(result.handoffReason).toBe("客户反馈无法打开注册链接");
-    expect(result.reply).toContain("转人工");
+    expect(result.reply).toBe("我正在核实，请稍等。");
   });
 
   it("answers generic questions and look-at-this prompts without resending the registration package", () => {
