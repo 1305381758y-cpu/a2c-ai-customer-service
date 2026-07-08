@@ -171,7 +171,7 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   };
 }
 
-function countLinkLoadFailures(
+export function countLinkLoadFailures(
   history: Array<{ direction: string; content: string }>,
   customerText: string
 ): number {
