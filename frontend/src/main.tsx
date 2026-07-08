@@ -499,6 +499,14 @@ function Config({ platform }: { platform: boolean }) {
       setError(error instanceof Error ? error.message : "保存配置失败");
     }
   };
+  const saveConfigFlag = async (key: "smartReplyEnabled" | "trainingSimulationEnabled" | "strictScriptFlowEnabled", value: boolean, successMessage: string) => {
+    setMessage("");
+    setError("");
+    const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
+    setForm(saved);
+    setMessage(successMessage);
+    notify("success", successMessage);
+  };
   const syncA2CAccounts = async (skipSave = false) => {
     setMessage("");
     setError("");
@@ -572,15 +580,15 @@ function Config({ platform }: { platform: boolean }) {
     <div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div>
     <div className={`smart-reply-card ${form.smartReplyEnabled === false ? "off" : "on"}`}>
       <div><h3>智能自动回复</h3><p>{form.smartReplyEnabled === false ? "已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。" : "已开启：客户消息会自动调用 AI，并通过当前 A2C 客服账号回复。"}</p></div>
-      <button className={form.smartReplyEnabled === false ? "" : "ghost"} onClick={() => setForm({ ...form, smartReplyEnabled: form.smartReplyEnabled === false })}>{form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"}</button>
+      <AsyncButton className={form.smartReplyEnabled === false ? "" : "ghost"} busyText="保存中..." onClick={() => saveConfigFlag("smartReplyEnabled", form.smartReplyEnabled === false, form.smartReplyEnabled === false ? "智能回复已开启" : "智能回复已关闭")}>{form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"}</AsyncButton>
     </div>
     <div className={`smart-reply-card ${form.trainingSimulationEnabled ? "on" : "off"}`}>
       <div><h3>模拟训练模式</h3><p>{form.trainingSimulationEnabled ? "已开启：真实 A2C 消息只会进入内部训练并生成记录，不会真实回复客户，也不会通知接管群。" : "已关闭：真实 A2C 消息会按当前配置正常自动回复客户。"}</p></div>
-      <button className={form.trainingSimulationEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, trainingSimulationEnabled: !form.trainingSimulationEnabled })}>{form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"}</button>
+      <AsyncButton className={form.trainingSimulationEnabled ? "ghost" : ""} busyText="保存中..." onClick={() => saveConfigFlag("trainingSimulationEnabled", !form.trainingSimulationEnabled, form.trainingSimulationEnabled ? "模拟训练已关闭" : "模拟训练已开启")}>{form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"}</AsyncButton>
     </div>
     <div className={`smart-reply-card ${form.strictScriptFlowEnabled ? "on" : "off"}`}>
       <div><h3>话本流程</h3><p>{form.strictScriptFlowEnabled ? "已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。" : "已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"}</p></div>
-      <button className={form.strictScriptFlowEnabled ? "ghost" : ""} onClick={() => setForm({ ...form, strictScriptFlowEnabled: !form.strictScriptFlowEnabled })}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</button>
+      <AsyncButton className={form.strictScriptFlowEnabled ? "ghost" : ""} busyText="保存中..." onClick={() => saveConfigFlag("strictScriptFlowEnabled", !form.strictScriptFlowEnabled, form.strictScriptFlowEnabled ? "话本流程已关闭" : "话本流程已开启")}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</AsyncButton>
     </div>
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
     <div className="memory tutorial-upload-card">
@@ -1584,7 +1592,7 @@ function TrainingLoopPanel({
           <span>{lastOutboundPayload.scriptFlowName ? `话本流程：${lastOutboundPayload.scriptFlowName}` : lastOutboundPayload.strictFlowEnabled === true ? "系统流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "话本流程未启用" : "话本流程待判断"}</span>
           <span>引用样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条</span>
         </div>
-        <div className="confidence-row"><span>业务来源 <strong>{currentScriptStep ? "当前话本节点" : firstSample ? "训练样本" : firstReviewItem ? "复盘候选" : "待补充"}</strong></span><button onClick={() => setDraft(suggestedReply)}>使用回复</button><button className="ghost">微调后使用</button><ThumbsUp size={16}/><ThumbsDown size={16}/></div>
+        <div className="confidence-row"><span>业务来源 <strong>{currentScriptStep ? "当前话本节点" : firstSample ? "训练样本" : firstReviewItem ? "复盘候选" : "待补充"}</strong></span><button onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框"); }}>使用回复</button><button className="ghost" onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框", "请在发送前按客户情况微调。"); }}>微调后使用</button><button className="icon-only ghost" title="回复合适" onClick={() => notify("success", "已记录反馈", "这条建议会作为后续优化参考。")}><ThumbsUp size={16}/></button><button className="icon-only ghost" title="回复不合适" onClick={() => notify("info", "已记录反馈", "建议生成复盘后沉淀为改进样本。")}><ThumbsDown size={16}/></button></div>
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><BookOpen size={17}/><div><h3>匹配知识</h3><p>{conversation.countryName ? `${countryLabel(conversation.countryName)} · ${languageName(conversation.language)}` : "当前客户上下文"}</p></div><span className="status-pill ok">{firstKnowledge ? "已匹配" : "待补充"}</span></div>
@@ -1606,13 +1614,13 @@ function TrainingLoopPanel({
         {!review.items.length && trainingSamples.slice(0, 2).map((sample) => <article key={sample.id} className="sample-suggestion">
           <strong>{label(sample.intent)} · {label(sample.stage)}</strong>
           <p>{sample.standardReply}</p>
-          <button className="ghost" onClick={() => setDraft(sample.standardReply)}>引用</button>
+          <button className="ghost" onClick={() => { setDraft(sample.standardReply); notify("success", "样本已填入回复框"); }}>引用</button>
         </article>)}
         {!review.items.length && !trainingSamples.length && <article className="sample-suggestion"><strong>暂无样本命中</strong><p>当前阶段还没有训练样本。建议生成复盘或上传真实聊天记录。</p></article>}
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><Lightbulb size={17}/><div><h3>训练提升</h3><p>当前对话可沉淀为训练内容</p></div></div>
-        <div className="training-actions"><button className="ghost">不准确</button><button className="ghost">不完整</button>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
+        <div className="training-actions"><button className="ghost" onClick={() => notify("info", "已标记：不准确", "请点击“一键提升为训练样本”生成复盘候选后再处理。")}>不准确</button><button className="ghost" onClick={() => notify("info", "已标记：不完整", "请点击“一键提升为训练样本”补全复盘候选。")}>不完整</button>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
         <ConversationReviewCard platform={platform} data={review} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
       </section>
     </>}

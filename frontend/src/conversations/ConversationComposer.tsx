@@ -1,5 +1,6 @@
 import type React from "react";
 import { Image, Paperclip, Send, Smile } from "lucide-react";
+import { notify } from "../ui/toast";
 
 export type MessageDraft = {
   type: string;
@@ -53,9 +54,9 @@ export function ConversationComposer({
     </div>
     <div className="composer-footer">
       <div className="composer-tools">
-        <button type="button" className="ghost icon-only" title="表情"><Smile size={16}/></button>
-        <button type="button" className="ghost icon-only" title="图片"><Image size={16}/></button>
-        <button type="button" className="ghost icon-only" title="附件"><Paperclip size={16}/></button>
+        <button type="button" className="ghost icon-only" title="表情" onClick={() => notify("info", "表情功能暂未开放", "可以先直接在输入框里输入表情。")}><Smile size={16}/></button>
+        <button type="button" className="ghost icon-only" title="图片" onClick={() => { onChange({ ...value, type: "image" }); notify("success", "已切换为图片消息", "请在媒体链接里填写图片地址后发送。"); }}><Image size={16}/></button>
+        <button type="button" className="ghost icon-only" title="附件" onClick={() => { onChange({ ...value, type: "document" }); notify("success", "已切换为文件消息", "请在媒体链接里填写文件地址后发送。"); }}><Paperclip size={16}/></button>
         <select value={value.type} onChange={(event) => onChange({ ...value, type: event.target.value })}>
           {MESSAGE_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
