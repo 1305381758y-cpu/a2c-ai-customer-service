@@ -37,6 +37,29 @@ describe("repository module composer", () => {
     expect(accounts[0]?.countryId).toBe(defaultCountry.id);
   });
 
+  it("replaces stale A2C accounts when a merchant syncs new remote credentials", () => {
+    const modules = setupModules();
+    const merchant = modules.merchants.create("A2C替换测试商户");
+    modules.settings.ensureDefaultCountry(merchant.id);
+    const oldAccounts = modules.a2cAccounts.sync(merchant.id, [
+      { apiPhone: "old-a2c-1", verifiedName: "旧客服一" },
+      { apiPhone: "old-a2c-2", verifiedName: "旧客服二" }
+    ]);
+
+    modules.a2cAccounts.createInviteCode(oldAccounts[0]!.id, { code: "OLD1" }, merchant.id);
+
+    const newAccounts = modules.a2cAccounts.sync(merchant.id, [
+      { apiPhone: "new-a2c-1", verifiedName: "新客服一" }
+    ]);
+    const savedAccounts = modules.a2cAccounts.list({ merchantId: merchant.id });
+    const config = modules.settings.getConfig(merchant.id);
+
+    expect(newAccounts.map((account) => account.apiPhone)).toEqual(["new-a2c-1"]);
+    expect(savedAccounts.map((account) => account.apiPhone)).toEqual(["new-a2c-1"]);
+    expect(config.a2cAccountPhone).toBe("new-a2c-1");
+    expect(modules.a2cAccounts.listInviteCodes(oldAccounts[0]!.id, merchant.id)).toEqual([]);
+  });
+
   it("wires review candidate application back into training content", () => {
     const modules = setupModules();
     const merchant = modules.merchants.create("复盘装配商户");

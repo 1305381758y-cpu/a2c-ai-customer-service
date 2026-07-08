@@ -45,6 +45,7 @@ export class MerchantA2CAccountRepository {
   sync(merchantId: string, accounts: A2CAccount[]): MerchantA2CAccountRecord[] {
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
     const defaultCountryId = this.countries.defaultCountryId(merchantId);
+    const syncedPhones = Array.from(new Set(accounts.map((account) => String(account.apiPhone || "").trim()).filter(Boolean)));
     const upsert = this.db.sqlite.prepare(`
       INSERT INTO merchant_a2c_accounts
         (merchant_id, country_id, api_phone, waba_id, status, number_status, quality_rating, messaging_limit, verified_name, enabled, synced_at)
@@ -62,6 +63,22 @@ export class MerchantA2CAccountRepository {
     `);
     this.db.sqlite.exec("BEGIN");
     try {
+      const staleRows = this.db.sqlite
+        .prepare(`
+          SELECT id
+          FROM merchant_a2c_accounts
+          WHERE merchant_id = ?
+            ${syncedPhones.length ? `AND api_phone NOT IN (${syncedPhones.map(() => "?").join(",")})` : ""}
+        `)
+        .all(merchantId, ...syncedPhones) as Array<{ id: number }>;
+      for (const row of staleRows) {
+        this.db.sqlite
+          .prepare("DELETE FROM a2c_invite_codes WHERE merchant_id = ? AND a2c_account_id = ?")
+          .run(merchantId, row.id);
+        this.db.sqlite
+          .prepare("DELETE FROM merchant_a2c_accounts WHERE merchant_id = ? AND id = ?")
+          .run(merchantId, row.id);
+      }
       for (const account of accounts) {
         const apiPhone = String(account.apiPhone || "").trim();
         if (!apiPhone) continue;
