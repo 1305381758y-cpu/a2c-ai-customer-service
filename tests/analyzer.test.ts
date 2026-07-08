@@ -136,7 +136,10 @@ describe("message analyzer", () => {
       "Si ya termine",
       "Que hay que hacer?",
       "Cuanto tengo que invertir",
-      "Me manda el link"
+      "Me manda el link",
+      "Todavía no se puede cargar",
+      "Todavía no puedo abrirlo",
+      "No puedo acceder al enlace"
     ];
 
     for (const text of cases) {
