@@ -929,8 +929,8 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[4].flowStep).toBe("telegram_download");
     expect(replies[4]).toContain("Telegram");
     expect(replies[4]).not.toContain("WhatsApp");
-    expect(turns[5].flowStep).toBe("collect_telegram");
-    expect(replies[5]).toContain("老师的 Telegram 链接");
+    expect(turns[5].flowStep).toBe("telegram_download");
+    expect(replies[5]).toContain("Telegram");
     expect(turns[6].flowStep).toBe("human_handoff");
     expect(replies[6]).toContain("https://t.me/teacher");
     expect(replies[6]).toContain("老师");
@@ -984,8 +984,8 @@ describe("strict Aston Brazil flow", () => {
     expect(replies[3]).toContain("邀请码");
     expect(turns[4].flowStep).toBe("wait_registration");
     expect(turns[6].flowStep).toBe("telegram_download");
-    expect(turns[7].flowStep).toBe("collect_telegram");
-    expect(replies[7]).toContain("老师的 Telegram 链接");
+    expect(turns[7].flowStep).toBe("telegram_download");
+    expect(replies[7]).toContain("Telegram");
     expect(replies[7]).not.toContain("WhatsApp");
     expect(turns[8].flowStep).toBe("human_handoff");
     expect(replies[8]).toContain("https://t.me/teacher");
@@ -1047,8 +1047,8 @@ describe("strict Aston Brazil flow", () => {
     expect(turns[3].flowStep).toBe("telegram_confirm");
     expect(turns[4].flowStep).toBe("telegram_download");
     expect(replies[4]).toContain("baixe o Telegram");
-    expect(turns[5].flowStep).toBe("collect_telegram");
-    expect(replies[5]).toContain("link do Telegram da professora");
+    expect(turns[5].flowStep).toBe("telegram_download");
+    expect(replies[5]).toContain("Telegram");
     expect(turns[6].flowStep).toBe("human_handoff");
     expect(replies[6]).toContain("https://t.me/teacher");
     expect(replies[6]).toContain("professora");
@@ -1345,17 +1345,16 @@ describe("strict Aston Brazil flow", () => {
     expect(beforePhone.nextFlowStep).toBe("wait_registration");
 
     const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
-    expect(afterPhone.reply).toContain("https://t.me/teacher");
-    expect(afterPhone.reply).toContain("老师");
+    expect(afterPhone.reply).toContain("Telegram 是个聊天工具");
+    expect(afterPhone.reply).toContain("应用商店");
     expect(afterPhone.reply).not.toMatch(/微信|WeChat/i);
     expect(afterPhone.reply).not.toContain("先完成平台注册");
-    expect(afterPhone.nextFlowStep).toBe("human_handoff");
+    expect(afterPhone.nextFlowStep).toBe("telegram_download");
 
     const phoneAlreadySent = reply("手机号我已经发给你了", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
-    expect(phoneAlreadySent.reply).toContain("https://t.me/teacher");
     expect(phoneAlreadySent.reply).toContain("老师");
     expect(phoneAlreadySent.reply).not.toContain("注册手机号");
-    expect(phoneAlreadySent.nextFlowStep).toBe("human_handoff");
+    expect(phoneAlreadySent.nextFlowStep).toBe("collect_telegram");
   });
 
   it("removes regional chat app comparisons from naturalized Telegram explanations", () => {
@@ -1384,14 +1383,14 @@ describe("strict Aston Brazil flow", () => {
     expect(installed.contextualIntent?.intent).toBe("telegram_installed");
 
     const tgQuestion = reply("为什么要使用Telegram呢", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
-    expect(tgQuestion.nextFlowStep).toBe("human_handoff");
-    expect(tgQuestion.reply).toContain("https://t.me/teacher");
+    expect(tgQuestion.nextFlowStep).toBe("telegram_download");
+    expect(tgQuestion.reply).toContain("Telegram");
     expect(tgQuestion.reply).toContain("老师");
+    expect(tgQuestion.reply).not.toContain("https://t.me/teacher");
     expect(tgQuestion.reply).not.toMatch(/微信|WeChat/i);
 
     const acknowledgement = reply("ok", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
-    expect(acknowledgement.nextFlowStep).toBe("human_handoff");
-    expect(acknowledgement.reply).toContain("https://t.me/teacher");
+    expect(acknowledgement.nextFlowStep).toBe("collect_telegram");
     expect(acknowledgement.reply).toContain("老师");
     expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
   });
@@ -1408,6 +1407,50 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).toContain("profesora");
     expect(result.reply).not.toContain("¿Tiene la aplicación Telegram?");
     expect(result.reply).not.toContain("¿usted ya cuenta con una cuenta de Telegram");
+  });
+
+  it("does not skip Telegram download when Spanish customer says they do not have Telegram", () => {
+    const result = replyWithRuntime(
+      "No lo tengo, ¿por qué tengo que usar este software?",
+      { language: "es", flowStep: "telegram_confirm", extractedPhone: "37639628" },
+      { inviteCode, teacherTelegramLink: "https://t.me/profesora_bo" }
+    );
+
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).toContain("Telegram");
+    expect(result.reply).toMatch(/Play Store|App Store/i);
+    expect(result.reply).not.toContain("https://t.me/profesora_bo");
+    expect(result.reply).not.toContain("salario neto");
+  });
+
+  it("returns from Telegram steps to registration when customer says registration is not complete", () => {
+    const result = replyWithRuntime(
+      "Todavía no he logrado registrarme.",
+      { language: "es", flowStep: "telegram_confirm", extractedPhone: "37639628" },
+      { inviteCode, teacherTelegramLink: "https://t.me/profesora_bo" }
+    );
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.stage).toBe("need_platform_register");
+    expect(result.contextualIntent?.intent).toBe("not_registered");
+    expect(result.reply).toMatch(/registro|registr/i);
+    expect(result.reply).not.toContain("Telegram");
+    expect(result.reply).not.toContain("https://t.me/profesora_bo");
+  });
+
+  it("answers Spanish registration-step questions without advancing to Telegram", () => {
+    const result = replyWithRuntime(
+      "Ya pude abrirlo. ¿Cómo debo registrarme?",
+      { language: "es", flowStep: "wait_registration" },
+      { inviteCode }
+    );
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.stage).toBe("need_platform_register");
+    expect(result.reply).toContain("Pasos para registrarse");
+    expect(result.reply).toContain("Código de invitación");
+    expect(result.reply).not.toContain("¿Tiene la aplicación Telegram");
   });
 
   it("does not move to wait registration when the invite code pool is empty", () => {

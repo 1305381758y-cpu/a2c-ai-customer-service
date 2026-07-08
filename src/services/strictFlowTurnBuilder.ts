@@ -46,7 +46,7 @@ export function buildStrictFlowTurn(input: {
   const contextualIntent = input.contextualIntent.intent;
   const shouldPrepareTeacherLink =
     input.conversation.flowStep === "collect_telegram" ||
-    (input.conversation.flowStep === "telegram_download" && (contextualIntent === "telegram_installed" || contextualIntent === "positive_confirmation" || contextualIntent === "acknowledgement")) ||
+    (input.conversation.flowStep === "telegram_download" && (contextualIntent === "telegram_installed" || contextualIntent === "positive_confirmation")) ||
     (input.conversation.flowStep === "telegram_confirm" && (contextualIntent === "positive_confirmation" || contextualIntent === "acknowledgement"));
   const teacherTelegramLink = shouldPrepareTeacherLink
     ? input.repos.assignTeacherTgLinkForConversation(input.conversation, input.country.tgRegisterGuideUrl || input.runtimeConfig.TG_REGISTER_GUIDE_URL)?.url

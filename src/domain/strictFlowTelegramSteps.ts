@@ -1,8 +1,9 @@
 import type { ContextualIntentLabel, InternalIntentLabel } from "./analyzer.js";
-import { asksGenericQuestionPermission } from "./strictFlowPredicates.js";
+import { asksGenericQuestionPermission, asksTelegramExplanation } from "./strictFlowPredicates.js";
 import { buildStrictFlowResponse, naturalizeStrictReply } from "./strictFlowResponseBuilder.js";
 import { applyScriptVariables, configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { stageForFlowStep } from "./strictFlowState.js";
+import { joinReplyParts } from "./strictFlowReplyText.js";
 import {
   shouldAcknowledgeTelegramInstalled,
   shouldCollectTelegramUsername,
@@ -24,6 +25,15 @@ export interface TelegramStepReplyContext {
 }
 
 export function buildTelegramStepReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
+  if (context.contextualLabel === "not_registered") {
+    return buildStrictFlowResponse(
+      input,
+      context.language,
+      "wait_registration",
+      "need_platform_register",
+      naturalizeStrictReply(input, context.step, context.text, context.language, flowScriptLine(input, "not_registered_ack", context.language), "wait_registration", "not_registered")
+    );
+  }
   if (context.step === "telegram_confirm") return buildTelegramConfirmReply(input, context);
   if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
   return buildCollectTelegramReply(input, context);
@@ -38,7 +48,11 @@ function buildTelegramConfirmReply(input: StrictFlowInput, context: TelegramStep
   }
   if (negativeTelegram) {
     const nextStep = configuredNextFlowStep(input, "telegram_confirm", "telegram_download");
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), flowScriptLine(input, "telegram_download", language));
+    const explanation = contextualLabel === "ask_tg_register" || asksTelegramExplanation(text)
+      ? flowScriptLine(input, "telegram_explain_after_phone_ack", language)
+      : "";
+    const content = joinReplyParts(explanation, flowScriptLine(input, "telegram_download", language), language);
+    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_tg_register"), content);
   }
   if (shouldPauseTelegramFlow(contextualLabel, inferredIntent)) {
     return buildStrictFlowResponse(input, language, "telegram_confirm", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
@@ -57,12 +71,12 @@ function buildTelegramDownloadReply(input: StrictFlowInput, context: TelegramSte
     return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, line, language));
   }
   if (shouldGuideTelegramDownload(contextualLabel)) {
-    return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "collect_telegram", contextualLabel));
+    return buildStrictFlowResponse(input, language, "telegram_download", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "telegram_download", language), "telegram_download", contextualLabel));
   }
-  if (shouldAcknowledgeTelegramInstalled(contextualLabel, positive)) {
+  if (shouldAcknowledgeTelegramInstalled(contextualLabel, positive) && contextualLabel !== "acknowledgement") {
     return buildTelegramLinkReply(input, language);
   }
-  return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram", language), "collect_telegram", input.analysis.intent));
+  return buildStrictFlowResponse(input, language, "telegram_download", "need_tg_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "collect_telegram_wait", language), "telegram_download", input.analysis.intent));
 }
 
 function buildCollectTelegramReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
@@ -75,16 +89,17 @@ function buildCollectTelegramReply(input: StrictFlowInput, context: TelegramStep
   if (asksGenericQuestionPermission(text)) {
     return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "ask_question_prompt_tg", language));
   }
+  if (contextualLabel === "ask_tg_register" || asksTelegramExplanation(text)) {
+    const content = joinReplyParts(flowScriptLine(input, "telegram_explain_after_phone_ack", language), flowScriptLine(input, "telegram_download", language), language);
+    return buildStrictFlowResponse(input, language, "telegram_download", "need_tg_register", content);
+  }
   if (shouldPauseTelegramFlow(contextualLabel, inferredIntent)) {
     return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "refusal_ack", language));
   }
   if (negativeTelegram || contextualLabel === "need_help") {
     return buildStrictFlowResponse(input, language, "telegram_download", "need_tg_register", flowScriptLine(input, "telegram_download", language));
   }
-  if (shouldWaitForTelegramUsername(contextualLabel, positive)) {
-    return buildTelegramLinkReply(input, language);
-  }
-  if (telegramLink(input)) {
+  if (shouldWaitForTelegramUsername(contextualLabel, positive) && contextualLabel !== "acknowledgement") {
     return buildTelegramLinkReply(input, language);
   }
   return buildStrictFlowResponse(input, language, "collect_telegram", "need_tg_register", flowScriptLine(input, "collect_telegram_wait", language));

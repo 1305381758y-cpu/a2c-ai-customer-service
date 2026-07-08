@@ -62,7 +62,7 @@ export function lastAssistantContent(history: Array<Pick<ConversationMessageReco
 
 export function isContextualShortReply(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return normalized.length > 0 && normalized.length <= 12 && /^(我没有|没有|沒|沒有|无|無|不会|不會|装好了|安装好了|下载好了|好了|好的|好|ok|okay|明白|知道了|yes|no|não|nao|sim)$/i.test(normalized);
+  return normalized.length > 0 && normalized.length <= 24 && /^(我没有|没有|沒|沒有|无|無|不会|不會|装好了|安装好了|下载好了|好了|好的|好|ok|okay|明白|知道了|yes|no|no lo tengo|no tengo|todavía no|todavia no|aún no|aun no|não|nao|sim|sí|si)$/i.test(normalized);
 }
 
 export function normalizeShortReply(text: string): string {
@@ -71,7 +71,7 @@ export function normalizeShortReply(text: string): string {
 
 export function saysContextualNo(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return /^(我没有|没有|沒有|没|沒|无|無|还没有|還沒有|没有telegram|没有tg|沒有telegram|沒有tg|no|nope|não tenho|nao tenho|sem telegram)$/i.test(normalized);
+  return /^(我没有|没有|沒有|没|沒|无|無|还没有|還沒有|没有telegram|没有tg|沒有telegram|沒有tg|no|nope|no lo tengo|no la tengo|no tengo|no tengo telegram|no tengo tg|não tenho|nao tenho|sem telegram)$/i.test(normalized);
 }
 
 export function saysNotAvailable(text: string): boolean {
@@ -81,7 +81,8 @@ export function saysNotAvailable(text: string): boolean {
 
 export function saysNotRegistered(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return /^(我没有|没有|沒有|没|沒|还没|还没有|還沒|還沒有|没完成|沒有完成|没注册|沒有注册|没有注册|不会注册|no|not yet)$/i.test(normalized);
+  if (/^(我没有|没有|沒有|没|沒|还没|还没有|還沒|還沒有|没完成|沒有完成|没注册|沒有注册|没有注册|不会注册|no|not yet|todav[ií]a no|a[uú]n no)$/i.test(normalized)) return true;
+  return /(还没.*(注册|完成)|還沒.*(註冊|完成)|没有.*(注册|完成)|沒有.*(註冊|完成)|没.*注册成功|沒有.*註冊成功|not.*registered|not.*finished|not.*completed|haven'?t.*registered|todav[ií]a\s+no.*registr|a[uú]n\s+no.*registr|no\s+he\s+(logrado|podido)?\s*registr|no\s+me\s+he\s+registr|no\s+pude\s+(registr|complet)|no\s+he\s+(terminado|finalizado|completado)|no\s+termin[eé]|no\s+finalic[eé]|não\s+(consegui|terminei|finalizei).*cadastro|nao\s+(consegui|terminei|finalizei).*cadastro)/i.test(text);
 }
 
 export function saysTelegramInstalled(text: string): boolean {
@@ -121,7 +122,7 @@ export function isRegistrationDoneConfirmation(text: string): boolean {
 }
 
 export function saysNoTelegram(text: string): boolean {
-  return /(没有|沒有|无|不用|不会|不想|没有tg|没有 telegram|no telegram|don't have telegram|dont have telegram|sem telegram|não tenho telegram|nao tenho telegram|não tenho|nao tenho)/i.test(text.trim());
+  return /(没有|沒有|无|不用|不会|不想|没有tg|没有 telegram|no telegram|don't have telegram|dont have telegram|no lo tengo|no la tengo|no tengo telegram|no tengo tg|sem telegram|não tenho telegram|nao tenho telegram|não tenho|nao tenho)/i.test(text.trim());
 }
 
 export function asksForInviteOrLink(text: string, intent: string): boolean {
@@ -137,7 +138,7 @@ export function asksToChat(text: string): boolean {
 }
 
 export function asksTrustConcern(text: string): boolean {
-  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|骗子|騙子|欺骗|欺騙|诈骗|詐騙|safe|trust|real|scam|fraud|seguro|confiável|confiavel|golpe|verdade)/i.test(text);
+  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|骗子|騙子|欺骗|欺騙|诈骗|詐騙|违法|非法|走私|safe|trust|real|scam|fraud|illegal|contraband|seguro|confiável|confiavel|golpe|verdade|ilegal|contrabando|estafa|fraude)/i.test(text);
 }
 
 export function asksEarningConcern(text: string): boolean {
@@ -247,7 +248,7 @@ export function asksForMoreJobInfo(text: string): boolean {
 }
 
 export function asksForRegistrationSteps(text: string): boolean {
-  return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|registration steps|register.*steps|how.*register)/i.test(text);
+  return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|c[oó]mo.*registr|como.*registr|registrarme|registrarse|pasos.*registro|proceso.*registro|registration steps|register.*steps|how.*register)/i.test(text);
 }
 
 export function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {

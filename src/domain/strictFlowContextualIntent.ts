@@ -52,17 +52,20 @@ export function buildRuleContextualIntent(
   });
 
   if (!text) return base("unknown", { source: "none" });
-  if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
-  if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
   if (step === "wait_registration" && hasIncompleteRegistrationPhone(text)) {
     return base("incomplete_phone", { nextAction: "need_complete_phone", reason: "registration done with incomplete phone" });
   }
+  if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
+  if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
 
   if (step === "telegram_confirm" && saysContextualNo(text)) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
   }
   if (step === "collect_telegram" && saysTelegramUsernameMissing(text)) {
     return base("telegram_username_help", { answeredPreviousQuestion: true, nextAction: "guide telegram username setup", reason: "missing telegram username after username request" });
+  }
+  if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && saysNotRegistered(text)) {
+    return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "return_to_wait_registration", reason: "customer says registration is not complete" });
   }
   if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && asksTelegramUsernameHelp(text)) {
     return base("telegram_username_help", { answeredPreviousQuestion: Boolean(previousAssistantMessage), nextAction: "guide telegram username setup", reason: "telegram username help" });
