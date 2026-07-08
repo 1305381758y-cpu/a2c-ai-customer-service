@@ -47,10 +47,11 @@ export function registerInternalMaintenanceRoutes(app: FastifyInstance, deps: In
     if (body.confirm !== "RESTORE_CUSTOMERS_FROM_CONVERSATIONS") {
       return reply.code(400).send({ error: "invalid confirmation" });
     }
-    const backupPath = backupDatabaseFile(deps.config.DATABASE_URL);
+    const backup = backupDatabaseFile(deps.config.DATABASE_URL);
     return {
       ok: true,
-      backupPath,
+      backupPath: backup.path,
+      backupSkippedReason: backup.skippedReason,
       ...deps.repos.rebuildCustomersFromConversations()
     };
   });
@@ -92,11 +93,15 @@ export function registerInternalMaintenanceRoutes(app: FastifyInstance, deps: In
   });
 }
 
-function backupDatabaseFile(databaseUrl: string): string {
-  if (databaseUrl === ":memory:") return "";
+function backupDatabaseFile(databaseUrl: string): { path: string; skippedReason: string } {
+  if (databaseUrl === ":memory:") return { path: "", skippedReason: "memory database" };
   const dbPath = resolve(databaseUrl);
-  if (!existsSync(dbPath)) return "";
+  if (!existsSync(dbPath)) return { path: "", skippedReason: "database file not found" };
   const backupPath = `${dirname(dbPath)}/app.db.backup-customer-restore-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-  copyFileSync(dbPath, backupPath);
-  return backupPath;
+  try {
+    copyFileSync(dbPath, backupPath);
+    return { path: backupPath, skippedReason: "" };
+  } catch (error) {
+    return { path: "", skippedReason: error instanceof Error ? error.message : "backup failed" };
+  }
 }
