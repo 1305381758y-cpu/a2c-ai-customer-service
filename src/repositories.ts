@@ -112,6 +112,10 @@ export class Repositories {
     return this.maintenance.clearLearningAndCustomerData();
   }
 
+  rebuildCustomersFromConversations() {
+    return this.maintenance.rebuildCustomersFromConversations();
+  }
+
   createTrainingSample(merchantId: string, sample: ImportedTrainingSample, countryId = this.defaultCountryId(merchantId)): { id: number } {
     return this.trainingContent.createTrainingSample(merchantId, sample, countryId);
   }

@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { copyFileSync, existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { hashPassword } from "../auth.js";
 import type { AppConfig } from "../config.js";
@@ -40,6 +42,19 @@ export function registerInternalMaintenanceRoutes(app: FastifyInstance, deps: In
     };
   });
 
+  app.post<{ Body: { confirm?: string } }>("/internal/admin/rebuild-customers", { preHandler: auth(deps.config) }, async (request, reply) => {
+    const body = z.object({ confirm: z.string() }).parse(request.body ?? {});
+    if (body.confirm !== "RESTORE_CUSTOMERS_FROM_CONVERSATIONS") {
+      return reply.code(400).send({ error: "invalid confirmation" });
+    }
+    const backupPath = backupDatabaseFile(deps.config.DATABASE_URL);
+    return {
+      ok: true,
+      backupPath,
+      ...deps.repos.rebuildCustomersFromConversations()
+    };
+  });
+
   app.get<{ Querystring: { language?: string; intent?: string; stage?: string; enabled?: string } }>("/internal/training-samples", { preHandler: auth(deps.config) }, async (request) => ({
     rows: deps.repos.listTrainingSamples({
       language: request.query.language,
@@ -75,4 +90,13 @@ export function registerInternalMaintenanceRoutes(app: FastifyInstance, deps: In
     if (!conversation) return reply.code(404).send({ error: "conversation not found" });
     return { conversation, rows: deps.repos.listConversationMessages(request.params.id, request.query.limit ? Number(request.query.limit) : 50) };
   });
+}
+
+function backupDatabaseFile(databaseUrl: string): string {
+  if (databaseUrl === ":memory:") return "";
+  const dbPath = resolve(databaseUrl);
+  if (!existsSync(dbPath)) return "";
+  const backupPath = `${dirname(dbPath)}/app.db.backup-customer-restore-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  copyFileSync(dbPath, backupPath);
+  return backupPath;
 }

@@ -52,6 +52,58 @@ describe("merchantCustomers service", () => {
     expect(result.total).toBe(3);
   });
 
+  it("rebuilds the customer index from existing conversations without deleting conversation data", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("客户恢复商户");
+    const firstConversation = repos.getOrCreateConversation("restore-customer", "a2c-1", "恢复客户", merchant.id);
+    const secondConversation = repos.getOrCreateConversation("restore-customer", "a2c-2", "恢复客户新版", merchant.id);
+    repos.updateConversation({
+      ...secondConversation,
+      language: "es",
+      stage: "ready_for_handoff",
+      extractedPhone: "59112345678",
+      extractedTelegram: "@restored",
+      status: "human_handoff"
+    });
+    repos.insertMessage({
+      conversationId: firstConversation.id,
+      direction: "inbound",
+      externalId: "restore-message-1",
+      content: "hola",
+      msgType: "text",
+      language: "es",
+      intent: "greeting"
+    });
+
+    expect(listMerchantCustomers(repos, merchant.id, {}).rows).toHaveLength(0);
+
+    const result = repos.rebuildCustomersFromConversations();
+
+    expect(result).toMatchObject({
+      customersBefore: 0,
+      conversationCustomers: 1,
+      customersAfter: 1,
+      restoredCustomers: 1
+    });
+    expect(repos.listConversations({ merchantId: merchant.id })).toHaveLength(2);
+    expect(repos.listConversationMessages(firstConversation.id)).toHaveLength(1);
+    expect(listMerchantCustomers(repos, merchant.id, {}).rows[0]).toMatchObject({
+      merchantId: merchant.id,
+      customerKey: "restore-customer",
+      nickname: "恢复客户新版",
+      firstA2CAccountPhone: "a2c-1",
+      lastA2CAccountPhone: "a2c-2",
+      language: "es",
+      stage: "ready_for_handoff",
+      extractedPhone: "59112345678",
+      extractedTelegram: "@restored",
+      status: "human_handoff",
+      conversationCount: 2,
+      lastConversationId: secondConversation.id
+    });
+  });
+
   it("hard deletes a merchant customer and all of their conversations", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);
