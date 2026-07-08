@@ -31,6 +31,7 @@ const merchantConfig: MerchantConfigRecord = {
   a2cTokenCacheKey: "",
   a2cAccessToken: "",
   a2cTokenExpiresAt: 0,
+  a2cAuthBlockedUntil: 0,
   smartReplyEnabled: true,
   trainingSimulationEnabled: false,
   strictScriptFlowEnabled: true,

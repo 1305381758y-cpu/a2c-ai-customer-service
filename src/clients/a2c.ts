@@ -17,6 +17,8 @@ const tokenCache = new Map<string, TokenCacheEntry>();
 export interface A2CTokenStore {
   get(cacheKey: string): { accessToken: string; expiresAt: number } | undefined;
   set(cacheKey: string, accessToken: string, expiresAt: number): void;
+  getAuthBlockedUntil?(cacheKey: string): number | undefined;
+  setAuthBlockedUntil?(cacheKey: string, blockedUntil: number): void;
   clear?(cacheKey: string): void;
 }
 
@@ -129,6 +131,11 @@ export class A2CClient {
     if (cached?.authBlockedUntil && Date.now() < cached.authBlockedUntil) {
       throw new Error("A2C auth failed: Visit too frequently, please try again later");
     }
+    const storedAuthBlockedUntil = this.tokenStore?.getAuthBlockedUntil?.(cacheKey);
+    if (storedAuthBlockedUntil && Date.now() < storedAuthBlockedUntil) {
+      tokenCache.set(cacheKey, { ...cached, authBlockedUntil: storedAuthBlockedUntil });
+      throw new Error("A2C auth failed: Visit too frequently, please try again later");
+    }
 
     const pending = this.fetchToken(cacheKey);
     tokenCache.set(cacheKey, { ...cached, pending });
@@ -147,7 +154,9 @@ export class A2CClient {
       if (!response.ok || json.code !== 200 || !json.data?.accessToken) {
         if (isRateLimitedAuth(json.msg || response.statusText)) {
           const cached = tokenCache.get(cacheKey);
-          tokenCache.set(cacheKey, { ...cached, pending: undefined, authBlockedUntil: Date.now() + AUTH_RATE_LIMIT_COOLDOWN_MS });
+          const blockedUntil = Date.now() + AUTH_RATE_LIMIT_COOLDOWN_MS;
+          tokenCache.set(cacheKey, { ...cached, pending: undefined, authBlockedUntil: blockedUntil });
+          this.tokenStore?.setAuthBlockedUntil?.(cacheKey, blockedUntil);
         }
         throw new Error(`A2C auth failed: ${json.msg || response.statusText}`);
       }
@@ -155,6 +164,7 @@ export class A2CClient {
       this.expiresAt = Date.now() + A2C_TOKEN_TTL_MS;
       tokenCache.set(cacheKey, { accessToken: this.accessToken, expiresAt: this.expiresAt });
       this.tokenStore?.set(cacheKey, this.accessToken, this.expiresAt);
+      this.tokenStore?.setAuthBlockedUntil?.(cacheKey, 0);
       return this.accessToken;
     } catch (error) {
       const cached = tokenCache.get(cacheKey);

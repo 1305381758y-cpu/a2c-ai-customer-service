@@ -70,6 +70,7 @@ export interface MerchantConfigRecord {
   a2cTokenCacheKey: string;
   a2cAccessToken: string;
   a2cTokenExpiresAt: number;
+  a2cAuthBlockedUntil: number;
   smartReplyEnabled: boolean;
   trainingSimulationEnabled: boolean;
   strictScriptFlowEnabled: boolean;

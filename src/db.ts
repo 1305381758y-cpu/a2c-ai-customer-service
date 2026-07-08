@@ -62,6 +62,7 @@ export function migrate(db: DatabaseSync): void {
       a2c_token_cache_key TEXT DEFAULT '',
       a2c_access_token TEXT DEFAULT '',
       a2c_token_expires_at INTEGER DEFAULT 0,
+      a2c_auth_blocked_until INTEGER DEFAULT 0,
       smart_reply_enabled INTEGER DEFAULT 1,
       training_simulation_enabled INTEGER DEFAULT 0,
       strict_script_flow_enabled INTEGER DEFAULT 0,
@@ -528,6 +529,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "a2c_token_cache_key", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "a2c_access_token", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "a2c_token_expires_at", "INTEGER DEFAULT 0");
+  ensureColumn(db, "merchant_configs", "a2c_auth_blocked_until", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_configs", "ai_provider", "TEXT DEFAULT 'minimax'");
   ensureColumn(db, "merchant_configs", "minimax_api_key", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "minimax_model", "TEXT DEFAULT 'MiniMax-M3'");

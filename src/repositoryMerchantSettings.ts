@@ -71,10 +71,28 @@ export class MerchantSettingsRepository {
             SET a2c_token_cache_key = ?,
                 a2c_access_token = ?,
                 a2c_token_expires_at = ?,
+                a2c_auth_blocked_until = 0,
                 updated_at = CURRENT_TIMESTAMP
             WHERE merchant_id = ?
           `)
           .run(cacheKey, accessToken, expiresAt, merchantId);
+      },
+      getAuthBlockedUntil: (cacheKey) => {
+        const config = this.getConfig(merchantId);
+        if (config.a2cTokenCacheKey && config.a2cTokenCacheKey !== cacheKey) return undefined;
+        return config.a2cAuthBlockedUntil || undefined;
+      },
+      setAuthBlockedUntil: (cacheKey, blockedUntil) => {
+        this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+        this.db.sqlite
+          .prepare(`
+            UPDATE merchant_configs
+            SET a2c_token_cache_key = ?,
+                a2c_auth_blocked_until = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE merchant_id = ?
+          `)
+          .run(cacheKey, blockedUntil, merchantId);
       },
       clear: (cacheKey) => {
         const config = this.getConfig(merchantId);

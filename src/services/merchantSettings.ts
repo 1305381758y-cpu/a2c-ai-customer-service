@@ -25,7 +25,7 @@ export function patchMerchantAgentProfile(
 }
 
 export function maskConfig(config: MerchantConfigRecord): Record<string, unknown> {
-  const { a2cTokenCacheKey: _cacheKey, a2cAccessToken: _accessToken, a2cTokenExpiresAt: _expiresAt, ...safeConfig } = config;
+  const { a2cTokenCacheKey: _cacheKey, a2cAccessToken: _accessToken, a2cTokenExpiresAt: _expiresAt, a2cAuthBlockedUntil: _blockedUntil, ...safeConfig } = config;
   return {
     ...safeConfig,
     a2cAppSecret: maskSecret(config.a2cAppSecret),

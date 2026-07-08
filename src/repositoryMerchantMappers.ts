@@ -37,6 +37,7 @@ export function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigR
     a2cTokenCacheKey: String(row.a2c_token_cache_key ?? ""),
     a2cAccessToken: String(row.a2c_access_token ?? ""),
     a2cTokenExpiresAt: Number(row.a2c_token_expires_at ?? 0),
+    a2cAuthBlockedUntil: Number(row.a2c_auth_blocked_until ?? 0),
     smartReplyEnabled: Boolean(Number(row.smart_reply_enabled ?? 1)),
     trainingSimulationEnabled: Boolean(Number(row.training_simulation_enabled ?? 0)),
     strictScriptFlowEnabled: Boolean(Number(row.strict_script_flow_enabled ?? 0)),
