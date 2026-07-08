@@ -27,6 +27,7 @@ export interface StrictFlowInput {
   inviteCode?: A2CInviteCodeRecord;
   config: AppConfig;
   teacherTelegramLink?: string;
+  linkLoadFailureCount?: number;
   inferredIntent?: InternalIntentLabel;
   contextualIntent?: StrictContextualIntent;
   strictFlowEnabled?: boolean;
@@ -45,6 +46,7 @@ export interface StrictFlowReply {
   controlledQuestionFallback?: boolean;
   contextualIntent?: StrictContextualIntent;
   tutorialImageRequested?: boolean;
+  handoffReason?: string;
 }
 
 export interface StrictContextualIntent {

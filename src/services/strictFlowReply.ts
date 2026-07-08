@@ -19,6 +19,7 @@ import { sendRegistrationTutorialImage } from "./registrationTutorialOutbound.js
 import { sendStrictFlowTextOutbound } from "./strictFlowTextOutbound.js";
 import { buildStrictFlowTurn } from "./strictFlowTurnBuilder.js";
 import { completeConversationGoal } from "./conversationGoalCompletion.js";
+import { asksHowToOpenLink, reportsLinkLoadFailure } from "../domain/strictFlowPredicates.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -87,7 +88,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     inferredIntent,
     contextualIntent,
     scriptFlow,
-    strictFlowRuntime
+    strictFlowRuntime,
+    linkLoadFailureCount: countLinkLoadFailures(history, customerText)
   });
   const { strictReply, inviteCode } = flowTurn;
 
@@ -142,7 +144,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
       a2c,
       telegram,
       simulation,
-      sendVerificationReply: false
+      sendVerificationReply: false,
+      handoffReason: strictReply.handoffReason
     });
     return {
       handled: true,
@@ -166,4 +169,32 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed",
     conversationId: conversation.id
   };
+}
+
+function countLinkLoadFailures(
+  history: Array<{ direction: string; content: string }>,
+  customerText: string
+): number {
+  const normalizedCurrent = normalizeMessageContent(customerText);
+  let count = 0;
+  let currentAlreadyCounted = false;
+  for (const message of history) {
+    if (message.direction !== "inbound" || !isRegistrationLinkOpenFailure(message.content)) continue;
+    count += 1;
+    if (normalizeMessageContent(message.content) === normalizedCurrent) {
+      currentAlreadyCounted = true;
+    }
+  }
+  if (isRegistrationLinkOpenFailure(customerText) && !currentAlreadyCounted) {
+    count += 1;
+  }
+  return count;
+}
+
+function isRegistrationLinkOpenFailure(value: string): boolean {
+  return reportsLinkLoadFailure(value) || asksHowToOpenLink(value);
+}
+
+function normalizeMessageContent(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }

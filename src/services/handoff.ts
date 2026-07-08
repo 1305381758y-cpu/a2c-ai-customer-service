@@ -5,10 +5,11 @@ export function buildHandoffMessage(input: {
   lastMessageId: string;
   lastMessageTime: string;
   summary: string;
+  handoffReason?: string;
 }): string {
   const { conversation } = input;
-  return `客户已完成自动引导流程，请人工跟进。
-
+  const reason = input.handoffReason?.trim() ? `\n\n接管理由：${input.handoffReason.trim()}\n` : "\n";
+  return `客户已完成自动引导流程，请人工跟进。${reason}
 客户定位信息：
 - 客户发送账号名称：${displayValue(conversation.nickname)}
 - 客户发送账号号码：${displayValue(conversation.customerPhone)}

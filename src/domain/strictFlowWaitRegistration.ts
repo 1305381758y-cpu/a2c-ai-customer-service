@@ -38,6 +38,7 @@ export interface WaitRegistrationReplyContext {
 
 export function buildWaitRegistrationReply(input: StrictFlowInput, context: WaitRegistrationReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, negativeTelegram, asksLink, inferredIntent } = context;
+  const linkFailureHandoffReason = "客户反馈无法打开注册链接";
 
   if (contextualLabel === "incomplete_phone") {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
@@ -55,9 +56,31 @@ export function buildWaitRegistrationReply(input: StrictFlowInput, context: Wait
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "verification_code_ack", language));
   }
   if (reportsLinkLoadFailure(text)) {
+    if ((input.linkLoadFailureCount ?? 1) >= 2) {
+      return buildStrictFlowResponse(
+        input,
+        language,
+        "human_handoff",
+        "ready_for_handoff",
+        flowScriptLine(input, "link_load_failure_handoff_ack", language),
+        false,
+        linkFailureHandoffReason
+      );
+    }
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "link_load_failure_ack", language));
   }
   if (asksHowToOpenLink(text)) {
+    if ((input.linkLoadFailureCount ?? 1) >= 2) {
+      return buildStrictFlowResponse(
+        input,
+        language,
+        "human_handoff",
+        "ready_for_handoff",
+        flowScriptLine(input, "link_load_failure_handoff_ack", language),
+        false,
+        linkFailureHandoffReason
+      );
+    }
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "link_open_ack", language));
   }
   if (reportsRegistrationBlocker(text)) {

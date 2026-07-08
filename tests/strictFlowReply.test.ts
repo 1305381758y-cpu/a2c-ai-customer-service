@@ -80,7 +80,7 @@ describe("strict flow reply module", () => {
       inferredIntent: "positive_confirmation"
     });
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
-    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -133,7 +133,7 @@ describe("strict flow reply module", () => {
       inferredIntent: "need_help"
     });
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
-    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -186,7 +186,7 @@ describe("strict flow reply module", () => {
     }));
     const strictFlowRuntime: StrictFlowRuntimeEngine = { nextTurn };
     const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
-    const telegram = { sendHandoffMessage: vi.fn(async () => undefined) };
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
 
     const result = await generateAndRecordStrictFlowReply({
       ...context,
@@ -276,5 +276,54 @@ describe("strict flow reply module", () => {
     const outbound = context.repos.listConversationMessages(context.conversation.id, 10).find((message) => message.direction === "outbound");
     expect(outbound?.content).toContain("https://t.me/teacher");
     expect(outbound?.content).toContain("500 到 2800 BOB");
+  });
+
+  it("notifies Telegram with a reason after the second registration link load failure", async () => {
+    const context = setupConversation("wait_registration");
+    const analysis = analyzeMessage("链接还是打不开", "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "链接还是打不开"
+    });
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "链接还是打不开",
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-link-fail-2",
+        content: "链接还是打不开",
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-link-fail-2",
+      simulation: false,
+      strictFlowEnabled: true,
+      inferredIntent: "need_help",
+      contextualIntent,
+      learnedIntent: null,
+      history: [
+        { direction: "inbound", content: "链接打不开", intent: "ask_link", createdAt: "2026-07-08T10:00:00.000Z" },
+        { direction: "outbound", content: "您可以先换浏览器打开。", intent: "unknown", createdAt: "2026-07-08T10:00:05.000Z" }
+      ]
+    });
+
+    expect(result).toEqual({ handled: true, status: "strict_flow_handoff", conversationId: context.conversation.id });
+    expect(telegram.sendHandoffMessage).toHaveBeenCalledOnce();
+    expect(String(telegram.sendHandoffMessage.mock.calls[0][0])).toContain("接管理由：客户反馈无法打开注册链接");
+    const stored = context.repos.getConversation(context.conversation.id);
+    expect(stored?.status).toBe("human_handoff");
+    expect(stored?.flowStep).toBe("human_handoff");
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 10).find((message) => message.direction === "outbound");
+    expect(outbound?.rawPayload?.handoffReason).toBe("客户反馈无法打开注册链接");
   });
 });

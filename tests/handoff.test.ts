@@ -79,4 +79,17 @@ describe("buildHandoffMessage", () => {
     expect(message).toContain("- 国家/市场：默认国家");
     expect(message).toContain("- 最近消息时间：未识别");
   });
+
+  it("includes a handoff reason when provided", () => {
+    const message = buildHandoffMessage({
+      conversation: conversation(),
+      lastMessageId: "msg-2",
+      lastMessageTime: "2026-06-13T10:00:00.000Z",
+      summary: "inbound: 链接还是打不开",
+      handoffReason: "客户反馈无法打开注册链接"
+    });
+
+    expect(message).toContain("接管理由：客户反馈无法打开注册链接");
+    expect(message).toContain("客户定位信息：");
+  });
 });

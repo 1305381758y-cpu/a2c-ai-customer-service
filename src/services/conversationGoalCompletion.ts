@@ -31,6 +31,7 @@ export async function completeConversationGoal(input: {
   telegram: Pick<TelegramClient, "sendHandoffMessage">;
   simulation?: boolean;
   sendVerificationReply?: boolean;
+  handoffReason?: string;
   generateReview?: (conversationId: string, runtimeConfig: AppConfig) => Promise<unknown>;
 }): Promise<ConversationGoalCompletionResult> {
   const { repos, conversation, data, simulation = false } = input;
@@ -47,7 +48,8 @@ export async function completeConversationGoal(input: {
       conversation,
       telegram: input.telegram,
       lastMessageId: data.messageId,
-      lastMessageTime: new Date((data.timestamp || Date.now()) * 1000).toISOString()
+      lastMessageTime: new Date((data.timestamp || Date.now()) * 1000).toISOString(),
+      handoffReason: input.handoffReason
     });
   }
   repos.updateConversation(conversation);
@@ -108,6 +110,7 @@ async function notifyHandoffOnce(input: {
   telegram: Pick<TelegramClient, "sendHandoffMessage">;
   lastMessageId: string;
   lastMessageTime: string;
+  handoffReason?: string;
 }): Promise<void> {
   const { repos, conversation } = input;
   if (conversation.handoffNotified) return;
@@ -117,7 +120,8 @@ async function notifyHandoffOnce(input: {
     conversation,
     lastMessageId: input.lastMessageId,
     lastMessageTime: input.lastMessageTime,
-    summary
+    summary,
+    handoffReason: input.handoffReason
   });
   try {
     await input.telegram.sendHandoffMessage(message);

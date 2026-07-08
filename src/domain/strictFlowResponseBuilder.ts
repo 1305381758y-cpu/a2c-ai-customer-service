@@ -31,7 +31,8 @@ export function buildStrictFlowResponse(
   nextFlowStep: StrictFlowStep,
   stage: Conversation["stage"],
   content: string,
-  needsInviteCode = false
+  needsInviteCode = false,
+  handoffReason = ""
 ): StrictFlowReply {
   const actionableContent = sanitizeCustomerVisibleStrictReply(ensureActionableStrictContent(content, nextFlowStep, language, strictFlowScriptLine));
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
@@ -50,6 +51,7 @@ export function buildStrictFlowResponse(
     controlledQuestionType: controlled?.type ?? "none",
     controlledQuestionFallback: Boolean(controlled?.cautiousFallback),
     contextualIntent,
+    handoffReason,
     tutorialImageRequested: shouldSendConfiguredRegistrationTutorialImage(input, canSendRegistrationTutorialImage) ||
       shouldSendRegistrationTutorialImage(input.customerText, currentStep, canSendRegistrationTutorialImage, input.config.REGISTRATION_TUTORIAL_IMAGE_URL)
   };

@@ -30,6 +30,7 @@ export function buildStrictFlowTurn(input: {
   inferredIntent: InternalIntentLabel;
   contextualIntent: StrictContextualIntent;
   strictFlowRuntime?: StrictFlowRuntimeEngine;
+  linkLoadFailureCount?: number;
 }): StrictFlowTurnBuildResult {
   const needsInviteCode = strictFlowNeedsInviteCode({
     merchant: input.merchant,
@@ -63,7 +64,8 @@ export function buildStrictFlowTurn(input: {
     inferredIntent: input.inferredIntent,
     contextualIntent: input.contextualIntent,
     strictFlowEnabled: input.strictFlowEnabled,
-    scriptFlow: input.scriptFlow
+    scriptFlow: input.scriptFlow,
+    linkLoadFailureCount: input.linkLoadFailureCount
   });
 
   return {

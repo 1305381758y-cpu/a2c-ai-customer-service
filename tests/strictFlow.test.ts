@@ -1206,6 +1206,34 @@ describe("strict Aston Brazil flow", () => {
     expect(cannotOpen.nextFlowStep).toBe("wait_registration");
   });
 
+  it("hands off when the customer reports the registration link cannot open for the second time", () => {
+    const text = "链接还是打不开";
+    const conv = conversation({ language: "zh", flowStep: "wait_registration" });
+    const analysis = analyzeMessage(text, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: conv,
+      analysis,
+      customerText: text
+    });
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config,
+      contextualIntent,
+      linkLoadFailureCount: 2
+    });
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.handoffReason).toBe("客户反馈无法打开注册链接");
+    expect(result.reply).toContain("转人工");
+  });
+
   it("answers generic questions and look-at-this prompts without resending the registration package", () => {
     const question = reply("我有个问题你可以帮我解答吗", { language: "zh", flowStep: "wait_registration" });
     expect(question.reply).toContain("直接问");
