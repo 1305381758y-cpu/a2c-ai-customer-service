@@ -177,6 +177,38 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).not.toMatch(/registramos por aquí|nombre.*Telegram/i);
   });
 
+  it("does not naturalize customer-visible handoff acknowledgements", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Entiendo, le quedó en blanco total. Vamos a pasarlo con un compañero para que lo revise directo con usted.",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "Estoy verificándolo ahora. Espere un momento, por favor.",
+        language: "es",
+        nextFlowStep: "human_handoff",
+        stage: "ready_for_handoff",
+        handoffReason: "客户反馈无法打开注册链接",
+        controlledQuestionType: "link_open"
+      }),
+      customerText: "En blanco, no se puede cargar.",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe("Estoy verificándolo ahora. Espere un momento, por favor.");
+    expect(result.reply).not.toMatch(/compañero|pasarlo|revise directo/i);
+    expect(result.naturalized).toMatchObject({ used: false, error: "接管提示保留固定话术" });
+  });
+
   it("preserves active merchant script-flow wording instead of rewriting it like built-in copy", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({

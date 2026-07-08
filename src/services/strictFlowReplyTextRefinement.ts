@@ -41,6 +41,24 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
+  if (input.strictReply.nextFlowStep === "human_handoff") {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: false
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "接管提示保留固定话术"
+      },
+      languageGuard
+    };
+  }
+
   if (input.scriptFlow?.flow.active && shouldPreserveScriptFlowNodeText(input.strictReply)) {
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,
