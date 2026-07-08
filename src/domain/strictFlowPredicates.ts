@@ -166,7 +166,8 @@ export function asksWhyPhone(text: string): boolean {
 }
 
 export function asksRegistrationFieldQuestion(text: string): boolean {
-  return /(用户名.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|用户名称.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|姓名.*(要不要|需要|必须|必須|真实|真實)|真实.*名字|真名|手机号.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|手机号码.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|电话号码.*(真实|真實|自己的|本人)|電話號碼.*(真实|真實|自己的|本人)|密码.*(怎么填|怎麼填|填什么|填什麼|要求)|密碼.*(怎么填|怎麼填|填什么|填什麼|要求)|邮箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|郵箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|邀请码.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|邀請碼.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|页面.*字段|表单.*字段|username.*(real|name|fill)|phone.*(real|own|fill)|password.*fill|email.*fill|invite.*where|invite.*fill)/i.test(text);
+  return /(用户名.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|用户名称.*(真实|真名|名字|姓名|怎么填|怎麼填|填什么|填什麼)|姓名.*(要不要|需要|必须|必須|真实|真實)|真实.*名字|真名|手机号.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|手机号码.*(真实|真實|自己的|本人|怎么填|怎麼填|填什么|填什麼)|电话号码.*(真实|真實|自己的|本人)|電話號碼.*(真实|真實|自己的|本人)|密码.*(怎么填|怎麼填|填什么|填什麼|要求)|密碼.*(怎么填|怎麼填|填什么|填什麼|要求)|邮箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|郵箱.*(怎么填|怎麼填|填什么|填什麼|要不要)|邀请码.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|邀請碼.*(填哪|哪里填|哪裡填|怎么填|怎麼填)|页面.*字段|表单.*字段|username.*(real|name|fill)|phone.*(real|own|fill)|password.*fill|email.*fill|invite.*where|invite.*fill)/i.test(text) ||
+    /(nombre.*(real|verdadero|registr)|n[uú]mero.*(tel[eé]fono|celular).*(real|reales|verdadero|registr)|tel[eé]fono.*(real|reales|verdadero|registr)|celular.*(real|reales|verdadero|registr)|registrarme.*(nombre|tel[eé]fono|celular).*(real|reales|verdadero)|datos.*(real|reales|verdadero)|contraseñ?a.*(poner|llenar|enviar)|correo.*(poner|llenar)|c[oó]digo.*invitaci[oó]n.*(d[oó]nde|donde|poner|llenar))/i.test(text);
 }
 
 export function asksToAnswerPreviousQuestion(text: string): boolean {
@@ -176,13 +177,15 @@ export function asksToAnswerPreviousQuestion(text: string): boolean {
 export function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
-  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre)/i.test(text);
+  if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar)$/i.test(normalized)) return true;
+  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|(enlace|link).*no.*(abre|abrir|acceder)|no me deja.*(entrar|acceder).*(enlace|link))/i.test(text);
 }
 
 export function reportsLinkLoadFailure(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
-  return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|没内容|沒有內容)|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load)/i.test(text);
+  if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar)$/i.test(normalized)) return true;
+  return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|没内容|沒有內容)|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|(enlace|link).*no.*(carga|abre|abrir|acceder)|p[aá]gina.*no.*(carga|abre)|no carga.*(p[aá]gina|enlace|link))/i.test(text);
 }
 
 export function asksGenericQuestionPermission(text: string): boolean {

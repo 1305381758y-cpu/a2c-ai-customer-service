@@ -1234,6 +1234,34 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).toBe("我正在核实，请稍等。");
   });
 
+  it("hands off when a Spanish customer reports the registration link cannot be accessed twice", () => {
+    const text = "No puedo acceder al enlace.";
+    const conv = conversation({ language: "es", flowStep: "wait_registration" });
+    const analysis = analyzeMessage(text, "es");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: conv,
+      analysis,
+      customerText: text
+    });
+
+    const result = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config,
+      contextualIntent,
+      linkLoadFailureCount: 2
+    });
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.handoffReason).toBe("客户反馈无法打开注册链接");
+    expect(result.reply).toContain("Espere un momento");
+  });
+
   it("answers generic questions and look-at-this prompts without resending the registration package", () => {
     const question = reply("我有个问题你可以帮我解答吗", { language: "zh", flowStep: "wait_registration" });
     expect(question.reply).toContain("直接问");
@@ -1273,6 +1301,16 @@ describe("strict Aston Brazil flow", () => {
     const cannotLoadContent = reply("我说我打不开链接无法加载内容", { language: "zh", flowStep: "wait_registration" });
     expect(cannotLoadContent.reply).toContain("链接页面加载不出来");
     expect(cannotLoadContent.reply).not.toContain("卡在打开链接、填写手机号");
+  });
+
+  it("answers Spanish registration field questions in wait registration without resending the link package", () => {
+    const result = reply("¿Necesito registrarme con mi nombre y número de teléfono reales?", { language: "es", flowStep: "wait_registration" });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("teléfono");
+    expect(result.reply).not.toContain("Enlace de registro");
+    expect(result.reply).not.toContain("Código de invitación");
+    expect(result.reply).not.toContain("https://register.example");
   });
 
   it("treats inbound registration screenshots as a registration blocker instead of missing invite", () => {

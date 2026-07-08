@@ -450,6 +450,9 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
   if (asksCustomerForInviteCode(cleaned)) {
     return fallback;
   }
+  if (asksForUnsupportedManualRegistration(cleaned)) {
+    return fallback;
+  }
   if (!allowLinkOrInvite) {
     cleaned = cleaned
       .replace(/https?:\/\/\S+/gi, "")
@@ -468,6 +471,10 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
 
 function asksCustomerForInviteCode(text: string): boolean {
   return /(把|发|提供|告诉|给我|給我).{0,12}(邀请码|邀請碼|invite code|invitation code|c[oó]digo de invitaci[oó]n|c[oó]digo de convite)|((有|手边|手邊|a mano|tiene|tenga).{0,20}(邀请码|邀請碼|invite code|invitation code|c[oó]digo de invitaci[oó]n|c[oó]digo de convite))|(?:me lo puede facilitar|puede facilitarme|env[ií]eme|m[aá]ndeme).{0,30}(c[oó]digo|invitaci[oó]n)|(c[oó]digo|invitaci[oó]n).{0,60}(facilitar|a mano|tiene|tenga)/i.test(text);
+}
+
+function asksForUnsupportedManualRegistration(text: string): boolean {
+  return /(registramos|registrarlo|registrarle|lo registro|la registro|register you|sign you up|帮您登记|幫您登記|帮你登记|帮您注册|幫您註冊|帮你注册).{0,80}(por aqu[ií]|aqu[ií]|here|这里|這裡)|(?:nombre|name|姓名).{0,40}(tel[eé]fono|phone|手机号|手机号码).{0,40}(telegram|tg)/i.test(text);
 }
 
 function looksLikeStructuredAiPayload(text: string): boolean {

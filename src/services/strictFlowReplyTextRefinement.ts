@@ -70,8 +70,9 @@ export async function refineStrictFlowReplyText(input: {
     agentProfile: input.agentProfile
   });
 
+  const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
   const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-    reply: naturalized.reply,
+    reply: safeNaturalizedReply.reply,
     targetLanguage: input.strictReply.language,
     flowStep: input.strictReply.nextFlowStep,
     allowLinkOrInvite: input.strictReply.needsInviteCode
@@ -79,7 +80,11 @@ export async function refineStrictFlowReplyText(input: {
 
   return {
     reply: languageGuard.reply,
-    naturalized,
+    naturalized: safeNaturalizedReply.rejected ? {
+      reply: input.strictReply.reply,
+      used: false,
+      error: "口语化改写越过流程边界，已回退"
+    } : naturalized,
     languageGuard
   };
 }
@@ -88,4 +93,15 @@ function shouldPreserveScriptFlowNodeText(strictReply: StrictFlowReply): boolean
   const questionType = strictReply.controlledQuestionType || "none";
   if (strictReply.controlledQuestionFallback) return false;
   return questionType === "none";
+}
+
+function sanitizeStrictNaturalizedReply(reply: string, fallback: string): { reply: string; rejected: boolean } {
+  if (asksForUnsupportedManualRegistration(reply)) {
+    return { reply: fallback, rejected: true };
+  }
+  return { reply, rejected: false };
+}
+
+function asksForUnsupportedManualRegistration(text: string): boolean {
+  return /(registramos|registrarlo|registrarle|lo registro|la registro|register you|sign you up|帮您登记|幫您登記|帮你登记|帮您注册|幫您註冊|帮你注册).{0,80}(por aqu[ií]|aqu[ií]|here|这里|這裡)|(?:nombre|name|姓名).{0,40}(tel[eé]fono|phone|手机号|手机号码).{0,40}(telegram|tg)/i.test(text);
 }

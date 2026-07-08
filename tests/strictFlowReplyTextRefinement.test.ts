@@ -150,6 +150,33 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: false, error: "邀请码未分配时跳过口语化改写" });
   });
 
+  it("rejects naturalized replies that offer unsupported manual registration", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Entiendo, si no logra abrirlo, lo registramos por aquí sin problema. Confírmeme su nombre, número de teléfono y usuario de Telegram.",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "Entiendo, la página del enlace no carga; pruebe cambiar de navegador o red. Si sigue igual, reviso el enlace.",
+        language: "es",
+        controlledQuestionType: "link_open"
+      }),
+      customerText: "No puedo acceder al enlace.",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).toBe("Entiendo, la página del enlace no carga; pruebe cambiar de navegador o red. Si sigue igual, reviso el enlace.");
+    expect(result.reply).not.toMatch(/registramos por aquí|nombre.*Telegram/i);
+  });
+
   it("preserves active merchant script-flow wording instead of rewriting it like built-in copy", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
