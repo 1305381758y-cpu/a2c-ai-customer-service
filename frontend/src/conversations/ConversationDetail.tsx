@@ -6,6 +6,7 @@ import { AsyncButton } from "../ui/components.js";
 import { localizeSystemText } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { ConversationChatColumn } from "./ConversationChatColumn.js";
+import { conversationDetailEndpoints, detailFlowStep, lastOutboundPayload, resetSentDraft, textSuggestionDraft } from "./ConversationDetailHelpers.js";
 import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
 
 export function ConversationDetail({ platform = false, conversation, refresh, onDeleted }: { platform?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
@@ -25,10 +26,11 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
   const [reviewError, setReviewError] = useState("");
   const [contextError, setContextError] = useState("");
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const endpoints = conversationDetailEndpoints(platform, conversation.id);
   const loadMessages = async (showLoading = false) => {
     if (showLoading) setMessagesLoading(true);
     try {
-      const res = await api<{ rows: ChatMessage[] }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages?limit=100`);
+      const res = await api<{ rows: ChatMessage[] }>(endpoints.messages);
       setMessages(res.rows);
       setMessagesError("");
     } catch (err) {
@@ -38,7 +40,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
     }
   };
   useEffect(() => {
-    if (!platform) api(`/api/merchant/conversations/${conversation.id}/read`, { method: "POST" }).then(() => refresh()).catch(() => null);
+    if (!platform) api(endpoints.read, { method: "POST" }).then(() => refresh()).catch(() => null);
     void loadMessages(true);
     const timer = window.setInterval(() => void loadMessages(), 3000);
     return () => window.clearInterval(timer);
@@ -49,7 +51,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
   }, [messages.length, conversation.id]);
   useEffect(() => {
     setMemoryError("");
-    api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => {
+    api<CustomerMemory>(endpoints.memory).then((item) => {
       setMemory(item);
       setNotes(item.operatorNotes || "");
     }).catch((err) => {
@@ -61,7 +63,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
   const loadReview = async () => {
     setReviewError("");
     try {
-      setReview(await api<ConversationReviewResponse>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/review`));
+      setReview(await api<ConversationReviewResponse>(endpoints.review));
     } catch (err) {
       setReview({ review: null, items: [] });
       setReviewError(err instanceof Error ? err.message : "对话复盘加载失败");
@@ -105,16 +107,16 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
     void loadBusinessContext();
     return () => { cancelled = true; };
   }, [conversation.countryId, conversation.stage, conversation.language, platform]);
-  const memoryUrl = `${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`;
-  const lastOutboundPayload = [...messages].reverse().find((item) => item.direction === "outbound")?.rawPayload || {};
-  const strictEnabled = lastOutboundPayload.strictFlowEnabled;
-  const flowStep = conversation.flowStep || lastOutboundPayload.strictFlowStep || "未识别";
+  const memoryUrl = endpoints.memory;
+  const outboundPayload = lastOutboundPayload(messages);
+  const strictEnabled = outboundPayload.strictFlowEnabled;
+  const flowStep = detailFlowStep(conversation, outboundPayload);
   const currentScriptStep = currentFlowStep(scriptFlow, flowStep);
   const quickReplies = buildBusinessQuickReplies(currentScriptStep, trainingSamples, knowledgeItems);
   const generate = async () => {
     setError("");
     setStatusMessage("正在生成对话复盘...");
-    await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/review`, { method: "POST" });
+    await api(endpoints.review, { method: "POST" });
     await loadReview();
     setStatusMessage("对话复盘已生成。");
   };
@@ -137,8 +139,8 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
     setError("");
     setStatusMessage("");
     try {
-      await api(`/api/merchant/conversations/${conversation.id}/send`, { method: "POST", body: JSON.stringify(send) });
-      setSend({ ...send, content: "", url: "", caption: "" });
+      await api(endpoints.send, { method: "POST", body: JSON.stringify(send) });
+      setSend(resetSentDraft(send));
       setStatusMessage("消息已发送。");
       await loadMessages();
     } catch (err) {
@@ -155,7 +157,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
       messagesError={messagesError}
       error={error}
       statusMessage={statusMessage}
-      lastOutboundPayload={lastOutboundPayload}
+      lastOutboundPayload={outboundPayload}
       strictEnabled={strictEnabled}
       flowStep={flowStep}
       scriptFlow={scriptFlow}
@@ -174,7 +176,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
       platform={platform}
       conversation={conversation}
       flowStep={flowStep}
-      lastOutboundPayload={lastOutboundPayload}
+      lastOutboundPayload={outboundPayload}
       scriptFlow={scriptFlow}
       currentScriptStep={currentScriptStep}
       trainingSamples={trainingSamples}
@@ -190,7 +192,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
       saveMemoryAction={saveMemoryAction}
       onGenerate={generate}
       onApply={apply}
-      setDraft={(content) => setSend({ ...send, type: "text", content, url: "", caption: "智能建议" })}
+      setDraft={(content) => setSend(textSuggestionDraft(send, content))}
     />
   </div>;
 }
