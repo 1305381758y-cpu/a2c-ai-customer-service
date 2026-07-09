@@ -54,6 +54,81 @@ describe("script flow service", () => {
     expect(repos.getMerchantConfig(merchant.id).strictScriptFlowEnabled).toBe(true);
   });
 
+  it("rejects enabling a script flow with broken node rules", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("启用校验商户");
+    const flow = createTwoStepFlow(repos, merchant.id);
+
+    repos.patchScriptFlowStep(flow.steps[0].id, merchant.id, { standardReply: "" }, "运营");
+
+    expect(enableScriptFlow(repos, String(flow.flow.id), merchant.id, "运营")).toEqual({
+      ok: false,
+      statusCode: 400,
+      error: "话本流程暂不能启用：兴趣筛选 缺少客服标准话术"
+    });
+  });
+
+  it("rejects activating a broken script flow through basic info editing", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("状态启用校验商户");
+    const flow = createTwoStepFlow(repos, merchant.id);
+    repos.patchScriptFlowStep(flow.steps[0].id, merchant.id, { standardReply: "" }, "运营");
+
+    expect(patchScriptFlow(repos, String(flow.flow.id), merchant.id, { status: "active" }, "运营")).toEqual({
+      ok: false,
+      statusCode: 400,
+      error: "话本流程暂不能启用：兴趣筛选 缺少客服标准话术"
+    });
+  });
+
+  it("rejects enabling a script flow with missing next step references", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("跳转校验商户");
+    const flow = createTwoStepFlow(repos, merchant.id);
+
+    repos.patchScriptFlowStep(flow.steps[0].id, merchant.id, { nextFlowCode: "不存在", nextFlowStep: "telegram_confirm" }, "运营");
+
+    const result = enableScriptFlow(repos, String(flow.flow.id), merchant.id, "运营");
+    expect(result).toMatchObject({ ok: false, statusCode: 400 });
+    if (result.ok) throw new Error("expected validation error");
+    expect(result.error).toContain("下一流程编号“不存在”不存在");
+    expect(result.error).toContain("下一系统步骤 确认TG（telegram_confirm） 不存在");
+  });
+
+  it("rejects enabling a script flow when registration or teacher TG variables are incomplete", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("变量校验商户");
+    const flow = repos.createScriptFlow(merchant.id, {
+      name: "变量错误话本",
+      steps: [
+        {
+          flowCode: "A",
+          flowName: "发送链接",
+          flowStep: "send_register_link",
+          standardReply: "请打开这个入口注册。",
+          sendLink: true,
+          sendInvite: false,
+          sortOrder: 1
+        },
+        {
+          flowCode: "B",
+          flowName: "发送TG链接",
+          flowStep: "collect_telegram",
+          standardReply: "我会给您老师链接。",
+          sortOrder: 2
+        }
+      ],
+      createdBy: "测试员"
+    });
+
+    const result = enableScriptFlow(repos, String(flow.flow.id), merchant.id, "运营");
+    expect(result).toMatchObject({ ok: false, statusCode: 400 });
+    if (result.ok) throw new Error("expected validation error");
+    expect(result.error).toContain("发送链接 发送注册信息时需要同时开启注册链接和邀请码");
+    expect(result.error).toContain("发送链接 已开启发链接，但话术里缺少 {{REGISTER_URL}} 或 {{INVITE_DISPLAY}}");
+    expect(result.error).toContain("发送TG链接 是发送TG链接节点，话术里需要包含 {{TG_LINK}}");
+  });
+
   it("creates the built-in 11-step strict business flow as editable draft", () => {
     const repos = new Repositories(openDb(":memory:"));
     const merchant = repos.createMerchant("内置流程商户");

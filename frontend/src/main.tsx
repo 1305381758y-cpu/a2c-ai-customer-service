@@ -964,6 +964,8 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   const [selectedStep, setSelectedStep] = useState<ScriptFlowStep | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [flowName, setFlowName] = useState("");
+  const [enableError, setEnableError] = useState("");
+  const validationWarnings = useMemo(() => detail ? validateScriptFlowDraft(detail.steps) : [], [detail]);
   const reload = async () => {
     setRowsLoading(true);
     setRowsError(null);
@@ -979,6 +981,7 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   useEffect(() => { void reload(); }, [rowsUrl]);
   const loadDetail = async (flow: ScriptFlow) => {
     setSelected(flow);
+    setEnableError("");
     const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${flow.id}`);
     setDetail(next);
     setSelectedStep(next.steps[0] || null);
@@ -1019,6 +1022,19 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
     setSelected(next.flow);
     setSelectedStep((current) => next.steps.find((step) => step.id === current?.id) || next.steps[0] || null);
     await reload();
+  };
+  const enableFlow = async () => {
+    if (!detail) return;
+    setEnableError("");
+    try {
+      await api(`${base}/${detail.flow.id}/enable`, { method: "POST" });
+      notify("success", "话本流程已启用", "后续新客户会优先按这个流程推进。");
+      await refreshDetail();
+    } catch (error) {
+      const message = translateSystemMessage(error instanceof Error ? error.message : "启用失败");
+      setEnableError(message);
+      throw error;
+    }
   };
   const addStep = async () => {
     if (!detail) return;
@@ -1082,7 +1098,7 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
             <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
           </div>
           <div className="toolbar">
-            <AsyncButton busyText="启用中..." onClick={async () => { await api(`${base}/${detail.flow.id}/enable`, { method: "POST" }); notify("success", "话本流程已启用"); await refreshDetail(); }}>启用流程</AsyncButton>
+            <AsyncButton busyText="启用中..." onClick={enableFlow}>启用流程</AsyncButton>
             <ConfirmActionButton
               className="danger"
               busyText="删除中..."
@@ -1095,6 +1111,11 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
             </ConfirmActionButton>
           </div>
         </div>
+        {enableError && <div className="warning action-warning" role="alert"><strong>启用失败</strong><span>{enableError}</span></div>}
+        {validationWarnings.length > 0 && <div className="notice action-warning" role="status">
+          <strong>启用前建议检查</strong>
+          <span>{validationWarnings.slice(0, 5).join("；")}</span>
+        </div>}
         <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
         <div className="script-flow-columns">
           <div className="script-step-list">
@@ -1277,6 +1298,33 @@ function IntentLearning({ platform = false, timeMode }: { platform?: boolean; ti
       </div> : <div className="empty-chat"><h3>选择一个候选意图</h3><p>左侧显示的是系统自动发现的识别盲区。选择后可以查看样例、确认它属于什么意图，并标记处理状态。</p></div>}
     </section>
   </div>;
+}
+
+function validateScriptFlowDraft(steps: ScriptFlowStep[]): string[] {
+  const enabledSteps = steps.filter((step) => step.enabled).sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+  if (!enabledSteps.length) return ["至少需要 1 个启用节点"];
+  const codes = new Set(enabledSteps.map((step) => step.flowCode?.trim()).filter(Boolean));
+  const flowSteps = new Set(enabledSteps.map((step) => step.flowStep?.trim()).filter(Boolean));
+  const warnings: string[] = [];
+  const seenCodes = new Set<string>();
+  for (const step of enabledSteps) {
+    const code = step.flowCode?.trim();
+    if (code && seenCodes.has(code)) warnings.push(`流程编号重复：${code}`);
+    if (code) seenCodes.add(code);
+    const name = step.flowName || step.flowCode || "未命名节点";
+    if (!step.standardReply?.trim()) warnings.push(`${name} 缺少客服标准话术`);
+    if ((step.sendLink || step.sendInvite) && !(step.sendLink && step.sendInvite)) warnings.push(`${name} 发注册信息时需要同时开启链接和邀请码`);
+    if (step.sendLink && !scriptTextIncludes(step.standardReply, ["{{REGISTER_URL}}", "{{INVITE_DISPLAY}}"])) warnings.push(`${name} 缺少注册链接变量`);
+    if (step.sendInvite && !scriptTextIncludes(step.standardReply, ["{{INVITE_CODE}}", "{{INVITE_DISPLAY}}"])) warnings.push(`${name} 缺少邀请码变量`);
+    if (step.flowStep === "collect_telegram" && !scriptTextIncludes(step.standardReply, ["{{TG_LINK}}", "{{TELEGRAM_LINK}}"])) warnings.push(`${name} 缺少老师TG链接变量`);
+    if (step.nextFlowCode && !codes.has(step.nextFlowCode.trim())) warnings.push(`${name} 的下一流程编号不存在`);
+    if (step.nextFlowStep && !flowSteps.has(step.nextFlowStep.trim())) warnings.push(`${name} 的下一系统步骤不存在`);
+  }
+  return [...new Set(warnings)];
+}
+
+function scriptTextIncludes(text: string, values: string[]): boolean {
+  return values.some((value) => text.includes(value));
 }
 
 function TrainingMaterials({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {

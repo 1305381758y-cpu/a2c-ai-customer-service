@@ -155,6 +155,10 @@ small { color: var(--muted); }
 .error { background: var(--red-soft); color: var(--red); border-color: #fecdca; }
 .notice { background: var(--green-soft); color: var(--green); border-color: #abefc6; margin-top: 10px; }
 .warning { background: var(--amber-soft); color: var(--amber); border-color: #fedf89; margin: 10px 0; }
+.action-warning {
+  display: grid;
+  gap: 4px;
+}
 
 .state-view {
   display: grid;
