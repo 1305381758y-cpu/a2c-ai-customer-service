@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Upload, Workflow } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVersion } from "../types.js";
-import { ScriptFlowStepEditor } from "./ScriptFlowStepEditor.js";
-import { AsyncButton, ConfirmActionButton, Editor, FilterBar, Table } from "../ui/components.js";
-import { countryLabel, formatDateTime, label, translateSystemMessage } from "../ui/formatters.js";
+import { ScriptFlowDetailPanel } from "./ScriptFlowDetailPanel.js";
+import { ScriptFlowListPanel } from "./ScriptFlowListPanel.js";
+import { translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
 export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
@@ -130,85 +129,8 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   };
 
   return <div className="script-flow-page work-split">
-    <section className="script-flow-list work-panel">
-      <div className="training-center-hero compact">
-        <div><h3>话本流程</h3><p>上传话本后，系统会自动分析并生成可编辑流程节点。检查无误后再启用，客户会话才会按新流程推进。</p></div>
-      </div>
-      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "status"] : ["countryId", "status"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "draft", "active", "disabled"] }} onApply={reload} />
-      <div className="material-uploader compact-uploader">
-        <div className="toolbar wrap">
-          <input placeholder="话本名称，可选" value={flowName} onChange={(event) => setFlowName(event.target.value)} />
-          <input type="file" accept=".xlsx,.xls,.docx,.txt,.md,.csv" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-          <AsyncButton disabled={!file || platform && !filters.merchantId.trim()} busyText="分析中..." onClick={upload}><Upload size={16}/>上传并生成节点</AsyncButton>
-          <AsyncButton disabled={platform && !filters.merchantId.trim()} busyText="创建中..." onClick={createBuiltIn}><Workflow size={16}/>使用内置11步创建</AsyncButton>
-        </div>
-        <small>支持 Excel/CSV 标准表头，也支持 Word/TXT/MD 自由话本。也可以直接使用系统内置 11 步生成草稿，右侧逐步修改后再启用。</small>
-      </div>
-      <Table
-        rows={rows}
-        columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]}
-        onRow={loadDetail}
-        selectedKey={selected?.id}
-        rowKey={(row) => row.id}
-        loading={rowsLoading}
-        error={rowsError}
-        onRetry={reload}
-        emptyTitle="暂无话本流程"
-        emptyDetail="可以上传话本文件，或使用内置 11 步创建一个草稿流程。"
-      />
-    </section>
-    <section className="script-flow-detail detail-panel">
-      {detail ? <div className="script-flow-editor">
-        <div className="detail-title-row">
-          <div>
-            <h3>{detail.flow.name}</h3>
-            <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
-          </div>
-          <div className="toolbar">
-            <AsyncButton busyText="启用中..." onClick={enableFlow}>启用流程</AsyncButton>
-            <ConfirmActionButton
-              className="danger"
-              busyText="删除中..."
-              title="确认删除话本流程？"
-              detail="删除后不可恢复。若这是当前启用流程，需要先启用其他流程，否则真实客户可能无法继续按预期话本推进。"
-              confirmText="删除流程"
-              onConfirm={deleteFlow}
-            >
-              删除流程
-            </ConfirmActionButton>
-          </div>
-        </div>
-        {enableError && <div className="warning action-warning" role="alert"><strong>启用失败</strong><span>{enableError}</span></div>}
-        {validationWarnings.length > 0 && <div className="notice action-warning" role="status">
-          <strong>启用前建议检查</strong>
-          <span>{validationWarnings.slice(0, 5).join("；")}</span>
-        </div>}
-        <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
-        <div className="script-flow-columns">
-          <div className="script-step-list">
-            <div className="panel-title"><h3>流程节点</h3><AsyncButton busyText="新增中..." onClick={addStep}><Plus size={16}/>新增节点</AsyncButton></div>
-            {detail.steps.map((step) => <button key={step.id} className={`script-step-card ${selectedStep?.id === step.id ? "active" : ""} ${step.enabled ? "enabled" : "disabled"}`} onClick={() => setSelectedStep(step)}>
-              <span className="script-step-card-head">
-                <strong>{step.flowCode || "未编号"} · {step.flowName || label(step.flowStep)}</strong>
-                <span className={`script-step-status ${step.enabled ? "on" : "off"}`}>{step.enabled ? "启用" : "停用"}</span>
-              </span>
-              <span className="script-step-meta">{label(step.flowStep)} · 顺序 {step.sortOrder}</span>
-              <small className="script-step-reply">{step.standardReply || "暂无标准话术，请点击右侧补充。"}</small>
-            </button>)}
-            {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入话本文件。</div>}
-          </div>
-          <div className="script-step-editor">
-            {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后编辑话术和跳转规则。</div>}
-          </div>
-        </div>
-        <details className="version-panel">
-          <summary>版本记录</summary>
-          <div className="stack-list">
-            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span><ConfirmActionButton busyText="恢复中..." title="确认恢复话本版本？" detail={`恢复到版本 ${version.version} 后，当前流程节点和话术会被该版本覆盖。建议确认内容无误后再操作。`} confirmText="恢复版本" onConfirm={async () => { await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</ConfirmActionButton></div>)}
-          </div>
-        </details>
-      </div> : <div className="empty-chat"><h3>选择话本流程</h3><p>上传或选择一个流程后，可以在这里编辑每一步话术、触发条件和下一步规则。</p></div>}
-    </section>
+    <ScriptFlowListPanel platform={platform} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
+    <ScriptFlowDetailPanel detail={detail} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationWarnings={validationWarnings} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
   </div>;
 }
 function validateScriptFlowDraft(steps: ScriptFlowStep[]): string[] {
