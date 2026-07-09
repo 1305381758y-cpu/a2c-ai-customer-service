@@ -6,7 +6,7 @@ import { AsyncButton } from "../ui/components.js";
 import { localizeSystemText } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { ConversationChatColumn } from "./ConversationChatColumn.js";
-import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, ScriptProgress, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
+import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
 
 export function ConversationDetail({ platform = false, conversation, refresh, onDeleted }: { platform?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
