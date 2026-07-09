@@ -46,14 +46,14 @@ export function AgentProfilePage({
   const load = async () => setForm(await api<AgentProfile>(url));
 
   useEffect(() => {
-    load().catch((err) => setError(err instanceof Error ? err.message : "加载 Agent 配置失败"));
+    load().catch((err) => setError(err instanceof Error ? err.message : "加载智能体配置失败"));
   }, [url]);
 
   const fields: Array<[keyof AgentProfile, string, string]> = [
-    ["agentName", "Agent名称", "例如：开户注册接待专员"],
+    ["agentName", "智能体名称", "例如：开户注册接待专员"],
     ["roleDefinition", "角色定义", "说明这个客服是谁，有什么经验，负责什么"],
     ["toneStyle", "语气风格", "例如：简短、口语化、耐心、像真人聊天"],
-    ["coreGoal", "核心目标", "这个 Agent 最终要帮客户完成什么"],
+    ["coreGoal", "核心目标", "这个智能体最终要帮客户完成什么"],
     ["mustFollow", "必须遵守", "流程、回答方式、资料收集顺序等"],
     ["forbidden", "禁止事项", "不能承诺、不能收集、不能暴露的内容"],
     ["uncertaintyPolicy", "不确定问题口径", "遇到未配置规则时怎么回答"],
@@ -67,8 +67,8 @@ export function AgentProfilePage({
     try {
       const saved = await api<AgentProfile>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
-      setMessage("Agent 配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。");
-      notify("success", "Agent 配置已保存");
+      setMessage("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。");
+      notify("success", "智能体配置已保存");
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     }
@@ -76,7 +76,7 @@ export function AgentProfilePage({
 
   return <section className="single-column">
     <div className="work-panel">
-      <div className="section-title"><div><h2>商户 Agent 配置</h2><p>流程仍由话本状态机控制，这里只控制人设、语气、边界和转人工口径。</p></div>{form && <span className={`status-pill ${form.enabled ? "ok" : "neutral"}`}>{form.enabled ? "已启用" : "已停用"}</span>}</div>
+      <div className="section-title"><div><h2>商户智能体配置</h2><p>流程仍由话本状态机控制，这里只控制人设、语气、边界和转人工口径。</p></div>{form && <span className={`status-pill ${form.enabled ? "ok" : "neutral"}`}>{form.enabled ? "已启用" : "已停用"}</span>}</div>
       {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select>}
       {error && <div className="error">{error}</div>}
       {message && <div className="notice">{message}</div>}
@@ -85,8 +85,8 @@ export function AgentProfilePage({
         <div className="form-grid elevated-form agent-profile-grid">
           {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
         </div>
-        <div className="toolbar sticky-actions"><AsyncButton disabled={!canEdit} onClick={save} busyText="保存中...">保存 Agent 配置</AsyncButton><AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
-      </> : <div className="empty-state">正在加载 Agent 配置...</div>}
+        <div className="toolbar sticky-actions"><AsyncButton disabled={!canEdit} onClick={save} busyText="保存中...">保存智能体配置</AsyncButton><AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
+      </> : <div className="empty-state">正在加载智能体配置...</div>}
     </div>
   </section>;
 }

@@ -159,10 +159,10 @@ async function main() {
   try {
     await login(page, "admin@example.com", "Admin123456");
     await createMerchantUser(page);
-    report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "商户", "后台账号", "配置", "Agent配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
+    report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "商户", "后台账号", "配置", "智能体配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
     await logout(page);
     await login(page, "merchant-scroll@example.com", "Merchant123456");
-    report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "Agent配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
+    report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
     console.log(report.join("\n"));
   } finally {
     await browser.close();

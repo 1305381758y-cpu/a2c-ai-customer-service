@@ -95,8 +95,8 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
   const [timeMode, setTimeMode] = useState<TimeDisplayMode>(() => getTimeDisplayMode());
   const merchantTrainingViews = ["materials", "knowledge", "samples"];
   const nav = user.role === "platform_admin"
-    ? [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "Agent配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
-    : [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["training", "训练中心", Upload], ["simulator", "模拟训练", MessageSquare], ["agentProfile", "Agent配置", Bot], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
+    ? [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["merchants", "商户", Building2], ["users", "后台账号", Users], ["config", "配置", Settings], ["agentProfile", "智能体配置", Bot], ["customers", "客户", Contact], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["materials", "素材", FileText], ["knowledge", "知识库", Workflow], ["samples", "样本", Upload], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow]]
+    : [["dashboard", "总览", Bot], ["aiCalls", "模型调用", Sparkles], ["training", "训练中心", Upload], ["simulator", "模拟训练", MessageSquare], ["agentProfile", "智能体配置", Bot], ["scriptFlows", "话本流程", Workflow], ["intentLearning", "意图学习", Lightbulb], ["customers", "客户", Contact], ["conversations", "会话", MessageSquare], ["handoffs", "接管", Workflow], ["config", "设置", Settings]];
   const activeView = user.role !== "platform_admin" && merchantTrainingViews.includes(view) ? "training" : view;
   useEffect(() => {
     if (user.role !== "platform_admin" && merchantTrainingViews.includes(view)) setView("training");
@@ -1829,7 +1829,7 @@ function TrainingLoopPanel({
   const referencedMaterials = lastOutboundPayload.trainingMaterials?.length || 0;
   return <aside className="training-loop-panel">
     <div className="assistant-tabs">
-      <button className={activeTab === "assistant" ? "active" : ""} onClick={() => setActiveTab("assistant")}>AI助手</button>
+      <button className={activeTab === "assistant" ? "active" : ""} onClick={() => setActiveTab("assistant")}>智能助手</button>
       <button className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}>客户资料</button>
       <button className={activeTab === "ticket" ? "active" : ""} onClick={() => setActiveTab("ticket")}>工单</button>
       <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>历史记录</button>
@@ -1837,7 +1837,7 @@ function TrainingLoopPanel({
     {activeTab === "assistant" && <>
       {contextError && <div className="warning">业务上下文加载失败：{contextError}</div>}
       <section className="assistant-card ai-reply-card">
-        <div className="assistant-card-title"><Sparkles size={17}/><div><h3>AI 回复建议</h3><p>基于对话上下文生成</p></div></div>
+        <div className="assistant-card-title"><Sparkles size={17}/><div><h3>智能回复建议</h3><p>基于对话上下文生成</p></div></div>
         <div className="reply-preview">{suggestedReply}</div>
         <div className="runtime-facts">
           <span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span>
