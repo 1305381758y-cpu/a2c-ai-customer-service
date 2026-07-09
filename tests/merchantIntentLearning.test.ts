@@ -68,6 +68,26 @@ describe("merchantIntentLearning service", () => {
     expect(result.total).toBe(2);
   });
 
+  it("filters by the last seen time range", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("意图时间筛选商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    const oldEvent = recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "昨天链接打不开", candidateKey: "old-link", suggestedIntent: "need_help" });
+    const newEvent = recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "今天链接打不开", candidateKey: "new-link", suggestedIntent: "need_help" });
+    db.sqlite.prepare("UPDATE intent_learning_events SET last_seen_at = ? WHERE id = ?").run("2026-07-03 10:00:00", oldEvent.id);
+    db.sqlite.prepare("UPDATE intent_learning_events SET last_seen_at = ? WHERE id = ?").run("2026-07-04 10:00:00", newEvent.id);
+
+    const result = listMerchantIntentLearningEvents(repos, merchant.id, {
+      startAt: "2026-07-04T00:00:00+08:00",
+      endAt: "2026-07-05T00:00:00+08:00"
+    });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.total).toBe(1);
+    expect(result.rows[0].id).toBe(newEvent.id);
+  });
+
   it("patches only events that belong to the merchant", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

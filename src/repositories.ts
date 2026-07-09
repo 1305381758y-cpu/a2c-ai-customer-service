@@ -196,11 +196,11 @@ export class Repositories {
     return this.intentLearning.get(id, merchantId);
   }
 
-  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): IntentLearningEventRecord[] {
     return this.intentLearning.list(filters);
   }
 
-  countIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string } = {}): number {
+  countIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     return this.intentLearning.count(filters);
   }
 

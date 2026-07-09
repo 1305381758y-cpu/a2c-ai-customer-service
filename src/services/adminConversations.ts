@@ -49,6 +49,9 @@ export type AdminIntentLearningListQuery = {
   status?: string;
   suggestedIntent?: string;
   q?: string;
+  startAt?: string;
+  endAt?: string;
+  timeZone?: string;
   limit?: string;
 };
 
@@ -98,12 +101,15 @@ export function listAdminIntentLearningEvents(
   repos: Repositories,
   query: AdminIntentLearningListQuery
 ): { rows: IntentLearningEventRecord[]; total: number } {
+  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
   const filters = {
     merchantId: query.merchantId,
     countryId: query.countryId,
     status: query.status,
     suggestedIntent: query.suggestedIntent,
-    q: query.q
+    q: query.q,
+    startAt: range.startAt,
+    endAt: range.endAt
   };
   return {
     rows: repos.listIntentLearningEvents({

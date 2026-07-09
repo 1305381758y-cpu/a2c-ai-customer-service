@@ -80,7 +80,7 @@ export class IntentLearningRepository {
     return row ? mapIntentLearningEvent(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): IntentLearningEventRecord[] {
     const { where, params } = this.buildListWhere(filters);
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
     params.push(limit);
@@ -96,7 +96,7 @@ export class IntentLearningRepository {
       .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));
   }
 
-  count(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string } = {}): number {
+  count(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     const { where, params } = this.buildListWhere(filters);
     const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM intent_learning_events ${where}`).get(...params) as { count: number } | undefined;
     return Number(row?.count ?? 0);
@@ -140,7 +140,7 @@ export class IntentLearningRepository {
     return this.get(id, merchantId);
   }
 
-  private buildListWhere(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string }): { where: string; params: Array<string | number> } {
+  private buildListWhere(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string }): { where: string; params: Array<string | number> } {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -158,6 +158,14 @@ export class IntentLearningRepository {
     if (filters.suggestedIntent) {
       clauses.push("suggested_intent = ?");
       params.push(filters.suggestedIntent);
+    }
+    if (filters.startAt) {
+      clauses.push("last_seen_at >= ?");
+      params.push(filters.startAt);
+    }
+    if (filters.endAt) {
+      clauses.push("last_seen_at < ?");
+      params.push(filters.endAt);
     }
     const q = filters.q?.trim();
     if (q) {

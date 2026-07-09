@@ -123,7 +123,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />}
         {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
         {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
-        {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} />}
+        {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} timeMode={timeMode} />}
         {activeView === "training" && <TrainingMaterials platform={false} simple />}
         {activeView === "simulator" && <TrainingSimulator api={api} notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} />}
         {activeView === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
@@ -1117,11 +1117,18 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
   </div>;
 }
 
-function IntentLearning({ platform = false }: { platform?: boolean }) {
+function IntentLearning({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, q: filters.q, limit: filters.limit });
+  const [countries] = useRows<MerchantCountry>(platform ? "" : "/api/merchant/countries");
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" });
+  const activeCountry = filters.countryId
+    ? countries.find((country) => country.id === filters.countryId)
+    : countries.find((country) => country.status === "active") || countries[0];
+  const intentTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
+  const intentTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
+  const rowsUrl = withQuery(base, platform
+    ? { ...filters, timeZone: "Asia/Shanghai" }
+    : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: intentTimeZone, limit: filters.limit });
   const [rows, setRows] = useState<IntentLearningEvent[]>([]);
   const [total, setTotal] = useState(0);
   const pager = useClientPagination(rows, 20);
@@ -1157,7 +1164,7 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
       <div className="training-center-hero compact">
         <div>
           <h3>意图学习</h3>
-          <p>系统会把没识别准、规则库没有覆盖、或需要靠上下文判断的客户表达自动沉淀到这里。运营处理后，再把高频意图补进话本或规则。</p>
+          <p>系统会把没识别准、规则库没有覆盖、或需要靠上下文判断的客户表达自动沉淀到这里。筛选时间按{intentTimeLabel}解释，运营处理后可把高频意图补进话本或规则。</p>
         </div>
       </div>
       <div className="learning-metrics">
@@ -1167,7 +1174,7 @@ function IntentLearning({ platform = false }: { platform?: boolean }) {
         <span>已沉淀 <strong>{metrics.promoted}</strong></span>
         <span>已忽略 <strong>{metrics.ignored}</strong></span>
       </div>
-      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "limit"] : ["q", "countryId", "status", "suggestedIntent", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
+      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
       <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
       <Pagination pager={pager} />
     </section>
