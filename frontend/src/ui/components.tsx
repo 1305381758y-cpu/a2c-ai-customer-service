@@ -79,10 +79,13 @@ export function CountrySettingsEditor({ value, onSave }: { value: MerchantCountr
   </div><div className="toolbar"><AsyncButton busyText="保存中..." onClick={() => onSave(draft)}>保存</AsyncButton></div></div>;
 }
 
-export function FilterBar({ filters, setFilters, fields, selects = {}, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; onApply: () => Promise<void> }) {
+export function FilterBar({ filters, setFilters, fields, selects = {}, resetValues, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; resetValues?: Filters; onApply: () => Promise<void> }) {
   return <div className="toolbar wrap filters">{fields.map((field) => {
     if (selects[field]) return <select key={field} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? optionLabel(field, option) : label(field)}</option>)}</select>;
     const isTimeFilter = field === "startAt" || field === "endAt";
     return <input key={field} type={isTimeFilter ? "datetime-local" : "text"} step={isTimeFilter ? 1 : undefined} placeholder={label(field)} aria-label={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} />;
-  })}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button className="ghost" onClick={() => { const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""])); setFilters(reset); }}><X size={16}/>重置</button></div>;
+  })}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button className="ghost" onClick={() => {
+    const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""]));
+    setFilters({ ...reset, ...(resetValues || {}) });
+  }}><X size={16}/>重置</button></div>;
 }

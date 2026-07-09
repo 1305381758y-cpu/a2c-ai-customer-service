@@ -19,7 +19,8 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
+  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" };
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
   const activeCountry = filters.countryId
     ? countries.find((country) => country.id === filters.countryId)
     : countries.find((country) => country.status === "active") || countries[0];
@@ -86,6 +87,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
           setFilters={setFilters}
           fields={platform ? ["merchantId", "q", "countryId", "status", "language", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "language", "startAt", "endAt", "limit"]}
           selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }}
+          resetValues={defaultFilters}
           onApply={reload}
         />
         <Table

@@ -1120,7 +1120,8 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
 function IntentLearning({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" });
+  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" };
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
   const activeCountry = filters.countryId
     ? countries.find((country) => country.id === filters.countryId)
     : countries.find((country) => country.status === "active") || countries[0];
@@ -1174,7 +1175,7 @@ function IntentLearning({ platform = false, timeMode }: { platform?: boolean; ti
         <span>已沉淀 <strong>{metrics.promoted}</strong></span>
         <span>已忽略 <strong>{metrics.ignored}</strong></span>
       </div>
-      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} onApply={reload} />
+      <FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }} resetValues={defaultFilters} onApply={reload} />
       <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
       <Pagination pager={pager} />
     </section>
