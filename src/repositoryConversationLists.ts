@@ -10,6 +10,8 @@ export interface ConversationListFilters {
   handoffStatus?: string;
   a2cAccountPhone?: string;
   customerPhone?: string;
+  startAt?: string;
+  endAt?: string;
   limit?: number;
 }
 
@@ -28,6 +30,7 @@ export function buildConversationListQuery(filters: ConversationListFilters = {}
   addFilter(clauses, params, "c.handoff_status", filters.handoffStatus);
   addFilter(clauses, params, "c.a2c_account_phone", filters.a2cAccountPhone);
   addFilter(clauses, params, "c.customer_phone", filters.customerPhone);
+  addRangeFilter(clauses, params, "c.created_at", filters.startAt, filters.endAt);
   params.push(clampConversationListLimit(filters.limit));
   return {
     where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
@@ -57,6 +60,23 @@ function addFilter(clauses: string[], params: Array<string | number>, column: st
   if (!value) return;
   clauses.push(`${column} = ?`);
   params.push(value);
+}
+
+function addRangeFilter(
+  clauses: string[],
+  params: Array<string | number>,
+  column: string,
+  startAt: string | undefined,
+  endAt: string | undefined
+): void {
+  if (startAt) {
+    clauses.push(`${column} >= ?`);
+    params.push(startAt);
+  }
+  if (endAt) {
+    clauses.push(`${column} <= ?`);
+    params.push(endAt);
+  }
 }
 
 function clampConversationListLimit(limit: number | undefined): number {

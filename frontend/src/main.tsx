@@ -18,7 +18,7 @@ import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
 import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TeacherTgLink, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
 import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
-import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, getTimeDisplayMode, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, setTimeDisplayMode, statusTone, timeDisplayModeLabel, translateSystemMessage, type TimeDisplayMode } from "./ui/formatters.js";
+import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, getTimeDisplayMode, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, setTimeDisplayMode, statusTone, timeDisplayModeLabel, timeZoneForCountry, translateSystemMessage, type TimeDisplayMode } from "./ui/formatters.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
 import { notify, notifyExportStarted, ToastHost } from "./ui/toast.js";
 import "./styles.css";
@@ -129,8 +129,8 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         {activeView === "materials" && <TrainingMaterials platform={user.role === "platform_admin"} />}
         {activeView === "knowledge" && <KnowledgePage platform={user.role === "platform_admin"} />}
         {activeView === "samples" && <Samples platform={user.role === "platform_admin"} />}
-        {activeView === "conversations" && <Conversations platform={user.role === "platform_admin"} />}
-        {activeView === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs />}
+        {activeView === "conversations" && <Conversations platform={user.role === "platform_admin"} timeMode={timeMode} />}
+        {activeView === "handoffs" && <Conversations platform={user.role === "platform_admin"} handoffs timeMode={timeMode} />}
       </main>
     </div>
   );
@@ -1261,8 +1261,8 @@ function TrainingMaterials({ platform = false, simple = false }: { platform?: bo
   return <div className={selected && detail ? "split work-split" : "single-column work-split"}><section className="work-panel">{simple && <div className="training-center-hero"><div><h3>上传资料，系统自动学习</h3><p>把聊天记录、话本、FAQ、业务规则、Word、TXT、Excel 或截图上传到这里。系统会自动拆解、打标签、整理成后续回复可参考的内容。</p></div><div className="training-steps"><span>1 选择国家</span><span>2 上传或粘贴资料</span><span>3 自动学习并生效</span></div></div>}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader training-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="学习中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>{simple ? "上传并学习" : "上传素材"}</AsyncButton></div><textarea placeholder={simple ? "也可以直接粘贴真实聊天记录、话本、问答或业务规则，系统会自动学习" : "粘贴聊天记录、话术、问答或业务规则"} value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="学习中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>{simple ? "学习粘贴内容" : "导入粘贴文本"}</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={pager.rows} columns={columns} onRow={loadDetail} loading={materialsLoading} error={materialsError} onRetry={reload} emptyTitle={simple ? "暂无学习资料" : "暂无素材记录"} emptyDetail={simple ? "上传聊天记录、话本、FAQ、业务规则或截图后，系统会自动学习。" : "上传素材后会在这里展示解析结果。"} /><Pagination pager={pager} /></section>{selected && detail && <section className="detail-panel"><div><h3>{detail.material.filename}</h3><p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p><div className="toolbar"><ConfirmActionButton className="danger" busyText="删除中..." title={simple ? "确认彻底删除学习资料？" : "确认彻底删除素材？"} detail={simple ? "删除后系统不会再参考这份学习资料，此操作不可恢复。" : "删除后该素材及其生成的样本和知识会一起删除，后续回复不会再参考它们。"} confirmText={simple ? "彻底删除资料" : "彻底删除素材"} onConfirm={async () => { await api(`${base}/${detail.material.id}`, { method: "DELETE" }); setSelected(null); setDetail(null); await reload(); notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除"); }}>{simple ? "彻底删除资料" : "彻底删除素材"}</ConfirmActionButton></div>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div></section>}</div>;
 }
 
-function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
-  return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} />;
+function Conversations({ platform = false, handoffs = false, timeMode }: { platform?: boolean; handoffs?: boolean; timeMode: TimeDisplayMode }) {
+  return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} timeMode={timeMode} />;
 }
 
 function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
@@ -1291,10 +1291,10 @@ function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
-  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "limit"] : ["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle={handoffs ? "暂无待接管会话" : "暂无会话"} emptyDetail={handoffs ? "客户触发人工接管后会显示在这里。" : "客户发送消息后，会话会显示在这里。"} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => { setRows(await loadRows(rowsUrl)); }} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
+  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "startAt", "endAt", "limit"] : ["merchantId", "status", "handoffStatus", "language", "startAt", "endAt", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle={handoffs ? "暂无待接管会话" : "暂无会话"} emptyDetail={handoffs ? "客户触发人工接管后会显示在这里。" : "客户发送消息后，会话会显示在这里。"} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => { setRows(await loadRows(rowsUrl)); }} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
 }
 
-function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
+function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: boolean; timeMode: TimeDisplayMode }) {
   const [accounts, setAccounts] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
@@ -1306,8 +1306,9 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const [accountKeyword, setAccountKeyword] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
+  const conversationTimeZone = timeMode === "country" && selectedAccount ? timeZoneForCountry(selectedAccount.countryCode || selectedAccount.countryName) : "";
   const rowsUrl = selectedAccount
-    ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
+    ? withQuery("/api/merchant/conversations", { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone })
     : "";
   const [rows, setRows] = useState<Conversation[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -1430,7 +1431,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
   };
 
-  const exportFilters = selectedAccount ? { ...filters, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined;
+  const exportFilters = selectedAccount ? { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined;
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
@@ -1484,7 +1485,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       onOpenNewCustomer={openNewCustomer}
       onRetry={reloadRows}
       onExportStarted={notifyExportStarted}
-      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
+      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "startAt", "endAt", "limit"] : ["status", "handoffStatus", "language", "startAt", "endAt", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
     />
     <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;

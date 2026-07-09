@@ -264,7 +264,7 @@ export class Repositories {
     return this.conversations.patchCustomerMemory(conversationId, merchantId, patch);
   }
 
-  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: number } = {}): Conversation[] {
+  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; startAt?: string; endAt?: string; limit?: number } = {}): Conversation[] {
     return this.conversations.list(filters);
   }
 

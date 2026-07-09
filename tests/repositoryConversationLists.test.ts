@@ -27,6 +27,35 @@ describe("repository conversation list query builder", () => {
     });
   });
 
+  it("includes conversation created time range filters before the limit", () => {
+    expect(buildConversationListQuery({
+      merchantId: "merchant-1",
+      countryId: "country-1",
+      status: "human_handoff",
+      handoffStatus: "pending",
+      language: "es",
+      a2cAccountPhone: "5910000",
+      customerPhone: "customer-1",
+      startAt: "2026-07-04 00:00:00",
+      endAt: "2026-07-04 23:59:59",
+      limit: 50
+    })).toEqual({
+      where: "WHERE c.merchant_id = ? AND c.country_id = ? AND c.status = ? AND c.language = ? AND c.handoff_status = ? AND c.a2c_account_phone = ? AND c.customer_phone = ? AND c.created_at >= ? AND c.created_at <= ?",
+      params: [
+        "merchant-1",
+        "country-1",
+        "human_handoff",
+        "es",
+        "pending",
+        "5910000",
+        "customer-1",
+        "2026-07-04 00:00:00",
+        "2026-07-04 23:59:59",
+        50
+      ]
+    });
+  });
+
   it("uses the default list limit without filters", () => {
     expect(buildConversationListQuery()).toEqual({
       where: "",

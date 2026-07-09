@@ -25,6 +25,9 @@ export type AdminConversationListQuery = {
   language?: string;
   a2cAccountPhone?: string;
   customerPhone?: string;
+  startAt?: string;
+  endAt?: string;
+  timeZone?: string;
   limit?: string;
 };
 
@@ -50,6 +53,7 @@ export type AdminIntentLearningListQuery = {
 };
 
 export function listAdminConversations(repos: Repositories, query: AdminConversationListQuery): { rows: Conversation[] } {
+  const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
   return {
     rows: repos.listConversations({
       merchantId: query.merchantId,
@@ -59,6 +63,8 @@ export function listAdminConversations(repos: Repositories, query: AdminConversa
       language: query.language,
       a2cAccountPhone: query.a2cAccountPhone,
       customerPhone: query.customerPhone,
+      startAt: range.startAt,
+      endAt: range.endAt,
       limit: query.limit ? Number(query.limit) : undefined
     })
   };

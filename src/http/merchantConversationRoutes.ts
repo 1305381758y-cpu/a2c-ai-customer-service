@@ -32,7 +32,7 @@ type MerchantConversationRoutesDeps = {
 export function registerMerchantConversationRoutes(app: FastifyInstance, deps: MerchantConversationRoutesDeps): void {
   registerMerchantOutboundMessageRoutes(app, deps);
 
-  app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: deps.merchantRoles }, async (request) => ({
+  app.get<{ Querystring: { countryId?: string; status?: string; handoffStatus?: string; language?: string; a2cAccountPhone?: string; customerPhone?: string; startAt?: string; endAt?: string; timeZone?: string; limit?: string } }>("/api/merchant/conversations", { preHandler: deps.merchantRoles }, async (request) => ({
     ...listMerchantConversations(deps.repos, scopedMerchantId(request), request.query)
   }));
 
