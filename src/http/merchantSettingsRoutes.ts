@@ -19,6 +19,7 @@ import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js"
 import { registerMerchantRegistrationTutorialRoutes } from "./merchantRegistrationTutorialRoutes.js";
 import { registerMerchantTelegramRoutes } from "./merchantTelegramRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
+import { sendResult } from "./routeResponses.js";
 
 type MerchantSettingsRoutesDeps = {
   config: AppConfig;
@@ -43,8 +44,8 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config", { preHandler: deps.adminOnly }, async (request) =>
     getMaskedMerchantConfig(deps.repos, request.params.id)
   );
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: deps.adminOnly }, async (request) =>
-    patchMaskedMerchantConfig(deps.repos, request.params.id, request.body ?? {})
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: deps.adminOnly }, async (request, reply) =>
+    sendResult(reply, patchMaskedMerchantConfig(deps.repos, request.params.id, request.body ?? {}))
   );
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) =>
     getMerchantAgentProfile(deps.repos, request.params.id)
@@ -60,8 +61,8 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
   app.get("/api/merchant/config", { preHandler: deps.merchantRoles }, async (request) =>
     getMaskedMerchantConfig(deps.repos, scopedMerchantId(request))
   );
-  app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: deps.merchantAdmins }, async (request) =>
-    patchMaskedMerchantConfig(deps.repos, scopedMerchantId(request), request.body ?? {})
+  app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: deps.merchantAdmins }, async (request, reply) =>
+    sendResult(reply, patchMaskedMerchantConfig(deps.repos, scopedMerchantId(request), request.body ?? {}))
   );
   app.get("/api/merchant/agent-profile", { preHandler: deps.merchantRoles }, async (request) =>
     getMerchantAgentProfile(deps.repos, scopedMerchantId(request))

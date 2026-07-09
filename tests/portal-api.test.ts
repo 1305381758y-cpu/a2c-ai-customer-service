@@ -28,6 +28,23 @@ async function login(app: ReturnType<typeof buildApp>, email: string, password: 
   return String(response.headers["set-cookie"]);
 }
 
+async function enableBuiltInStrictFlow(app: ReturnType<typeof buildApp>, cookie: string, name = "测试内置流程"): Promise<void> {
+  const created = await app.inject({
+    method: "POST",
+    url: "/api/merchant/script-flows/builtin",
+    headers: { cookie },
+    payload: { name }
+  });
+  expect(created.statusCode).toBe(200);
+  const flowId = created.json().flow.id as number;
+  const enabled = await app.inject({
+    method: "POST",
+    url: `/api/merchant/script-flows/${flowId}/enable`,
+    headers: { cookie }
+  });
+  expect(enabled.statusCode).toBe(200);
+}
+
 function multipartUploadPayload(filename: string, contentType: string, content: string | Buffer) {
   const boundary = "----codex-test-boundary";
   const contentBuffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
@@ -84,6 +101,7 @@ describe("portal api", () => {
     });
     expect(created.statusCode).toBe(200);
     const merchantCookie = await login(app, "merchant-sim@test.local", "Merchant123456");
+    await enableBuiltInStrictFlow(app, merchantCookie, "模拟训练内置流程");
     const patchConfig = await app.inject({
       method: "PATCH",
       url: "/api/merchant/config",
@@ -163,6 +181,7 @@ describe("portal api", () => {
     const adminProfileB = await app.inject({ method: "GET", url: `/api/admin/merchants/${merchantB.id}/agent-profile`, headers: { cookie: adminCookie } });
     expect(adminProfileB.json().merchantId).toBe(merchantB.id);
 
+    await enableBuiltInStrictFlow(app, cookieA, "复盘模拟内置流程");
     await app.inject({
       method: "PATCH",
       url: "/api/merchant/config",
@@ -321,6 +340,7 @@ describe("portal api", () => {
         payload: { merchantId, email: "intent-learning@test.local", name: "意图学习", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "intent-learning@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "意图学习内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -447,6 +467,7 @@ describe("portal api", () => {
       expect(merchant.statusCode).toBe(200);
       const merchantId = (merchant.json().merchant?.id ?? merchant.json().id) as string;
       const merchantCookie = await login(app, "spanish-language@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "西语短句内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -498,7 +519,7 @@ describe("portal api", () => {
       const outboundRows = rows.filter((row) => row.direction === "outbound");
       expect(outboundRows.length).toBeGreaterThanOrEqual(2);
       expect(outboundRows.at(-1)?.language).toBe("es");
-      expect(outboundRows.at(-1)?.content).toMatch(/registro|trabajo|plataforma/i);
+      expect(outboundRows.at(-1)?.content).toMatch(/registro|registrarse|trabajo|plataforma|enlace/i);
       expect(outboundRows.at(-1)?.content).not.toMatch(/Hello|online part-time job|Got it/i);
     } finally {
       await app.close();
@@ -543,6 +564,7 @@ describe("portal api", () => {
       expect(merchant.statusCode).toBe(200);
       const merchantId = (merchant.json().merchant?.id ?? merchant.json().id) as string;
       const merchantCookie = await login(app, "spanish-ai-language@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "西语供应商内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -2414,6 +2436,7 @@ describe("portal api", () => {
         payload: { merchantId, email: "country-pool@test.local", name: "账号隔离流程", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "country-pool@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "邀请码隔离内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -2499,6 +2522,7 @@ describe("portal api", () => {
         payload: { merchantId, email: "tutorial@test.local", name: "教程图", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "tutorial@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "教程图内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -2902,6 +2926,7 @@ describe("portal api", () => {
         payload: { merchantId, email: "strict-config@test.local", name: "严格流程配置", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "strict-config@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "严格流程配置内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",
@@ -2992,6 +3017,7 @@ describe("portal api", () => {
         payload: { merchantId, email: "language-guard@test.local", name: "语言防线", password: "Merchant123456", role: "merchant_admin" }
       });
       const merchantCookie = await login(app, "language-guard@test.local", "Merchant123456");
+      await enableBuiltInStrictFlow(app, merchantCookie, "语言防线内置流程");
       await app.inject({
         method: "PATCH",
         url: "/api/merchant/config",

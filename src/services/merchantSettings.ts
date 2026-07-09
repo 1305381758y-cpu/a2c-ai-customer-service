@@ -1,4 +1,9 @@
 import type { MerchantAgentProfileRecord, MerchantConfigRecord, Repositories } from "../repositories.js";
+import { validateScriptFlowForEnable } from "./scriptFlows.js";
+
+type MerchantConfigPatchResult =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; statusCode: 400; error: string };
 
 export function getMaskedMerchantConfig(repos: Repositories, merchantId: string): Record<string, unknown> {
   return maskConfig(repos.getMerchantConfig(merchantId));
@@ -8,8 +13,20 @@ export function patchMaskedMerchantConfig(
   repos: Repositories,
   merchantId: string,
   patch: Record<string, unknown>
-): Record<string, unknown> {
-  return maskConfig(repos.patchMerchantConfig(merchantId, cleanConfigPatch(patch)));
+): MerchantConfigPatchResult {
+  const cleaned = cleanConfigPatch(patch);
+  if (isEnablingStrictScriptFlow(cleaned)) {
+    const activeFlows = repos.listScriptFlows({ merchantId, status: "active" }).filter((flow) => flow.active);
+    const activeFlow = activeFlows[0] ? repos.getScriptFlow(activeFlows[0].id, merchantId) : undefined;
+    if (!activeFlow) {
+      return { ok: false, statusCode: 400, error: "开启话本流程前，请先在“话本流程”页面启用一个有效流程。" };
+    }
+    const validationErrors = validateScriptFlowForEnable(activeFlow);
+    if (validationErrors.length) {
+      return { ok: false, statusCode: 400, error: `当前启用话本存在问题：${validationErrors.join("；")}` };
+    }
+  }
+  return { ok: true, value: maskConfig(repos.patchMerchantConfig(merchantId, cleaned)) };
 }
 
 export function getMerchantAgentProfile(repos: Repositories, merchantId: string): MerchantAgentProfileRecord {
@@ -50,6 +67,14 @@ function cleanConfigPatch(patch: Record<string, unknown>): Record<string, unknow
     cleaned[key] = value;
   }
   return cleaned;
+}
+
+function isEnablingStrictScriptFlow(patch: Record<string, unknown>): boolean {
+  if (!Object.hasOwn(patch, "strictScriptFlowEnabled")) return false;
+  const value = patch.strictScriptFlowEnabled;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value === "true" || value === "1" || value === "on";
+  return false;
 }
 
 function cleanAgentProfilePatch(patch: Record<string, unknown>): Record<string, unknown> {

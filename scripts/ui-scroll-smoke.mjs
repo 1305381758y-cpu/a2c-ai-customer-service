@@ -209,6 +209,7 @@ async function confirmDialogAction(page, name) {
 }
 
 async function smokeMerchantSettingsToggles(page) {
+  await ensureActiveScriptFlow(page);
   await clickNav(page, "设置");
 
   await page.getByRole("button", { name: "关闭智能回复", exact: true }).click();
@@ -227,15 +228,30 @@ async function smokeMerchantSettingsToggles(page) {
   await confirmDialogAction(page, "关闭模拟训练");
   await page.waitForFunction(() => document.body.textContent?.includes("已关闭：真实 A2C 消息会按当前配置正常自动回复客户。"), { timeout: 10_000 });
 
+  if (await page.getByRole("button", { name: "关闭话本流程", exact: true }).count()) {
+    await page.getByRole("button", { name: "关闭话本流程", exact: true }).click();
+    await confirmDialogAction(page, "关闭话本流程");
+    await page.waitForFunction(() => document.body.textContent?.includes("已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"), { timeout: 10_000 });
+  }
+
   await page.getByRole("button", { name: "开启话本流程", exact: true }).click();
   await confirmDialogAction(page, "开启话本流程");
   await page.waitForFunction(() => document.body.textContent?.includes("已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。"), { timeout: 10_000 });
-
   await page.getByRole("button", { name: "关闭话本流程", exact: true }).click();
   await confirmDialogAction(page, "关闭话本流程");
   await page.waitForFunction(() => document.body.textContent?.includes("已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"), { timeout: 10_000 });
 
   return "商户管理员/设置: 3 个高风险开关点击生效";
+}
+
+async function ensureActiveScriptFlow(page) {
+  await clickNav(page, "话本流程");
+  const flowName = `验收启用流程-${Date.now()}`;
+  await page.getByPlaceholder("话本名称，可选").fill(flowName);
+  await page.getByRole("button", { name: "使用内置11步创建", exact: true }).click();
+  await page.waitForFunction((name) => document.body.textContent?.includes(name), flowName, { timeout: 10_000 });
+  await page.locator(".detail-title-row").getByRole("button", { name: "启用流程", exact: true }).click();
+  await page.waitForFunction(() => document.body.textContent?.includes("当前启用"), { timeout: 10_000 });
 }
 
 async function smokeDateFilterRequest(page, navLabel, endpointPart, reportLabel) {
