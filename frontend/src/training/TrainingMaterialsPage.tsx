@@ -7,6 +7,7 @@ import { AsyncButton, ConfirmActionButton, FilterBar, Table } from "../ui/compon
 import { countryLabel, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { trainingImportMessage, trainingMaterialColumns, type TrainingImportResult } from "./TrainingMaterialsPageHelpers.js";
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
@@ -49,16 +50,12 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
     body.append("countryId", filters.countryId || countries[0]?.id || "");
     const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
-    const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
-    setMessage(simple ? `已学习 ${result.imported} 条内容，后续回复会自动参考${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}` : `已导入 ${result.imported} 条：样本 ${result.samples}，知识 ${result.knowledge}${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);
+    const result = await response.json() as TrainingImportResult;
+    setMessage(trainingImportMessage(result, simple));
     await reload();
   };
 
-  const columns = platform
-    ? ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"]
-    : simple
-      ? ["countryName", "filename", "sourceType", "itemCount", "status", "createdAt"]
-      : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"];
+  const columns = trainingMaterialColumns(platform, simple);
 
   return <div className={selected && detail ? "split work-split" : "single-column work-split"}>
     <section className="work-panel">
