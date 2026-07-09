@@ -10,7 +10,7 @@ import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
 import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
-import { DEFAULT_COUNTRY_DRAFT, configPageEndpoints, configWebhookUrl, countryToDraft, filterA2CAccounts } from "./ConfigPageHelpers.js";
+import { DEFAULT_COUNTRY_DRAFT, configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "./ConfigPageHelpers.js";
 
 export function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -66,8 +66,7 @@ export function Config({ platform }: { platform: boolean }) {
     setError("");
     const body = new FormData();
     body.append("file", tutorialImageFile);
-    const endpoint = platform ? `/api/admin/merchants/${merchantId}/config/registration-tutorial-image` : "/api/merchant/config/registration-tutorial-image";
-    const response = await fetch(endpoint, { method: "POST", body });
+    const response = await fetch(configTutorialImageEndpoint(platform, merchantId), { method: "POST", body });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));
@@ -96,11 +95,7 @@ export function Config({ platform }: { platform: boolean }) {
     try {
       const saved = await api<Record<string, string | boolean>>(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
-      if (!saved.a2cAppId || !saved.a2cAppSecret) {
-        setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
-        return;
-      }
-      setMessage("配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。");
+      setMessage(configSaveSuccessMessage(saved));
     } catch (error) {
       setError(error instanceof Error ? error.message : "保存配置失败");
     }
@@ -135,8 +130,7 @@ export function Config({ platform }: { platform: boolean }) {
     }
   };
   const toggleA2CAccount = async (row: A2CAccount) => {
-    const endpoint = platform ? `/api/admin/a2c/accounts/${row.id}` : `/api/merchant/a2c/accounts/${row.id}`;
-    const result = await api<{ config: Record<string, string | boolean> }>(endpoint, { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
+    const result = await api<{ config: Record<string, string | boolean> }>(configA2CAccountPatchEndpoint(platform, row.id), { method: "PATCH", body: JSON.stringify({ enabled: !row.enabled }) });
     setForm(result.config);
     await reloadA2CAccounts();
   };
@@ -153,12 +147,7 @@ export function Config({ platform }: { platform: boolean }) {
     if (!teacherTgDraft.urls.trim()) throw new Error("请先填写老师TG链接，一行一条。");
     const result = await api<{ imported: number; rows: TeacherTgLink[] }>(`${endpoints.teacherTgLinks}/import`, {
       method: "POST",
-      body: JSON.stringify({
-        countryId: currentCountry.id,
-        urls: teacherTgDraft.urls,
-        priority: Number(teacherTgDraft.priority || 0),
-        rotationCount: Number(teacherTgDraft.rotationCount || 1)
-      })
+      body: JSON.stringify(teacherTgImportPayload(currentCountry, teacherTgDraft))
     });
     setTeacherTgLinks(result.rows);
     setTeacherTgDraft({ ...teacherTgDraft, urls: "" });
@@ -178,8 +167,7 @@ export function Config({ platform }: { platform: boolean }) {
     setError("");
     try {
       await api(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
-      const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
-      const result = await api<{ config: Record<string, string | boolean>; webhookUrl?: string }>(endpoint, { method: "POST" });
+      const result = await api<{ config: Record<string, string | boolean>; webhookUrl?: string }>(configTelegramSetupEndpoint(platform, merchantId), { method: "POST" });
       setForm(result.config);
       setMessage(`TG绑定已开启${result.webhookUrl ? `：${result.webhookUrl}` : ""}。请把机器人拉进唯一接管群，并在群里发送 /bind；发送后点“刷新TG状态”。`);
       window.setTimeout(() => reloadConfig().catch(() => null), 1500);

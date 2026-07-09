@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { configPageEndpoints, configWebhookUrl, countryToDraft, filterA2CAccounts } from "../frontend/src/settings/ConfigPageHelpers.js";
+import { configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "../frontend/src/settings/ConfigPageHelpers.js";
 import type { A2CAccount, MerchantCountry } from "../frontend/src/types.js";
 
 describe("frontend config page helpers", () => {
@@ -32,6 +32,20 @@ describe("frontend config page helpers", () => {
     expect(configWebhookUrl("https://service.example", false, "ignored", {})).toBe("https://service.example/webhooks/a2c/default");
   });
 
+  it("builds action endpoints for settings buttons", () => {
+    expect(configTutorialImageEndpoint(false, "ignored")).toBe("/api/merchant/config/registration-tutorial-image");
+    expect(configTutorialImageEndpoint(true, "merchant-1")).toBe("/api/admin/merchants/merchant-1/config/registration-tutorial-image");
+    expect(configTelegramSetupEndpoint(false, "ignored")).toBe("/api/merchant/telegram/setup-webhook");
+    expect(configTelegramSetupEndpoint(true, "merchant-1")).toBe("/api/admin/merchants/merchant-1/telegram/setup-webhook");
+    expect(configA2CAccountPatchEndpoint(false, 7)).toBe("/api/merchant/a2c/accounts/7");
+    expect(configA2CAccountPatchEndpoint(true, 7)).toBe("/api/admin/a2c/accounts/7");
+  });
+
+  it("explains whether account sync is available after saving config", () => {
+    expect(configSaveSuccessMessage({})).toContain("填写 A2C App ID 和密钥");
+    expect(configSaveSuccessMessage({ a2cAppId: "app", a2cAppSecret: "secret" })).toContain("保存配置不会自动同步账号");
+  });
+
   it("converts current country config into editable draft values", () => {
     expect(countryToDraft(country({ name: "玻利维亚", code: "bo", defaultLanguage: "es", requireWhatsApp: false }))).toMatchObject({
       code: "bo",
@@ -53,6 +67,19 @@ describe("frontend config page helpers", () => {
     expect(filterA2CAccounts(accounts, { keyword: "bolivia", status: "", countryId: "" }).map((item) => item.apiPhone)).toEqual(["1001"]);
     expect(filterA2CAccounts(accounts, { keyword: "", status: "enabled", countryId: "bo" }).map((item) => item.apiPhone)).toEqual(["1001"]);
     expect(filterA2CAccounts(accounts, { keyword: "", status: "disabled", countryId: "br" }).map((item) => item.apiPhone)).toEqual(["2002"]);
+  });
+
+  it("builds teacher Telegram import payload from the current country and draft", () => {
+    expect(teacherTgImportPayload(country({ id: "bo-country" }), { urls: "https://t.me/a\nhttps://t.me/b", priority: "5", rotationCount: "3" })).toEqual({
+      countryId: "bo-country",
+      urls: "https://t.me/a\nhttps://t.me/b",
+      priority: 5,
+      rotationCount: 3
+    });
+    expect(teacherTgImportPayload(country({ id: "bo-country" }), { urls: "https://t.me/a", priority: "", rotationCount: "" })).toMatchObject({
+      priority: 0,
+      rotationCount: 1
+    });
   });
 });
 

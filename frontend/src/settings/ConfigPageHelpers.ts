@@ -57,6 +57,32 @@ export function configWebhookUrl(origin: string, platform: boolean, merchantId: 
   return `${origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
 }
 
+export function configTutorialImageEndpoint(platform: boolean, merchantId: string) {
+  return platform ? `/api/admin/merchants/${merchantId}/config/registration-tutorial-image` : "/api/merchant/config/registration-tutorial-image";
+}
+
+export function configTelegramSetupEndpoint(platform: boolean, merchantId: string) {
+  return platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
+}
+
+export function configA2CAccountPatchEndpoint(platform: boolean, accountId: number) {
+  return platform ? `/api/admin/a2c/accounts/${accountId}` : `/api/merchant/a2c/accounts/${accountId}`;
+}
+
+export function configSaveSuccessMessage(saved: Record<string, string | boolean>) {
+  if (!saved.a2cAppId || !saved.a2cAppSecret) return "配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。";
+  return "配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。";
+}
+
+export function teacherTgImportPayload(country: MerchantCountry, draft: { urls: string; priority: string; rotationCount: string }) {
+  return {
+    countryId: country.id,
+    urls: draft.urls,
+    priority: Number(draft.priority || 0),
+    rotationCount: Number(draft.rotationCount || 1)
+  };
+}
+
 export function countryToDraft(country: MerchantCountry): CountryDraft {
   return {
     code: country.code || "default",
