@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, useRows, withQuery } from "../app/api.js";
 import { ConversationExportBar } from "../conversations/ConversationExport.js";
-import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
-import { ConfirmActionButton, FilterBar, Table } from "../ui/components.js";
-import { countryLabel, formatConversationDate, label, languageName, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { FilterBar, Table } from "../ui/components.js";
+import { countryLabel, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
+import { CustomerDetailPanel } from "./CustomerDetailPanel.js";
 
 type CustomersPageProps = {
   platform?: boolean;
@@ -121,44 +121,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
         <Pagination pager={pager} />
       </section>
       {selected && (
-        <section className="detail-panel customer-detail-panel">
-          <div>
-            <div className="detail-title-row">
-              <div>
-                <h3>{selected.customerKey}</h3>
-                <p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p>
-              </div>
-              <ConfirmActionButton
-                className="danger"
-                busyText="删除中..."
-                title="确认彻底删除客户？"
-                detail={`客户 ${selected.customerKey} 的所有会话、聊天记录、记忆和接管记录都会一起删除，此操作不可恢复。`}
-                confirmText="彻底删除"
-                onConfirm={deleteSelected}
-              >
-                删除客户
-              </ConfirmActionButton>
-            </div>
-            <div className="form-grid">
-              <label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label>
-              <label>最近接收账号<input readOnly value={selected.lastA2CAccountPhone || ""} /></label>
-              <label>手机号<input readOnly value={selected.extractedPhone || ""} /></label>
-              <label>Telegram<input readOnly value={selected.extractedTelegram || ""} /></label>
-              <label>WhatsApp<input readOnly value={selected.extractedWhatsApp || ""} /></label>
-              <label>会话数<input readOnly value={String(selected.conversationCount || 0)} /></label>
-              <label>最近会话ID<input readOnly value={selected.lastConversationId || ""} /></label>
-            </div>
-            <p>客户档案由回调自动创建和更新；删除客户会同步清理该客户所有会话、消息、记忆和接管记录。</p>
-          </div>
-          <CustomerConversationHistory
-            platform={platform}
-            customer={selected}
-            loadRows={loadRows}
-            withQuery={withQuery}
-            helpers={{ formatConversationDate, countryLabel, languageName, label }}
-            renderConversation={renderConversation}
-          />
-        </section>
+        <CustomerDetailPanel platform={platform} customer={selected} onDelete={deleteSelected} renderConversation={renderConversation} />
       )}
     </div>
   );
