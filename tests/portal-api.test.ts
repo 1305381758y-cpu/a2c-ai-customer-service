@@ -1257,7 +1257,7 @@ describe("portal api", () => {
     await app.close();
   });
 
-  it("does not cap customer list requests at 500 rows", () => {
+  it("keeps customer totals uncapped while list rows are page-limited", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);
     const merchant = repos.createMerchant("客户分页测试");
@@ -1266,7 +1266,14 @@ describe("portal api", () => {
       repos.upsertCustomerFromConversation(conversation);
     }
 
-    expect(repos.listCustomers({ merchantId: merchant.id, limit: 600 })).toHaveLength(501);
+    expect(repos.countCustomers({ merchantId: merchant.id })).toBe(501);
+    expect(repos.listCustomers({ merchantId: merchant.id, limit: 600 })).toHaveLength(500);
+
+    const firstPage = repos.listCustomers({ merchantId: merchant.id, limit: 20 });
+    const secondPage = repos.listCustomers({ merchantId: merchant.id, limit: 20, offset: 20 });
+    expect(firstPage).toHaveLength(20);
+    expect(secondPage).toHaveLength(20);
+    expect(new Set([...firstPage, ...secondPage].map((customer) => customer.customerKey)).size).toBe(40);
   });
 
   it("hard deletes legacy customer memories that still point to the removed conversation", async () => {

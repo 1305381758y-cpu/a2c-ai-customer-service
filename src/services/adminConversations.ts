@@ -29,6 +29,7 @@ export type AdminConversationListQuery = {
   endAt?: string;
   timeZone?: string;
   limit?: string;
+  offset?: string;
 };
 
 export type AdminCustomerListQuery = {
@@ -41,6 +42,7 @@ export type AdminCustomerListQuery = {
   endAt?: string;
   timeZone?: string;
   limit?: string;
+  offset?: string;
 };
 
 export type AdminIntentLearningListQuery = {
@@ -91,7 +93,8 @@ export function listAdminCustomers(repos: Repositories, query: AdminCustomerList
   return {
     rows: repos.listCustomers({
       ...filters,
-      limit: query.limit ? Number(query.limit) : undefined
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined
     }),
     total: repos.countCustomers(filters)
   };

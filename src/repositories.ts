@@ -168,7 +168,7 @@ export class Repositories {
     return this.customers.get(merchantId, customerKey);
   }
 
-  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
+  listCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number; offset?: number } = {}): CustomerRecord[] {
     return this.customers.list(filters);
   }
 

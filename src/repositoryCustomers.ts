@@ -63,7 +63,7 @@ export class CustomerRepository {
     return row ? mapCustomer(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): CustomerRecord[] {
+  list(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string; limit?: number; offset?: number } = {}): CustomerRecord[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (filters.merchantId) {
@@ -92,8 +92,9 @@ export class CustomerRepository {
       params.push(filters.endAt);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
-    params.push(limit);
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    const offset = Math.max(filters.offset ?? 0, 0);
+    params.push(limit, offset);
     return this.db.sqlite
       .prepare(`
         SELECT cu.*, co.code AS country_code, co.name AS country_name
@@ -101,7 +102,7 @@ export class CustomerRepository {
         LEFT JOIN merchant_countries co ON co.id = cu.country_id
         ${where}
         ORDER BY cu.last_seen_at DESC, cu.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
       .all(...params)
       .map((row) => mapCustomer(row as Record<string, unknown>));

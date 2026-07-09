@@ -6,7 +6,7 @@ import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
 import { ConfirmActionButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
 
 type CustomersPageProps = {
@@ -19,23 +19,37 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
-  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" };
+  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const activeCountry = filters.countryId
     ? countries.find((country) => country.id === filters.countryId)
     : countries.find((country) => country.status === "active") || countries[0];
   const customerTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
   const customerTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
   const queryFilters = platform
-    ? { ...filters, timeZone: "Asia/Shanghai" }
-    : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: customerTimeZone, limit: filters.limit };
+    ? { ...filters, timeZone: "Asia/Shanghai", limit: String(pageSize), offset: String((page - 1) * pageSize) }
+    : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: customerTimeZone, limit: String(pageSize), offset: String((page - 1) * pageSize) };
   const rowsUrl = withQuery(base, queryFilters);
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = {
+    rows,
+    page,
+    pageSize,
+    total,
+    totalPages,
+    setPage: (nextPage: number) => setPage(Math.min(Math.max(nextPage, 1), totalPages)),
+    setPageSize: (nextPageSize: number) => {
+      setPageSize(nextPageSize);
+      setPage(1);
+    }
+  };
   const compactColumns = platform
     ? ["merchantId", "countryName", "customerKey", "lastA2CAccountPhone", "stage", "conversationCount", "lastSeenAt"]
     : ["countryName", "customerKey", "lastA2CAccountPhone", "stage", "conversationCount", "lastSeenAt"];
@@ -50,7 +64,6 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
       const result = await api<{ rows: Customer[]; total: number }>(rowsUrl);
       setRows(result.rows);
       setTotal(result.total);
-      pager.setPage(1);
     } catch (err) {
       setRows([]);
       setTotal(0);
@@ -60,6 +73,9 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
     }
   };
   React.useEffect(() => { void reload(); }, [rowsUrl]);
+  React.useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   const deleteSelected = async () => {
     if (!selected) return;
     const url = platform
@@ -85,13 +101,13 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
         <FilterBar
           filters={filters}
           setFilters={setFilters}
-          fields={platform ? ["merchantId", "q", "countryId", "status", "language", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "language", "startAt", "endAt", "limit"]}
+          fields={platform ? ["merchantId", "q", "countryId", "status", "language", "startAt", "endAt"] : ["q", "countryId", "status", "language", "startAt", "endAt"]}
           selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }}
           resetValues={defaultFilters}
-          onApply={reload}
+          onApply={async () => { setPage(1); await reload(); }}
         />
         <Table
-          rows={pager.rows}
+          rows={rows}
           columns={columns}
           onRow={setSelected}
           selectedKey={selected?.id}

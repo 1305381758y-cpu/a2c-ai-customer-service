@@ -17,6 +17,7 @@ export function listMerchantCustomers(
     endAt?: string;
     timeZone?: string;
     limit?: string;
+    offset?: string;
   }
 ): { rows: CustomerRecord[]; total: number } {
   const range = normalizeSqlTimeRange({ startAt: filters.startAt, endAt: filters.endAt, timeZone: filters.timeZone });
@@ -32,7 +33,8 @@ export function listMerchantCustomers(
   return {
     rows: repos.listCustomers({
       ...scopedFilters,
-      limit: filters.limit ? Number(filters.limit) : undefined
+      limit: filters.limit ? Number(filters.limit) : undefined,
+      offset: filters.offset ? Number(filters.offset) : undefined
     }),
     total: repos.countCustomers(scopedFilters)
   };
