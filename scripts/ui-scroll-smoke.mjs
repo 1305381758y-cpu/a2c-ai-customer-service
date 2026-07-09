@@ -203,6 +203,14 @@ async function smokeDateFilterRequest(page, navLabel, endpointPart, reportLabel)
   return `${reportLabel}: 时间筛选请求生效`;
 }
 
+async function smokeAgentProfileSave(page) {
+  await clickNav(page, "智能体配置");
+  await page.getByLabel("智能体名称").fill(`验收接待专员-${Date.now()}`);
+  await page.getByRole("button", { name: "保存智能体配置", exact: true }).click();
+  await page.waitForFunction(() => document.body.textContent?.includes("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。"), { timeout: 10_000 });
+  return "商户管理员/智能体配置: 保存按钮生效";
+}
+
 async function main() {
   await waitForHealth();
   const browser = await chromium.launch({ headless: true });
@@ -217,6 +225,7 @@ async function main() {
     report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
     report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
     report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
+    report.push(await smokeAgentProfileSave(page));
     report.push(await smokeMerchantSettingsToggles(page));
     await page.setViewportSize({ width: 1024, height: 768 });
     report.push(...await smokeRole(page, "商户管理员-窄屏1024", ["总览", "模型调用", "话本流程", "会话", "设置"]));
