@@ -2,13 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { api, loadRows, withQuery } from "../app/api.js";
 import type { ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, Knowledge, Sample, ScriptFlowDetail } from "../types.js";
-import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
-import { countryLabel, formatConversationDate, formatTime, label, languageName, localizeSystemText, normalizeText, replyModeLabel, translateSystemMessage } from "../ui/formatters.js";
+import { AsyncButton } from "../ui/components.js";
+import { localizeSystemText } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
-import { ConversationComposer } from "./ConversationComposer.js";
-import { ConversationDetailHeader } from "./ConversationDetailHeader.js";
+import { ConversationChatColumn } from "./ConversationChatColumn.js";
 import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, ScriptProgress, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
-import { MessageTimeline } from "./MessageTimeline.js";
 
 export function ConversationDetail({ platform = false, conversation, refresh, onDeleted }: { platform?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -148,34 +146,30 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
     }
   }}>{children}</AsyncButton>;
   return <div className="conversation-detail wechat-detail">
-    <section className="wechat-chat-column">
-      <ConversationDetailHeader
-        platform={platform}
-        conversation={conversation}
-        lastOutboundPayload={lastOutboundPayload}
-        flowStep={flowStep}
-        strictEnabled={strictEnabled}
-        countryLabel={countryLabel}
-        languageName={languageName}
-        label={label}
-        replyModeLabel={replyModeLabel}
-        onHandoffStatusChange={async (handoffStatus) => {
-          setError("");
-          setStatusMessage("正在更新接管状态...");
-          await api(`/api/merchant/handoffs/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ handoffStatus }) });
-          setStatusMessage("接管状态已更新。");
-          await loadReview().catch(() => null);
-          refresh();
-        }}
-        renderDeleteAction={() => <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除会话？" detail="该会话的聊天记录、接管记录和相关状态会一起删除，此操作不可恢复。" confirmText="删除会话" onConfirm={async () => { await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</ConfirmActionButton>}
-      />
-      {error && <div className="error" role="alert">{error}</div>}
-      {statusMessage && <div className="notice" role="status">{statusMessage}</div>}
-      {messagesError && <div className="warning">聊天记录刷新失败：{messagesError}<button className="ghost" onClick={() => void loadMessages(true)}>重新加载</button></div>}
-      <div className="chat-window" ref={messagesRef}>{messagesLoading ? <div className="empty-state">聊天记录加载中...</div> : messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: (value) => formatConversationDate(value, conversation.countryCode || conversation.countryName || conversation.countryId), formatTime: (value) => formatTime(value, conversation.countryCode || conversation.countryName || conversation.countryId), label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
-      <ScriptProgress flowStep={flowStep} scriptFlow={scriptFlow} />
-      {!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={sendAction} quickReplies={quickReplies} />}
-    </section>
+    <ConversationChatColumn
+      platform={platform}
+      conversation={conversation}
+      messages={messages}
+      messagesRef={messagesRef}
+      messagesLoading={messagesLoading}
+      messagesError={messagesError}
+      error={error}
+      statusMessage={statusMessage}
+      lastOutboundPayload={lastOutboundPayload}
+      strictEnabled={strictEnabled}
+      flowStep={flowStep}
+      scriptFlow={scriptFlow}
+      send={send}
+      quickReplies={quickReplies}
+      refresh={refresh}
+      loadReview={loadReview}
+      loadMessages={loadMessages}
+      onDeleted={onDeleted}
+      onSendChange={setSend}
+      renderSendAction={sendAction}
+      setError={setError}
+      setStatusMessage={setStatusMessage}
+    />
     <TrainingLoopPanel
       platform={platform}
       conversation={conversation}
