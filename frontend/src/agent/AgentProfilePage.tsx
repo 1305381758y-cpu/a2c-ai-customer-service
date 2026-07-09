@@ -81,7 +81,7 @@ export function AgentProfilePage({
       {error && <div className="error">{error}</div>}
       {message && <div className="notice">{message}</div>}
       {form ? <>
-        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露 AI、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div><button className={form.enabled ? "ghost" : ""} disabled={!canEdit} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button></div>
+        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露智能服务、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div><button className={form.enabled ? "ghost" : ""} disabled={!canEdit} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button></div>
         <div className="form-grid elevated-form agent-profile-grid">
           {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
         </div>

@@ -33,7 +33,7 @@ function ChatBubble({ message, helpers }: { message: ChatMessage; helpers: Messa
   const operatorTranslated = payload.operatorTranslatedContent || "";
   const translationStatus = payload.translationStatus || (original && translated && helpers.normalizeText(original) !== helpers.normalizeText(translated) ? "translated" : undefined);
   const canShowTranslation = Boolean(original && translated && translationStatus === "translated" && helpers.normalizeText(original) !== helpers.normalizeText(translated));
-  const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查 AI 供应商配置") : "";
+  const translationIssue = original && !canShowTranslation ? payload.translationError || (translationStatus === "skipped" ? "无需翻译或翻译配置未完成" : "译文未生成，请先检查智能供应商配置") : "";
   const isOutbound = message.direction === "outbound";
   const operatorTranslationStatus = payload.operatorTranslationStatus || (operatorTranslated && helpers.normalizeText(operatorTranslated) !== helpers.normalizeText(message.content) ? "translated" : undefined);
   const canShowOperatorTranslation = Boolean(isOutbound && operatorTranslated && operatorTranslationStatus === "translated" && helpers.normalizeText(operatorTranslated) !== helpers.normalizeText(message.content));

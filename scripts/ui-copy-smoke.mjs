@@ -25,7 +25,7 @@ const forbidden = [
   { pattern: />\s*Edit\s*</, label: "Edit" },
   { pattern: />\s*Error\s*</, label: "Error" },
   { pattern: /Agent配置|Agent 配置|商户 Agent|保存 Agent|加载 Agent|Agent名称/, label: "Agent mixed copy" },
-  { pattern: /AI助手|AI 回复建议/, label: "AI mixed copy" }
+  { pattern: /AI助手|AI 回复建议|AI供应商|AI 供应商|AI建议|A2C AI|>\s*AI\s*</, label: "AI mixed copy" }
 ];
 
 const failures = [];
@@ -45,4 +45,3 @@ if (failures.length) {
 }
 
 console.log(`后台文案检查通过：${files.length} 个前端源码文件`);
-
