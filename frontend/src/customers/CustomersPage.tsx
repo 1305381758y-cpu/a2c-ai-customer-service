@@ -4,10 +4,11 @@ import { api, useRows, withQuery } from "../app/api.js";
 import { ConversationExportBar } from "../conversations/ConversationExport.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
 import { FilterBar, Table } from "../ui/components.js";
-import { countryLabel, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import type { TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
 import { CustomerDetailPanel } from "./CustomerDetailPanel.js";
+import { customerActiveCountry, customerColumns, customerExportFilters, customerQueryFilters, customerTimeLabelFor, customerTimeZoneFor, todayBeijingDateRange } from "./CustomerPageHelpers.js";
 
 type CustomersPageProps = {
   platform?: boolean;
@@ -23,14 +24,10 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const activeCountry = filters.countryId
-    ? countries.find((country) => country.id === filters.countryId)
-    : countries.find((country) => country.status === "active") || countries[0];
-  const customerTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
-  const customerTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
-  const queryFilters = platform
-    ? { ...filters, timeZone: "Asia/Shanghai", limit: String(pageSize), offset: String((page - 1) * pageSize) }
-    : { countryId: filters.countryId, status: filters.status, language: filters.language, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: customerTimeZone, limit: String(pageSize), offset: String((page - 1) * pageSize) };
+  const activeCountry = customerActiveCountry(countries, filters.countryId || "");
+  const customerTimeZone = customerTimeZoneFor(platform, timeMode, activeCountry);
+  const customerTimeLabel = customerTimeLabelFor(platform, timeMode, activeCountry);
+  const queryFilters = customerQueryFilters(platform, filters, customerTimeZone, page, pageSize);
   const rowsUrl = withQuery(base, queryFilters);
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
@@ -50,13 +47,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
       setPage(1);
     }
   };
-  const compactColumns = platform
-    ? ["merchantId", "countryName", "customerKey", "lastA2CAccountPhone", "stage", "conversationCount", "lastSeenAt"]
-    : ["countryName", "customerKey", "lastA2CAccountPhone", "stage", "conversationCount", "lastSeenAt"];
-  const fullColumns = platform
-    ? ["merchantId", "countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"]
-    : ["countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"];
-  const columns = selected ? compactColumns : fullColumns;
+  const columns = customerColumns(platform, Boolean(selected));
   const reload = async () => {
     setLoading(true);
     setError(null);
@@ -87,9 +78,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
     await reload();
   };
   const exportBase = platform ? "/api/admin/conversations/export" : "/api/merchant/conversations/export";
-  const scopedExportFilters = platform
-    ? { merchantId: filters.merchantId, countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, timeZone: "Asia/Shanghai", limit: "50000" }
-    : { countryId: filters.countryId, status: filters.status, language: filters.language, startAt: filters.startAt, endAt: filters.endAt, timeZone: customerTimeZone, limit: "50000" };
+  const scopedExportFilters = customerExportFilters(platform, filters, customerTimeZone);
 
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
@@ -125,17 +114,4 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
       )}
     </div>
   );
-}
-
-function todayBeijingDateRange() {
-  const now = new Date();
-  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const today = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
-  beijing.setUTCDate(beijing.getUTCDate() + 1);
-  const tomorrow = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
-  return { startAt: `${today}T00:00:00`, endAt: `${tomorrow}T00:00:00` };
-}
-
-function pad(value: number) {
-  return String(value).padStart(2, "0");
 }
