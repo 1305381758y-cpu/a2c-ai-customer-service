@@ -8,9 +8,10 @@ import { PlatformConversations } from "./PlatformConversations.js";
 import { ProactiveConversationDetail } from "./ProactiveConversationDetail.js";
 import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { AsyncButton, FilterBar } from "../ui/components.js";
-import { countryLabel, formatConversationDate, label, languageName, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { countryLabel, formatConversationDate, label, languageName, type TimeDisplayMode } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
+import { conversationExportFilters, conversationTimeZoneFor, filterConversationAccounts } from "./ConversationPageHelpers.js";
 
 export function Conversations({ platform = false, handoffs = false, timeMode }: { platform?: boolean; handoffs?: boolean; timeMode: TimeDisplayMode }) {
   return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} timeMode={timeMode} />;
@@ -28,7 +29,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
   const [accountKeyword, setAccountKeyword] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
-  const conversationTimeZone = timeMode === "country" && selectedAccount ? timeZoneForCountry(selectedAccount.countryCode || selectedAccount.countryName) : "Asia/Shanghai";
+  const conversationTimeZone = conversationTimeZoneFor(selectedAccount, timeMode);
   const rowsUrl = selectedAccount
     ? withQuery("/api/merchant/conversations", { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone })
     : "";
@@ -38,14 +39,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
   const [rowsError, setRowsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 10);
   const filteredAccounts = useMemo(() => {
-    const keyword = accountKeyword.trim().toLowerCase();
-    return accounts.filter((account) => {
-      const text = [account.verifiedName, account.apiPhone, account.countryName, account.countryCode, account.wabaId].join(" ").toLowerCase();
-      if (keyword && !text.includes(keyword)) return false;
-      if (accountStatus === "enabled" && !account.enabled) return false;
-      if (accountStatus === "disabled" && account.enabled) return false;
-      return true;
-    });
+    return filterConversationAccounts(accounts, { keyword: accountKeyword, status: accountStatus });
   }, [accounts, accountKeyword, accountStatus]);
   const accountPager = useClientPagination(filteredAccounts, 10);
 
@@ -160,7 +154,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
     setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
   };
 
-  const exportFilters = selectedAccount ? { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone, limit: "50000" } : undefined;
+  const exportFilters = conversationExportFilters(filters, conversationTimeZone, selectedAccount);
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
