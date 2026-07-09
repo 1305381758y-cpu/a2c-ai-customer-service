@@ -8,6 +8,16 @@ import { coercePatch } from "../ui/form.js";
 import { inferCountryProfile, languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
+type MerchantUser = User & { status?: string };
+type TargetField = "requirePlatformAccount" | "requirePhone" | "requireTelegram" | "requireWhatsApp";
+
+const TARGET_FIELDS: Array<[TargetField, string]> = [
+  ["requirePlatformAccount", "要求平台开户"],
+  ["requirePhone", "要求手机号"],
+  ["requireTelegram", "要求Telegram"],
+  ["requireWhatsApp", "要求WhatsApp"]
+];
+
 export function MerchantsPage() {
   const [rows, setRows] = useState<Merchant[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -31,9 +41,9 @@ export function MerchantsPage() {
   const [createdLogin, setCreatedLogin] = useState("");
   const [selected, setSelected] = useState<Merchant | null>(null);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<MerchantUser[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<MerchantCountry | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<MerchantUser | null>(null);
   const [userForm, setUserForm] = useState({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
   const reloadMerchants = async () => {
     setRowsLoading(true);
@@ -62,7 +72,7 @@ export function MerchantsPage() {
     }
     const [nextCountries, nextUsers] = await Promise.all([
       loadRows<MerchantCountry>(`/api/admin/merchants/${merchantId}/countries`),
-      loadRows<User>(withQuery("/api/admin/users", { merchantId }))
+      loadRows<MerchantUser>(withQuery("/api/admin/users", { merchantId }))
     ]);
     setCountries(nextCountries);
     setUsers(nextUsers);
@@ -122,12 +132,7 @@ export function MerchantsPage() {
             <label>TG注册说明<input placeholder="Telegram 下载或注册说明链接" value={form.tgRegisterGuideUrl} onChange={(e) => update("tgRegisterGuideUrl", e.target.value)} /></label>
           </div>
           <div className="target-grid">
-            {[
-              ["requirePlatformAccount", "要求平台开户"],
-              ["requirePhone", "要求手机号"],
-              ["requireTelegram", "要求Telegram"],
-              ["requireWhatsApp", "要求WhatsApp"]
-            ].map(([key, text]) => <label key={key}>{text}<select value={(form as any)[key]} onChange={(e) => update(key as keyof typeof form, e.target.value)}><option value="true">需要</option><option value="false">不需要</option></select></label>)}
+            {TARGET_FIELDS.map(([key, text]) => <label key={key}>{text}<select value={form[key]} onChange={(e) => update(key, e.target.value)}><option value="true">需要</option><option value="false">不需要</option></select></label>)}
           </div>
         </div>
         <div className="form-section">
@@ -180,10 +185,10 @@ export function MerchantsPage() {
             await reloadMerchantDetail(selected.id);
           }}><Plus size={16}/>新增账号</AsyncButton>
         </div>
-        <Table rows={users as any[]} columns={["email", "name", "role", "status"]} onRow={(row) => setSelectedUser(row as User)} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
-        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: (selectedUser as any).status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
+        <Table rows={users} columns={["email", "name", "role", "status"]} onRow={setSelectedUser} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
+        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: selectedUser.status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
           if (!patch.password) delete patch.password;
-          const saved = await api<User>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
+          const saved = await api<MerchantUser>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
           setSelectedUser(saved);
           await reloadMerchantDetail(selected.id);
         }} onDelete={async () => {
