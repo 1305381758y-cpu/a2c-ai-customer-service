@@ -5,7 +5,55 @@ import { api, loadRows } from "../app/api.js";
 import type { A2CAccount, InviteCode, MerchantCountry } from "../types.js";
 import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
 import { countryLabel, displayValue, formatDateTime, label } from "../ui/formatters.js";
+import { Pagination, type PagerState } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+
+export function A2CAccountsPanel({
+  accounts,
+  filteredAccounts,
+  pager,
+  countries,
+  platform,
+  accountKeyword,
+  accountStatus,
+  accountCountryId,
+  onKeywordChange,
+  onStatusChange,
+  onCountryChange,
+  onToggle
+}: {
+  accounts: A2CAccount[];
+  filteredAccounts: A2CAccount[];
+  pager: PagerState & { rows: A2CAccount[] };
+  countries: MerchantCountry[];
+  platform: boolean;
+  accountKeyword: string;
+  accountStatus: string;
+  accountCountryId: string;
+  onKeywordChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+  onCountryChange: (value: string) => void;
+  onToggle: (account: A2CAccount) => Promise<void>;
+}) {
+  return <div className="memory">
+    <div className="account-section-head">
+      <div><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p></div>
+      <span>已保存 {accounts.length} 个账号</span>
+    </div>
+    <div className="account-filter-bar">
+      <label>搜索账号<input value={accountKeyword} onChange={(event) => onKeywordChange(event.target.value)} placeholder="手机号、名称、WABA ID" /></label>
+      <label>状态<select value={accountStatus} onChange={(event) => onStatusChange(event.target.value)}><option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option></select></label>
+      <label>国家<select value={accountCountryId} onChange={(event) => onCountryChange(event.target.value)}><option value="">全部国家</option>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select></label>
+    </div>
+    <div className="account-list-meta">当前筛选 {filteredAccounts.length} 个账号，显示第 {(pager.page - 1) * pager.pageSize + (pager.total ? 1 : 0)} - {Math.min(pager.page * pager.pageSize, pager.total)} 个。</div>
+    <div className="account-grid">
+      {pager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => onToggle(row)} onCountry={async () => undefined} />)}
+      {!accounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}
+      {accounts.length > 0 && !filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}
+    </div>
+    <Pagination pager={pager} />
+  </div>;
+}
 
 export function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {
   const [codes, setCodes] = useState<InviteCode[]>([]);
