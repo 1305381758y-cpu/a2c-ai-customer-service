@@ -10,7 +10,7 @@ import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
 import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
-import { DEFAULT_COUNTRY_DRAFT, countryToDraft, filterA2CAccounts } from "./ConfigPageHelpers.js";
+import { DEFAULT_COUNTRY_DRAFT, configPageEndpoints, configWebhookUrl, countryToDraft, filterA2CAccounts } from "./ConfigPageHelpers.js";
 
 export function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -23,31 +23,26 @@ export function Config({ platform }: { platform: boolean }) {
   const [countryDraft, setCountryDraft] = useState(DEFAULT_COUNTRY_DRAFT);
   const [teacherTgLinks, setTeacherTgLinks] = useState<TeacherTgLink[]>([]);
   const [teacherTgDraft, setTeacherTgDraft] = useState({ urls: "", priority: "0", rotationCount: "1" });
-  const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
-  const countriesUrl = platform ? `/api/admin/merchants/${merchantId}/countries` : "/api/merchant/countries";
-  const a2cAccountsUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts` : "/api/merchant/a2c/accounts";
-  const a2cSyncUrl = platform ? `/api/admin/merchants/${merchantId}/a2c/accounts/sync` : "/api/merchant/a2c/accounts/sync";
-  const teacherTgLinksUrl = platform ? `/api/admin/merchants/${merchantId}/teacher-tg-links` : "/api/merchant/teacher-tg-links";
-  const checkUrl = platform ? `/api/admin/merchants/${merchantId}/config/check` : "/api/merchant/config/check";
-  const a2cWebhookUrl = `${window.location.origin}/webhooks/a2c/${platform ? merchantId : String(form.merchantId || "default")}`;
+  const endpoints = configPageEndpoints(platform, merchantId);
+  const a2cWebhookUrl = configWebhookUrl(window.location.origin, platform, merchantId, form);
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
   const [accountKeyword, setAccountKeyword] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [accountCountryId, setAccountCountryId] = useState("");
-  const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
+  const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(endpoints.config));
   useEffect(() => {
     reloadConfig().catch((err) => setError(err instanceof Error ? err.message : "配置加载失败"));
-  }, [url]);
+  }, [endpoints.config]);
   useEffect(() => {
-    loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch((err) => setError(err instanceof Error ? err.message : "国家设置加载失败"));
-  }, [countriesUrl]);
+    loadRows<MerchantCountry>(endpoints.countries).then(setCountries).catch((err) => setError(err instanceof Error ? err.message : "国家设置加载失败"));
+  }, [endpoints.countries]);
   useEffect(() => {
-    loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch((err) => setError(err instanceof Error ? err.message : "A2C客服账号加载失败"));
-  }, [a2cAccountsUrl]);
+    loadRows<A2CAccount>(endpoints.a2cAccounts).then(setA2CAccounts).catch((err) => setError(err instanceof Error ? err.message : "A2C客服账号加载失败"));
+  }, [endpoints.a2cAccounts]);
   useEffect(() => {
-    loadRows<TeacherTgLink>(teacherTgLinksUrl).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
-  }, [teacherTgLinksUrl]);
+    loadRows<TeacherTgLink>(endpoints.teacherTgLinks).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
+  }, [endpoints.teacherTgLinks]);
   useEffect(() => { setChecks([]); }, [merchantId]);
   const applyCountryDraft = (country: MerchantCountry) => setCountryDraft(countryToDraft(country));
   useEffect(() => {
@@ -59,10 +54,10 @@ export function Config({ platform }: { platform: boolean }) {
     return filterA2CAccounts(a2cAccounts, { keyword: accountKeyword, status: accountStatus, countryId: accountCountryId });
   }, [a2cAccounts, accountKeyword, accountStatus, accountCountryId]);
   const accountPager = useClientPagination(filteredA2CAccounts, 12);
-  const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
-  const reloadTeacherTgLinks = async () => setTeacherTgLinks(await loadRows<TeacherTgLink>(teacherTgLinksUrl));
+  const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(endpoints.countries));
+  const reloadTeacherTgLinks = async () => setTeacherTgLinks(await loadRows<TeacherTgLink>(endpoints.teacherTgLinks));
   const reloadA2CAccounts = async () => {
-    setA2CAccounts(await loadRows<A2CAccount>(a2cAccountsUrl));
+    setA2CAccounts(await loadRows<A2CAccount>(endpoints.a2cAccounts));
     accountPager.setPage(1);
   };
   const uploadTutorialImage = async () => {
@@ -87,7 +82,7 @@ export function Config({ platform }: { platform: boolean }) {
     setError("");
     setMessage("正在检测配置...");
     try {
-      const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(checkUrl);
+      const result = await api<{ rows: ConfigCheck[]; checkedAt: string }>(endpoints.check);
       setChecks(result.rows);
       setMessage("配置检测完成。");
     } catch (err) {
@@ -99,7 +94,7 @@ export function Config({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify(form) });
+      const saved = await api<Record<string, string | boolean>>(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       if (!saved.a2cAppId || !saved.a2cAppSecret) {
         setMessage("配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。");
@@ -114,7 +109,7 @@ export function Config({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
+      const saved = await api<Record<string, string | boolean>>(endpoints.config, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
       setForm(saved);
       setMessage(successMessage);
       notify("success", successMessage);
@@ -129,8 +124,8 @@ export function Config({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      if (!skipSave) await api(url, { method: "PATCH", body: JSON.stringify(form) });
-      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean>; stale?: boolean; warning?: string }>(a2cSyncUrl, { method: "POST" });
+      if (!skipSave) await api(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
+      const result = await api<{ imported: number; rows: A2CAccount[]; config: Record<string, string | boolean>; stale?: boolean; warning?: string }>(endpoints.a2cSync, { method: "POST" });
       setA2CAccounts(result.rows);
       accountPager.setPage(1);
       setForm(result.config);
@@ -147,7 +142,7 @@ export function Config({ platform }: { platform: boolean }) {
   };
   const saveCountry = async () => {
     const payload = coercePatch(countryDraft);
-    await api(countriesUrl, { method: "POST", body: JSON.stringify(payload) });
+    await api(endpoints.countries, { method: "POST", body: JSON.stringify(payload) });
     await reloadCountries();
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
@@ -156,7 +151,7 @@ export function Config({ platform }: { platform: boolean }) {
     const currentCountry = countries[0];
     if (!currentCountry) throw new Error("请先保存国家设置，再批量设置老师TG链接。");
     if (!teacherTgDraft.urls.trim()) throw new Error("请先填写老师TG链接，一行一条。");
-    const result = await api<{ imported: number; rows: TeacherTgLink[] }>(`${teacherTgLinksUrl}/import`, {
+    const result = await api<{ imported: number; rows: TeacherTgLink[] }>(`${endpoints.teacherTgLinks}/import`, {
       method: "POST",
       body: JSON.stringify({
         countryId: currentCountry.id,
@@ -182,7 +177,7 @@ export function Config({ platform }: { platform: boolean }) {
     setMessage("");
     setError("");
     try {
-      await api(url, { method: "PATCH", body: JSON.stringify(form) });
+      await api(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
       const endpoint = platform ? `/api/admin/merchants/${merchantId}/telegram/setup-webhook` : "/api/merchant/telegram/setup-webhook";
       const result = await api<{ config: Record<string, string | boolean>; webhookUrl?: string }>(endpoint, { method: "POST" });
       setForm(result.config);
@@ -200,7 +195,7 @@ export function Config({ platform }: { platform: boolean }) {
     <ConfigCredentialFields form={form} onChange={setForm} />
     <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
     <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} />
-    <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={teacherTgLinksUrl} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
+    <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={endpoints.teacherTgLinks} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
     <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} />
     <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
   </section>;
