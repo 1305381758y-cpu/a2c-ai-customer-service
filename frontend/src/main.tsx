@@ -1324,7 +1324,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
   const [accountKeyword, setAccountKeyword] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
-  const conversationTimeZone = timeMode === "country" && selectedAccount ? timeZoneForCountry(selectedAccount.countryCode || selectedAccount.countryName) : "";
+  const conversationTimeZone = timeMode === "country" && selectedAccount ? timeZoneForCountry(selectedAccount.countryCode || selectedAccount.countryName) : "Asia/Shanghai";
   const rowsUrl = selectedAccount
     ? withQuery("/api/merchant/conversations", { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone })
     : "";

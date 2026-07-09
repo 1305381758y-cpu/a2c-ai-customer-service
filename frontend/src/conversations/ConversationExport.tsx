@@ -9,13 +9,8 @@ type ExportStartedHandler = (format: ExportFormat) => void;
 
 export function downloadConversationExport(base: string, filters: Filters, format: ExportFormat, onStarted?: ExportStartedHandler) {
   const url = withQuery(base, { ...filters, format });
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
   onStarted?.(format);
+  window.location.assign(url);
 }
 
 export function ConversationExportBar({
