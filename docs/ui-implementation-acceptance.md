@@ -40,6 +40,7 @@
 - 后台分栏、工作面板、详情标题、表单区、商户创建表单、粘性操作条和记忆卡片等跨页面工作区样式已拆到 `frontend/src/styles/workspace.css`。
 - 会话工作台中的客服账号列表、客户列表、会话卡片、导出工具、消息气泡、媒体预览和发送栏基础样式已拆到 `frontend/src/styles/conversations.css`，保留主样式中的后续产品设计覆盖顺序。
 - 话本流程编辑器与意图学习页面的基础布局、节点卡片、版本行、学习指标和详情卡片样式已拆到 `frontend/src/styles/flow-learning.css`。
+- 2026-06 页面适配、会话工作台密度调整、复盘折叠、客户列表和窄屏适配覆盖规则已拆到 `frontend/src/styles/ui-fit-pass.css`，加载在主样式之后。
 - 全局响应式兜底、防横向溢出、窄屏会话布局、表格和表单自适应规则已拆到 `frontend/src/styles/responsive-guardrails.css`，并在最终覆盖文件之前引入。
 - 页面滚动安全、分析页主滚动、话本节点选中态可读性和最后覆盖规则已拆到 `frontend/src/styles/final-overrides.css`，并在 `main.tsx` 中放在主样式之后引入以保持覆盖顺序。
 
