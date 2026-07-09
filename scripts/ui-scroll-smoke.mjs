@@ -214,13 +214,17 @@ async function smokeAgentProfileSave(page) {
 async function smokeScriptFlowCreateAndDelete(page) {
   await clickNav(page, "话本流程");
   const flowName = `验收内置流程-${Date.now()}`;
+  const replyText = `验收节点话术-${Date.now()}`;
   await page.getByPlaceholder("话本名称，可选").fill(flowName);
   await page.getByRole("button", { name: "使用内置11步创建", exact: true }).click();
   await page.waitForFunction((name) => document.body.textContent?.includes(name), flowName, { timeout: 10_000 });
+  await page.getByLabel("客服标准话术").fill(replyText);
+  await page.getByRole("button", { name: "保存节点", exact: true }).click();
+  await page.waitForFunction((text) => document.body.textContent?.includes(text), replyText, { timeout: 10_000 });
   await page.locator(".detail-title-row").getByRole("button", { name: "删除流程", exact: true }).click();
   await confirmDialogAction(page, "删除流程");
   await page.waitForFunction((name) => !document.querySelector(".script-flow-detail")?.textContent?.includes(name), flowName, { timeout: 10_000 });
-  return "商户管理员/话本流程: 内置流程创建后可删除";
+  return "商户管理员/话本流程: 内置流程可创建、编辑节点并删除";
 }
 
 async function main() {
