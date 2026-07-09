@@ -1,0 +1,162 @@
+/* Scroll safety: fixed-height split layouts are useful for chat workspaces, but
+   single-column analytical pages must use the main page scroll instead. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+main {
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.single-column.work-split,
+.dashboard-page,
+.ai-calls-page {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  align-items: start;
+}
+
+.single-column.work-split > .work-panel,
+.dashboard-page > .work-panel,
+.ai-calls-page > .work-panel {
+  overflow: visible;
+}
+
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-heading-row h3 {
+  margin: 0;
+}
+
+/* Script flow readability: keep node cards readable even when selected/enabled. */
+.script-step-list {
+  max-height: min(720px, calc(100vh - 320px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.script-step-card {
+  align-items: start;
+  background: #fff !important;
+  border: 1px solid #dfe7f2;
+  border-left: 4px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  color: var(--text) !important;
+  gap: 8px;
+  line-height: 1.45;
+  padding: 12px 14px;
+}
+
+.script-step-card:hover {
+  background: #f8fbff !important;
+  border-color: #b9cdf8;
+  border-left-color: var(--brand);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .10);
+}
+
+.script-step-card.active {
+  background: #f8fbff !important;
+  border-color: #7da2f6;
+  border-left-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+}
+
+.script-step-card.enabled {
+  border-left-color: #12b76a;
+}
+
+.script-step-card.enabled.active {
+  border-left-color: var(--brand);
+}
+
+.script-step-card.disabled {
+  background: #fbfcfe !important;
+  opacity: .82;
+}
+
+.script-step-card-head {
+  align-items: flex-start;
+  color: var(--text) !important;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
+.script-step-card-head strong {
+  color: var(--text) !important;
+  display: block;
+  flex: 1 1 auto;
+  font-size: 15px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.script-step-status {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.script-step-status.on {
+  background: var(--green-soft);
+  border-color: #abefc6;
+  color: var(--green);
+}
+
+.script-step-status.off {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+}
+
+.script-step-meta {
+  color: var(--muted-strong) !important;
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.script-step-reply {
+  color: var(--muted-strong) !important;
+  display: -webkit-box;
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.55;
+  max-height: 4.65em;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal !important;
+}
+
+@media (min-width: 1181px) {
+  .ai-call-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
