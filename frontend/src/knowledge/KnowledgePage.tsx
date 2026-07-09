@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
@@ -14,14 +14,26 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled });
-  const [rows, setRows] = useRows<Knowledge>(rowsUrl);
+  const [rows, setRows] = useState<Knowledge[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
   const reload = async () => {
-    setRows(await loadRows(rowsUrl));
-    pager.setPage(1);
+    setLoading(true);
+    setError(null);
+    try {
+      setRows(await loadRows(rowsUrl));
+      pager.setPage(1);
+    } catch (err) {
+      setRows([]);
+      setError(err instanceof Error ? err.message : "知识库加载失败，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
   };
+  useEffect(() => { void reload(); }, [rowsUrl]);
 
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
@@ -58,7 +70,16 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             <Plus size={16}/>新增知识
           </AsyncButton>
         </div>
-        <Table rows={pager.rows} columns={["countryId", "type", "title", "content", "language", "priority", "enabled"]} onRow={setSelected} />
+        <Table
+          rows={pager.rows}
+          columns={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
+          onRow={setSelected}
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          emptyTitle="暂无知识内容"
+          emptyDetail="可以新增 FAQ、话术、规则或禁用表达，供后续回复参考。"
+        />
         <Pagination pager={pager} />
       </section>
       {selected && (
@@ -68,12 +89,14 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
             value={selected as any}
             fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
             selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }}
+            deleteTitle="确认彻底删除知识？"
+            deleteDetail="删除后，该知识不会再被后续回复参考。此操作不可恢复，请确认不是正在使用的业务规则或话术。"
+            deleteConfirmText="彻底删除"
             onSave={async (patch) => {
               await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
               await reload();
             }}
             onDelete={async () => {
-              if (!window.confirm("确认彻底删除这条知识？删除后 AI 不会再引用它。")) return;
               await api(`${base}/${selected.id}`, { method: "DELETE" });
               setSelected(null);
               await reload();

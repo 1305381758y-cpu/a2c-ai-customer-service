@@ -16,7 +16,7 @@ import { Dashboard } from "./dashboard/Dashboard.js";
 import { KnowledgePage } from "./knowledge/KnowledgePage.js";
 import { TrainingSimulator } from "./simulator/TrainingSimulator.js";
 import type { A2CAccount, AiCallStats, ChatMessage, ConfigCheck, Conversation, ConversationReview, ConversationReviewItem, ConversationReviewResponse, CustomerMemory, Filters, IntentLearningEvent, InviteCode, Knowledge, Merchant, MerchantCountry, Sample, ScriptFlow, ScriptFlowDetail, ScriptFlowStep, ScriptFlowVersion, TeacherTgLink, TrainingMaterial, TrainingMaterialItem, UnreadSummary, User } from "./types.js";
-import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
+import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, FilterBar, Table } from "./ui/components.js";
 import { coercePatch } from "./ui/form.js";
 import { countryLabel, displayValue, formatConversationDate, formatDateTime, formatTime, getTimeDisplayMode, inferCountryProfile, label, languageName, localizeSystemText, normalizeText, replyModeLabel, setTimeDisplayMode, statusTone, timeDisplayModeLabel, translateSystemMessage, type TimeDisplayMode } from "./ui/formatters.js";
 import { Pagination, useClientPagination } from "./ui/Pagination.js";
@@ -111,7 +111,7 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
         <div className="side-brand"><span>AI</span><div><h2>A2C AI</h2><small>智能客服工作台</small></div></div>
         <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
         <nav>{nav.map(([key, label, Icon]) => <button key={key as string} className={activeView === key ? "active" : ""} onClick={() => setView(key as string)}><Icon size={17}/>{label as string}</button>)}</nav>
-        <button className="logout" onClick={async () => { if (!window.confirm("确认退出当前账号？")) return; await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</button>
+        <ConfirmActionButton className="logout" busyText="退出中..." title="确认退出登录？" detail="退出后需要重新输入账号密码才能进入后台。" confirmText="退出登录" onConfirm={async () => { await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</ConfirmActionButton>
       </aside>
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
@@ -208,7 +208,10 @@ function MetricCard({ title, value, detail }: { title: string; value: number | s
 }
 
 function Merchants() {
-  const [rows, setRows] = useRows<Merchant>("/api/admin/merchants");
+  const [rows, setRows] = useState<Merchant[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState("");
   const [form, setForm] = useState({
     name: "",
     countryCode: "br",
@@ -231,12 +234,26 @@ function Merchants() {
   const [selectedCountry, setSelectedCountry] = useState<MerchantCountry | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
+  const reloadMerchants = async () => {
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      setRows(await loadRows("/api/admin/merchants"));
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "商户列表加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+  useEffect(() => { void reloadMerchants(); }, []);
   const update = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   const updateCountryName = (value: string) => {
     const inferred = inferCountryProfile(value);
     setForm({ ...form, countryName: value, countryCode: inferred.code, defaultLanguage: inferred.defaultLanguage });
   };
   const reloadMerchantDetail = async (merchantId = selected?.id) => {
+    setDetailError("");
     if (!merchantId) {
       setCountries([]);
       setUsers([]);
@@ -251,7 +268,9 @@ function Merchants() {
     setSelectedCountry((current) => nextCountries.find((item) => item.id === current?.id) || nextCountries[0] || null);
     setSelectedUser((current) => nextUsers.find((item) => item.id === current?.id) || null);
   };
-  useEffect(() => { reloadMerchantDetail().catch(() => null); }, [selected?.id]);
+  useEffect(() => {
+    reloadMerchantDetail().catch((err) => setDetailError(err instanceof Error ? err.message : "商户详情加载失败"));
+  }, [selected?.id]);
   const createMerchant = async () => {
     const payload = {
       name: form.name.trim(),
@@ -277,7 +296,7 @@ function Merchants() {
     setCreatedLogin(payload.adminUser ? `商户已创建。商户端登录邮箱：${payload.adminUser.email}；初始密码：${payload.adminUser.password}` : "商户已创建，暂未创建商户端登录账号。");
     setSelected(merchant || null);
     setForm({ ...form, name: "", adminEmail: "", adminName: "", adminPassword: "Merchant123456" });
-    setRows(await loadRows("/api/admin/merchants"));
+    await reloadMerchants();
     if (merchant?.id) await reloadMerchantDetail(merchant.id);
   };
   return <div className="split merchant-admin-layout"><CountryPresetDatalist />
@@ -323,20 +342,20 @@ function Merchants() {
           {createdLogin && <span className="success-text">{createdLogin}</span>}
         </div>
       </div>
-      <Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+      <Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reloadMerchants} emptyTitle="暂无商户" emptyDetail="创建商户后，会在这里显示商户列表。" />
     </section>
     <section className="detail-panel">{selected ? <div className="merchant-detail">
-      <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} onSave={async (patch) => {
+      {detailError && <div className="error" role="alert">商户详情加载失败：{detailError}</div>}
+      <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} deleteTitle="确认彻底删除商户？" deleteDetail={`商户“${selected.name}”的账号、国家、客户、会话、样本、知识库、素材和配置都会被删除，此操作不可恢复。`} deleteConfirmText="彻底删除" onSave={async (patch) => {
         const saved = await api<Merchant>(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
         setSelected(saved);
-        setRows(await loadRows("/api/admin/merchants"));
+        await reloadMerchants();
       }} onDelete={selected.id === "default" ? undefined : async () => {
-        if (!window.confirm(`确认彻底删除商户“${selected.name}”？该商户的账号、国家、客户、会话、样本、知识库、素材和配置都会被删除。`)) return;
         await api(`/api/admin/merchants/${selected.id}`, { method: "DELETE" });
         setSelected(null);
         setSelectedCountry(null);
         setSelectedUser(null);
-        await setRows(await loadRows("/api/admin/merchants"));
+        await reloadMerchants();
         notify("success", "商户已彻底删除");
       }} />
       <div className="form-section">
@@ -361,13 +380,12 @@ function Merchants() {
           }}><Plus size={16}/>新增账号</AsyncButton>
         </div>
         <Table rows={users as any[]} columns={["email", "name", "role", "status"]} onRow={(row) => setSelectedUser(row as User)} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
-        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: (selectedUser as any).status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} onSave={async (patch) => {
+        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: (selectedUser as any).status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
           if (!patch.password) delete patch.password;
           const saved = await api<User>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
           setSelectedUser(saved);
           await reloadMerchantDetail(selected.id);
         }} onDelete={async () => {
-          if (!window.confirm(`确认删除账号 ${selectedUser.email}？`)) return;
           await api(`/api/admin/users/${selectedUser.id}`, { method: "DELETE" });
           setSelectedUser(null);
           await reloadMerchantDetail(selected.id);
@@ -382,10 +400,71 @@ function Merchants() {
 function UsersPage() {
   const [filters, setFilters] = useState<Filters>({ merchantId: "" });
   const usersUrl = withQuery("/api/admin/users", filters);
-  const [rows, setRows] = useRows<Record<string, string>>(usersUrl);
+  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const [form, setForm] = useState({ email: "", name: "", password: "Admin123456", role: "merchant_admin", merchantId: "default" });
   const [selected, setSelected] = useState<Record<string, string> | null>(null);
-  return <div className="split"><section><div className="toolbar wrap"><input placeholder="按商户ID筛选" value={filters.merchantId} onChange={(e) => setFilters({ merchantId: e.target.value })} /><button onClick={async () => setRows(await loadRows(usersUrl))}>筛选</button></div><div className="toolbar wrap">{["email","name","password","merchantId"].map((k) => <input key={k} placeholder={label(k)} value={(form as any)[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />)}<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="merchant_admin">{label("merchant_admin")}</option><option value="merchant_operator">{label("merchant_operator")}</option><option value="platform_admin">{label("platform_admin")}</option></select><button onClick={async () => { await api("/api/admin/users", { method: "POST", body: JSON.stringify(form) }); setRows(await loadRows(usersUrl)); }}>新增用户</button></div><Table rows={rows} columns={["email", "name", "role", "merchantId", "status"]} onRow={setSelected} /></section><section>{selected ? <Editor title="用户设置" value={{ name: selected.name, status: selected.status, role: selected.role, merchantId: selected.merchantId || "", password: "" }} fields={["name", "status", "role", "merchantId", "password"]} selects={{ status: ["active", "disabled"], role: ["platform_admin", "merchant_admin", "merchant_operator"] }} onSave={async (patch) => { if (!patch.password) delete patch.password; await api(`/api/admin/users/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) }); setRows(await loadRows(usersUrl)); }} /> : <p>选择用户后可停用、改角色或重置密码。</p>}</section></div>;
+  const reload = async () => {
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      setRows(await loadRows(usersUrl));
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "用户列表加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+  useEffect(() => { void reload(); }, [usersUrl]);
+  const createUser = async () => {
+    await api("/api/admin/users", { method: "POST", body: JSON.stringify(form) });
+    setForm({ ...form, email: "", name: "", password: "Admin123456" });
+    await reload();
+    notify("success", "用户已新增");
+  };
+  return <div className="split work-split">
+    <section className="work-panel">
+      <div className="toolbar wrap">
+        <input placeholder="按商户ID筛选" value={filters.merchantId} onChange={(e) => setFilters({ merchantId: e.target.value })} />
+        <AsyncButton busyText="筛选中..." onClick={reload}><Search size={16}/>筛选</AsyncButton>
+      </div>
+      <div className="toolbar wrap compact-create">
+        {["email", "name", "password", "merchantId"].map((key) => <input key={key} placeholder={label(key)} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />)}
+        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <option value="merchant_admin">{label("merchant_admin")}</option>
+          <option value="merchant_operator">{label("merchant_operator")}</option>
+          <option value="platform_admin">{label("platform_admin")}</option>
+        </select>
+        <AsyncButton disabled={!form.email.trim() || !form.name.trim() || form.password.length < 8} busyText="新增中..." onClick={createUser}><Plus size={16}/>新增用户</AsyncButton>
+      </div>
+      <Table rows={rows} columns={["email", "name", "role", "merchantId", "status"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle="暂无用户" emptyDetail="新增平台管理员、商户管理员或商户运营后，会显示在这里。" />
+    </section>
+    <section className="detail-panel">
+      {selected ? <Editor
+        title="用户设置"
+        value={{ name: selected.name, status: selected.status, role: selected.role, merchantId: selected.merchantId || "", password: "" }}
+        fields={["name", "status", "role", "merchantId", "password"]}
+        selects={{ status: ["active", "disabled"], role: ["platform_admin", "merchant_admin", "merchant_operator"] }}
+        deleteTitle="确认删除后台用户？"
+        deleteDetail={`删除用户 ${selected.email} 后，该账号将无法登录后台。商户和客户数据不会删除。`}
+        deleteConfirmText="删除用户"
+        onSave={async (patch) => {
+          if (!patch.password) delete patch.password;
+          const saved = await api<Record<string, string>>(`/api/admin/users/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+          setSelected(saved);
+          await reload();
+        }}
+        onDelete={async () => {
+          await api(`/api/admin/users/${selected.id}`, { method: "DELETE" });
+          setSelected(null);
+          await reload();
+          notify("success", "用户已删除");
+        }}
+      /> : <div className="empty-state">选择用户后可停用、改角色、重置密码或删除账号。</div>}
+    </section>
+  </div>;
 }
 
 function Config({ platform }: { platform: boolean }) {
@@ -412,10 +491,18 @@ function Config({ platform }: { platform: boolean }) {
   const [accountStatus, setAccountStatus] = useState("");
   const [accountCountryId, setAccountCountryId] = useState("");
   const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(url));
-  useEffect(() => { reloadConfig().catch(() => null); }, [url]);
-  useEffect(() => { loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch(() => setCountries([])); }, [countriesUrl]);
-  useEffect(() => { loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch(() => setA2CAccounts([])); }, [a2cAccountsUrl]);
-  useEffect(() => { loadRows<TeacherTgLink>(teacherTgLinksUrl).then(setTeacherTgLinks).catch(() => setTeacherTgLinks([])); }, [teacherTgLinksUrl]);
+  useEffect(() => {
+    reloadConfig().catch((err) => setError(err instanceof Error ? err.message : "配置加载失败"));
+  }, [url]);
+  useEffect(() => {
+    loadRows<MerchantCountry>(countriesUrl).then(setCountries).catch((err) => setError(err instanceof Error ? err.message : "国家设置加载失败"));
+  }, [countriesUrl]);
+  useEffect(() => {
+    loadRows<A2CAccount>(a2cAccountsUrl).then(setA2CAccounts).catch((err) => setError(err instanceof Error ? err.message : "A2C客服账号加载失败"));
+  }, [a2cAccountsUrl]);
+  useEffect(() => {
+    loadRows<TeacherTgLink>(teacherTgLinksUrl).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
+  }, [teacherTgLinksUrl]);
   useEffect(() => { setChecks([]); }, [merchantId]);
   const applyCountryDraft = (country: MerchantCountry) => {
     setCountryDraft({
@@ -502,10 +589,17 @@ function Config({ platform }: { platform: boolean }) {
   const saveConfigFlag = async (key: "smartReplyEnabled" | "trainingSimulationEnabled" | "strictScriptFlowEnabled", value: boolean, successMessage: string) => {
     setMessage("");
     setError("");
-    const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
-    setForm(saved);
-    setMessage(successMessage);
-    notify("success", successMessage);
+    try {
+      const saved = await api<Record<string, string | boolean>>(url, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
+      setForm(saved);
+      setMessage(successMessage);
+      notify("success", successMessage);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "保存开关失败";
+      setError(detail);
+      notify("error", "开关保存失败", detail);
+      throw err;
+    }
   };
   const syncA2CAccounts = async (skipSave = false) => {
     setMessage("");
@@ -580,15 +674,15 @@ function Config({ platform }: { platform: boolean }) {
     <div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div>
     <div className={`smart-reply-card ${form.smartReplyEnabled === false ? "off" : "on"}`}>
       <div><h3>智能自动回复</h3><p>{form.smartReplyEnabled === false ? "已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。" : "已开启：客户消息会自动调用 AI，并通过当前 A2C 客服账号回复。"}</p></div>
-      <AsyncButton className={form.smartReplyEnabled === false ? "" : "ghost"} busyText="保存中..." onClick={() => saveConfigFlag("smartReplyEnabled", form.smartReplyEnabled === false, form.smartReplyEnabled === false ? "智能回复已开启" : "智能回复已关闭")}>{form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"}</AsyncButton>
+      <ConfirmActionButton className={form.smartReplyEnabled === false ? "" : "ghost"} busyText="保存中..." title={form.smartReplyEnabled === false ? "确认开启智能回复？" : "确认关闭智能回复？"} detail={form.smartReplyEnabled === false ? "开启后，真实客户消息会按当前 A2C 客服账号自动回复。请确认 A2C、AI 供应商、话本和邀请码配置都已正确。" : "关闭后，系统仍会接收客户消息和更新记录，但不会自动回复真实客户。"} confirmText={form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"} onConfirm={() => saveConfigFlag("smartReplyEnabled", form.smartReplyEnabled === false, form.smartReplyEnabled === false ? "智能回复已开启" : "智能回复已关闭")}>{form.smartReplyEnabled === false ? "开启智能回复" : "关闭智能回复"}</ConfirmActionButton>
     </div>
     <div className={`smart-reply-card ${form.trainingSimulationEnabled ? "on" : "off"}`}>
       <div><h3>模拟训练模式</h3><p>{form.trainingSimulationEnabled ? "已开启：真实 A2C 消息只会进入内部训练并生成记录，不会真实回复客户，也不会通知接管群。" : "已关闭：真实 A2C 消息会按当前配置正常自动回复客户。"}</p></div>
-      <AsyncButton className={form.trainingSimulationEnabled ? "ghost" : ""} busyText="保存中..." onClick={() => saveConfigFlag("trainingSimulationEnabled", !form.trainingSimulationEnabled, form.trainingSimulationEnabled ? "模拟训练已关闭" : "模拟训练已开启")}>{form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"}</AsyncButton>
+      <ConfirmActionButton className={form.trainingSimulationEnabled ? "ghost" : ""} busyText="保存中..." title={form.trainingSimulationEnabled ? "确认关闭模拟训练？" : "确认开启模拟训练？"} detail={form.trainingSimulationEnabled ? "关闭后，真实 A2C 消息会恢复按当前配置自动回复客户。请确认线上配置已经准备好。" : "开启后，真实 A2C 消息只进入内部训练，不会真实回复客户，也不会通知接管群。适合测试前排查流程。"} confirmText={form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"} onConfirm={() => saveConfigFlag("trainingSimulationEnabled", !form.trainingSimulationEnabled, form.trainingSimulationEnabled ? "模拟训练已关闭" : "模拟训练已开启")}>{form.trainingSimulationEnabled ? "关闭模拟训练" : "开启模拟训练"}</ConfirmActionButton>
     </div>
     <div className={`smart-reply-card ${form.strictScriptFlowEnabled ? "on" : "off"}`}>
       <div><h3>话本流程</h3><p>{form.strictScriptFlowEnabled ? "已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。" : "已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"}</p></div>
-      <AsyncButton className={form.strictScriptFlowEnabled ? "ghost" : ""} busyText="保存中..." onClick={() => saveConfigFlag("strictScriptFlowEnabled", !form.strictScriptFlowEnabled, form.strictScriptFlowEnabled ? "话本流程已关闭" : "话本流程已开启")}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</AsyncButton>
+      <ConfirmActionButton className={form.strictScriptFlowEnabled ? "ghost" : ""} busyText="保存中..." title={form.strictScriptFlowEnabled ? "确认关闭话本流程？" : "确认开启话本流程？"} detail={form.strictScriptFlowEnabled ? "关闭后，客户可能不再按固定开户注册流程推进，而是走普通回复或兜底逻辑。" : "开启后，客户回复会优先按当前启用话本流程推进。请确认话本流程、注册链接、邀请码和导师 TG 链接配置正确。"} confirmText={form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"} onConfirm={() => saveConfigFlag("strictScriptFlowEnabled", !form.strictScriptFlowEnabled, form.strictScriptFlowEnabled ? "话本流程已关闭" : "话本流程已开启")}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</ConfirmActionButton>
     </div>
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
     <div className="memory tutorial-upload-card">
@@ -607,7 +701,7 @@ function Config({ platform }: { platform: boolean }) {
         </div>
       </div>
     </div>
-    <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><AsyncButton onClick={() => syncA2CAccounts()} busyText="同步中..."><RefreshCw size={16}/>同步A2C客服账号</AsyncButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
+    <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><ConfirmActionButton title="确认同步 A2C 客服账号？" detail="同步会真实请求 A2C 接口。A2C Token 有限频风险，请确认不是连续频繁点击；同步后会刷新本地客服账号列表和接收账号配置。" confirmText="同步账号" busyText="同步中..." onConfirm={() => syncA2CAccounts()}><RefreshCw size={16}/>同步A2C客服账号</ConfirmActionButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
     <div className="memory country-settings-card">
@@ -673,19 +767,28 @@ function TeacherTgLinkEditor({ link, endpoint, reload }: { link: TeacherTgLink; 
       <input type="number" min="1" placeholder="轮询次数" value={draft.rotationCount} onChange={(e) => setDraft({ ...draft, rotationCount: e.target.value })} />
       <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option value="active">启用</option><option value="disabled">停用</option></select>
       <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${link.id}`, { method: "PATCH", body: JSON.stringify({ ...draft, priority: Number(draft.priority || 0), rotationCount: Number(draft.rotationCount || 1) }) }); await reload(); notify("success", "老师TG链接已保存"); }}>保存</AsyncButton>
-      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认删除这条老师TG链接？已分配过的老客户仍保留历史绑定。")) return; await api(`${endpoint}/${link.id}`, { method: "DELETE" }); await reload(); notify("success", "老师TG链接已删除"); }}>删除</AsyncButton>
+      <ConfirmActionButton className="danger" busyText="删除中..." title="确认删除导师 TG 链接？" detail="删除后新客户不会再分配到这条导师链接；已分配过的老客户仍保留历史绑定记录。" confirmText="删除链接" onConfirm={async () => { await api(`${endpoint}/${link.id}`, { method: "DELETE" }); await reload(); notify("success", "老师TG链接已删除"); }}>删除</ConfirmActionButton>
     </div>
   </article>;
 }
 
 function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {
   const [codes, setCodes] = useState<InviteCode[]>([]);
+  const [codesError, setCodesError] = useState("");
   const [draft, setDraft] = useState({ codes: "", registerUrl: "" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const endpoint = platform ? `/api/admin/a2c/accounts/${account.id}/invite-codes` : `/api/merchant/a2c/accounts/${account.id}/invite-codes`;
   const codeEndpoint = platform ? "/api/admin/invite-codes" : "/api/merchant/invite-codes";
-  const reload = async () => setCodes(await loadRows<InviteCode>(endpoint));
-  useEffect(() => { reload().catch(() => setCodes([])); }, [endpoint]);
+  const reload = async () => {
+    setCodesError("");
+    try {
+      setCodes(await loadRows<InviteCode>(endpoint));
+    } catch (err) {
+      setCodes([]);
+      setCodesError(err instanceof Error ? err.message : "邀请码池加载失败");
+    }
+  };
+  useEffect(() => { void reload(); }, [endpoint]);
   const selectedCode = codes.find((item) => item.id === selectedId) || codes[0] || null;
   useEffect(() => {
     if (!codes.length) {
@@ -703,7 +806,7 @@ function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: {
   return <article className="account-panel">
     <div className="account-panel-head">
       <div><strong>{account.verifiedName || account.apiPhone}</strong><span>{account.apiPhone} · {countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</span></div>
-      <AsyncButton busyText="处理中..." onClick={onToggle}>{account.enabled ? "停用账号" : "启用账号"}</AsyncButton>
+      <ConfirmActionButton busyText="处理中..." title={account.enabled ? "确认停用客服账号？" : "确认启用客服账号？"} detail={account.enabled ? "停用后，该 A2C 客服账号不会再用于自动回复和分配邀请码；已有会话记录仍会保留。" : "启用后，该 A2C 客服账号会参与自动回复和邀请码分配，请确认账号国家和邀请码池配置正确。"} confirmText={account.enabled ? "停用账号" : "启用账号"} onConfirm={onToggle}>{account.enabled ? "停用账号" : "启用账号"}</ConfirmActionButton>
     </div>
     <div className="account-settings-row">
       <div className="account-country">归属国家：{countryLabel(account.countryName || countries[0]?.name || "默认国家")}</div>
@@ -720,12 +823,13 @@ function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: {
         <div className="invite-manager">
           <div className="invite-list">
             <div className="invite-list-head"><span>邀请码</span><span>状态</span><span>客户</span></div>
-            {codes.map((code) => <button key={code.id} className={selectedCode?.id === code.id ? "active" : ""} onClick={() => setSelectedId(code.id)}>
+            {codesError && <div className="empty-state compact error-state"><strong>邀请码池加载失败</strong><span>{codesError}</span><button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
+            {!codesError && codes.map((code) => <button key={code.id} className={selectedCode?.id === code.id ? "active" : ""} onClick={() => setSelectedId(code.id)}>
               <strong>{code.code}</strong>
               {displayValue("status", code.status)}
               <small>{code.assignedCustomerKey || "未绑定"}</small>
             </button>)}
-            {!codes.length && <div className="empty-state compact">暂无邀请码，先在上方批量导入。</div>}
+            {!codesError && !codes.length && <div className="empty-state compact">暂无邀请码，先在上方批量导入。</div>}
           </div>
           <div className="invite-detail">
             {selectedCode ? <InviteCodeEditor code={selectedCode} endpoint={codeEndpoint} reload={reload} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
@@ -753,7 +857,7 @@ function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoi
     </div>
     <div className="invite-editor-actions">
       <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
-      <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个邀请码？")) return; await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</AsyncButton>
+      <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除邀请码？" detail={`邀请码 ${code.code} 删除后不可恢复。若它已绑定客户，历史绑定记录可能仍用于排查，但不会再进入可分配池。`} confirmText="彻底删除" onConfirm={async () => { await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</ConfirmActionButton>
     </div>
   </div>;
 }
@@ -763,12 +867,27 @@ function Samples({ platform = false }: { platform?: boolean }) {
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", language: "", intent: "", stage: "", enabled: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, language: filters.language, intent: filters.intent, stage: filters.stage, enabled: filters.enabled });
-  const [rows, setRows] = useRows<Sample>(rowsUrl);
+  const [rows, setRows] = useState<Sample[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Sample | null>(null);
-  const reload = async () => { setRows(await loadRows(rowsUrl)); pager.setPage(1); };
-  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel"><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败"); const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] }; notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`); setFile(null); await reload(); }}><Upload size={16}/>上传训练文件</AsyncButton></div><small>支持 CSV、Excel、Word、TXT、截图/图片。表格直接生成样本；文本、Word、截图会自动提取话术。</small></div>}<Table rows={pager.rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); await reload(); }} onDelete={async () => { if (!window.confirm("确认彻底删除这个样本？删除后 AI 不会再引用它。")) return; await api(`${base}/${selected.id}`, { method: "DELETE" }); setSelected(null); await reload(); notify("success", "样本已彻底删除"); }} /></section>}</div>;
+  const reload = async () => {
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      setRows(await loadRows(rowsUrl));
+      pager.setPage(1);
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "样本加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+  useEffect(() => { void reload(); }, [rowsUrl]);
+  return <div className={selected ? "split work-split" : "single-column work-split"}><section className="work-panel"><FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="上传中..." onClick={async () => { if (!file) return; const body = new FormData(); body.append("file", file); body.append("countryId", filters.countryId || countries[0]?.id || ""); const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败"); const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] }; notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`); setFile(null); await reload(); }}><Upload size={16}/>上传训练文件</AsyncButton></div><small>支持 CSV、Excel、Word、TXT、截图/图片。表格直接生成样本；文本、Word、截图会自动提取话术。</small></div>}<Table rows={pager.rows} columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]} onRow={setSelected} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle="暂无训练样本" emptyDetail="上传标准样本、话本或聊天记录后，系统会在这里展示可编辑的优秀回复样本。" /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><Editor title="样本编辑" value={selected as any} fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]} selects={{ enabled: ["true", "false"] }} deleteTitle="确认彻底删除样本？" deleteDetail="删除后，后续回复不会再参考这个优秀样本。此操作不可恢复。" deleteConfirmText="彻底删除" onSave={async (patch) => { await api(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) }); await reload(); }} onDelete={async () => { await api(`${base}/${selected.id}`, { method: "DELETE" }); setSelected(null); await reload(); notify("success", "样本已彻底删除"); }} /></section>}</div>;
 }
 
 function ScriptFlows({ platform = false }: { platform?: boolean }) {
@@ -777,13 +896,27 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status });
-  const [rows, setRows] = useRows<ScriptFlow>(rowsUrl);
+  const [rows, setRows] = useState<ScriptFlow[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ScriptFlow | null>(null);
   const [detail, setDetail] = useState<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] } | null>(null);
   const [selectedStep, setSelectedStep] = useState<ScriptFlowStep | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [flowName, setFlowName] = useState("");
-  const reload = async () => setRows(await loadRows(rowsUrl));
+  const reload = async () => {
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      setRows(await loadRows(rowsUrl));
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "话本流程加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+  useEffect(() => { void reload(); }, [rowsUrl]);
   const loadDetail = async (flow: ScriptFlow) => {
     setSelected(flow);
     const next = await api<{ flow: ScriptFlow; steps: ScriptFlowStep[]; versions: ScriptFlowVersion[] }>(`${base}/${flow.id}`);
@@ -846,7 +979,6 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
   };
   const deleteFlow = async () => {
     if (!selected) return;
-    if (!window.confirm("确认删除这个话本流程？删除后不可恢复。当前启用的话本需要先启用其他话本后再删除。")) return;
     await api(`${base}/${selected.id}`, { method: "DELETE" });
     notify("success", "话本流程已删除");
     setSelected(null);
@@ -869,7 +1001,18 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
         </div>
         <small>支持 Excel/CSV 标准表头，也支持 Word/TXT/MD 自由话本。也可以直接使用系统内置 11 步生成草稿，右侧逐步修改后再启用。</small>
       </div>
-      <Table rows={rows} columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]} onRow={loadDetail} selectedKey={selected?.id} rowKey={(row) => row.id} />
+      <Table
+        rows={rows}
+        columns={["name", "countryName", "status", "active", "version", "stepCount", "updatedAt"]}
+        onRow={loadDetail}
+        selectedKey={selected?.id}
+        rowKey={(row) => row.id}
+        loading={rowsLoading}
+        error={rowsError}
+        onRetry={reload}
+        emptyTitle="暂无话本流程"
+        emptyDetail="可以上传话本文件，或使用内置 11 步创建一个草稿流程。"
+      />
     </section>
     <section className="script-flow-detail detail-panel">
       {detail ? <div className="script-flow-editor">
@@ -880,7 +1023,16 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
           </div>
           <div className="toolbar">
             <AsyncButton busyText="启用中..." onClick={async () => { await api(`${base}/${detail.flow.id}/enable`, { method: "POST" }); notify("success", "话本流程已启用"); await refreshDetail(); }}>启用流程</AsyncButton>
-            <AsyncButton className="danger" busyText="删除中..." onClick={deleteFlow}>删除流程</AsyncButton>
+            <ConfirmActionButton
+              className="danger"
+              busyText="删除中..."
+              title="确认删除话本流程？"
+              detail="删除后不可恢复。若这是当前启用流程，需要先启用其他流程，否则真实客户可能无法继续按预期话本推进。"
+              confirmText="删除流程"
+              onConfirm={deleteFlow}
+            >
+              删除流程
+            </ConfirmActionButton>
           </div>
         </div>
         <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
@@ -904,7 +1056,7 @@ function ScriptFlows({ platform = false }: { platform?: boolean }) {
         <details className="version-panel">
           <summary>版本记录</summary>
           <div className="stack-list">
-            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span><AsyncButton busyText="恢复中..." onClick={async () => { if (!window.confirm(`确认恢复到版本 ${version.version}？`)) return; await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</AsyncButton></div>)}
+            {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span><ConfirmActionButton busyText="恢复中..." title="确认恢复话本版本？" detail={`恢复到版本 ${version.version} 后，当前流程节点和话术会被该版本覆盖。建议确认内容无误后再操作。`} confirmText="恢复版本" onConfirm={async () => { await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</ConfirmActionButton></div>)}
           </div>
         </details>
       </div> : <div className="empty-chat"><h3>选择话本流程</h3><p>上传或选择一个流程后，可以在这里编辑每一步话术、触发条件和下一步规则。</p></div>}
@@ -927,7 +1079,6 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
     await onSaved();
   };
   const remove = async () => {
-    if (!window.confirm("确认删除这个流程节点？如果有其他节点引用它，需要先修改引用。")) return;
     await api(`${endpoint}/${step.id}`, { method: "DELETE" });
     notify("success", "流程节点已删除");
     await onSaved();
@@ -956,7 +1107,7 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
       <label>备注<textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} /></label>
     </div>
     <div className="notice">变量：{"{{REGISTER_URL}}"} 注册链接，{"{{INVITE_CODE}}"} 邀请码，{"{{INVITE_DISPLAY}}"} 链接和邀请码完整文本。</div>
-    <div className="toolbar"><AsyncButton busyText="保存中..." onClick={save}>保存节点</AsyncButton><AsyncButton busyText="复制中..." onClick={duplicate}><Copy size={16}/>复制节点</AsyncButton><AsyncButton className="danger" busyText="删除中..." onClick={remove}>删除节点</AsyncButton></div>
+    <div className="toolbar"><AsyncButton busyText="保存中..." onClick={save}>保存节点</AsyncButton><AsyncButton busyText="复制中..." onClick={duplicate}><Copy size={16}/>复制节点</AsyncButton><ConfirmActionButton className="danger" busyText="删除中..." title="确认删除流程节点？" detail="删除后不可恢复。如果其他节点引用了这个节点，需要先修改引用关系，否则流程可能断开。" confirmText="删除节点" onConfirm={remove}>删除节点</ConfirmActionButton></div>
   </div>;
 }
 
@@ -1065,14 +1216,29 @@ function TrainingMaterials({ platform = false, simple = false }: { platform?: bo
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, sourceType: filters.sourceType, status: filters.status, limit: filters.limit });
-  const [rows, setRows] = useRows<TrainingMaterial>(rowsUrl);
+  const [rows, setRows] = useState<TrainingMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [file, setFile] = useState<File | null>(null);
   const [pasted, setPasted] = useState("");
   const [selected, setSelected] = useState<TrainingMaterial | null>(null);
   const [detail, setDetail] = useState<{ material: TrainingMaterial; items: TrainingMaterialItem[] } | null>(null);
   const [message, setMessage] = useState("");
-  const reload = async () => { setRows(await loadRows(rowsUrl)); pager.setPage(1); };
+  const reload = async () => {
+    setMaterialsLoading(true);
+    setMaterialsError(null);
+    try {
+      setRows(await loadRows(rowsUrl));
+      pager.setPage(1);
+    } catch (err) {
+      setRows([]);
+      setMaterialsError(err instanceof Error ? err.message : "学习资料加载失败，请稍后重试。");
+    } finally {
+      setMaterialsLoading(false);
+    }
+  };
+  useEffect(() => { void reload(); }, [rowsUrl]);
   const loadDetail = async (row: TrainingMaterial) => {
     setSelected(row);
     setDetail(await api<{ material: TrainingMaterial; items: TrainingMaterialItem[] }>(`${base}/${row.id}`));
@@ -1092,7 +1258,7 @@ function TrainingMaterials({ platform = false, simple = false }: { platform?: bo
     : simple
       ? ["countryName", "filename", "sourceType", "itemCount", "status", "createdAt"]
       : ["countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"];
-  return <div className={selected && detail ? "split work-split" : "single-column work-split"}><section className="work-panel">{simple && <div className="training-center-hero"><div><h3>上传资料，系统自动学习</h3><p>把聊天记录、话本、FAQ、业务规则、Word、TXT、Excel 或截图上传到这里。系统会自动拆解、打标签、整理成后续回复可参考的内容。</p></div><div className="training-steps"><span>1 选择国家</span><span>2 上传或粘贴资料</span><span>3 自动学习并生效</span></div></div>}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader training-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="学习中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>{simple ? "上传并学习" : "上传素材"}</AsyncButton></div><textarea placeholder={simple ? "也可以直接粘贴真实聊天记录、话本、问答或业务规则，系统会自动学习" : "粘贴聊天记录、话术、问答或业务规则"} value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="学习中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>{simple ? "学习粘贴内容" : "导入粘贴文本"}</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={pager.rows} columns={columns} onRow={loadDetail} /><Pagination pager={pager} /></section>{selected && detail && <section className="detail-panel"><div><h3>{detail.material.filename}</h3><p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p><div className="toolbar"><AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm(simple ? "确认彻底删除这份学习资料？删除后系统不会再参考它。" : "确认彻底删除这个素材？它生成的样本和知识会一起删除。")) return; await api(`${base}/${detail.material.id}`, { method: "DELETE" }); setSelected(null); setDetail(null); await reload(); notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除"); }}>{simple ? "彻底删除资料" : "彻底删除素材"}</AsyncButton></div>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div></section>}</div>;
+  return <div className={selected && detail ? "split work-split" : "single-column work-split"}><section className="work-panel">{simple && <div className="training-center-hero"><div><h3>上传资料，系统自动学习</h3><p>把聊天记录、话本、FAQ、业务规则、Word、TXT、Excel 或截图上传到这里。系统会自动拆解、打标签、整理成后续回复可参考的内容。</p></div><div className="training-steps"><span>1 选择国家</span><span>2 上传或粘贴资料</span><span>3 自动学习并生效</span></div></div>}<FilterBar filters={filters} setFilters={setFilters} fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]} selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }} onApply={reload} />{!platform && <div className="material-uploader compact-uploader training-uploader"><div className="toolbar"><select value={filters.countryId} onChange={(e) => setFilters({ ...filters, countryId: e.target.value })}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select><input type="file" accept=".csv,.xlsx,.xls,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /><AsyncButton disabled={!file} busyText="学习中..." onClick={async () => { if (file) await uploadFile(file); }}><Upload size={16}/>{simple ? "上传并学习" : "上传素材"}</AsyncButton></div><textarea placeholder={simple ? "也可以直接粘贴真实聊天记录、话本、问答或业务规则，系统会自动学习" : "粘贴聊天记录、话术、问答或业务规则"} value={pasted} onChange={(e) => setPasted(e.target.value)} /><AsyncButton disabled={!pasted.trim()} busyText="学习中..." onClick={async () => { if (!pasted.trim()) return; await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" })); setPasted(""); }}><FileText size={16}/>{simple ? "学习粘贴内容" : "导入粘贴文本"}</AsyncButton>{message && <div className="notice" role="status">{message}</div>}</div>}<Table rows={pager.rows} columns={columns} onRow={loadDetail} loading={materialsLoading} error={materialsError} onRetry={reload} emptyTitle={simple ? "暂无学习资料" : "暂无素材记录"} emptyDetail={simple ? "上传聊天记录、话本、FAQ、业务规则或截图后，系统会自动学习。" : "上传素材后会在这里展示解析结果。"} /><Pagination pager={pager} /></section>{selected && detail && <section className="detail-panel"><div><h3>{detail.material.filename}</h3><p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p><div className="toolbar"><ConfirmActionButton className="danger" busyText="删除中..." title={simple ? "确认彻底删除学习资料？" : "确认彻底删除素材？"} detail={simple ? "删除后系统不会再参考这份学习资料，此操作不可恢复。" : "删除后该素材及其生成的样本和知识会一起删除，后续回复不会再参考它们。"} confirmText={simple ? "彻底删除资料" : "彻底删除素材"} onConfirm={async () => { await api(`${base}/${detail.material.id}`, { method: "DELETE" }); setSelected(null); setDetail(null); await reload(); notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除"); }}>{simple ? "彻底删除资料" : "彻底删除素材"}</ConfirmActionButton></div>{detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}<div className="messages material-items">{detail.items.map((item) => <article key={item.id}><strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong><span>{item.title}</span><small>{label(item.intent || item.stage)}</small><p>{item.content}</p></article>)}</div><pre>{detail.material.rawText || ""}</pre></div></section>}</div>;
 }
 
 function Conversations({ platform = false, handoffs = false }: { platform?: boolean; handoffs?: boolean }) {
@@ -1103,14 +1269,29 @@ function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const base = "/api/admin/conversations";
   const [filters, setFiltersState] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
   const rowsUrl = withQuery(base, filters);
-  const [rows, setRows] = useRows<Conversation>(rowsUrl);
+  const [rows, setRows] = useState<Conversation[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Conversation | null>(null);
-  const reload = async () => { setRows(await loadRows(rowsUrl)); pager.setPage(1); };
+  const reload = async () => {
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      setRows(await loadRows(rowsUrl));
+      pager.setPage(1);
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "会话加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+  useEffect(() => { void reload(); }, [rowsUrl]);
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
   };
-  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "limit"] : ["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => setRows(await loadRows(rowsUrl))} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
+  return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}><section className="work-panel"><ConversationExportBar base="/api/admin/conversations/export" scopedFilters={{ ...filters, limit: "50000" }} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />{handoffs && <div className="conversation-list-toolbar"><span className="status-pill warning">只显示待接管</span></div>}<FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["merchantId", "language", "limit"] : ["merchantId", "status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reload} /><Table rows={pager.rows} columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle={handoffs ? "暂无待接管会话" : "暂无会话"} emptyDetail={handoffs ? "客户触发人工接管后会显示在这里。" : "客户发送消息后，会话会显示在这里。"} /><Pagination pager={pager} /></section>{selected && <section className="detail-panel"><ConversationDetail platform conversation={selected} refresh={async () => { setRows(await loadRows(rowsUrl)); }} onDeleted={async () => { setSelected(null); await reload(); }} /></section>}</div>;
 }
 
 function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
@@ -1128,7 +1309,9 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
   const rowsUrl = selectedAccount
     ? withQuery("/api/merchant/conversations", { ...filters, a2cAccountPhone: selectedAccount.apiPhone })
     : "";
-  const [rows, setRows] = useRows<Conversation>(rowsUrl || "/api/merchant/conversations?limit=1&a2cAccountPhone=__none__");
+  const [rows, setRows] = useState<Conversation[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 10);
   const filteredAccounts = useMemo(() => {
     const keyword = accountKeyword.trim().toLowerCase();
@@ -1166,17 +1349,32 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
     setUnread(res.rows);
   };
   const reloadRows = async () => {
-    if (!selectedAccount) return;
-    const nextRows = await loadRows<Conversation>(rowsUrl);
-    setRows(nextRows);
-    setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
+    if (!selectedAccount || !rowsUrl) {
+      setRows([]);
+      setRowsError(null);
+      return;
+    }
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      const nextRows = await loadRows<Conversation>(rowsUrl);
+      setRows(nextRows);
+      setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
+    } catch (err) {
+      setRows([]);
+      setRowsError(err instanceof Error ? err.message : "客户会话加载失败，请稍后重试。");
+    } finally {
+      setRowsLoading(false);
+    }
   };
+  useEffect(() => { void reloadRows(); }, [rowsUrl]);
   useEffect(() => {
     if (!selectedAccount) return;
     let cancelled = false;
     const pollRows = async () => {
       const nextRows = await loadRows<Conversation>(rowsUrl).catch(() => null);
       if (!nextRows || cancelled) return;
+      setRowsError(null);
       setRows(nextRows);
       setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
     };
@@ -1268,6 +1466,8 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       exportFilters={exportFilters}
       pager={pager}
       totalRows={rows.length}
+      loading={rowsLoading}
+      loadError={rowsError}
       newCustomer={newCustomer}
       error={error}
       accountUnread={accountUnread}
@@ -1282,6 +1482,7 @@ function MerchantConversations({ handoffs = false }: { handoffs?: boolean }) {
       onOpenConversation={openConversation}
       onNewCustomerChange={setNewCustomer}
       onOpenNewCustomer={openNewCustomer}
+      onRetry={reloadRows}
       onExportStarted={notifyExportStarted}
       renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "limit"] : ["status", "handoffStatus", "language", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
     />
@@ -1307,24 +1508,55 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
   const [statusMessage, setStatusMessage] = useState("");
   const [error, setError] = useState("");
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState("");
+  const [memoryError, setMemoryError] = useState("");
+  const [reviewError, setReviewError] = useState("");
+  const [contextError, setContextError] = useState("");
   const messagesRef = useRef<HTMLDivElement | null>(null);
-  const loadMessages = async () => {
-    const res = await api<{ rows: ChatMessage[] }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages?limit=100`);
-    setMessages(res.rows);
+  const loadMessages = async (showLoading = false) => {
+    if (showLoading) setMessagesLoading(true);
+    try {
+      const res = await api<{ rows: ChatMessage[] }>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/messages?limit=100`);
+      setMessages(res.rows);
+      setMessagesError("");
+    } catch (err) {
+      setMessagesError(err instanceof Error ? err.message : "聊天记录加载失败");
+    } finally {
+      if (showLoading) setMessagesLoading(false);
+    }
   };
   useEffect(() => {
     if (!platform) api(`/api/merchant/conversations/${conversation.id}/read`, { method: "POST" }).then(() => refresh()).catch(() => null);
-    loadMessages().catch(() => null);
-    const timer = window.setInterval(() => loadMessages().catch(() => null), 3000);
+    void loadMessages(true);
+    const timer = window.setInterval(() => void loadMessages(), 3000);
     return () => window.clearInterval(timer);
   }, [conversation.id, platform]);
   useEffect(() => {
     const node = messagesRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages.length, conversation.id]);
-  useEffect(() => { api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => { setMemory(item); setNotes(item.operatorNotes || ""); }).catch(() => { setMemory(null); setNotes(""); }); }, [conversation.id, platform]);
-  const loadReview = async () => setReview(await api<ConversationReviewResponse>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/review`));
-  useEffect(() => { loadReview().catch(() => setReview({ review: null, items: [] })); }, [conversation.id, platform]);
+  useEffect(() => {
+    setMemoryError("");
+    api<CustomerMemory>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/memory`).then((item) => {
+      setMemory(item);
+      setNotes(item.operatorNotes || "");
+    }).catch((err) => {
+      setMemory(null);
+      setNotes("");
+      setMemoryError(err instanceof Error ? err.message : "客户记忆加载失败");
+    });
+  }, [conversation.id, platform]);
+  const loadReview = async () => {
+    setReviewError("");
+    try {
+      setReview(await api<ConversationReviewResponse>(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}/review`));
+    } catch (err) {
+      setReview({ review: null, items: [] });
+      setReviewError(err instanceof Error ? err.message : "对话复盘加载失败");
+    }
+  };
+  useEffect(() => { void loadReview(); }, [conversation.id, platform]);
   useEffect(() => {
     if (platform) {
       setScriptFlow(null);
@@ -1334,21 +1566,30 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
     }
     let cancelled = false;
     const loadBusinessContext = async () => {
-      const flow = await loadActiveScriptFlow(conversation.countryId).catch(() => null);
-      const sampleFilters = {
-        countryId: conversation.countryId || "",
-        language: conversation.language || "",
-        stage: conversation.stage || "",
-        enabled: "true"
-      };
-      const [samplesResult, knowledgeResult] = await Promise.all([
-        loadRows<Sample>(withQuery("/api/merchant/training-samples", sampleFilters)).catch(() => []),
-        loadRows<Knowledge>(withQuery("/api/merchant/knowledge", { countryId: conversation.countryId || "", enabled: "true" })).catch(() => [])
-      ]);
-      if (cancelled) return;
-      setScriptFlow(flow);
-      setTrainingSamples(samplesResult);
-      setKnowledgeItems(knowledgeResult);
+      setContextError("");
+      try {
+        const flow = await loadActiveScriptFlow(conversation.countryId).catch(() => null);
+        const sampleFilters = {
+          countryId: conversation.countryId || "",
+          language: conversation.language || "",
+          stage: conversation.stage || "",
+          enabled: "true"
+        };
+        const [samplesResult, knowledgeResult] = await Promise.all([
+          loadRows<Sample>(withQuery("/api/merchant/training-samples", sampleFilters)),
+          loadRows<Knowledge>(withQuery("/api/merchant/knowledge", { countryId: conversation.countryId || "", enabled: "true" }))
+        ]);
+        if (cancelled) return;
+        setScriptFlow(flow);
+        setTrainingSamples(samplesResult);
+        setKnowledgeItems(knowledgeResult);
+      } catch (err) {
+        if (cancelled) return;
+        setScriptFlow(null);
+        setTrainingSamples([]);
+        setKnowledgeItems([]);
+        setContextError(err instanceof Error ? err.message : "业务上下文加载失败");
+      }
     };
     void loadBusinessContext();
     return () => { cancelled = true; };
@@ -1413,11 +1654,12 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
           await loadReview().catch(() => null);
           refresh();
         }}
-        renderDeleteAction={() => <AsyncButton className="danger" busyText="删除中..." onClick={async () => { if (!window.confirm("确认彻底删除这个会话？聊天记录和接管记录会一起删除。")) return; await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</AsyncButton>}
+        renderDeleteAction={() => <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除会话？" detail="该会话的聊天记录、接管记录和相关状态会一起删除，此操作不可恢复。" confirmText="删除会话" onConfirm={async () => { await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</ConfirmActionButton>}
       />
       {error && <div className="error" role="alert">{error}</div>}
       {statusMessage && <div className="notice" role="status">{statusMessage}</div>}
-      <div className="chat-window" ref={messagesRef}>{messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: (value) => formatConversationDate(value, conversation.countryCode || conversation.countryName || conversation.countryId), formatTime: (value) => formatTime(value, conversation.countryCode || conversation.countryName || conversation.countryId), label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
+      {messagesError && <div className="warning">聊天记录刷新失败：{messagesError}<button className="ghost" onClick={() => void loadMessages(true)}>重新加载</button></div>}
+      <div className="chat-window" ref={messagesRef}>{messagesLoading ? <div className="empty-state">聊天记录加载中...</div> : messages.length ? <MessageTimeline messages={messages} helpers={{ formatDate: (value) => formatConversationDate(value, conversation.countryCode || conversation.countryName || conversation.countryId), formatTime: (value) => formatTime(value, conversation.countryCode || conversation.countryName || conversation.countryId), label, languageName, normalizeText, replyModeLabel, translateSystemMessage }} /> : <div className="empty-state">暂无聊天记录</div>}</div>
       <ScriptProgress flowStep={flowStep} scriptFlow={scriptFlow} />
       {!platform && <ConversationComposer value={send} onChange={setSend} renderSendAction={sendAction} quickReplies={quickReplies} />}
     </section>
@@ -1431,7 +1673,10 @@ function ConversationDetail({ platform = false, conversation, refresh, onDeleted
       trainingSamples={trainingSamples}
       knowledgeItems={knowledgeItems}
       review={review}
+      reviewError={reviewError}
       memory={memory}
+      memoryError={memoryError}
+      contextError={contextError}
       notes={notes}
       localizeSystemText={localizeSystemText}
       onNotesChange={setNotes}
@@ -1539,7 +1784,10 @@ function TrainingLoopPanel({
   trainingSamples,
   knowledgeItems,
   review,
+  reviewError,
   memory,
+  memoryError,
+  contextError,
   notes,
   localizeSystemText,
   onNotesChange,
@@ -1557,7 +1805,10 @@ function TrainingLoopPanel({
   trainingSamples: Sample[];
   knowledgeItems: Knowledge[];
   review: ConversationReviewResponse;
+  reviewError: string;
   memory: CustomerMemory | null;
+  memoryError: string;
+  contextError: string;
   notes: string;
   localizeSystemText: (value: string) => string;
   onNotesChange: (value: string) => void;
@@ -1584,6 +1835,7 @@ function TrainingLoopPanel({
       <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>历史记录</button>
     </div>
     {activeTab === "assistant" && <>
+      {contextError && <div className="warning">业务上下文加载失败：{contextError}</div>}
       <section className="assistant-card ai-reply-card">
         <div className="assistant-card-title"><Sparkles size={17}/><div><h3>AI 回复建议</h3><p>基于对话上下文生成</p></div></div>
         <div className="reply-preview">{suggestedReply}</div>
@@ -1621,7 +1873,7 @@ function TrainingLoopPanel({
       <section className="assistant-card">
         <div className="assistant-card-title"><Lightbulb size={17}/><div><h3>训练提升</h3><p>当前对话可沉淀为训练内容</p></div></div>
         <div className="training-actions"><button className="ghost" onClick={() => notify("info", "已标记：不准确", "请点击“一键提升为训练样本”生成复盘候选后再处理。")}>不准确</button><button className="ghost" onClick={() => notify("info", "已标记：不完整", "请点击“一键提升为训练样本”补全复盘候选。")}>不完整</button>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
-        <ConversationReviewCard platform={platform} data={review} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
+        <ConversationReviewCard platform={platform} data={review} error={reviewError} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
       </section>
     </>}
     {activeTab === "profile" && <section className="assistant-card customer-profile-panel">
@@ -1637,7 +1889,7 @@ function TrainingLoopPanel({
         <span>Telegram</span><strong>{conversation.extractedTelegram || "未识别"}</strong>
         <span>WhatsApp</span><strong>{conversation.extractedWhatsApp || "未识别"}</strong>
       </div>
-      <ConversationMemoryCard memory={memory} notes={notes} localizeSystemText={localizeSystemText} onNotesChange={onNotesChange} renderSaveAction={saveMemoryAction} />
+      <ConversationMemoryCard memory={memory} error={memoryError} notes={notes} localizeSystemText={localizeSystemText} onNotesChange={onNotesChange} renderSaveAction={saveMemoryAction} />
     </section>}
     {activeTab === "ticket" && <section className="assistant-card ticket-panel">
       <div className="assistant-card-title"><MessageSquare size={17}/><div><h3>工单</h3><p>当前会话处理状态</p></div><span className="status-pill ok">{label(conversation.handoffStatus)}</span></div>

@@ -4,7 +4,7 @@ import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import { ConversationExportBar } from "../conversations/ConversationExport.js";
 import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
-import { AsyncButton, FilterBar, Table } from "../ui/components.js";
+import { ConfirmActionButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
@@ -23,6 +23,8 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
   const rowsUrl = withQuery(base, queryFilters);
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<Customer | null>(null);
   const compactColumns = platform
@@ -33,15 +35,24 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
     : ["countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"];
   const columns = selected ? compactColumns : fullColumns;
   const reload = async () => {
-    const result = await api<{ rows: Customer[]; total: number }>(rowsUrl);
-    setRows(result.rows);
-    setTotal(result.total);
-    pager.setPage(1);
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api<{ rows: Customer[]; total: number }>(rowsUrl);
+      setRows(result.rows);
+      setTotal(result.total);
+      pager.setPage(1);
+    } catch (err) {
+      setRows([]);
+      setTotal(0);
+      setError(err instanceof Error ? err.message : "客户数据加载失败，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
   };
-  React.useEffect(() => { reload().catch(() => { setRows([]); setTotal(0); }); }, [rowsUrl]);
+  React.useEffect(() => { void reload(); }, [rowsUrl]);
   const deleteSelected = async () => {
     if (!selected) return;
-    if (!window.confirm(`确认彻底删除客户 ${selected.customerKey}？该客户的所有会话、聊天记录、记忆和接管记录都会一起删除。`)) return;
     const url = platform
       ? `/api/admin/customers/${encodeURIComponent(selected.customerKey)}?merchantId=${encodeURIComponent(selected.merchantId || "default")}`
       : `/api/merchant/customers/${encodeURIComponent(selected.customerKey)}`;
@@ -69,7 +80,18 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
           selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "active", "human_handoff"] }}
           onApply={reload}
         />
-        <Table rows={pager.rows} columns={columns} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+        <Table
+          rows={pager.rows}
+          columns={columns}
+          onRow={setSelected}
+          selectedKey={selected?.id}
+          rowKey={(row) => row.id}
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          emptyTitle="暂无客户数据"
+          emptyDetail="当前筛选条件下没有客户。可以调整时间、状态或搜索条件后重试。"
+        />
         <Pagination pager={pager} />
       </section>
       {selected && (
@@ -80,7 +102,16 @@ export function CustomersPage({ platform = false, renderConversation }: Customer
                 <h3>{selected.customerKey}</h3>
                 <p>{countryLabel(selected.countryName)} · {selected.nickname || "无昵称"} · {label(selected.status)} · {languageName(selected.language)}</p>
               </div>
-              <AsyncButton className="danger" busyText="删除中..." onClick={deleteSelected}>删除客户</AsyncButton>
+              <ConfirmActionButton
+                className="danger"
+                busyText="删除中..."
+                title="确认彻底删除客户？"
+                detail={`客户 ${selected.customerKey} 的所有会话、聊天记录、记忆和接管记录都会一起删除，此操作不可恢复。`}
+                confirmText="彻底删除"
+                onConfirm={deleteSelected}
+              >
+                删除客户
+              </ConfirmActionButton>
             </div>
             <div className="form-grid">
               <label>首次接收账号<input readOnly value={selected.firstA2CAccountPhone || ""} /></label>

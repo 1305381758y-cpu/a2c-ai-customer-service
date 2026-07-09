@@ -40,11 +40,16 @@ export function TrainingSimulator({
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [accountsError, setAccountsError] = useState("");
 
   useEffect(() => {
+    setAccountsError("");
     api<{ rows: A2CAccount[] }>("/api/merchant/a2c/accounts")
       .then((res) => setAccounts(res.rows || []))
-      .catch(() => setAccounts([]));
+      .catch((err) => {
+        setAccounts([]);
+        setAccountsError(err instanceof Error ? err.message : "客服账号加载失败");
+      });
   }, [api]);
 
   useEffect(() => {
@@ -55,21 +60,28 @@ export function TrainingSimulator({
 
   const send = async () => {
     setError("");
-    const res = await api<SimulatorResponse>("/api/merchant/training-simulator/messages", {
-      method: "POST",
-      body: JSON.stringify({
-        customerPhone: form.customerPhone,
-        nickname: form.nickname,
-        a2cAccountPhone: form.a2cAccountPhone || undefined,
-        content: form.content,
-        msgType: "text"
-      })
-    });
-    setRows(res.rows || []);
-    setConversation(res.conversation || null);
-    setStatus(res.status);
-    setForm({ ...form, content: "" });
-    notify("success", "已完成内部模拟", "回复只记录在系统内，不会发送给真实客户。");
+    try {
+      const res = await api<SimulatorResponse>("/api/merchant/training-simulator/messages", {
+        method: "POST",
+        body: JSON.stringify({
+          customerPhone: form.customerPhone,
+          nickname: form.nickname,
+          a2cAccountPhone: form.a2cAccountPhone || undefined,
+          content: form.content,
+          msgType: "text"
+        })
+      });
+      setRows(res.rows || []);
+      setConversation(res.conversation || null);
+      setStatus(res.status);
+      setForm({ ...form, content: "" });
+      notify("success", "已完成内部模拟", "回复只记录在系统内，不会发送给真实客户。");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "内部模拟失败";
+      setError(detail);
+      notify("error", "内部模拟失败", detail);
+      throw err;
+    }
   };
 
   const resetCustomer = () => {
@@ -91,9 +103,10 @@ export function TrainingSimulator({
       <label>选择客服账号
         <select value={form.a2cAccountPhone} onChange={(e) => setForm({ ...form, a2cAccountPhone: e.target.value })}>
           {accounts.map((item) => <option key={item.id} value={item.apiPhone}>{item.verifiedName || "客服账号"} · {item.apiPhone}</option>)}
-          {!accounts.length && <option value="">未同步账号，使用模拟账号</option>}
+          {!accounts.length && <option value="">{accountsError ? "客服账号加载失败" : "未同步账号，使用模拟账号"}</option>}
         </select>
       </label>
+      {accountsError && <div className="error" role="alert">{accountsError}</div>}
       <label>模拟客户号码<input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} /></label>
       <label>模拟客户昵称<input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} /></label>
       <label>客户消息<textarea rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="输入客户会发来的内容，例如：你好 / 链接打不开 / 我没有 Telegram" /></label>

@@ -10,15 +10,27 @@ export function Dashboard({ platform, api, timeMode }: { platform: boolean; api:
   const [data, setData] = useState<Record<string, number>>({});
   const [filters, setFilters] = useState<Filters>({ startAt: "", endAt: "" });
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const endpoint = platform ? "/api/admin/dashboard" : "/api/merchant/dashboard";
   const activeCountry = countries.find((country) => country.status === "active") || countries[0];
   const statsTimeZone = timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
   const statsTimeLabel = timeMode === "country" && activeCountry ? `${activeCountry.name || "国家"}时间` : timeDisplayModeLabel("beijing");
-  const reload = () => api<Record<string, number>>(withQuery(endpoint, { ...filters, timeZone: statsTimeZone })).then(setData);
+  const reload = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await api<Record<string, number>>(withQuery(endpoint, { ...filters, timeZone: statsTimeZone })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "总览数据加载失败");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (platform) return;
-    api<{ rows: MerchantCountry[] }>("/api/merchant/countries").then((result) => setCountries(result.rows || [])).catch(() => setCountries([]));
+    api<{ rows: MerchantCountry[] }>("/api/merchant/countries").then((result) => setCountries(result.rows || [])).catch((err) => setError(err instanceof Error ? err.message : "国家设置加载失败"));
   }, [api, platform]);
 
   useEffect(() => {
@@ -37,6 +49,8 @@ export function Dashboard({ platform, api, timeMode }: { platform: boolean; api:
         <button onClick={reload}><Search size={16}/>筛选时间</button>
       </div>
     </section>
+    {loading && <div className="notice">正在加载总览数据...</div>}
+    {error && <div className="error" role="alert">总览加载失败：{error}<button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
     <div className="metric-section-title">累计总量</div>
     <MetricGrid keys={["customers", "conversations", "customerMessages", "replies", "averageMessagesPerConversation"]} data={data} platform={platform} timeLabel={statsTimeLabel} />
     <div className="metric-section-title">今日，{statsTimeLabel}</div>

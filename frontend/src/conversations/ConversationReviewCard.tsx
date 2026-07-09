@@ -3,13 +3,14 @@ import type { ConversationReviewResponse } from "../types.js";
 
 type ConversationReviewCardProps = {
   data: ConversationReviewResponse;
+  error?: string;
   platform: boolean;
   onGenerate: () => Promise<void>;
   onApply: (itemId: number) => Promise<void>;
   renderAction: (options: { children: React.ReactNode; busyText: string; onClick: () => Promise<void> }) => React.ReactNode;
 };
 
-export function ConversationReviewCard({ data, platform, onGenerate, onApply, renderAction }: ConversationReviewCardProps) {
+export function ConversationReviewCard({ data, error = "", platform, onGenerate, onApply, renderAction }: ConversationReviewCardProps) {
   const review = data.review;
   return <details className="memory review-card review-card-collapsible">
     <summary className="review-summary">
@@ -24,6 +25,7 @@ export function ConversationReviewCard({ data, platform, onGenerate, onApply, re
         {renderAction({ onClick: onGenerate, busyText: "生成中...", children: "生成复盘" })}
         {review?.goalCompleted && <span className="status-pill ok">目标已完成</span>}
       </div>
+      {error && <div className="warning">对话复盘加载失败：{error}</div>}
       {review && <div className="review-grid">
         <ReviewList title="客户主要疑虑" rows={review.mainConcerns} />
         <ReviewList title="发现的问题" rows={review.mistakes} />

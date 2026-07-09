@@ -42,9 +42,10 @@ export class MaintenanceRepository {
               SELECT *
               FROM (
                 SELECT c.*,
+                       c.rowid AS conversation_rowid,
                        ROW_NUMBER() OVER (
                          PARTITION BY c.merchant_id, c.customer_phone
-                         ORDER BY c.updated_at DESC, c.created_at DESC, c.id DESC
+                         ORDER BY c.updated_at DESC, c.created_at DESC, c.rowid DESC
                        ) AS rn
                 FROM conversations c
               )
@@ -54,9 +55,10 @@ export class MaintenanceRepository {
               SELECT *
               FROM (
                 SELECT c.*,
+                       c.rowid AS conversation_rowid,
                        ROW_NUMBER() OVER (
                          PARTITION BY c.merchant_id, c.customer_phone
-                         ORDER BY c.created_at ASC, c.updated_at ASC, c.id ASC
+                         ORDER BY c.created_at ASC, c.updated_at ASC, c.rowid ASC
                        ) AS rn
                 FROM conversations c
               )

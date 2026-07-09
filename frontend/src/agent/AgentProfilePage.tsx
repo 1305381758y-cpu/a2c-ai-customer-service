@@ -40,7 +40,7 @@ export function AgentProfilePage({
       setMerchants([]);
       return;
     }
-    loadRows<Merchant>("/api/admin/merchants").then(setMerchants).catch(() => setMerchants([]));
+    loadRows<Merchant>("/api/admin/merchants").then(setMerchants).catch((err) => setError(err instanceof Error ? err.message : "商户列表加载失败"));
   }, [loadRows, platform]);
 
   const load = async () => setForm(await api<AgentProfile>(url));

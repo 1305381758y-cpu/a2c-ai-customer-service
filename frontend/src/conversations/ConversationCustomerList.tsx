@@ -20,6 +20,8 @@ type ConversationCustomerListProps = {
   exportFilters?: Filters;
   pager: ConversationPager;
   totalRows: number;
+  loading?: boolean;
+  loadError?: string | null;
   newCustomer: DraftCustomer;
   error: string;
   accountUnread: (apiPhone: string) => number;
@@ -34,6 +36,7 @@ type ConversationCustomerListProps = {
   onOpenConversation: (conversation: Conversation) => void;
   onNewCustomerChange: (value: DraftCustomer) => void;
   onOpenNewCustomer: () => void;
+  onRetry?: () => Promise<void> | void;
   onExportStarted: (format: "csv" | "jsonl") => void;
   renderFilterBar: () => React.ReactNode;
 };
@@ -47,6 +50,8 @@ export function ConversationCustomerList({
   exportFilters,
   pager,
   totalRows,
+  loading = false,
+  loadError = null,
   newCustomer,
   error,
   accountUnread,
@@ -61,6 +66,7 @@ export function ConversationCustomerList({
   onOpenConversation,
   onNewCustomerChange,
   onOpenNewCustomer,
+  onRetry,
   onExportStarted,
   renderFilterBar
 }: ConversationCustomerListProps) {
@@ -97,7 +103,9 @@ export function ConversationCustomerList({
         </div>
       </details>
       <div className="stack-list conversation-list">
-        {pager.rows.map((row) => {
+        {loading && <div className="empty-state">客户会话加载中...</div>}
+        {!loading && loadError && <div className="empty-state error-state"><strong>客户会话加载失败</strong><span>{loadError}</span>{onRetry && <button className="ghost" onClick={() => void onRetry()}>重新加载</button>}</div>}
+        {!loading && !loadError && pager.rows.map((row) => {
           const unreadCount = conversationUnread(row.id);
           return <div key={row.id} role="button" tabIndex={0} className={`conversation-row ${row.pinnedAt ? "pinned" : ""} ${unreadCount > 0 ? "unread" : ""} ${selectedConversation?.id === row.id ? "active" : ""}`} onClick={() => onOpenConversation(row)} onKeyDown={(event) => { if (event.key === "Enter") onOpenConversation(row); }}>
             <span className="conversation-row-main">
@@ -115,7 +123,7 @@ export function ConversationCustomerList({
             </span>
           </div>;
         })}
-        {!totalRows && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}
+        {!loading && !loadError && !totalRows && <div className="empty-state">这个客服账号下还没有客户会话。可以等待客户发消息，或主动打开新客户对话框。</div>}
       </div>
       <Pagination pager={pager} />
     </>}
