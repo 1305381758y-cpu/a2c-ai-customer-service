@@ -185,6 +185,24 @@ async function smokeMerchantSettingsToggles(page) {
   return "商户管理员/设置: 3 个高风险开关点击生效";
 }
 
+async function smokeDateFilterRequest(page, navLabel, endpointPart, reportLabel) {
+  await clickNav(page, navLabel);
+  await page.getByLabel("开始时间").fill("2026-07-01T00:00:01");
+  await page.getByLabel("结束时间").fill("2026-07-01T23:59:59");
+  const [response] = await Promise.all([
+    page.waitForResponse((res) => {
+      if (!res.url().includes(endpointPart)) return false;
+      const url = new URL(res.url());
+      return url.searchParams.get("startAt") === "2026-07-01T00:00:01"
+        && url.searchParams.get("endAt") === "2026-07-01T23:59:59"
+        && Boolean(url.searchParams.get("timeZone"));
+    }, { timeout: 10_000 }),
+    page.getByRole("button", { name: navLabel === "总览" ? "筛选时间" : "筛选", exact: true }).click()
+  ]);
+  if (!response.ok()) throw new Error(`${reportLabel} 筛选请求失败：${response.status()}`);
+  return `${reportLabel}: 时间筛选请求生效`;
+}
+
 async function main() {
   await waitForHealth();
   const browser = await chromium.launch({ headless: true });
@@ -197,6 +215,8 @@ async function main() {
     await logout(page);
     await login(page, "merchant-scroll@example.com", "Merchant123456");
     report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
+    report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
+    report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
     report.push(await smokeMerchantSettingsToggles(page));
     console.log(report.join("\n"));
   } finally {
