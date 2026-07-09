@@ -102,6 +102,7 @@ export function ConversationCustomerList({
           {error && <div className="error">{error}</div>}
         </div>
       </details>
+      <div className="table-helper">当前筛选共 {totalRows} 个客户会话，列表展示前 {pager.total} 个。</div>
       <div className="stack-list conversation-list">
         {loading && <div className="empty-state">客户会话加载中...</div>}
         {!loading && loadError && <div className="empty-state error-state"><strong>客户会话加载失败</strong><span>{loadError}</span>{onRetry && <button className="ghost" onClick={() => void onRetry()}>重新加载</button>}</div>}

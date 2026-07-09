@@ -188,13 +188,26 @@ export class ConversationRepository {
     return listConversations(this.db, filters);
   }
 
-  count(filters: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; startAt?: string; endAt?: string } = {}): number {
+  count(filters: {
+    merchantId?: string;
+    countryId?: string;
+    status?: string;
+    language?: string;
+    handoffStatus?: string;
+    a2cAccountPhone?: string;
+    customerPhone?: string;
+    startAt?: string;
+    endAt?: string;
+  } = {}): number {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     addFilter(clauses, params, "merchant_id", filters.merchantId);
     addFilter(clauses, params, "country_id", filters.countryId);
     addFilter(clauses, params, "status", filters.status);
+    addFilter(clauses, params, "language", filters.language);
     addFilter(clauses, params, "handoff_status", filters.handoffStatus);
+    addFilter(clauses, params, "a2c_account_phone", filters.a2cAccountPhone);
+    addFilter(clauses, params, "customer_phone", filters.customerPhone);
     addRangeFilter(clauses, params, "created_at", filters.startAt, filters.endAt);
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const row = this.db.sqlite.prepare(`SELECT COUNT(*) AS count FROM conversations ${where}`).get(...params) as { count: number } | undefined;

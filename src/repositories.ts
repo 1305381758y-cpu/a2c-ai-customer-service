@@ -268,7 +268,7 @@ export class Repositories {
     return this.conversations.list(filters);
   }
 
-  countConversations(filters: { merchantId?: string; countryId?: string; status?: string; handoffStatus?: string; startAt?: string; endAt?: string } = {}): number {
+  countConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; startAt?: string; endAt?: string } = {}): number {
     return this.conversations.count(filters);
   }
 

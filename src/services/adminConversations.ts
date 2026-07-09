@@ -52,21 +52,25 @@ export type AdminIntentLearningListQuery = {
   limit?: string;
 };
 
-export function listAdminConversations(repos: Repositories, query: AdminConversationListQuery): { rows: Conversation[] } {
+export function listAdminConversations(repos: Repositories, query: AdminConversationListQuery): { rows: Conversation[]; total: number } {
   const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    status: query.status,
+    handoffStatus: query.handoffStatus,
+    language: query.language,
+    a2cAccountPhone: query.a2cAccountPhone,
+    customerPhone: query.customerPhone,
+    startAt: range.startAt,
+    endAt: range.endAt
+  };
   return {
     rows: repos.listConversations({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      status: query.status,
-      handoffStatus: query.handoffStatus,
-      language: query.language,
-      a2cAccountPhone: query.a2cAccountPhone,
-      customerPhone: query.customerPhone,
-      startAt: range.startAt,
-      endAt: range.endAt,
+      ...filters,
       limit: query.limit ? Number(query.limit) : undefined
-    })
+    }),
+    total: repos.countConversations(filters)
   };
 }
 

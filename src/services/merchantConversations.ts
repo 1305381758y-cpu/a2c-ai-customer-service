@@ -33,21 +33,25 @@ export function listMerchantConversations(
   repos: Repositories,
   merchantId: string,
   query: MerchantConversationListQuery
-): { rows: Conversation[] } {
+): { rows: Conversation[]; total: number } {
   const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
+  const filters = {
+    merchantId,
+    countryId: query.countryId,
+    status: query.status,
+    handoffStatus: query.handoffStatus,
+    language: query.language,
+    a2cAccountPhone: query.a2cAccountPhone,
+    customerPhone: query.customerPhone,
+    startAt: range.startAt,
+    endAt: range.endAt
+  };
   return {
     rows: repos.listConversations({
-      merchantId,
-      countryId: query.countryId,
-      status: query.status,
-      handoffStatus: query.handoffStatus,
-      language: query.language,
-      a2cAccountPhone: query.a2cAccountPhone,
-      customerPhone: query.customerPhone,
-      startAt: range.startAt,
-      endAt: range.endAt,
+      ...filters,
       limit: query.limit ? Number(query.limit) : undefined
-    })
+    }),
+    total: repos.countConversations(filters)
   };
 }
 
