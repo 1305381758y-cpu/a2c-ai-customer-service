@@ -218,6 +218,8 @@ async function main() {
     report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
     report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
     report.push(await smokeMerchantSettingsToggles(page));
+    await page.setViewportSize({ width: 1024, height: 768 });
+    report.push(...await smokeRole(page, "商户管理员-窄屏1024", ["总览", "模型调用", "话本流程", "会话", "设置"]));
     console.log(report.join("\n"));
   } finally {
     await browser.close();
