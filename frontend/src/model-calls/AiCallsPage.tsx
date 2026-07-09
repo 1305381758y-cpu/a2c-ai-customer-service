@@ -13,17 +13,27 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
   const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], availableTaskTypes: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const activeCountry = countries.find((country) => country.status === "active") || countries[0];
   const statsTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
   const statsTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
   const reload = async () => {
-    const query = platform
-      ? { ...filters, timeZone: "Asia/Shanghai" }
-      : { provider: filters.provider, taskType: filters.taskType, status: filters.status, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
-    const nextData = await api<AiCallStats>(withQuery(endpoint, query));
-    setData(nextData);
-    if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
-    if (selectedError && !nextData.byError.some((row) => aiCallErrorKey(row) === aiCallErrorKey(selectedError))) setSelectedError(null);
+    setLoading(true);
+    setError("");
+    try {
+      const query = platform
+        ? { ...filters, timeZone: "Asia/Shanghai" }
+        : { provider: filters.provider, taskType: filters.taskType, status: filters.status, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
+      const nextData = await api<AiCallStats>(withQuery(endpoint, query));
+      setData(nextData);
+      if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
+      if (selectedError && !nextData.byError.some((row) => aiCallErrorKey(row) === aiCallErrorKey(selectedError))) setSelectedError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "模型调用统计加载失败，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
   const activeTaskType = filters.taskType || selectedTaskType;
@@ -35,7 +45,15 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
     const query = platform
       ? { ...nextFilters, timeZone: "Asia/Shanghai" }
       : { provider: nextFilters.provider, taskType: nextFilters.taskType, status: nextFilters.status, startAt: nextFilters.startAt, endAt: nextFilters.endAt, timeZone: statsTimeZone };
-    setData(await api<AiCallStats>(withQuery(endpoint, query)));
+    setLoading(true);
+    setError("");
+    try {
+      setData(await api<AiCallStats>(withQuery(endpoint, query)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "调用类型明细加载失败，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
   };
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
@@ -65,8 +83,10 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
         </select>
         <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
         <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
-        <button onClick={reload}><Search size={16}/>筛选</button>
+        <button onClick={reload} disabled={loading}><Search size={16}/>{loading ? "筛选中..." : "筛选"}</button>
       </div>
+      {loading && <div className="notice">正在加载模型调用统计...</div>}
+      {error && <div className="error" role="alert">模型调用统计加载失败：{error}<button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
       <div className="grid metrics">
         <MetricCard title="总调用" value={data.totalCalls} detail="所有供应商、所有任务类型" />
         <MetricCard title="成功调用" value={data.successCalls} detail="已正常返回内容" />
