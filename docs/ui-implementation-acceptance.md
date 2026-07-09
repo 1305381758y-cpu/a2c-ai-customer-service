@@ -31,6 +31,7 @@
 - 前端样式已开始分层：设计 token、全局 reset、按钮和输入框基础样式已拆到 `frontend/src/styles/tokens.css`，后续可继续按 layout、components、pages 迁移。
 - Shell 布局、侧边栏、顶部栏、在线状态和时间切换器基础样式已拆到 `frontend/src/styles/layout.css`，业务页面样式继续留在主样式文件中渐进迁移。
 - 提示条、统一状态、确认弹窗和 Toast 样式已拆到 `frontend/src/styles/feedback.css`，与通用页面状态组件和高风险操作确认保持同一维护入口。
+- 卡片区块、指标卡、工具栏、筛选栏、表格、状态标签、分页和徽标基础样式已拆到 `frontend/src/styles/components.css`，页面局部覆盖继续保留在主样式文件中。
 
 ## 新增验证命令
 
