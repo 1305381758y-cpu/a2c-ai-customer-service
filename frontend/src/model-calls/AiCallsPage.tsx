@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Search } from "lucide-react";
 
 import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
 import { Table } from "../ui/components.js";
 import { countryLabel, label, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 import { MetricCard } from "../ui/MetricCard.js";
+import { AiCallFilters } from "./AiCallFilters.js";
 
 export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
@@ -64,28 +64,19 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
           <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。当前筛选时间按{statsTimeLabel}解释。</p>
         </div>
       </div>
-      <div className="toolbar wrap filters">
-        {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => setFilters({ ...filters, merchantId: event.target.value })} />}
-        <select aria-label="智能供应商" value={filters.provider || ""} onChange={(event) => setFilters({ ...filters, provider: event.target.value })}>
-          <option value="">全部供应商</option>
-          {data.availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}
-        </select>
-        <select aria-label="调用类型" value={filters.taskType || ""} onChange={(event) => {
-          setSelectedTaskType(event.target.value);
-          setFilters({ ...filters, taskType: event.target.value });
-        }}>
-          <option value="">全部调用类型</option>
-          {data.availableTaskTypes.map((taskType) => <option key={taskType} value={taskType}>{label(taskType)}</option>)}
-        </select>
-        <select aria-label="调用状态" value={filters.status || ""} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-          <option value="">全部状态</option>
-          <option value="success">成功</option>
-          <option value="error">失败</option>
-        </select>
-        <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
-        <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
-        <button onClick={reload} disabled={loading}><Search size={16}/>{loading ? "筛选中..." : "筛选"}</button>
-      </div>
+      <AiCallFilters
+        platform={platform}
+        filters={filters}
+        loading={loading}
+        availableProviders={data.availableProviders}
+        availableTaskTypes={data.availableTaskTypes}
+        onChange={setFilters}
+        onTaskTypeChange={(taskType) => {
+          setSelectedTaskType(taskType);
+          setFilters({ ...filters, taskType });
+        }}
+        onReload={reload}
+      />
       {loading && <div className="notice">正在加载模型调用统计...</div>}
       {error && <div className="error" role="alert">模型调用统计加载失败：{error}<button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
       <div className="grid metrics">
