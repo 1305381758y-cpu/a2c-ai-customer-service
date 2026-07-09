@@ -116,12 +116,12 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
       <main>
         <header><div><h1>{nav.find((item) => item[0] === activeView)?.[1] || "总览"}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
         {activeView === "dashboard" && <Dashboard platform={user.role === "platform_admin"} api={api} timeMode={timeMode} />}
-        {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} />}
+        {activeView === "aiCalls" && <AiCallsPage platform={user.role === "platform_admin"} timeMode={timeMode} />}
         {activeView === "merchants" && <Merchants />}
         {activeView === "users" && <UsersPage />}
         {activeView === "config" && <Config platform={user.role === "platform_admin"} />}
         {activeView === "agentProfile" && <AgentProfilePage platform={user.role === "platform_admin"} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />}
-        {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
+        {activeView === "customers" && <CustomersPage platform={user.role === "platform_admin"} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={user.role === "platform_admin"} conversation={conversation} refresh={reloadHistory} onDeleted={async () => { await reloadHistory(); }} />} />}
         {activeView === "scriptFlows" && <ScriptFlows platform={user.role === "platform_admin"} />}
         {activeView === "intentLearning" && <IntentLearning platform={user.role === "platform_admin"} />}
         {activeView === "training" && <TrainingMaterials platform={false} simple />}
@@ -136,25 +136,31 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
   );
 }
 
-function AiCallsPage({ platform = false }: { platform?: boolean }) {
+function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
+  const [countries] = useRows<MerchantCountry>(platform ? "" : "/api/merchant/countries");
   const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
+  const activeCountry = countries.find((country) => country.status === "active") || countries[0];
+  const statsTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
+  const statsTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
   const reload = async () => {
-    const query = platform ? filters : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt };
+    const query = platform
+      ? { ...filters, timeZone: "Asia/Shanghai" }
+      : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
     setData(nextData);
     if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
   };
-  useEffect(() => { reload().catch(() => undefined); }, [platform]);
+  useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
   const detailRows = selectedTaskType ? data.byTypeDetails.filter((row) => row.taskType === selectedTaskType) : data.byTypeDetails;
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
       <div className="training-center-hero compact">
         <div>
           <h3>大模型调用统计</h3>
-          <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。</p>
+          <p>统计翻译、语言识别、意图理解、口语化改写、图片分析、复盘和普通回复等所有模型调用。当前筛选时间按{statsTimeLabel}解释。</p>
         </div>
       </div>
       <div className="toolbar wrap filters">
