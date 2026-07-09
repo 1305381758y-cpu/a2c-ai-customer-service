@@ -3,7 +3,7 @@ import { CheckCircle2, RefreshCw } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Filters, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
-import { A2CAccountCard, ConfigSwitchCards, TeacherTgLinkEditor, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
+import { A2CAccountCard, ConfigSwitchCards, TeacherTgLinksPanel, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, displayValue, inferCountryProfile, label, languageName, statusTone, translateSystemMessage } from "../ui/formatters.js";
@@ -230,26 +230,7 @@ export function Config({ platform }: { platform: boolean }) {
         {countries[0] && <button type="button" className="ghost" onClick={() => { applyCountryDraft(countries[0]); notify("success", "已载入当前国家", "修改后点击“保存国家设置”。"); }}>编辑当前国家</button>}
       </div>
       <div className="country-auto-note">国家代码和默认语言由国家名称自动生成，不需要手动填写；例如“玻利维亚”会自动识别为 <strong>bo / 西语</strong>。</div>
-      <div className="memory compact-panel">
-        <div className="section-title-row">
-          <div>
-            <h3>老师TG链接池</h3>
-            <p>话本流程第 9 步会从这里自动分配老师 Telegram 链接。同一客户首次分配后会绑定固定导师，后续不会切换。</p>
-          </div>
-          <span className="status-pill neutral">已配置 {teacherTgLinks.length} 条</span>
-        </div>
-        <div className="toolbar wrap">
-          <label className="wide">批量导入<textarea placeholder="一行一个老师TG链接，例如：https://t.me/teacher_username" value={teacherTgDraft.urls} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, urls: e.target.value })} /></label>
-          <label>优先级<input type="number" value={teacherTgDraft.priority} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, priority: e.target.value })} /></label>
-          <label>轮询次数<input type="number" min="1" value={teacherTgDraft.rotationCount} onChange={(e) => setTeacherTgDraft({ ...teacherTgDraft, rotationCount: e.target.value })} /></label>
-          <AsyncButton onClick={importTeacherTelegramLinks} busyText="导入中...">导入链接</AsyncButton>
-        </div>
-        <small>分配规则：按优先级从高到低排列；轮询次数表示这一轮里该链接连续出现几次。例如 A 轮询 2、B 轮询 1，则分配顺序为 A、A、B，然后循环。</small>
-        <Table rows={teacherTgLinks} columns={["label", "url", "priority", "rotationCount", "assignedCount", "status"]} rowKey={(row) => row.id} />
-        <div className="messages material-items">
-          {teacherTgLinks.map((link) => <TeacherTgLinkEditor key={link.id} link={link} endpoint={teacherTgLinksUrl} reload={reloadTeacherTgLinks} />)}
-        </div>
-      </div>
+      <TeacherTgLinksPanel links={teacherTgLinks} draft={teacherTgDraft} endpoint={teacherTgLinksUrl} reload={reloadTeacherTgLinks} onDraftChange={setTeacherTgDraft} onImport={importTeacherTelegramLinks} />
       <div className="toolbar wrap country-settings-form">
         <CountryPresetDatalist />
         <label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：玻利维亚" value={countryDraft.name} onChange={(e) => updateCountryDraftName(e.target.value)} /></label>
