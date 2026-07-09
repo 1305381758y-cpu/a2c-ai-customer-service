@@ -11,7 +11,7 @@ import { AsyncButton, FilterBar } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName, type TimeDisplayMode } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
-import { accountUnreadCount, conversationExportFilters, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts } from "./ConversationPageHelpers.js";
+import { accountUnreadCount, conversationExportFilters, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts, normalizeConversationFilters, proactiveCustomerDraft, selectedConversationAfterReload } from "./ConversationPageHelpers.js";
 
 export function Conversations({ platform = false, handoffs = false, timeMode }: { platform?: boolean; handoffs?: boolean; timeMode: TimeDisplayMode }) {
   return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} timeMode={timeMode} />;
@@ -78,7 +78,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
       const nextRows = result.rows;
       setRows(nextRows);
       setTotalRows(result.total);
-      setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
+      setSelected((current) => selectedConversationAfterReload(current, nextRows));
     } catch (err) {
       setRows([]);
       setTotalRows(0);
@@ -98,7 +98,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
       setRowsError(null);
       setRows(nextRows);
       setTotalRows(result.total);
-      setSelected((current) => current ? nextRows.find((row) => row.id === current.id) || current : current);
+      setSelected((current) => selectedConversationAfterReload(current, nextRows));
     };
     const timer = window.setInterval(() => void pollRows(), 4000);
     return () => {
@@ -143,18 +143,18 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
   }, [selected?.id, selectedUnread]);
   const openNewCustomer = () => {
     setError("");
-    const customerPhone = newCustomer.customerPhone.trim();
-    if (!customerPhone) {
-      setError("请先填写客户号码。");
+    const result = proactiveCustomerDraft(newCustomer);
+    if (!result.draft) {
+      setError(result.error);
       return;
     }
     setSelected(null);
-    setDraftCustomer({ customerPhone, nickname: newCustomer.nickname.trim() });
+    setDraftCustomer(result.draft);
   };
 
   const exportFilters = conversationExportFilters(filters, conversationTimeZone, selectedAccount);
   const setFilters = (next: Filters) => {
-    setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
+    setFiltersState(normalizeConversationFilters(next, handoffs));
   };
   const exportBase = "/api/merchant/conversations/export";
 

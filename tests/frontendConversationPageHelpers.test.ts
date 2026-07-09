@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { accountUnreadCount, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts } from "../frontend/src/conversations/ConversationPageHelpers.js";
-import type { A2CAccount, UnreadSummary } from "../frontend/src/types.js";
+import { accountUnreadCount, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts, normalizeConversationFilters, proactiveCustomerDraft, selectedConversationAfterReload } from "../frontend/src/conversations/ConversationPageHelpers.js";
+import type { A2CAccount, Conversation, UnreadSummary } from "../frontend/src/types.js";
 
 describe("frontend conversation page helpers", () => {
   it("filters A2C accounts by keyword and enabled status", () => {
@@ -45,6 +45,35 @@ describe("frontend conversation page helpers", () => {
     expect(conversationTimeZoneFor(account({ countryCode: "bo" }), "beijing")).toBe("Asia/Shanghai");
     expect(conversationTimeZoneFor(null, "country")).toBe("Asia/Shanghai");
   });
+
+  it("locks handoff filters to pending human handoff rows", () => {
+    expect(normalizeConversationFilters({ status: "active", handoffStatus: "done", language: "es" }, true)).toEqual({
+      status: "human_handoff",
+      handoffStatus: "pending",
+      language: "es"
+    });
+    expect(normalizeConversationFilters({ status: "active" }, false)).toEqual({ status: "active" });
+  });
+
+  it("preserves the selected conversation across row reloads", () => {
+    const current = conversation({ id: "c-1", customerPhone: "old" });
+    const replacement = conversation({ id: "c-1", customerPhone: "new" });
+
+    expect(selectedConversationAfterReload(current, [replacement])).toBe(replacement);
+    expect(selectedConversationAfterReload(current, [conversation({ id: "other" })])).toBe(current);
+    expect(selectedConversationAfterReload(null, [replacement])).toBeNull();
+  });
+
+  it("normalizes proactive customer drafts", () => {
+    expect(proactiveCustomerDraft({ customerPhone: " 591 ", nickname: " Test " })).toEqual({
+      error: "",
+      draft: { customerPhone: "591", nickname: "Test" }
+    });
+    expect(proactiveCustomerDraft({ customerPhone: " ", nickname: "Test" })).toEqual({
+      error: "请先填写客户号码。",
+      draft: null
+    });
+  });
 });
 
 function account(patch: Partial<A2CAccount> = {}): A2CAccount {
@@ -64,6 +93,29 @@ function account(patch: Partial<A2CAccount> = {}): A2CAccount {
     verifiedName: "Account",
     enabled: true,
     syncedAt: "2026-07-01 00:00:00",
+    ...patch
+  };
+}
+
+function conversation(patch: Partial<Conversation> = {}): Conversation {
+  return {
+    id: "c-1",
+    merchantId: "merchant-1",
+    countryId: "country-1",
+    countryCode: "br",
+    countryName: "巴西",
+    customerPhone: "1001",
+    a2cAccountPhone: "2001",
+    nickname: "",
+    language: "pt-BR",
+    stage: "wait_registration",
+    flowStep: "wait_registration",
+    extractedPhone: "",
+    extractedTelegram: "",
+    extractedWhatsApp: "",
+    status: "active",
+    handoffStatus: "pending",
+    unreadCount: 0,
     ...patch
   };
 }

@@ -1,4 +1,4 @@
-import type { A2CAccount, Filters, UnreadSummary } from "../types.js";
+import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 import { withQuery } from "../app/api.js";
 
@@ -36,4 +36,18 @@ export function conversationUnreadCount(unread: UnreadSummary[], conversationId:
   return unread
     .flatMap((item) => item.conversations)
     .find((item) => item.conversationId === conversationId)?.unreadCount || 0;
+}
+
+export function normalizeConversationFilters(filters: Filters, handoffs: boolean): Filters {
+  return handoffs ? { ...filters, status: "human_handoff", handoffStatus: "pending" } : filters;
+}
+
+export function selectedConversationAfterReload(current: Conversation | null, rows: Conversation[]) {
+  return current ? rows.find((row) => row.id === current.id) || current : current;
+}
+
+export function proactiveCustomerDraft(input: { customerPhone: string; nickname: string }) {
+  const customerPhone = input.customerPhone.trim();
+  if (!customerPhone) return { error: "请先填写客户号码。", draft: null };
+  return { error: "", draft: { customerPhone, nickname: input.nickname.trim() } };
 }
