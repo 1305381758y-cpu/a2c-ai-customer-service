@@ -37,6 +37,7 @@
 - 客户页列表、客户会话历史和客户详情中的会话卡片样式已拆到 `frontend/src/styles/customers.css`，便于后续单独治理客户页信息密度。
 - 设置页中的国家配置、配置检测、注册教程图片、智能回复开关、A2C 账号和邀请码池样式已拆到 `frontend/src/styles/settings.css`，减少配置页交互问题排查成本。
 - 训练中心、素材上传、模拟消息列表和上传引导区样式已拆到 `frontend/src/styles/training.css`，让训练相关页面的视觉规则集中维护。
+- 后台分栏、工作面板、详情标题、表单区、商户创建表单、粘性操作条和记忆卡片等跨页面工作区样式已拆到 `frontend/src/styles/workspace.css`。
 
 ## 新增验证命令
 
