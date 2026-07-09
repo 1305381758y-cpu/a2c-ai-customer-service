@@ -107,6 +107,33 @@ describe("AI call stats", () => {
     }]);
   });
 
+  it("filters model calls by success or failure status", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("调用状态筛选商户");
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "translation", status: "success", durationMs: 100 });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "contextual_intent", status: "error", durationMs: 400, error: "DeepSeek 返回内容为空", requestSummary: "{\"maxOutputTokens\":260}", responseSummary: "{\"finishReason\":\"length\"}" });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "translation", status: "success", durationMs: 200 });
+
+    const failedStats = getMerchantAiCallStats(repos, merchant.id, { status: "error" });
+    const successStats = getMerchantAiCallStats(repos, merchant.id, { status: "success" });
+
+    expect(failedStats).toMatchObject({ totalCalls: 1, successCalls: 0, errorCalls: 1, successRate: 0, averageDurationMs: 400 });
+    expect(failedStats.byError).toEqual([{
+      taskType: "contextual_intent",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      errorMessage: "DeepSeek 返回内容为空",
+      httpStatus: null,
+      requestSummary: "{\"maxOutputTokens\":260}",
+      responseSummary: "{\"finishReason\":\"length\"}",
+      errorCalls: 1,
+      lastFailedAt: expect.any(String)
+    }]);
+    expect(successStats).toMatchObject({ totalCalls: 2, successCalls: 2, errorCalls: 0, successRate: 100, averageDurationMs: 150 });
+    expect(successStats.byError).toEqual([]);
+  });
+
   it("filters datetime-local ranges using the selected timezone", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

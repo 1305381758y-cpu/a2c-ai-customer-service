@@ -137,9 +137,10 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
 }
 
 function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", startAt: "", endAt: "" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
+  const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], availableTaskTypes: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
   const activeCountry = countries.find((country) => country.status === "active") || countries[0];
@@ -148,10 +149,11 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
   const reload = async () => {
     const query = platform
       ? { ...filters, timeZone: "Asia/Shanghai" }
-      : { provider: filters.provider, taskType: filters.taskType, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
+      : { provider: filters.provider, taskType: filters.taskType, status: filters.status, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
     setData(nextData);
     if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
+    if (selectedError && !nextData.byError.some((row) => aiCallErrorKey(row) === aiCallErrorKey(selectedError))) setSelectedError(null);
   };
   useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
   const activeTaskType = filters.taskType || selectedTaskType;
@@ -162,7 +164,7 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
     setFilters(nextFilters);
     const query = platform
       ? { ...nextFilters, timeZone: "Asia/Shanghai" }
-      : { provider: nextFilters.provider, taskType: nextFilters.taskType, startAt: nextFilters.startAt, endAt: nextFilters.endAt, timeZone: statsTimeZone };
+      : { provider: nextFilters.provider, taskType: nextFilters.taskType, status: nextFilters.status, startAt: nextFilters.startAt, endAt: nextFilters.endAt, timeZone: statsTimeZone };
     setData(await api<AiCallStats>(withQuery(endpoint, query)));
   };
   return <div className="ai-calls-page work-split single-column">
@@ -185,6 +187,11 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
         }}>
           <option value="">全部调用类型</option>
           {data.availableTaskTypes.map((taskType) => <option key={taskType} value={taskType}>{label(taskType)}</option>)}
+        </select>
+        <select aria-label="调用状态" value={filters.status || ""} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+          <option value="">全部状态</option>
+          <option value="success">成功</option>
+          <option value="error">失败</option>
         </select>
         <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
         <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
@@ -216,10 +223,40 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
       </section>
       <section className="assistant-card">
         <h3>失败原因明细</h3>
-        <Table rows={data.byError} columns={["taskType", "provider", "model", "errorMessage", "httpStatus", "requestSummary", "responseSummary", "errorCalls", "lastFailedAt"]} />
+        <Table rows={data.byError} columns={["taskType", "provider", "model", "errorMessage", "httpStatus", "errorCalls", "lastFailedAt"]} onRow={setSelectedError} selectedKey={selectedError ? aiCallErrorKey(selectedError) : undefined} rowKey={(row) => aiCallErrorKey(row)} emptyTitle="暂无失败调用" emptyDetail="当前筛选范围内没有失败记录。" />
+        {selectedError && <div className="ai-call-error-detail">
+          <div className="section-heading-row">
+            <h4>{label(selectedError.taskType)} · {label(selectedError.provider)} · {selectedError.model}</h4>
+            <button className="ghost" onClick={() => setSelectedError(null)}>收起详情</button>
+          </div>
+          <p><strong>失败原因：</strong>{selectedError.errorMessage}</p>
+          <div className="ai-call-summary-grid">
+            <div>
+              <strong>请求摘要</strong>
+              <pre>{formatAiCallSummary(selectedError.requestSummary)}</pre>
+            </div>
+            <div>
+              <strong>返回摘要</strong>
+              <pre>{formatAiCallSummary(selectedError.responseSummary)}</pre>
+            </div>
+          </div>
+        </div>}
       </section>
     </section>
   </div>;
+}
+
+function aiCallErrorKey(row: AiCallStats["byError"][number]) {
+  return [row.taskType, row.provider, row.model, row.errorMessage, row.httpStatus ?? "", row.lastFailedAt].join("|");
+}
+
+function formatAiCallSummary(value: string) {
+  if (!value) return "暂无摘要";
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
 }
 
 function MetricCard({ title, value, detail }: { title: string; value: number | string; detail: string }) {

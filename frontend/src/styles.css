@@ -505,6 +505,29 @@ section p { color: var(--muted-strong); line-height: 1.55; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
+.ai-call-error-detail {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.ai-call-error-detail h4,
+.ai-call-error-detail p {
+  margin: 0;
+}
+.ai-call-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ai-call-summary-grid > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
 .filters {
   padding: 10px;
   background: var(--surface-soft);
@@ -4540,6 +4563,10 @@ header p {
 
   .script-rail {
     min-width: 560px;
+  }
+
+  .ai-call-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 

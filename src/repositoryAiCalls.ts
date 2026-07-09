@@ -18,6 +18,7 @@ export interface AiCallStatsFilters {
   merchantId?: string;
   provider?: string;
   taskType?: string;
+  status?: "success" | "error" | string;
   startAt?: string;
   endAt?: string;
 }
@@ -176,6 +177,10 @@ function buildWhere(filters: AiCallStatsFilters): { where: string; params: Array
   if (filters.taskType) {
     clauses.push("task_type = ?");
     params.push(filters.taskType);
+  }
+  if (filters.status === "success" || filters.status === "error") {
+    clauses.push("status = ?");
+    params.push(filters.status);
   }
   if (filters.startAt) {
     clauses.push("created_at >= ?");

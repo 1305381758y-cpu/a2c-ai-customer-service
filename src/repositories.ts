@@ -639,7 +639,7 @@ export class Repositories {
     this.aiCalls.record(input);
   }
 
-  aiCallStats(filters: { merchantId?: string; provider?: string; taskType?: string; startAt?: string; endAt?: string } = {}): AiCallStats {
+  aiCallStats(filters: { merchantId?: string; provider?: string; taskType?: string; status?: string; startAt?: string; endAt?: string } = {}): AiCallStats {
     return this.aiCalls.stats(filters);
   }
 }

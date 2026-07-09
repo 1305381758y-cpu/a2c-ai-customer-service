@@ -261,12 +261,14 @@ async function smokeAiCallsTaskTypeFilter(page) {
   await page.waitForFunction(() => document.body.textContent?.includes("DeepSeek"), { timeout: 10_000 });
   await page.getByLabel("智能供应商").selectOption("deepseek");
   await page.getByLabel("调用类型").selectOption("intent_classification");
+  await page.getByLabel("调用状态").selectOption("success");
   await page.getByLabel("开始时间").fill("2026-07-01T00:00:01");
   await page.getByLabel("结束时间").fill("2026-07-01T23:59:59");
   const [response] = await Promise.all([
     waitForQueryResponse(page, "/api/merchant/ai-calls/stats", {
       provider: "deepseek",
       taskType: "intent_classification",
+      status: "success",
       startAt: "2026-07-01T00:00:01",
       endAt: "2026-07-01T23:59:59",
       timeZone: true
@@ -274,7 +276,7 @@ async function smokeAiCallsTaskTypeFilter(page) {
     page.getByRole("button", { name: "筛选", exact: true }).click()
   ]);
   if (!response.ok()) throw new Error(`商户管理员/模型调用 调用类型筛选失败：${response.status()}`);
-  return "商户管理员/模型调用: 供应商和调用类型筛选请求生效";
+  return "商户管理员/模型调用: 供应商、调用类型和状态筛选请求生效";
 }
 
 async function smokeCustomerFilterAndExport(page) {
