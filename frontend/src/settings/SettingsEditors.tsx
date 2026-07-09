@@ -2,13 +2,24 @@ import React, { useEffect, useState } from "react";
 import { Copy, Upload } from "lucide-react";
 
 import { api } from "../app/api.js";
-import type { TeacherTgLink } from "../types.js";
-import { AsyncButton, ConfirmActionButton, Table } from "../ui/components.js";
-import { label } from "../ui/formatters.js";
+import type { MerchantCountry, TeacherTgLink } from "../types.js";
+import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, Table } from "../ui/components.js";
+import { countryLabel, displayValue, label, languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
 type ConfigForm = Record<string, string | boolean>;
 type ConfigFlagKey = "smartReplyEnabled" | "trainingSimulationEnabled" | "strictScriptFlowEnabled";
+type CountryDraft = {
+  code: string;
+  name: string;
+  defaultLanguage: string;
+  platformRegisterUrl: string;
+  tgRegisterGuideUrl: string;
+  requirePlatformAccount: string;
+  requirePhone: string;
+  requireTelegram: string;
+  requireWhatsApp: string;
+};
 
 export function ConfigSwitchCards({ form, saveConfigFlag }: { form: ConfigForm; saveConfigFlag: (key: ConfigFlagKey, value: boolean, successMessage: string) => Promise<void> }) {
   return <>
@@ -109,4 +120,83 @@ export function TeacherTgLinkEditor({ link, endpoint, reload }: { link: TeacherT
       <ConfirmActionButton className="danger" busyText="删除中..." title="确认删除导师 TG 链接？" detail="删除后新客户不会再分配到这条导师链接；已分配过的老客户仍保留历史绑定记录。" confirmText="删除链接" onConfirm={async () => { await api(`${endpoint}/${link.id}`, { method: "DELETE" }); await reload(); notify("success", "老师TG链接已删除"); }}>删除</ConfirmActionButton>
     </div>
   </article>;
+}
+
+export function CountryMarketSettingsCard({
+  countries,
+  countryDraft,
+  teacherTgLinks,
+  teacherTgDraft,
+  teacherTgLinksUrl,
+  reloadTeacherTgLinks,
+  applyCountryDraft,
+  updateCountryDraftName,
+  setCountryDraft,
+  reInferCountryDraft,
+  saveCountry,
+  onTeacherTgDraftChange,
+  onTeacherTgImport
+}: {
+  countries: MerchantCountry[];
+  countryDraft: CountryDraft;
+  teacherTgLinks: TeacherTgLink[];
+  teacherTgDraft: { urls: string; priority: string; rotationCount: string };
+  teacherTgLinksUrl: string;
+  reloadTeacherTgLinks: () => Promise<void>;
+  applyCountryDraft: (country: MerchantCountry) => void;
+  updateCountryDraftName: (value: string) => void;
+  setCountryDraft: (draft: CountryDraft) => void;
+  reInferCountryDraft: () => void;
+  saveCountry: () => Promise<void>;
+  onTeacherTgDraftChange: (draft: { urls: string; priority: string; rotationCount: string }) => void;
+  onTeacherTgImport: () => Promise<void>;
+}) {
+  return <div className="memory country-settings-card">
+    <div className="section-title-row">
+      <div>
+        <h3>商户国家/市场</h3>
+        <p>商户只需要填写国家，国家代码和默认语言会自动带入。当前版本每个商户只维护一个国家。</p>
+      </div>
+      {countries[0] && <button type="button" className="ghost" onClick={() => { applyCountryDraft(countries[0]); notify("success", "已载入当前国家", "修改后点击“保存国家设置”。"); }}>编辑当前国家</button>}
+    </div>
+    <div className="country-auto-note">国家代码和默认语言由国家名称自动生成，不需要手动填写；例如“玻利维亚”会自动识别为 <strong>bo / 西语</strong>。</div>
+    <TeacherTgLinksPanel links={teacherTgLinks} draft={teacherTgDraft} endpoint={teacherTgLinksUrl} reload={reloadTeacherTgLinks} onDraftChange={onTeacherTgDraftChange} onImport={onTeacherTgImport} />
+    <div className="toolbar wrap country-settings-form">
+      <CountryPresetDatalist />
+      <label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：玻利维亚" value={countryDraft.name} onChange={(event) => updateCountryDraftName(event.target.value)} /></label>
+      <label className="inline-field">国家代码<input readOnly value={countryDraft.code} /></label>
+      <label className="inline-field">默认语言<input readOnly value={languageName(countryDraft.defaultLanguage)} /></label>
+      <button type="button" className="ghost" onClick={reInferCountryDraft}>重新识别</button>
+      <input placeholder={label("platformRegisterUrl")} value={countryDraft.platformRegisterUrl} onChange={(event) => setCountryDraft({ ...countryDraft, platformRegisterUrl: event.target.value })} />
+      <input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(event) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: event.target.value })} />
+      <select value={countryDraft.requirePlatformAccount} onChange={(event) => setCountryDraft({ ...countryDraft, requirePlatformAccount: event.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select>
+      <select value={countryDraft.requirePhone} onChange={(event) => setCountryDraft({ ...countryDraft, requirePhone: event.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select>
+      <select value={countryDraft.requireTelegram} onChange={(event) => setCountryDraft({ ...countryDraft, requireTelegram: event.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select>
+      <select value={countryDraft.requireWhatsApp} onChange={(event) => setCountryDraft({ ...countryDraft, requireWhatsApp: event.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select>
+      <AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton>
+    </div>
+    <p className="table-helper">点击下方国家行也可以载入编辑。</p>
+    <Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} selectedKey={countries[0]?.id} onRow={(row) => { applyCountryDraft(row); notify("success", "已载入国家设置", "修改后点击“保存国家设置”。"); }} />
+  </div>;
+}
+
+export function TelegramHandoffCard({
+  form,
+  setupTelegram,
+  refreshTelegramStatus
+}: {
+  form: ConfigForm;
+  setupTelegram: () => Promise<void>;
+  refreshTelegramStatus: () => Promise<void>;
+}) {
+  return <div className="memory">
+    <h3>TG接管群绑定</h3>
+    <p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>
+    {form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}
+    <div className="toolbar">
+      <AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton>
+      <AsyncButton onClick={refreshTelegramStatus} busyText="刷新中...">刷新TG状态</AsyncButton>
+    </div>
+    <p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p>
+  </div>;
 }

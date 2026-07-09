@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, RefreshCw } from "lucide-react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
-import type { A2CAccount, ConfigCheck, Filters, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
+import { api, loadRows, useRows } from "../app/api.js";
+import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
 import { A2CAccountsPanel } from "./InviteCodePanel.js";
-import { ConfigSwitchCards, TeacherTgLinksPanel, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
-import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
+import { ConfigSwitchCards, CountryMarketSettingsCard, TelegramHandoffCard, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
+import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
-import { countryLabel, displayValue, inferCountryProfile, label, languageName, statusTone, translateSystemMessage } from "../ui/formatters.js";
+import { inferCountryProfile, label, languageName, translateSystemMessage } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 
@@ -222,34 +222,8 @@ export function Config({ platform }: { platform: boolean }) {
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><ConfirmActionButton title="确认同步 A2C 客服账号？" detail="同步会真实请求 A2C 接口。A2C Token 有限频风险，请确认不是连续频繁点击；同步后会刷新本地客服账号列表和接收账号配置。" confirmText="同步账号" busyText="同步中..." onConfirm={() => syncA2CAccounts()}><RefreshCw size={16}/>同步A2C客服账号</ConfirmActionButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}
-    <div className="memory country-settings-card">
-      <div className="section-title-row">
-        <div>
-          <h3>商户国家/市场</h3>
-          <p>商户只需要填写国家，国家代码和默认语言会自动带入。当前版本每个商户只维护一个国家。</p>
-        </div>
-        {countries[0] && <button type="button" className="ghost" onClick={() => { applyCountryDraft(countries[0]); notify("success", "已载入当前国家", "修改后点击“保存国家设置”。"); }}>编辑当前国家</button>}
-      </div>
-      <div className="country-auto-note">国家代码和默认语言由国家名称自动生成，不需要手动填写；例如“玻利维亚”会自动识别为 <strong>bo / 西语</strong>。</div>
-      <TeacherTgLinksPanel links={teacherTgLinks} draft={teacherTgDraft} endpoint={teacherTgLinksUrl} reload={reloadTeacherTgLinks} onDraftChange={setTeacherTgDraft} onImport={importTeacherTelegramLinks} />
-      <div className="toolbar wrap country-settings-form">
-        <CountryPresetDatalist />
-        <label className="inline-field">国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：玻利维亚" value={countryDraft.name} onChange={(e) => updateCountryDraftName(e.target.value)} /></label>
-        <label className="inline-field">国家代码<input readOnly value={countryDraft.code} /></label>
-        <label className="inline-field">默认语言<input readOnly value={languageName(countryDraft.defaultLanguage)} /></label>
-        <button type="button" className="ghost" onClick={reInferCountryDraft}>重新识别</button>
-        <input placeholder={label("platformRegisterUrl")} value={countryDraft.platformRegisterUrl} onChange={(e) => setCountryDraft({ ...countryDraft, platformRegisterUrl: e.target.value })} />
-        <input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(e) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: e.target.value })} />
-        <select value={countryDraft.requirePlatformAccount} onChange={(e) => setCountryDraft({ ...countryDraft, requirePlatformAccount: e.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select>
-        <select value={countryDraft.requirePhone} onChange={(e) => setCountryDraft({ ...countryDraft, requirePhone: e.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select>
-        <select value={countryDraft.requireTelegram} onChange={(e) => setCountryDraft({ ...countryDraft, requireTelegram: e.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select>
-        <select value={countryDraft.requireWhatsApp} onChange={(e) => setCountryDraft({ ...countryDraft, requireWhatsApp: e.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select>
-        <AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton>
-      </div>
-      <p className="table-helper">点击下方国家行也可以载入编辑。</p>
-      <Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} selectedKey={countries[0]?.id} onRow={(row) => { applyCountryDraft(row); notify("success", "已载入国家设置", "修改后点击“保存国家设置”。"); }} />
-    </div>
+    <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={teacherTgLinksUrl} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
     <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} />
-    <div className="memory"><h3>TG接管群绑定</h3><p>状态：{displayValue("status", form.telegramHandoffChatStatus || "unbound")} · 群：{form.telegramHandoffChatTitle || form.telegramHandoffChatId || "未绑定"}</p>{form.telegramHandoffChatError && <div className="warning">{form.telegramHandoffChatError}</div>}<div className="toolbar"><AsyncButton onClick={setupTelegram} busyText="设置中...">设置TG绑定</AsyncButton><AsyncButton onClick={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} busyText="刷新中..."><RefreshCw size={16}/>刷新TG状态</AsyncButton></div><p>保存 TG机器人 Token 后点击设置绑定，再把机器人拉进唯一接管群并发送 /bind；系统会自动保存群ID。</p></div>
+    <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
   </section>;
 }
