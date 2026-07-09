@@ -449,6 +449,23 @@ section p { color: var(--muted-strong); line-height: 1.55; }
 }
 .toolbar.wrap { flex-wrap: wrap; }
 .toolbar input, .toolbar select { min-width: 150px; }
+.filter-control {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+  flex: 0 1 190px;
+}
+.filter-control span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.filter-control input,
+.filter-control select {
+  width: 100%;
+  min-width: 0;
+}
 .section-title-row {
   display: flex;
   justify-content: space-between;
@@ -547,12 +564,40 @@ section p { color: var(--muted-strong); line-height: 1.55; }
 }
 
 .table {
-  overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
   max-height: min(62vh, 720px);
+  overflow: hidden;
+}
+.table-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #f8fafc;
+}
+.table-meta strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+.table-meta p,
+.table-meta span {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.table-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: inherit;
+  -webkit-overflow-scrolling: touch;
 }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td {
@@ -574,6 +619,11 @@ th {
 tbody tr.clickable { cursor: pointer; }
 tbody tr.clickable:hover { background: #f6f9ff; }
 tbody tr.selected { background: #edf4ff; box-shadow: inset 3px 0 0 var(--brand); }
+.table.compact th,
+.table.compact td {
+  padding: 7px 9px;
+  font-size: 13px;
+}
 .empty-row td {
   text-align: center;
   color: var(--muted);
@@ -4269,6 +4319,10 @@ section,
 
 .table {
   width: 100%;
+  overflow: hidden;
+}
+
+.table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -4302,6 +4356,7 @@ td {
 .toolbar input,
 .toolbar select,
 .toolbar button,
+.toolbar .filter-control,
 .filters input,
 .filters select,
 .filters button,
@@ -4309,6 +4364,19 @@ td {
 .upload-strip select,
 .upload-strip button {
   min-width: 0;
+}
+
+.filter-control {
+  max-width: 100%;
+}
+
+.table-scroll {
+  min-width: 0;
+}
+
+.table-meta {
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .dashboard-filter,

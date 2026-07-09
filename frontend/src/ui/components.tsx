@@ -16,10 +16,53 @@ export function StateView({ type, title, detail, actionLabel, onAction }: { type
   </div>;
 }
 
-export function Table<T extends Record<string, any>>({ rows, columns, onRow, selectedKey, rowKey, loading = false, error, emptyTitle = "暂无数据", emptyDetail, onRetry }: { rows: T[]; columns: string[]; onRow?: (row: T) => void; selectedKey?: string | number; rowKey?: (row: T, index: number) => string | number; loading?: boolean; error?: string | null; emptyTitle?: string; emptyDetail?: string; onRetry?: () => void | Promise<void> }) {
+export function Table<T extends Record<string, any>>({
+  rows,
+  columns,
+  onRow,
+  selectedKey,
+  rowKey,
+  loading = false,
+  error,
+  emptyTitle = "暂无数据",
+  emptyDetail,
+  onRetry,
+  caption,
+  summary,
+  density = "normal"
+}: {
+  rows: T[];
+  columns: string[];
+  onRow?: (row: T) => void;
+  selectedKey?: string | number;
+  rowKey?: (row: T, index: number) => string | number;
+  loading?: boolean;
+  error?: string | null;
+  emptyTitle?: string;
+  emptyDetail?: string;
+  onRetry?: () => void | Promise<void>;
+  caption?: string;
+  summary?: string;
+  density?: "normal" | "compact";
+}) {
   const [internalSelected, setInternalSelected] = useState<string | number | undefined>();
   const activeKey = selectedKey ?? internalSelected;
-  return <div className="table"><table><thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead><tbody>{loading ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="loading" title="加载中" detail="正在读取数据，请稍候。" /></td></tr> : error ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="error" title="加载失败" detail={error} actionLabel={onRetry ? "重新加载" : undefined} onAction={onRetry} /></td></tr> : rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c], row)}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}><StateView type="empty" title={emptyTitle} detail={emptyDetail} /></td></tr>}</tbody></table></div>;
+  const hasData = rows.length > 0 && !loading && !error;
+  return <div className={`table ${density === "compact" ? "compact" : ""}`}>
+    {(caption || summary || hasData || columns.length > 6) && <div className="table-meta">
+      <div>
+        {caption && <strong>{caption}</strong>}
+        {summary && <span>{summary}</span>}
+      </div>
+      <small>{hasData ? `当前显示 ${rows.length} 行` : columns.length > 6 ? "字段较多，可横向滚动查看" : ""}</small>
+    </div>}
+    <div className="table-scroll" tabIndex={columns.length > 6 ? 0 : undefined} aria-label={columns.length > 6 ? "表格可横向滚动" : undefined}>
+      <table>
+        <thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead>
+        <tbody>{loading ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="loading" title="加载中" detail="正在读取数据，请稍候。" /></td></tr> : error ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="error" title="加载失败" detail={error} actionLabel={onRetry ? "重新加载" : undefined} onAction={onRetry} /></td></tr> : rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c], row)}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}><StateView type="empty" title={emptyTitle} detail={emptyDetail} /></td></tr>}</tbody>
+      </table>
+    </div>
+  </div>;
 }
 
 export function AsyncButton({ children, busyText, onClick, className, disabled = false }: { children: React.ReactNode; busyText: string; onClick: () => Promise<void>; className?: string; disabled?: boolean }) {
@@ -81,10 +124,10 @@ export function CountrySettingsEditor({ value, onSave }: { value: MerchantCountr
 
 export function FilterBar({ filters, setFilters, fields, selects = {}, resetValues, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; resetValues?: Filters; onApply: () => Promise<void> }) {
   return <div className="toolbar wrap filters">{fields.map((field) => {
-    if (selects[field]) return <select key={field} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? optionLabel(field, option) : label(field)}</option>)}</select>;
+    if (selects[field]) return <label key={field} className="filter-control"><span>{label(field)}</span><select value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? optionLabel(field, option) : "全部"}</option>)}</select></label>;
     const isTimeFilter = field === "startAt" || field === "endAt";
-    return <input key={field} type={isTimeFilter ? "datetime-local" : "text"} step={isTimeFilter ? 1 : undefined} placeholder={label(field)} aria-label={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} />;
-  })}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button className="ghost" onClick={() => {
+    return <label key={field} className="filter-control"><span>{label(field)}</span><input type={isTimeFilter ? "datetime-local" : "text"} step={isTimeFilter ? 1 : undefined} placeholder={label(field)} aria-label={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} /></label>;
+  })}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button type="button" className="ghost" onClick={() => {
     const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""]));
     setFilters({ ...reset, ...(resetValues || {}) });
   }}><X size={16}/>重置</button></div>;
