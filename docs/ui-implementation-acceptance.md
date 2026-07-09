@@ -44,6 +44,7 @@
 - 2026-06 页面适配、会话工作台密度调整、复盘折叠、客户列表和窄屏适配覆盖规则已拆到 `frontend/src/styles/ui-fit-pass.css`，加载在主样式之后。
 - 全局响应式兜底、防横向溢出、窄屏会话布局、表格和表单自适应规则已拆到 `frontend/src/styles/responsive-guardrails.css`，并在最终覆盖文件之前引入。
 - 页面滚动安全、分析页主滚动、话本节点选中态可读性和最后覆盖规则已拆到 `frontend/src/styles/final-overrides.css`，并在 `main.tsx` 中放在主样式之后引入以保持覆盖顺序。
+- 平台商户管理页已从入口文件抽到 `frontend/src/merchants/MerchantsPage.tsx`，入口文件只保留登录、导航、角色视图和页面路由。
 
 ## 新增验证命令
 
