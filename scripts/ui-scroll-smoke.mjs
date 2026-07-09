@@ -114,6 +114,21 @@ function seedMerchantConversation(merchantResult) {
         (merchant_id, country_id, customer_key, nickname, first_a2c_account_phone, last_a2c_account_phone, language, stage, status, conversation_count, last_conversation_id, first_seen_at, last_seen_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
     `).run(merchantId, countryId, "591700000001", "验收客户", "7000000001", "7000000001", "es", "need_platform_register", "active", "ui-smoke-conversation-1", timestamp, timestamp, timestamp, timestamp);
+    db.prepare(`
+      INSERT INTO ai_call_logs
+        (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, request_summary, response_summary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(merchantId, countryId, "deepseek", "deepseek-chat", "intent_classification", "success", 120, "", "{\"maxOutputTokens\":512}", "{\"contentLength\":24}", timestamp);
+    db.prepare(`
+      INSERT INTO ai_call_logs
+        (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, request_summary, response_summary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(merchantId, countryId, "deepseek", "deepseek-chat", "contextual_intent", "error", 900, "DeepSeek 返回内容为空", "{\"maxOutputTokens\":900}", "{\"contentLength\":0}", timestamp);
+    db.prepare(`
+      INSERT INTO ai_call_logs
+        (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, request_summary, response_summary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(merchantId, countryId, "minimax", "MiniMax-M3", "translation", "success", 240, "", "{\"target\":\"zh\"}", "{\"contentLength\":12}", timestamp);
   } finally {
     db.close();
   }
@@ -239,6 +254,27 @@ async function smokeDateFilterRequest(page, navLabel, endpointPart, reportLabel)
   ]);
   if (!response.ok()) throw new Error(`${reportLabel} 筛选请求失败：${response.status()}`);
   return `${reportLabel}: 时间筛选请求生效`;
+}
+
+async function smokeAiCallsTaskTypeFilter(page) {
+  await clickNav(page, "模型调用");
+  await page.waitForFunction(() => document.body.textContent?.includes("DeepSeek"), { timeout: 10_000 });
+  await page.getByLabel("智能供应商").selectOption("deepseek");
+  await page.getByLabel("调用类型").selectOption("intent_classification");
+  await page.getByLabel("开始时间").fill("2026-07-01T00:00:01");
+  await page.getByLabel("结束时间").fill("2026-07-01T23:59:59");
+  const [response] = await Promise.all([
+    waitForQueryResponse(page, "/api/merchant/ai-calls/stats", {
+      provider: "deepseek",
+      taskType: "intent_classification",
+      startAt: "2026-07-01T00:00:01",
+      endAt: "2026-07-01T23:59:59",
+      timeZone: true
+    }),
+    page.getByRole("button", { name: "筛选", exact: true }).click()
+  ]);
+  if (!response.ok()) throw new Error(`商户管理员/模型调用 调用类型筛选失败：${response.status()}`);
+  return "商户管理员/模型调用: 供应商和调用类型筛选请求生效";
 }
 
 async function smokeCustomerFilterAndExport(page) {
@@ -380,6 +416,7 @@ async function main() {
     report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
     report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
     report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
+    report.push(await smokeAiCallsTaskTypeFilter(page));
     report.push(await smokeCustomerFilterAndExport(page));
     report.push(await smokeConversationFilterAndExport(page));
     report.push(await smokeAgentProfileSave(page));

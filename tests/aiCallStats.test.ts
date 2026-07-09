@@ -16,6 +16,7 @@ describe("AI call stats", () => {
 
     expect(stats).toMatchObject({ totalCalls: 3, successCalls: 2, errorCalls: 1, successRate: 66.7 });
     expect(stats.availableProviders).toEqual(["deepseek", "minimax"]);
+    expect(stats.availableTaskTypes).toEqual(["intent_classification", "translation"]);
     expect(stats.byType.find((row) => row.taskType === "translation")).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50 });
     expect(stats.byProvider.find((row) => row.provider === "minimax")).toMatchObject({ totalCalls: 2, successRate: 50 });
     expect(stats.byTypeDetails.find((row) => row.taskType === "translation" && row.provider === "minimax")).toMatchObject({
@@ -50,6 +51,7 @@ describe("AI call stats", () => {
 
     expect(stats).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50 });
     expect(stats.availableProviders).toEqual(["deepseek", "minimax"]);
+    expect(stats.availableTaskTypes).toEqual(["contextual_intent", "intent_classification"]);
     expect(stats.byProvider).toEqual([{ provider: "deepseek", totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50, averageDurationMs: 7540 }]);
     expect(stats.byTypeDetails).toEqual(expect.arrayContaining([{
       taskType: "intent_classification",
@@ -70,6 +72,36 @@ describe("AI call stats", () => {
       httpStatus: 200,
       requestSummary: "{\"maxOutputTokens\":260}",
       responseSummary: "{\"choicesCount\":1,\"contentLength\":0}",
+      errorCalls: 1,
+      lastFailedAt: expect.any(String)
+    }]);
+  });
+
+  it("filters model calls by task type while keeping task type choices available", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("调用类型筛选商户");
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "translation", status: "success", durationMs: 100 });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "deepseek", model: "deepseek-chat", taskType: "intent_classification", status: "error", durationMs: 200, error: "DeepSeek 返回内容为空" });
+    repos.recordAiCall({ merchantId: merchant.id, provider: "minimax", model: "MiniMax-M3", taskType: "intent_classification", status: "success", durationMs: 300 });
+
+    const stats = getMerchantAiCallStats(repos, merchant.id, { taskType: "intent_classification" });
+
+    expect(stats).toMatchObject({ totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50 });
+    expect(stats.availableTaskTypes).toEqual(["intent_classification", "translation"]);
+    expect(stats.byType).toEqual([{ taskType: "intent_classification", totalCalls: 2, successCalls: 1, errorCalls: 1, successRate: 50, averageDurationMs: 250 }]);
+    expect(stats.byProvider).toEqual(expect.arrayContaining([
+      { provider: "deepseek", totalCalls: 1, successCalls: 0, errorCalls: 1, successRate: 0, averageDurationMs: 200 },
+      { provider: "minimax", totalCalls: 1, successCalls: 1, errorCalls: 0, successRate: 100, averageDurationMs: 300 }
+    ]));
+    expect(stats.byError).toEqual([{
+      taskType: "intent_classification",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      errorMessage: "DeepSeek 返回内容为空",
+      httpStatus: null,
+      requestSummary: "",
+      responseSummary: "",
       errorCalls: 1,
       lastFailedAt: expect.any(String)
     }]);

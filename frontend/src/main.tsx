@@ -137,24 +137,34 @@ function Portal({ user, view, setView, onLogout }: { user: User; view: string; s
 }
 
 function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
-  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
+  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], availableTaskTypes: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
   const activeCountry = countries.find((country) => country.status === "active") || countries[0];
   const statsTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
   const statsTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
   const reload = async () => {
     const query = platform
       ? { ...filters, timeZone: "Asia/Shanghai" }
-      : { provider: filters.provider, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
+      : { provider: filters.provider, taskType: filters.taskType, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
     const nextData = await api<AiCallStats>(withQuery(endpoint, query));
     setData(nextData);
     if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
   };
   useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
-  const detailRows = selectedTaskType ? data.byTypeDetails.filter((row) => row.taskType === selectedTaskType) : data.byTypeDetails;
+  const activeTaskType = filters.taskType || selectedTaskType;
+  const detailRows = activeTaskType ? data.byTypeDetails.filter((row) => row.taskType === activeTaskType) : data.byTypeDetails;
+  const applyTaskType = async (taskType: string) => {
+    setSelectedTaskType(taskType);
+    const nextFilters = { ...filters, taskType };
+    setFilters(nextFilters);
+    const query = platform
+      ? { ...nextFilters, timeZone: "Asia/Shanghai" }
+      : { provider: nextFilters.provider, taskType: nextFilters.taskType, startAt: nextFilters.startAt, endAt: nextFilters.endAt, timeZone: statsTimeZone };
+    setData(await api<AiCallStats>(withQuery(endpoint, query)));
+  };
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
       <div className="training-center-hero compact">
@@ -168,6 +178,13 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
         <select aria-label="智能供应商" value={filters.provider || ""} onChange={(event) => setFilters({ ...filters, provider: event.target.value })}>
           <option value="">全部供应商</option>
           {data.availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}
+        </select>
+        <select aria-label="调用类型" value={filters.taskType || ""} onChange={(event) => {
+          setSelectedTaskType(event.target.value);
+          setFilters({ ...filters, taskType: event.target.value });
+        }}>
+          <option value="">全部调用类型</option>
+          {data.availableTaskTypes.map((taskType) => <option key={taskType} value={taskType}>{label(taskType)}</option>)}
         </select>
         <input type="datetime-local" step={1} aria-label="开始时间" placeholder="开始时间" value={filters.startAt || ""} onChange={(event) => setFilters({ ...filters, startAt: event.target.value })} />
         <input type="datetime-local" step={1} aria-label="结束时间" placeholder="结束时间" value={filters.endAt || ""} onChange={(event) => setFilters({ ...filters, endAt: event.target.value })} />
@@ -183,7 +200,7 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
       <div className="ai-call-columns">
         <section className="assistant-card">
           <h3>按调用类型</h3>
-          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs"]} onRow={(row) => setSelectedTaskType(row.taskType)} selectedKey={selectedTaskType} rowKey={(row) => row.taskType} />
+          <Table rows={data.byType} columns={["taskType", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs"]} onRow={(row) => void applyTaskType(row.taskType)} selectedKey={activeTaskType} rowKey={(row) => row.taskType} />
         </section>
         <section className="assistant-card">
           <h3>按供应商</h3>
@@ -192,8 +209,8 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
       </div>
       <section className="assistant-card">
         <div className="section-heading-row">
-          <h3>调用类型明细 · {selectedTaskType ? label(selectedTaskType) : "全部类型"}</h3>
-          {selectedTaskType && <button className="ghost" onClick={() => setSelectedTaskType("")}>查看全部类型</button>}
+          <h3>调用类型明细 · {activeTaskType ? label(activeTaskType) : "全部类型"}</h3>
+          {activeTaskType && <button className="ghost" onClick={() => void applyTaskType("")}>查看全部类型</button>}
         </div>
         <Table rows={detailRows} columns={["taskType", "provider", "model", "totalCalls", "successCalls", "errorCalls", "successRate", "averageDurationMs", "lastCalledAt"]} />
       </section>

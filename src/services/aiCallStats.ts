@@ -4,6 +4,7 @@ import { normalizeSqlTimeRange } from "./beijingTime.js";
 export type AiCallStatsQuery = {
   merchantId?: string;
   provider?: string;
+  taskType?: string;
   startAt?: string;
   endAt?: string;
   timeZone?: string;
@@ -11,10 +12,10 @@ export type AiCallStatsQuery = {
 
 export function getMerchantAiCallStats(repos: Repositories, merchantId: string, query: AiCallStatsQuery): AiCallStats {
   const range = normalizeSqlTimeRange(query);
-  return repos.aiCallStats({ merchantId, provider: query.provider, startAt: range.startAt, endAt: range.endAt });
+  return repos.aiCallStats({ merchantId, provider: query.provider, taskType: query.taskType, startAt: range.startAt, endAt: range.endAt });
 }
 
 export function getAdminAiCallStats(repos: Repositories, query: AiCallStatsQuery): AiCallStats {
   const range = normalizeSqlTimeRange(query);
-  return repos.aiCallStats({ merchantId: query.merchantId, provider: query.provider, startAt: range.startAt, endAt: range.endAt });
+  return repos.aiCallStats({ merchantId: query.merchantId, provider: query.provider, taskType: query.taskType, startAt: range.startAt, endAt: range.endAt });
 }

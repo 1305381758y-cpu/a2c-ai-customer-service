@@ -17,6 +17,7 @@ export interface AiCallLogInput {
 export interface AiCallStatsFilters {
   merchantId?: string;
   provider?: string;
+  taskType?: string;
   startAt?: string;
   endAt?: string;
 }
@@ -28,6 +29,7 @@ export interface AiCallStats {
   successRate: number;
   averageDurationMs: number;
   availableProviders: string[];
+  availableTaskTypes: string[];
   byType: Array<{ taskType: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byProvider: Array<{ provider: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number }>;
   byTypeDetails: Array<{ taskType: string; provider: string; model: string; totalCalls: number; successCalls: number; errorCalls: number; successRate: number; averageDurationMs: number; lastCalledAt: string }>;
@@ -134,6 +136,14 @@ export class AiCallRepository {
       GROUP BY provider
       ORDER BY provider ASC
     `).all(...providerWhere.params).map((row) => String((row as Record<string, unknown>).provider || "unknown"));
+    const taskTypeWhere = buildWhere({ ...filters, taskType: undefined });
+    const availableTaskTypes = this.db.sqlite.prepare(`
+      SELECT task_type
+      FROM ai_call_logs
+      ${taskTypeWhere.where}
+      GROUP BY task_type
+      ORDER BY task_type ASC
+    `).all(...taskTypeWhere.params).map((row) => String((row as Record<string, unknown>).task_type || "unknown"));
     const totalCalls = Number(total?.total_calls ?? 0);
     const successCalls = Number(total?.success_calls ?? 0);
     return {
@@ -143,6 +153,7 @@ export class AiCallRepository {
       successRate: successRate(successCalls, totalCalls),
       averageDurationMs: Math.round(Number(total?.average_duration_ms ?? 0)),
       availableProviders,
+      availableTaskTypes,
       byType,
       byProvider,
       byTypeDetails,
@@ -161,6 +172,10 @@ function buildWhere(filters: AiCallStatsFilters): { where: string; params: Array
   if (filters.provider) {
     clauses.push("provider = ?");
     params.push(filters.provider);
+  }
+  if (filters.taskType) {
+    clauses.push("task_type = ?");
+    params.push(filters.taskType);
   }
   if (filters.startAt) {
     clauses.push("created_at >= ?");
