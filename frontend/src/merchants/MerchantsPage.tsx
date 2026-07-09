@@ -1,50 +1,23 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
 
 import { api, loadRows, withQuery } from "../app/api.js";
 import type { Merchant, MerchantCountry, User } from "../types.js";
-import { AsyncButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
-import { coercePatch } from "../ui/form.js";
-import { inferCountryProfile, languageName } from "../ui/formatters.js";
-import { notify } from "../ui/toast.js";
-
-type MerchantUser = User & { status?: string };
-type TargetField = "requirePlatformAccount" | "requirePhone" | "requireTelegram" | "requireWhatsApp";
-
-const TARGET_FIELDS: Array<[TargetField, string]> = [
-  ["requirePlatformAccount", "要求平台开户"],
-  ["requirePhone", "要求手机号"],
-  ["requireTelegram", "要求Telegram"],
-  ["requireWhatsApp", "要求WhatsApp"]
-];
+import { CountryPresetDatalist, Table } from "../ui/components.js";
+import { MerchantDetailPanel, type MerchantUser } from "./MerchantDetailPanel.js";
+import { buildCreateMerchantPayload, createDefaultMerchantForm, MerchantCreatePanel } from "./MerchantCreatePanel.js";
 
 export function MerchantsPage() {
   const [rows, setRows] = useState<Merchant[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    countryCode: "br",
-    countryName: "巴西",
-    defaultLanguage: "pt-BR",
-    platformRegisterUrl: "",
-    tgRegisterGuideUrl: "",
-    requirePlatformAccount: "true",
-    requirePhone: "true",
-    requireTelegram: "true",
-    requireWhatsApp: "false",
-    adminEmail: "",
-    adminName: "",
-    adminPassword: "Merchant123456"
-  });
+  const [form, setForm] = useState(createDefaultMerchantForm);
   const [createdLogin, setCreatedLogin] = useState("");
   const [selected, setSelected] = useState<Merchant | null>(null);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
   const [users, setUsers] = useState<MerchantUser[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<MerchantCountry | null>(null);
   const [selectedUser, setSelectedUser] = useState<MerchantUser | null>(null);
-  const [userForm, setUserForm] = useState({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
   const reloadMerchants = async () => {
     setRowsLoading(true);
     setRowsError(null);
@@ -58,11 +31,6 @@ export function MerchantsPage() {
     }
   };
   useEffect(() => { void reloadMerchants(); }, []);
-  const update = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
-  const updateCountryName = (value: string) => {
-    const inferred = inferCountryProfile(value);
-    setForm({ ...form, countryName: value, countryCode: inferred.code, defaultLanguage: inferred.defaultLanguage });
-  };
   const reloadMerchantDetail = async (merchantId = selected?.id) => {
     setDetailError("");
     if (!merchantId) {
@@ -83,25 +51,7 @@ export function MerchantsPage() {
     reloadMerchantDetail().catch((err) => setDetailError(err instanceof Error ? err.message : "商户详情加载失败"));
   }, [selected?.id]);
   const createMerchant = async () => {
-    const payload = {
-      name: form.name.trim(),
-      country: {
-        code: form.countryCode.trim() || "default",
-        name: form.countryName.trim() || "默认国家",
-        defaultLanguage: form.defaultLanguage,
-        platformRegisterUrl: form.platformRegisterUrl.trim(),
-        tgRegisterGuideUrl: form.tgRegisterGuideUrl.trim(),
-        requirePlatformAccount: form.requirePlatformAccount === "true",
-        requirePhone: form.requirePhone === "true",
-        requireTelegram: form.requireTelegram === "true",
-        requireWhatsApp: form.requireWhatsApp === "true"
-      },
-      adminUser: form.adminEmail.trim() ? {
-        email: form.adminEmail.trim(),
-        name: form.adminName.trim() || `${form.name.trim()}管理员`,
-        password: form.adminPassword
-      } : undefined
-    };
+    const payload = buildCreateMerchantPayload(form);
     const result = await api<{ merchant?: Merchant; adminUser?: User } | Merchant>("/api/admin/merchants", { method: "POST", body: JSON.stringify(payload) });
     const merchant = "merchant" in result ? result.merchant : result;
     setCreatedLogin(payload.adminUser ? `商户已创建。商户端登录邮箱：${payload.adminUser.email}；初始密码：${payload.adminUser.password}` : "商户已创建，暂未创建商户端登录账号。");
@@ -112,93 +62,9 @@ export function MerchantsPage() {
   };
   return <div className="split merchant-admin-layout"><CountryPresetDatalist />
     <section className="work-panel">
-      <div className="merchant-create-panel">
-        <div className="panel-heading">
-          <div><h3>新增商户开户</h3><p>一次填写商户、国家/市场和商户端管理员账号，创建后商户可直接登录配置。</p></div>
-        </div>
-        <div className="form-section">
-          <h4>商户基础信息</h4>
-          <div className="form-grid compact-fields">
-            <label>商户名称<input placeholder="例如：阿斯顿" value={form.name} onChange={(e) => update("name", e.target.value)} /></label>
-          </div>
-        </div>
-        <div className="form-section">
-          <h4>国家 / 市场</h4>
-          <div className="form-grid compact-fields">
-            <label>国家<input list="merchant-country-presets" placeholder="输入或选择国家，例如：巴西" value={form.countryName} onChange={(e) => updateCountryName(e.target.value)} /></label>
-            <label>国家代码<input readOnly value={form.countryCode} /></label>
-            <label>默认语言<input readOnly value={languageName(form.defaultLanguage)} /></label>
-            <label>开户链接<input placeholder="开户链接，可后续在配置页修改" value={form.platformRegisterUrl} onChange={(e) => update("platformRegisterUrl", e.target.value)} /></label>
-            <label>TG注册说明<input placeholder="Telegram 下载或注册说明链接" value={form.tgRegisterGuideUrl} onChange={(e) => update("tgRegisterGuideUrl", e.target.value)} /></label>
-          </div>
-          <div className="target-grid">
-            {TARGET_FIELDS.map(([key, text]) => <label key={key}>{text}<select value={form[key]} onChange={(e) => update(key, e.target.value)}><option value="true">需要</option><option value="false">不需要</option></select></label>)}
-          </div>
-        </div>
-        <div className="form-section">
-          <h4>商户端登录账号</h4>
-          <div className="form-grid compact-fields">
-            <label>登录邮箱<input placeholder="merchant@example.com" value={form.adminEmail} onChange={(e) => update("adminEmail", e.target.value)} /></label>
-            <label>管理员姓名<input placeholder="默认用“商户名管理员”" value={form.adminName} onChange={(e) => update("adminName", e.target.value)} /></label>
-            <label>初始密码<input value={form.adminPassword} onChange={(e) => update("adminPassword", e.target.value)} /></label>
-          </div>
-        </div>
-        <div className="toolbar sticky-actions merchant-create-actions">
-          <AsyncButton disabled={!form.name.trim() || Boolean(form.adminEmail.trim()) && form.adminPassword.length < 8} busyText="创建中..." onClick={createMerchant}><Plus size={16}/>创建商户</AsyncButton>
-          {createdLogin && <span className="success-text">{createdLogin}</span>}
-        </div>
-      </div>
+      <MerchantCreatePanel form={form} createdLogin={createdLogin} onChange={setForm} onCreate={createMerchant} />
       <Table rows={rows} columns={["name", "status", "id"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reloadMerchants} emptyTitle="暂无商户" emptyDetail="创建商户后，会在这里显示商户列表。" />
     </section>
-    <section className="detail-panel">{selected ? <div className="merchant-detail">
-      {detailError && <div className="error" role="alert">商户详情加载失败：{detailError}</div>}
-      <Editor title="商户设置" value={selected} fields={["name", "status"]} selects={{ status: ["active", "disabled"] }} deleteTitle="确认彻底删除商户？" deleteDetail={`商户“${selected.name}”的账号、国家、客户、会话、样本、知识库、素材和配置都会被删除，此操作不可恢复。`} deleteConfirmText="彻底删除" onSave={async (patch) => {
-        const saved = await api<Merchant>(`/api/admin/merchants/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-        setSelected(saved);
-        await reloadMerchants();
-      }} onDelete={selected.id === "default" ? undefined : async () => {
-        await api(`/api/admin/merchants/${selected.id}`, { method: "DELETE" });
-        setSelected(null);
-        setSelectedCountry(null);
-        setSelectedUser(null);
-        await reloadMerchants();
-        notify("success", "商户已彻底删除");
-      }} />
-      <div className="form-section">
-        <h4>国家 / 市场配置</h4>
-        {selectedCountry ? <CountrySettingsEditor value={selectedCountry} onSave={async (patch) => {
-          const saved = await api<MerchantCountry>(`/api/admin/merchants/${selected.id}/countries/${selectedCountry.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(patch)) });
-          setSelectedCountry(saved);
-          await reloadMerchantDetail(selected.id);
-        }} /> : <div className="empty-state compact">暂无国家配置</div>}
-      </div>
-      <div className="form-section">
-        <h4>商户登录账号</h4>
-        <div className="toolbar wrap compact-create">
-          <input placeholder="登录邮箱" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-          <input placeholder="姓名" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
-          <input placeholder="初始密码" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-          <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}><option value="merchant_admin">商户管理员</option><option value="merchant_operator">商户运营</option></select>
-          <AsyncButton disabled={!userForm.email.trim() || !userForm.name.trim() || userForm.password.length < 8} busyText="新增中..." onClick={async () => {
-            await api("/api/admin/users", { method: "POST", body: JSON.stringify({ ...userForm, merchantId: selected.id }) });
-            setUserForm({ email: "", name: "", password: "Merchant123456", role: "merchant_admin" });
-            await reloadMerchantDetail(selected.id);
-          }}><Plus size={16}/>新增账号</AsyncButton>
-        </div>
-        <Table rows={users} columns={["email", "name", "role", "status"]} onRow={setSelectedUser} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
-        {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: selectedUser.status || "active", merchantId: selected.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
-          if (!patch.password) delete patch.password;
-          const saved = await api<MerchantUser>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: selected.id }) });
-          setSelectedUser(saved);
-          await reloadMerchantDetail(selected.id);
-        }} onDelete={async () => {
-          await api(`/api/admin/users/${selectedUser.id}`, { method: "DELETE" });
-          setSelectedUser(null);
-          await reloadMerchantDetail(selected.id);
-          notify("success", "账号已删除");
-        }} />}
-      </div>
-      <div className="notice">A2C、智能供应商和 TG 密钥仍在“配置”页维护；这里负责商户、国家和登录账号的增删改查。</div>
-    </div> : <div className="empty-state">选择商户后可修改名称和状态。新增商户时可以同时创建国家和商户端登录账号。</div>}</section>
+    <section className="detail-panel">{selected ? <MerchantDetailPanel merchant={selected} detailError={detailError} selectedCountry={selectedCountry} users={users} selectedUser={selectedUser} onMerchantChange={setSelected} onCountryChange={setSelectedCountry} onUserChange={setSelectedUser} onReloadMerchants={reloadMerchants} onReloadDetail={reloadMerchantDetail} /> : <div className="empty-state">选择商户后可修改名称和状态。新增商户时可以同时创建国家和商户端登录账号。</div>}</section>
   </div>;
 }
