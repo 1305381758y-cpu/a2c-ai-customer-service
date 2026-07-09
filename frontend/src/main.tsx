@@ -21,6 +21,7 @@ import { coercePatch } from "./ui/form.js";
 import { countryLabel, displayValue, formatDateTime, getTimeDisplayMode, inferCountryProfile, label, languageName, setTimeDisplayMode, timeDisplayModeLabel, type TimeDisplayMode } from "./ui/formatters.js";
 import { notify, ToastHost } from "./ui/toast.js";
 import "./styles.css";
+import "./styles/product-refresh.css";
 import "./styles/ui-fit-pass.css";
 import "./styles/responsive-guardrails.css";
 import "./styles/final-overrides.css";
