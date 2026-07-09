@@ -7,7 +7,8 @@ import { countryLabel, formatDateTime, label, languageName, replyModeLabel } fro
 import { notify } from "../ui/toast.js";
 import { ConversationMemoryCard } from "./ConversationMemoryCard.js";
 import { ConversationReviewCard } from "./ConversationReviewCard.js";
-import { displayReviewItemContent, firstSuggestedReply, scriptGuidanceRows } from "./ConversationScriptHelpers.js";
+import { displayReviewItemContent, scriptGuidanceRows } from "./ConversationScriptHelpers.js";
+import { firstMatchedKnowledge, firstMatchedSample, firstReviewCandidate, trainingBusinessSource, trainingReferenceCounts, trainingSuggestedReply } from "./ConversationTrainingPanelHelpers.js";
 
 export { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, ScriptProgress } from "./ConversationScriptHelpers.js";
 
@@ -55,15 +56,11 @@ export function TrainingLoopPanel({
   setDraft: (content: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"assistant" | "profile" | "ticket" | "history">("assistant");
-  const suggestedReply = currentScriptStep?.standardReply
-    || trainingSamples.find((sample) => sample.standardReply)?.standardReply
-    || firstSuggestedReply(review)
-    || "当前节点还没有配置标准回复。可以先生成对话复盘，或到话本流程/训练中心补充样本。";
-  const firstKnowledge = knowledgeItems[0];
-  const firstSample = trainingSamples[0];
-  const firstReviewItem = review.items[0];
-  const referencedSamples = lastOutboundPayload.samples?.length || 0;
-  const referencedMaterials = lastOutboundPayload.trainingMaterials?.length || 0;
+  const suggestedReply = trainingSuggestedReply(currentScriptStep, trainingSamples, review);
+  const firstKnowledge = firstMatchedKnowledge(knowledgeItems);
+  const firstSample = firstMatchedSample(trainingSamples);
+  const firstReviewItem = firstReviewCandidate(review);
+  const references = trainingReferenceCounts(lastOutboundPayload);
   return <aside className="training-loop-panel">
     <div className="assistant-tabs">
       <button className={activeTab === "assistant" ? "active" : ""} onClick={() => setActiveTab("assistant")}>智能助手</button>
@@ -79,9 +76,9 @@ export function TrainingLoopPanel({
         <div className="runtime-facts">
           <span>回复模式：{replyModeLabel(lastOutboundPayload.replyMode)}</span>
           <span>{lastOutboundPayload.scriptFlowName ? `话本流程：${lastOutboundPayload.scriptFlowName}` : lastOutboundPayload.strictFlowEnabled === true ? "系统流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "话本流程未启用" : "话本流程待判断"}</span>
-          <span>引用样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条</span>
+          <span>引用样本 {references.samples} 条 · 资料 {references.materials} 条</span>
         </div>
-        <div className="confidence-row"><span>业务来源 <strong>{currentScriptStep ? "当前话本节点" : firstSample ? "训练样本" : firstReviewItem ? "复盘候选" : "待补充"}</strong></span><button onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框"); }}>使用回复</button><button className="ghost" onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框", "请在发送前按客户情况微调。"); }}>微调后使用</button><button className="icon-only ghost" title="回复合适" onClick={() => notify("success", "已记录反馈", "这条建议会作为后续优化参考。")}><ThumbsUp size={16}/></button><button className="icon-only ghost" title="回复不合适" onClick={() => notify("info", "已记录反馈", "建议生成复盘后沉淀为改进样本。")}><ThumbsDown size={16}/></button></div>
+        <div className="confidence-row"><span>业务来源 <strong>{trainingBusinessSource(currentScriptStep, firstSample, firstReviewItem)}</strong></span><button onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框"); }}>使用回复</button><button className="ghost" onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框", "请在发送前按客户情况微调。"); }}>微调后使用</button><button className="icon-only ghost" title="回复合适" onClick={() => notify("success", "已记录反馈", "这条建议会作为后续优化参考。")}><ThumbsUp size={16}/></button><button className="icon-only ghost" title="回复不合适" onClick={() => notify("info", "已记录反馈", "建议生成复盘后沉淀为改进样本。")}><ThumbsDown size={16}/></button></div>
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><BookOpen size={17}/><div><h3>匹配知识</h3><p>{conversation.countryName ? `${countryLabel(conversation.countryName)} · ${languageName(conversation.language)}` : "当前客户上下文"}</p></div><span className="status-pill ok">{firstKnowledge ? "已匹配" : "待补充"}</span></div>
@@ -144,7 +141,7 @@ export function TrainingLoopPanel({
         <article><strong>最近聊天</strong><p>{conversation.updatedAt ? formatDateTime(conversation.updatedAt, conversation.countryCode || conversation.countryName || conversation.countryId) : "暂无更新时间"} · 当前聊天窗口展示完整消息时间线</p></article>
         <article><strong>对话复盘</strong><p>{review.review ? `${review.review.score} 分 · ${review.review.summary}` : "未生成复盘"}</p></article>
         <article><strong>训练候选</strong><p>{review.items.length ? `${review.items.length} 条候选内容` : "暂无候选内容"}</p></article>
-        <article><strong>运行引用</strong><p>样本 {referencedSamples} 条 · 资料 {referencedMaterials} 条 · 回复模式 {replyModeLabel(lastOutboundPayload.replyMode)}</p></article>
+        <article><strong>运行引用</strong><p>样本 {references.samples} 条 · 资料 {references.materials} 条 · 回复模式 {replyModeLabel(lastOutboundPayload.replyMode)}</p></article>
       </div>
     </section>}
   </aside>;
