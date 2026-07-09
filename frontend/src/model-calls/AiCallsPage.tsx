@@ -4,8 +4,8 @@ import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
 import { Table } from "../ui/components.js";
 import { countryLabel, label, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
-import { MetricCard } from "../ui/MetricCard.js";
 import { AiCallFilters } from "./AiCallFilters.js";
+import { AiCallMetricGrid } from "./AiCallMetricGrid.js";
 
 export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
@@ -79,13 +79,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
       />
       {loading && <div className="notice">正在加载模型调用统计...</div>}
       {error && <div className="error" role="alert">模型调用统计加载失败：{error}<button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
-      <div className="grid metrics">
-        <MetricCard title="总调用" value={data.totalCalls} detail="所有供应商、所有任务类型" />
-        <MetricCard title="成功调用" value={data.successCalls} detail="已正常返回内容" />
-        <MetricCard title="失败调用" value={data.errorCalls} detail="Key、限流、超时或返回异常" />
-        <MetricCard title="成功率" value={`${data.successRate}%`} detail="成功调用 / 总调用" />
-        <MetricCard title="平均耗时" value={`${data.averageDurationMs} ms`} detail="按筛选范围计算" />
-      </div>
+      <AiCallMetricGrid data={data} />
       <div className="ai-call-columns">
         <section className="assistant-card">
           <h3>按调用类型</h3>
