@@ -31,7 +31,7 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
   const apiKey = deepseekApiKey(config);
   if (!apiKey) throw new Error("DeepSeek Key 未配置");
   if (hasImagePart(contents)) throw new Error("DeepSeek 暂不支持图片输入，请切换 MiniMax/Gemini 处理图片");
-  const maxTokens = deepSeekMaxTokens(options);
+  const maxTokens = deepSeekEffectiveMaxTokens(options);
   const response = await fetch(`${normalizeDeepSeekBaseUrl(config)}/chat/completions`, {
     method: "POST",
     headers: {
@@ -65,7 +65,7 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
   return text;
 }
 
-function deepSeekMaxTokens(options: AiTextOptions): number {
+export function deepSeekEffectiveMaxTokens(options: AiTextOptions): number {
   const requested = options.maxOutputTokens ?? 1200;
   if (options.taskType === "intent_classification") return Math.max(requested, 512);
   if (options.taskType === "contextual_intent") return Math.max(requested, 900);

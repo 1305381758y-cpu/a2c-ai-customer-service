@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { detectAiLanguage, generateAiText } from "../src/clients/aiProvider.js";
+import { deepSeekEffectiveMaxTokens } from "../src/clients/aiProviderTransport.js";
 import { setAiCallRecorder, type AiCallTelemetryInput } from "../src/clients/aiProviderRuntime.js";
 import { loadConfig } from "../src/config.js";
 
@@ -77,6 +78,13 @@ describe("MiniMax request queue", () => {
 });
 
 describe("DeepSeek provider", () => {
+  it("uses one shared effective token policy for DeepSeek requests and telemetry", () => {
+    expect(deepSeekEffectiveMaxTokens({ taskType: "intent_classification", maxOutputTokens: 80 })).toBe(512);
+    expect(deepSeekEffectiveMaxTokens({ taskType: "contextual_intent", maxOutputTokens: 260 })).toBe(900);
+    expect(deepSeekEffectiveMaxTokens({ taskType: "translation", maxOutputTokens: 80 })).toBe(80);
+    expect(deepSeekEffectiveMaxTokens({})).toBe(1200);
+  });
+
   it("calls the DeepSeek chat completions endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,

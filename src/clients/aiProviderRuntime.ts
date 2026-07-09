@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { generateGeminiText, geminiApiKey } from "./gemini.js";
-import { deepseekApiKey, deepseekModel, generateDeepSeekText, generateMiniMaxText, minimaxApiKey, minimaxModel } from "./aiProviderTransport.js";
+import { deepseekApiKey, deepSeekEffectiveMaxTokens, deepseekModel, generateDeepSeekText, generateMiniMaxText, minimaxApiKey, minimaxModel } from "./aiProviderTransport.js";
 import type { AiProviderName, AiTextOptions, AiTextPart } from "./aiProviderTypes.js";
 
 export type AiCallTelemetryInput = {
@@ -142,8 +142,7 @@ function summarizeAiRequest(contents: string | AiTextPart[], options: AiTextOpti
 
 function effectiveMaxOutputTokens(provider: AiProviderName, options: AiTextOptions): number {
   const requested = options.maxOutputTokens ?? 1200;
-  if (provider === "deepseek" && options.taskType === "intent_classification") return Math.max(requested, 512);
-  if (provider === "deepseek" && options.taskType === "contextual_intent") return Math.max(requested, 900);
+  if (provider === "deepseek") return deepSeekEffectiveMaxTokens(options);
   return requested;
 }
 
