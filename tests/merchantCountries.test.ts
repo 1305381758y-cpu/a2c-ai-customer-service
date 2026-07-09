@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
-import { createMerchantCountry, listMerchantCountries, patchMerchantCountry } from "../src/services/merchantCountries.js";
+import { createMerchantCountry, listAllMerchantCountries, listMerchantCountries, patchMerchantCountry } from "../src/services/merchantCountries.js";
 
 describe("merchantCountries service", () => {
   it("creates the merchant primary country and infers code and default language from the name", () => {
@@ -59,5 +59,19 @@ describe("merchantCountries service", () => {
       statusCode: 404,
       error: "country not found"
     });
+  });
+
+  it("lists country options across merchants for platform filters", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchantA = repos.createMerchant("平台国家商户A");
+    const merchantB = repos.createMerchant("平台国家商户B");
+    createMerchantCountry(repos, merchantA.id, { name: "玻利维亚" });
+    createMerchantCountry(repos, merchantB.id, { name: "巴西" });
+
+    const rows = listAllMerchantCountries(repos).rows;
+
+    expect(rows.some((country) => country.merchantId === merchantA.id && country.code === "bo")).toBe(true);
+    expect(rows.some((country) => country.merchantId === merchantB.id && country.code === "br")).toBe(true);
   });
 });

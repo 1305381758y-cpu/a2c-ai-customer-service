@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
-import { createMerchantCountry, listMerchantCountries, patchMerchantCountry } from "../services/merchantCountries.js";
+import { createMerchantCountry, listAllMerchantCountries, listMerchantCountries, patchMerchantCountry } from "../services/merchantCountries.js";
 import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 
@@ -18,6 +18,9 @@ export function registerMerchantCountryRoutes(app: FastifyInstance, deps: Mercha
 }
 
 function registerAdminCountryRoutes(app: FastifyInstance, deps: MerchantCountryRoutesDeps): void {
+  app.get("/api/admin/countries", { preHandler: deps.adminOnly }, async () => (
+    listAllMerchantCountries(deps.repos)
+  ));
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/countries", { preHandler: deps.adminOnly }, async (request) => (
     listMerchantCountries(deps.repos, request.params.id)
   ));

@@ -511,6 +511,10 @@ export class Repositories {
     return this.settings.listCountries(merchantId);
   }
 
+  listAllMerchantCountries(): MerchantCountryRecord[] {
+    return this.settings.listAllCountries();
+  }
+
   createMerchantCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
     return this.settings.createCountry(merchantId, input);
   }

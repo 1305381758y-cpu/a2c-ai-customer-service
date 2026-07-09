@@ -154,6 +154,17 @@ export class MerchantSettingsRepository {
     return [this.ensurePrimaryCountry(merchantId)];
   }
 
+  listAllCountries(): MerchantCountryRecord[] {
+    return this.db.sqlite
+      .prepare(`
+        SELECT *
+        FROM merchant_countries
+        ORDER BY merchant_id ASC, status ASC, updated_at DESC, created_at DESC
+      `)
+      .all()
+      .map((row) => mapMerchantCountry(row as Record<string, unknown>));
+  }
+
   createCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
     const current = this.ensurePrimaryCountry(merchantId);
     const profile = inferCountryProfile(input, current);

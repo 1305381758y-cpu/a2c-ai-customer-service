@@ -11,6 +11,10 @@ export function listMerchantCountries(
   return { rows: repos.listMerchantCountries(merchantId) };
 }
 
+export function listAllMerchantCountries(repos: Repositories): { rows: MerchantCountryRecord[] } {
+  return { rows: repos.listAllMerchantCountries() };
+}
+
 export function createMerchantCountry(
   repos: Repositories,
   merchantId: string,

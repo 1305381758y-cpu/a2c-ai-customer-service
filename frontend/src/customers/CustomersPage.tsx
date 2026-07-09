@@ -17,7 +17,7 @@ type CustomersPageProps = {
 
 export function CustomersPage({ platform = false, timeMode, renderConversation }: CustomersPageProps) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt, limit: "50000" });
   const activeCountry = filters.countryId

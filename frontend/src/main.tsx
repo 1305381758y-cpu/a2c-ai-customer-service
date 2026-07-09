@@ -140,7 +140,7 @@ function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeM
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", startAt: "", endAt: "" });
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
-  const [countries] = useRows<MerchantCountry>(platform ? "" : "/api/merchant/countries");
+  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
   const activeCountry = countries.find((country) => country.status === "active") || countries[0];
   const statsTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
@@ -1119,7 +1119,7 @@ function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowSte
 
 function IntentLearning({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
-  const [countries] = useRows<MerchantCountry>(platform ? "" : "/api/merchant/countries");
+  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" });
   const activeCountry = filters.countryId
     ? countries.find((country) => country.id === filters.countryId)
