@@ -7,9 +7,10 @@ import { A2CAccountsPanel } from "./InviteCodePanel.js";
 import { ConfigSwitchCards, CountryMarketSettingsCard, TelegramHandoffCard, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
-import { inferCountryProfile, label, languageName, translateSystemMessage } from "../ui/formatters.js";
+import { inferCountryProfile, languageName, translateSystemMessage } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
 
 export function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -78,7 +79,6 @@ export function Config({ platform }: { platform: boolean }) {
     });
   }, [a2cAccounts, accountKeyword, accountStatus, accountCountryId]);
   const accountPager = useClientPagination(filteredA2CAccounts, 12);
-  const fields = ["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "aiProvider", "minimaxApiKey", "minimaxModel", "deepseekApiKey", "deepseekModel", "telegramBotToken", "platformRegisterUrl", "tgRegisterGuideUrl"];
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
   const reloadTeacherTgLinks = async () => setTeacherTgLinks(await loadRows<TeacherTgLink>(teacherTgLinksUrl));
   const reloadA2CAccounts = async () => {
@@ -214,10 +214,10 @@ export function Config({ platform }: { platform: boolean }) {
   };
   return <section>
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
-    <div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / 智能供应商 / TG</small></div><div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div><div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div>
+    <ConfigSetupSteps />
     <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
     <ConfigSwitchCards form={form} saveConfigFlag={saveConfigFlag} />
-    <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
+    <ConfigCredentialFields form={form} onChange={setForm} />
     <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><ConfirmActionButton title="确认同步 A2C 客服账号？" detail="同步会真实请求 A2C 接口。A2C Token 有限频风险，请确认不是连续频繁点击；同步后会刷新本地客服账号列表和接收账号配置。" confirmText="同步账号" busyText="同步中..." onConfirm={() => syncA2CAccounts()}><RefreshCw size={16}/>同步A2C客服账号</ConfirmActionButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
