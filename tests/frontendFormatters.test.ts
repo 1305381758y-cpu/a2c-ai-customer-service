@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { displayValue, formatDateTime, formatTime, getTimeDisplayMode, setTimeDisplayMode, timeZoneForCountry } from "../frontend/src/ui/formatters.js";
+import { displayValue, formatDateTime, formatTime, getTimeDisplayMode, label, setTimeDisplayMode, timeZoneForCountry } from "../frontend/src/ui/formatters.js";
 
 describe("frontend time formatters", () => {
   it("renders server timestamps in Beijing time", () => {
@@ -24,5 +24,9 @@ describe("frontend time formatters", () => {
     expect(formatDateTime("2026-07-03 12:00:00", "bo")).toBe("2026-07-03 08:00");
     expect(displayValue("createdAt", "2026-07-03 12:00:00", { countryCode: "bo" })).toBe("2026-07-03 08:00");
     setTimeDisplayMode("beijing");
+  });
+
+  it("uses operational wording for enabled-state columns", () => {
+    expect(label("active")).toBe("当前启用");
   });
 });
