@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Copy, RefreshCw, Upload } from "lucide-react";
+import { CheckCircle2, RefreshCw } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Filters, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
-import { A2CAccountCard, ConfigSwitchCards, TeacherTgLinkEditor } from "./SettingsEditors.js";
+import { A2CAccountCard, ConfigSwitchCards, TeacherTgLinkEditor, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, displayValue, inferCountryProfile, label, languageName, statusTone, translateSystemMessage } from "../ui/formatters.js";
@@ -214,25 +214,10 @@ export function Config({ platform }: { platform: boolean }) {
   return <section>
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
     <div className="setup-strip"><div><span>1</span><strong>填写密钥</strong><small>A2C / 智能供应商 / TG</small></div><div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div><div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div><div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div></div>
-    <div className="memory highlighted"><h3>A2C Webhook地址</h3><p>把这个地址填写到该商户的 A2C Webhook 配置里。</p><div className="copy-row"><label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label><AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); setMessage("Webhook 地址已复制。"); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton></div></div>
+    <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
     <ConfigSwitchCards form={form} saveConfigFlag={saveConfigFlag} />
     <div className="form-grid elevated-form">{fields.map((f) => <label key={f}>{label(f)}{f === "aiProvider" ? <select value={String(form[f] || "minimax")} onChange={(e) => setForm({ ...form, [f]: e.target.value })}><option value="minimax">MiniMax</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini兼容</option></select> : <input value={form[f] || ""} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}</label>)}</div>
-    <div className="memory tutorial-upload-card">
-      <div>
-        <h3>注册教程图片</h3>
-        <p>商户只需要上传图片。客户问“怎么注册”“我不会”“有教程吗”时，系统会自动把这张图发给客户。</p>
-      </div>
-      <div className="tutorial-upload-layout">
-        <div className="tutorial-preview">
-          {form.registrationTutorialImageUrl ? <img src={String(form.registrationTutorialImageUrl)} alt="注册教程图片预览" /> : <span>还未上传注册教程图片</span>}
-        </div>
-        <div className="tutorial-upload-actions">
-          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setTutorialImageFile(e.target.files?.[0] || null)} />
-          <AsyncButton disabled={!tutorialImageFile} busyText="上传中..." onClick={uploadTutorialImage}><Upload size={16}/>上传图片</AsyncButton>
-          <small>{tutorialImageFile ? `已选择：${tutorialImageFile.name}` : "支持 PNG、JPG、WEBP、GIF；上传后会替换当前教程图。"}</small>
-        </div>
-      </div>
-    </div>
+    <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
     <div className="toolbar sticky-actions"><AsyncButton onClick={saveConfig} busyText="保存中...">保存配置</AsyncButton><ConfirmActionButton title="确认同步 A2C 客服账号？" detail="同步会真实请求 A2C 接口。A2C Token 有限频风险，请确认不是连续频繁点击；同步后会刷新本地客服账号列表和接收账号配置。" confirmText="同步账号" busyText="同步中..." onConfirm={() => syncA2CAccounts()}><RefreshCw size={16}/>同步A2C客服账号</ConfirmActionButton><AsyncButton onClick={runConfigCheck} busyText="检测中..."><CheckCircle2 size={16}/>检测配置</AsyncButton></div>
     {error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}
     {checks.length > 0 && <div className="config-checks">{checks.map((item) => <article key={item.key} className={item.ok ? "ok" : item.status}><strong>{item.label}</strong><span>{label(item.status)}</span><p>{item.detail}</p></article>)}</div>}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Copy, Plus, Upload } from "lucide-react";
 
 import { api, loadRows } from "../app/api.js";
 import type { A2CAccount, InviteCode, MerchantCountry, TeacherTgLink } from "../types.js";
@@ -25,6 +25,36 @@ export function ConfigSwitchCards({ form, saveConfigFlag }: { form: ConfigForm; 
       <ConfirmActionButton className={form.strictScriptFlowEnabled ? "ghost" : ""} busyText="保存中..." title={form.strictScriptFlowEnabled ? "确认关闭话本流程？" : "确认开启话本流程？"} detail={form.strictScriptFlowEnabled ? "关闭后，客户可能不再按固定开户注册流程推进，而是走普通回复或兜底逻辑。" : "开启后，客户回复会优先按当前启用话本流程推进。请确认话本流程、注册链接、邀请码和导师 TG 链接配置正确。"} confirmText={form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"} onConfirm={() => saveConfigFlag("strictScriptFlowEnabled", !form.strictScriptFlowEnabled, form.strictScriptFlowEnabled ? "话本流程已关闭" : "话本流程已开启")}>{form.strictScriptFlowEnabled ? "关闭话本流程" : "开启话本流程"}</ConfirmActionButton>
     </div>
   </>;
+}
+
+export function WebhookCopyCard({ a2cWebhookUrl, onCopied }: { a2cWebhookUrl: string; onCopied: () => void }) {
+  return <div className="memory highlighted">
+    <h3>A2C Webhook地址</h3>
+    <p>把这个地址填写到该商户的 A2C Webhook 配置里。</p>
+    <div className="copy-row">
+      <label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label>
+      <AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); onCopied(); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton>
+    </div>
+  </div>;
+}
+
+export function TutorialImageUploadCard({ imageUrl, file, onFileChange, onUpload }: { imageUrl: string; file: File | null; onFileChange: (file: File | null) => void; onUpload: () => Promise<void> }) {
+  return <div className="memory tutorial-upload-card">
+    <div>
+      <h3>注册教程图片</h3>
+      <p>商户只需要上传图片。客户问“怎么注册”“我不会”“有教程吗”时，系统会自动把这张图发给客户。</p>
+    </div>
+    <div className="tutorial-upload-layout">
+      <div className="tutorial-preview">
+        {imageUrl ? <img src={imageUrl} alt="注册教程图片预览" /> : <span>还未上传注册教程图片</span>}
+      </div>
+      <div className="tutorial-upload-actions">
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => onFileChange(event.target.files?.[0] || null)} />
+        <AsyncButton disabled={!file} busyText="上传中..." onClick={onUpload}><Upload size={16}/>上传图片</AsyncButton>
+        <small>{file ? `已选择：${file.name}` : "支持 PNG、JPG、WEBP、GIF；上传后会替换当前教程图。"}</small>
+      </div>
+    </div>
+  </div>;
 }
 
 export function TeacherTgLinkEditor({ link, endpoint, reload }: { link: TeacherTgLink; endpoint: string; reload: () => Promise<void> }) {
