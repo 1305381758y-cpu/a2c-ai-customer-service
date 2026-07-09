@@ -105,13 +105,14 @@ npm run ui:scroll-smoke
 
 ## 本轮还未完全解决的结构问题
 
-这些问题已经在 `docs/ui-optimization-master-analysis.md` 中列为后续工程化方向，本轮只做了基础设施和高风险状态补齐：
+这些问题已经在 `docs/ui-optimization-master-analysis.md` 中列为后续工程化方向。本轮已经完成主要页面模块拆分、样式分层、页面状态、滚动与关键按钮验收，剩余风险集中在更深层的组件抽象和配置治理：
 
-- `frontend/src/main.tsx` 仍然过大，后续应拆成页面目录。
-- `frontend/src/styles.css` 仍然是单文件累积，后续应拆成 token、layout、components、pages。
-- 表格组件仍偏基础，后续应升级为带服务端分页、列配置、详情抽屉的数据表格。
-- 设置页、会话页、话本流程页仍需要按工作台/配置中心/流程编辑器模板继续重构。
+- `frontend/src/main.tsx` 已降为路由/壳层入口，但后续仍可继续把权限、导航和页面注册表抽成独立配置。
+- `frontend/src/styles.css` 已拆出 token、layout、components、entry、analytics、customers、settings、training、workspace、conversations、flow-learning 等文件；剩余内容主要是历史产品设计覆盖层、响应式规则和滚动安全规则，后续应按 `refresh.css`、`responsive.css`、`scroll-safety.css` 继续拆，但必须保持 CSS 覆盖顺序。
+- 表格组件已补齐统一状态和横向滚动提示，但仍可升级为带列配置、详情抽屉和批量操作的数据表格。
+- 设置页、会话页、话本流程页已拆出页面模块和主要样式块，后续重点是进一步抽取“配置组”“会话三栏”“节点编辑抽屉”等可复用组件。
 - 权限状态、版本记录、配置影响范围提示还需要继续统一到所有高风险配置页。
+- 部署前仍需要跑完整发布门禁并确认 Render `live`，本轮暂不部署。
 
 ## 后续改造优先级
 
