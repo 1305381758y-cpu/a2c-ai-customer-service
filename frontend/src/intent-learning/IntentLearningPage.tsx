@@ -3,23 +3,20 @@ import React, { useEffect, useState } from "react";
 import { api, useRows, withQuery } from "../app/api.js";
 import type { Filters, IntentLearningEvent, MerchantCountry } from "../types.js";
 import { AsyncButton, FilterBar, Table } from "../ui/components.js";
-import { countryLabel, formatDateTime, label, languageName, statusTone, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { countryLabel, formatDateTime, label, languageName, statusTone, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { intentActiveCountry, intentMetrics, intentQueryFilters, intentTimeLabelFor, intentTimeZoneFor } from "./IntentLearningPageHelpers.js";
 
 export function IntentLearningPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
-  const activeCountry = filters.countryId
-    ? countries.find((country) => country.id === filters.countryId)
-    : countries.find((country) => country.status === "active") || countries[0];
-  const intentTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
-  const intentTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
-  const rowsUrl = withQuery(base, platform
-    ? { ...filters, timeZone: "Asia/Shanghai" }
-    : { countryId: filters.countryId, status: filters.status, suggestedIntent: filters.suggestedIntent, q: filters.q, startAt: filters.startAt, endAt: filters.endAt, timeZone: intentTimeZone, limit: filters.limit });
+  const activeCountry = intentActiveCountry(countries, filters.countryId || "");
+  const intentTimeZone = intentTimeZoneFor(platform, timeMode, activeCountry);
+  const intentTimeLabel = intentTimeLabelFor(platform, timeMode, activeCountry);
+  const rowsUrl = withQuery(base, intentQueryFilters(platform, filters, intentTimeZone));
   const [rows, setRows] = useState<IntentLearningEvent[]>([]);
   const [total, setTotal] = useState(0);
   const pager = useClientPagination(rows, 20);
@@ -48,12 +45,7 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
     notify("success", message);
   };
 
-  const metrics = {
-    candidate: rows.filter((item) => item.status === "candidate").length,
-    reviewed: rows.filter((item) => item.status === "reviewed").length,
-    promoted: rows.filter((item) => item.status === "promoted").length,
-    ignored: rows.filter((item) => item.status === "ignored").length
-  };
+  const metrics = intentMetrics(rows);
 
   return <div className="intent-learning-page work-split">
     <section className="work-panel">
