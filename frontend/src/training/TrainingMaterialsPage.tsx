@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, loadRows, useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, TrainingMaterial, TrainingMaterialItem } from "../types.js";
 import { AsyncButton, ConfirmActionButton, FilterBar, Table } from "../ui/components.js";
 import { countryLabel, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import { trainingImportMessage, trainingMaterialColumns, type TrainingImportResult } from "./TrainingMaterialsPageHelpers.js";
+import { trainingImportEndpoint, trainingImportMessage, trainingMaterialColumns, trainingMaterialsBase, trainingMaterialsRowsUrl, trainingPasteFile, trainingSelectedCountryId, type TrainingImportResult } from "./TrainingMaterialsPageHelpers.js";
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
-  const base = platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
+  const base = trainingMaterialsBase(platform);
   const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, sourceType: filters.sourceType, status: filters.status, limit: filters.limit });
+  const rowsUrl = trainingMaterialsRowsUrl(platform, filters);
   const [rows, setRows] = useState<TrainingMaterial[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
@@ -47,8 +47,8 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
   const uploadFile = async (upload: File) => {
     const body = new FormData();
     body.append("file", upload);
-    body.append("countryId", filters.countryId || countries[0]?.id || "");
-    const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
+    body.append("countryId", trainingSelectedCountryId(filters, countries));
+    const response = await fetch(trainingImportEndpoint(platform), { method: "POST", body });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
     const result = await response.json() as TrainingImportResult;
     setMessage(trainingImportMessage(result, simple));
@@ -86,7 +86,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
         <textarea placeholder={simple ? "也可以直接粘贴真实聊天记录、话本、问答或业务规则，系统会自动学习" : "粘贴聊天记录、话术、问答或业务规则"} value={pasted} onChange={(e) => setPasted(e.target.value)} />
         <AsyncButton disabled={!pasted.trim()} busyText="学习中..." onClick={async () => {
           if (!pasted.trim()) return;
-          await uploadFile(new File([pasted], "pasted-material.txt", { type: "text/plain" }));
+          await uploadFile(trainingPasteFile(pasted));
           setPasted("");
         }}>
           <FileText size={16}/>{simple ? "学习粘贴内容" : "导入粘贴文本"}

@@ -1,9 +1,38 @@
+import { withQuery } from "../app/api.js";
+import type { Filters, MerchantCountry } from "../types.js";
+
 export type TrainingImportResult = {
   imported: number;
   samples: number;
   knowledge: number;
   warnings?: string[];
 };
+
+export function trainingMaterialsBase(platform: boolean) {
+  return platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
+}
+
+export function trainingMaterialsRowsUrl(platform: boolean, filters: Filters) {
+  const base = trainingMaterialsBase(platform);
+  return withQuery(base, platform ? filters : {
+    countryId: filters.countryId,
+    sourceType: filters.sourceType,
+    status: filters.status,
+    limit: filters.limit
+  });
+}
+
+export function trainingImportEndpoint(platform: boolean) {
+  return platform ? "/api/admin/training-materials/import" : "/api/merchant/training-materials/import";
+}
+
+export function trainingSelectedCountryId(filters: Filters, countries: MerchantCountry[]) {
+  return filters.countryId || countries[0]?.id || "";
+}
+
+export function trainingPasteFile(text: string) {
+  return new File([text], "pasted-material.txt", { type: "text/plain" });
+}
 
 export function trainingMaterialColumns(platform: boolean, simple: boolean) {
   if (platform) return ["merchantId", "countryName", "filename", "sourceType", "itemCount", "sampleCount", "knowledgeCount", "status", "createdAt"];
