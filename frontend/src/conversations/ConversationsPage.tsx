@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import { ConversationAccountList } from "./ConversationAccountList.js";
-import { ConversationComposer } from "./ConversationComposer.js";
 import { ConversationCustomerList } from "./ConversationCustomerList.js";
 import { ConversationDetail } from "./ConversationDetail.js";
 import { PlatformConversations } from "./PlatformConversations.js";
+import { ProactiveConversationDetail } from "./ProactiveConversationDetail.js";
 import type { A2CAccount, Conversation, Filters, UnreadSummary } from "../types.js";
 import { AsyncButton, FilterBar } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
@@ -218,11 +218,4 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
     />
     <section className="chat-pane">{selected ? <ConversationDetail conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;
-}
-
-function ProactiveConversationDetail({ account, target, onCreated }: { account: A2CAccount; target: { customerPhone: string; nickname: string }; onCreated: (conversation: Conversation) => Promise<void> }) {
-  const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
-  const [statusMessage, setStatusMessage] = useState("");
-  const [error, setError] = useState("");
-  return <div className="conversation-detail proactive-chat"><div className="chat-header"><div><h3>{target.customerPhone}</h3><p>通过客服账号 {account.verifiedName || account.apiPhone} 主动发送</p></div><span className="status-pill neutral">{countryLabel(account.countryName)}</span></div>{error && <div className="error" role="alert">{error}</div>}{statusMessage && <div className="notice" role="status">{statusMessage}</div>}<div className="empty-chat compact"><h3>新对话</h3><p>发送第一条消息后，系统会自动创建客户档案和会话记录。</p></div><ConversationComposer value={send} onChange={setSend} renderSendAction={(disabled, children) => <AsyncButton disabled={disabled} busyText="发送中..." onClick={async () => { setError(""); setStatusMessage(""); try { const res = await api<{ conversation: Conversation }>(`/api/merchant/a2c/accounts/${encodeURIComponent(account.apiPhone)}/send`, { method: "POST", body: JSON.stringify({ ...send, customerPhone: target.customerPhone, nickname: target.nickname }) }); setStatusMessage("消息已发送，会话已创建。"); await onCreated(res.conversation); } catch (err) { setError(err instanceof Error ? err.message : "发送失败"); } }}>{children}</AsyncButton>} /></div>;
 }
