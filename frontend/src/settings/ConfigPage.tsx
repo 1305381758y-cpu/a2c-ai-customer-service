@@ -10,6 +10,7 @@ import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
 import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
+import { DEFAULT_COUNTRY_DRAFT, countryToDraft, filterA2CAccounts } from "./ConfigPageHelpers.js";
 
 export function Config({ platform }: { platform: boolean }) {
   const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -19,7 +20,7 @@ export function Config({ platform }: { platform: boolean }) {
   const [error, setError] = useState("");
   const [a2cAccounts, setA2CAccounts] = useState<A2CAccount[]>([]);
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
-  const [countryDraft, setCountryDraft] = useState({ code: "br", name: "巴西", defaultLanguage: "pt-BR", platformRegisterUrl: "", tgRegisterGuideUrl: "", requirePlatformAccount: "true", requirePhone: "true", requireTelegram: "true", requireWhatsApp: "false" });
+  const [countryDraft, setCountryDraft] = useState(DEFAULT_COUNTRY_DRAFT);
   const [teacherTgLinks, setTeacherTgLinks] = useState<TeacherTgLink[]>([]);
   const [teacherTgDraft, setTeacherTgDraft] = useState({ urls: "", priority: "0", rotationCount: "1" });
   const url = platform ? `/api/admin/merchants/${merchantId}/config` : "/api/merchant/config";
@@ -48,34 +49,14 @@ export function Config({ platform }: { platform: boolean }) {
     loadRows<TeacherTgLink>(teacherTgLinksUrl).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
   }, [teacherTgLinksUrl]);
   useEffect(() => { setChecks([]); }, [merchantId]);
-  const applyCountryDraft = (country: MerchantCountry) => {
-    setCountryDraft({
-      code: country.code || "default",
-      name: country.name || "默认国家",
-      defaultLanguage: country.defaultLanguage || "unknown",
-      platformRegisterUrl: country.platformRegisterUrl || "",
-      tgRegisterGuideUrl: country.tgRegisterGuideUrl || "",
-      requirePlatformAccount: String(country.requirePlatformAccount),
-      requirePhone: String(country.requirePhone),
-      requireTelegram: String(country.requireTelegram),
-      requireWhatsApp: String(country.requireWhatsApp)
-    });
-  };
+  const applyCountryDraft = (country: MerchantCountry) => setCountryDraft(countryToDraft(country));
   useEffect(() => {
     const country = countries[0];
     if (!country) return;
     applyCountryDraft(country);
   }, [countries]);
   const filteredA2CAccounts = useMemo(() => {
-    const keyword = accountKeyword.trim().toLowerCase();
-    return a2cAccounts.filter((account) => {
-      const haystack = [account.apiPhone, account.verifiedName, account.countryName, account.countryCode, account.wabaId].join(" ").toLowerCase();
-      if (keyword && !haystack.includes(keyword)) return false;
-      if (accountStatus === "enabled" && !account.enabled) return false;
-      if (accountStatus === "disabled" && account.enabled) return false;
-      if (accountCountryId && account.countryId !== accountCountryId) return false;
-      return true;
-    });
+    return filterA2CAccounts(a2cAccounts, { keyword: accountKeyword, status: accountStatus, countryId: accountCountryId });
   }, [a2cAccounts, accountKeyword, accountStatus, accountCountryId]);
   const accountPager = useClientPagination(filteredA2CAccounts, 12);
   const reloadCountries = async () => setCountries(await loadRows<MerchantCountry>(countriesUrl));
