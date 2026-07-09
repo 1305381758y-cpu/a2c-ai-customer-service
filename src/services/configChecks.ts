@@ -103,7 +103,7 @@ async function checkAiProvider(config: AppConfig, ai: Pick<AiTasks, "checkAvaila
   if (!hasUsableAiKey(config)) {
     return {
       key: "ai",
-      label: "AI供应商",
+      label: "智能供应商",
       ok: false,
       status: "missing",
       detail: `缺少 ${aiProviderLabel(config)} Key，客户消息会降级使用样本/默认话术`
@@ -116,18 +116,18 @@ async function checkAiProvider(config: AppConfig, ai: Pick<AiTasks, "checkAvaila
     const model = provider === "minimax" ? minimaxModel(config) : provider === "deepseek" ? deepseekModel(config) : config.GOOGLE_AI_MODEL;
     return {
       key: "ai",
-      label: "AI供应商",
+      label: "智能供应商",
       ok: true,
       status: "ok",
-      detail: `${aiProviderLabel(config)} 可用，当前模型 ${model}；客户消息会优先调用 AI 回复`
+      detail: `${aiProviderLabel(config)} 可用，当前模型 ${model}；客户消息会优先调用智能服务回复`
     };
   } catch (error) {
     return {
       key: "ai",
-      label: "AI供应商",
+      label: "智能供应商",
       ok: false,
       status: "error",
-      detail: error instanceof Error ? error.message : "AI供应商检测失败"
+      detail: error instanceof Error ? error.message : "智能供应商检测失败"
     };
   }
 }
@@ -164,7 +164,7 @@ function checkPlatformRegisterUrl(config: AppConfig): ConfigCheckItem {
     label: "开户链接",
     ok: Boolean(config.PLATFORM_REGISTER_URL),
     status: config.PLATFORM_REGISTER_URL ? "ok" : "missing",
-    detail: config.PLATFORM_REGISTER_URL || "未配置，AI 回复里无法给客户开户链接"
+    detail: config.PLATFORM_REGISTER_URL || "未配置，自动回复里无法给客户开户链接"
   };
 }
 

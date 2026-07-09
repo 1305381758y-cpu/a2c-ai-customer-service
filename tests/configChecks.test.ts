@@ -34,7 +34,7 @@ describe("merchant config checks", () => {
     expect(result.value.rows.find((row) => row.key === "ai")).toMatchObject({
       ok: true,
       status: "ok",
-      detail: "DeepSeek 可用，当前模型 deepseek-chat；客户消息会优先调用 AI 回复"
+      detail: "DeepSeek 可用，当前模型 deepseek-chat；客户消息会优先调用智能服务回复"
     });
   });
 

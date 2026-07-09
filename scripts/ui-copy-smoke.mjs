@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -12,9 +12,17 @@ if (result.status !== 0) {
   throw new Error(result.stderr || "无法读取前端文件列表");
 }
 
-const files = result.stdout
+const frontendFiles = result.stdout
   .split("\n")
   .filter((file) => /\.(tsx?|jsx?)$/.test(file));
+
+const extraUiCopyFiles = [
+  "frontend/index.html",
+  "src/http/merchantSettingsRoutes.ts",
+  "src/services/configChecks.ts"
+].filter((file) => existsSync(resolve(root, file)));
+
+const files = [...new Set([...frontendFiles, ...extraUiCopyFiles])];
 
 const forbidden = [
   { pattern: />\s*Submit\s*</, label: "Submit" },
