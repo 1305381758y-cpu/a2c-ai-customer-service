@@ -33,6 +33,7 @@
 - 提示条、统一状态、确认弹窗和 Toast 样式已拆到 `frontend/src/styles/feedback.css`，与通用页面状态组件和高风险操作确认保持同一维护入口。
 - 卡片区块、指标卡、工具栏、筛选栏、表格、状态标签、分页和徽标基础样式已拆到 `frontend/src/styles/components.css`，页面局部覆盖继续保留在主样式文件中。
 - 启动页、登录页和品牌锁定区样式已拆到 `frontend/src/styles/entry.css`，后台业务页主样式继续变薄。
+- 总览和模型调用页面的基础布局样式已拆到 `frontend/src/styles/analytics.css`，后续可继续把页面专属样式按模块迁移。
 
 ## 新增验证命令
 

@@ -1,6 +1,7 @@
 @import "./styles/tokens.css";
 @import "./styles/layout.css";
 @import "./styles/entry.css";
+@import "./styles/analytics.css";
 @import "./styles/feedback.css";
 @import "./styles/components.css";
 
@@ -21,61 +22,6 @@
   background: #eff6ff;
   color: #1e3a8a;
   font-weight: 650;
-}
-.dashboard-page {
-  display: grid;
-  gap: 14px;
-}
-.dashboard-filter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-}
-.dashboard-filter h3 {
-  margin: 0 0 4px;
-}
-.dashboard-filter p,
-.metric-section-title {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-.metric-section-title {
-  font-weight: 750;
-  color: var(--text);
-}
-.ai-call-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-}
-.ai-call-error-detail {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: var(--surface-soft);
-}
-.ai-call-error-detail h4,
-.ai-call-error-detail p {
-  margin: 0;
-}
-.ai-call-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.ai-call-summary-grid > div {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
 }
 .split {
   display: grid;
