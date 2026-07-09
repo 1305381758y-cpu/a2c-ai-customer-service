@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, loadRows, useRows } from "../app/api.js";
 import { ConversationAccountList } from "./ConversationAccountList.js";
 import { ConversationCustomerList } from "./ConversationCustomerList.js";
 import { ConversationDetail } from "./ConversationDetail.js";
@@ -11,7 +11,7 @@ import { AsyncButton, FilterBar } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName, type TimeDisplayMode } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
-import { conversationExportFilters, conversationTimeZoneFor, filterConversationAccounts } from "./ConversationPageHelpers.js";
+import { accountUnreadCount, conversationExportFilters, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts } from "./ConversationPageHelpers.js";
 
 export function Conversations({ platform = false, handoffs = false, timeMode }: { platform?: boolean; handoffs?: boolean; timeMode: TimeDisplayMode }) {
   return platform ? <PlatformConversations handoffs={handoffs} /> : <MerchantConversations handoffs={handoffs} timeMode={timeMode} />;
@@ -30,9 +30,7 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
   const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
   const conversationTimeZone = conversationTimeZoneFor(selectedAccount, timeMode);
-  const rowsUrl = selectedAccount
-    ? withQuery("/api/merchant/conversations", { ...filters, timeZone: conversationTimeZone, a2cAccountPhone: selectedAccount.apiPhone })
-    : "";
+  const rowsUrl = conversationRowsQuery(filters, conversationTimeZone, selectedAccount);
   const [rows, setRows] = useState<Conversation[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -124,8 +122,8 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
     notify("success", pinned ? "会话已置顶" : "已取消置顶");
     await reloadRows();
   };
-  const accountUnread = (apiPhone: string) => unread.find((item) => item.a2cAccountPhone === apiPhone)?.unreadCount || 0;
-  const conversationUnread = (conversationId: string) => unread.flatMap((item) => item.conversations).find((item) => item.conversationId === conversationId)?.unreadCount || 0;
+  const accountUnread = (apiPhone: string) => accountUnreadCount(unread, apiPhone);
+  const conversationUnread = (conversationId: string) => conversationUnreadCount(unread, conversationId);
   const markConversationRead = async (conversationId: string) => {
     await api(`/api/merchant/conversations/${conversationId}/read`, { method: "POST" });
     await reloadRows();
