@@ -151,6 +151,40 @@ async function smokeRole(page, role, labels) {
   return report;
 }
 
+async function confirmDialogAction(page, name) {
+  await page.locator(".confirm-dialog").getByRole("button", { name, exact: true }).click();
+}
+
+async function smokeMerchantSettingsToggles(page) {
+  await clickNav(page, "设置");
+
+  await page.getByRole("button", { name: "关闭智能回复", exact: true }).click();
+  await confirmDialogAction(page, "关闭智能回复");
+  await page.waitForFunction(() => document.body.textContent?.includes("已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。"), { timeout: 10_000 });
+
+  await page.getByRole("button", { name: "开启智能回复", exact: true }).click();
+  await confirmDialogAction(page, "开启智能回复");
+  await page.waitForFunction(() => document.body.textContent?.includes("已开启：客户消息会自动调用智能服务，并通过当前 A2C 客服账号回复。"), { timeout: 10_000 });
+
+  await page.getByRole("button", { name: "开启模拟训练", exact: true }).click();
+  await confirmDialogAction(page, "开启模拟训练");
+  await page.waitForFunction(() => document.body.textContent?.includes("已开启：真实 A2C 消息只会进入内部训练并生成记录，不会真实回复客户，也不会通知接管群。"), { timeout: 10_000 });
+
+  await page.getByRole("button", { name: "关闭模拟训练", exact: true }).click();
+  await confirmDialogAction(page, "关闭模拟训练");
+  await page.waitForFunction(() => document.body.textContent?.includes("已关闭：真实 A2C 消息会按当前配置正常自动回复客户。"), { timeout: 10_000 });
+
+  await page.getByRole("button", { name: "开启话本流程", exact: true }).click();
+  await confirmDialogAction(page, "开启话本流程");
+  await page.waitForFunction(() => document.body.textContent?.includes("已开启：客户每回复一次，系统会按话本主动推进到下一步，不会掉到普通自由回复。"), { timeout: 10_000 });
+
+  await page.getByRole("button", { name: "关闭话本流程", exact: true }).click();
+  await confirmDialogAction(page, "关闭话本流程");
+  await page.waitForFunction(() => document.body.textContent?.includes("已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"), { timeout: 10_000 });
+
+  return "商户管理员/设置: 3 个高风险开关点击生效";
+}
+
 async function main() {
   await waitForHealth();
   const browser = await chromium.launch({ headless: true });
@@ -163,6 +197,7 @@ async function main() {
     await logout(page);
     await login(page, "merchant-scroll@example.com", "Merchant123456");
     report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
+    report.push(await smokeMerchantSettingsToggles(page));
     console.log(report.join("\n"));
   } finally {
     await browser.close();
