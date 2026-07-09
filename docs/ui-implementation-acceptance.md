@@ -34,6 +34,7 @@
 - 卡片区块、指标卡、工具栏、筛选栏、表格、状态标签、分页和徽标基础样式已拆到 `frontend/src/styles/components.css`，页面局部覆盖继续保留在主样式文件中。
 - 启动页、登录页和品牌锁定区样式已拆到 `frontend/src/styles/entry.css`，后台业务页主样式继续变薄。
 - 总览和模型调用页面的基础布局样式已拆到 `frontend/src/styles/analytics.css`，后续可继续把页面专属样式按模块迁移。
+- 客户页列表、客户会话历史和客户详情中的会话卡片样式已拆到 `frontend/src/styles/customers.css`，便于后续单独治理客户页信息密度。
 
 ## 新增验证命令
 
