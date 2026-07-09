@@ -3,7 +3,8 @@ import { CheckCircle2, RefreshCw } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { A2CAccount, ConfigCheck, Filters, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
-import { A2CAccountCard, ConfigSwitchCards, TeacherTgLinksPanel, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
+import { A2CAccountCard } from "./InviteCodePanel.js";
+import { ConfigSwitchCards, TeacherTgLinksPanel, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { AsyncButton, ConfirmActionButton, CountryPresetDatalist, CountrySettingsEditor, Editor, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, displayValue, inferCountryProfile, label, languageName, statusTone, translateSystemMessage } from "../ui/formatters.js";
