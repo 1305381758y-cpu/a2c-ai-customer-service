@@ -3,9 +3,10 @@ import React, { useEffect, useState } from "react";
 import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
 import { Table } from "../ui/components.js";
-import { countryLabel, label, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { label, type TimeDisplayMode } from "../ui/formatters.js";
 import { AiCallFilters } from "./AiCallFilters.js";
 import { AiCallMetricGrid } from "./AiCallMetricGrid.js";
+import { aiCallActiveCountry, aiCallErrorKey, aiCallStatsQuery, aiCallTimeLabelFor, aiCallTimeZoneFor, EMPTY_AI_CALL_STATS, formatAiCallSummary } from "./AiCallsPageHelpers.js";
 
 export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
@@ -13,19 +14,17 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
   const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
-  const [data, setData] = useState<AiCallStats>({ totalCalls: 0, successCalls: 0, errorCalls: 0, successRate: 0, averageDurationMs: 0, availableProviders: [], availableTaskTypes: [], byType: [], byProvider: [], byTypeDetails: [], byError: [] });
+  const [data, setData] = useState<AiCallStats>(EMPTY_AI_CALL_STATS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const activeCountry = countries.find((country) => country.status === "active") || countries[0];
-  const statsTimeZone = !platform && timeMode === "country" && activeCountry ? timeZoneForCountry(activeCountry) : "Asia/Shanghai";
-  const statsTimeLabel = !platform && timeMode === "country" && activeCountry ? `${countryLabel(activeCountry.name)}时间` : timeDisplayModeLabel("beijing");
+  const activeCountry = aiCallActiveCountry(countries);
+  const statsTimeZone = aiCallTimeZoneFor(platform, timeMode, activeCountry);
+  const statsTimeLabel = aiCallTimeLabelFor(platform, timeMode, activeCountry);
   const reload = async () => {
     setLoading(true);
     setError("");
     try {
-      const query = platform
-        ? { ...filters, timeZone: "Asia/Shanghai" }
-        : { provider: filters.provider, taskType: filters.taskType, status: filters.status, startAt: filters.startAt, endAt: filters.endAt, timeZone: statsTimeZone };
+      const query = aiCallStatsQuery(platform, filters, statsTimeZone);
       const nextData = await api<AiCallStats>(withQuery(endpoint, query));
       setData(nextData);
       if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
@@ -43,9 +42,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
     setSelectedTaskType(taskType);
     const nextFilters = { ...filters, taskType };
     setFilters(nextFilters);
-    const query = platform
-      ? { ...nextFilters, timeZone: "Asia/Shanghai" }
-      : { provider: nextFilters.provider, taskType: nextFilters.taskType, status: nextFilters.status, startAt: nextFilters.startAt, endAt: nextFilters.endAt, timeZone: statsTimeZone };
+    const query = aiCallStatsQuery(platform, nextFilters, statsTimeZone);
     setLoading(true);
     setError("");
     try {
@@ -120,17 +117,4 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
       </section>
     </section>
   </div>;
-}
-
-function aiCallErrorKey(row: AiCallStats["byError"][number]) {
-  return [row.taskType, row.provider, row.model, row.errorMessage, row.httpStatus ?? "", row.lastFailedAt].join("|");
-}
-
-function formatAiCallSummary(value: string) {
-  if (!value) return "暂无摘要";
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
 }
