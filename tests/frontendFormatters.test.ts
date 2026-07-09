@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { displayValue, formatDateTime, formatTime, getTimeDisplayMode, label, setTimeDisplayMode, timeZoneForCountry } from "../frontend/src/ui/formatters.js";
+import { displayValue, formatDateTime, formatTime, getTimeDisplayMode, label, optionLabel, setTimeDisplayMode, timeZoneForCountry } from "../frontend/src/ui/formatters.js";
 
 describe("frontend time formatters", () => {
   it("renders server timestamps in Beijing time", () => {
@@ -28,5 +28,10 @@ describe("frontend time formatters", () => {
 
   it("uses operational wording for enabled-state columns", () => {
     expect(label("active")).toBe("当前启用");
+  });
+
+  it("localizes country select options instead of exposing internal ids", () => {
+    expect(optionLabel("countryId", "default:br")).toBe("巴西");
+    expect(optionLabel("countryName", "bolivia")).toBe("玻利维亚");
   });
 });
