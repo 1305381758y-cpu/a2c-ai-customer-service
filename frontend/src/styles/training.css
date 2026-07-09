@@ -1,0 +1,100 @@
+.messages {
+  display: grid;
+  gap: 8px;
+  max-height: 380px;
+  overflow: auto;
+  margin: 14px 0;
+}
+
+.messages article {
+  padding: 10px;
+  border-radius: 7px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line-soft);
+}
+
+.messages article.outbound {
+  background: #eaf2ff;
+}
+
+.messages small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.material-uploader {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.material-uploader .toolbar {
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.compact-uploader {
+  padding: 10px;
+}
+
+.compact-uploader textarea {
+  min-height: 68px;
+}
+
+.training-center-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid #cfe0ff;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 68%);
+}
+
+.training-center-hero h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.training-center-hero p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.training-steps {
+  display: grid;
+  gap: 8px;
+  min-width: 190px;
+}
+
+.training-steps span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #24427a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.training-uploader {
+  background: #fff;
+}
+
+.material-items article {
+  display: grid;
+  gap: 5px;
+}
+
+.material-items article p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
