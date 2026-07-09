@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
 import { Table } from "../ui/components.js";
 import { countryLabel, label, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { MetricCard } from "../ui/MetricCard.js";
 
 export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
@@ -147,12 +148,4 @@ function formatAiCallSummary(value: string) {
   } catch {
     return value;
   }
-}
-
-function MetricCard({ title, value, detail }: { title: string; value: number | string; detail: string }) {
-  return <section className="metric-card">
-    <div className="metric-top"><span>{title}</span><i><Sparkles size={19}/></i></div>
-    <strong>{value}</strong>
-    <small>{detail}</small>
-  </section>;
 }

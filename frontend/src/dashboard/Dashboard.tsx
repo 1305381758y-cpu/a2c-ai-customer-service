@@ -3,6 +3,7 @@ import { Bot, Contact, MessageSquare, Search } from "lucide-react";
 import { withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry } from "../types.js";
 import { timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { MetricCard } from "../ui/MetricCard.js";
 
 type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
 
@@ -65,11 +66,7 @@ export function Dashboard({ platform, api, timeMode }: { platform: boolean; api:
 function MetricGrid({ keys, data, platform, timeLabel }: { keys: string[]; data: Record<string, number>; platform: boolean; timeLabel: string }) {
   return <div className="grid metrics">{keys.map((key) => {
     const Icon = metricIcon(key);
-    return <section key={key} className="metric-card">
-      <div className="metric-top"><span>{dashboardLabel(key, platform)}</span><i><Icon size={19}/></i></div>
-      <strong>{formatMetricValue(key, data[key] ?? 0)}</strong>
-      <small>{dashboardHint(key, platform, timeLabel)}</small>
-    </section>;
+    return <MetricCard key={key} title={dashboardLabel(key, platform)} value={formatMetricValue(key, data[key] ?? 0)} detail={dashboardHint(key, platform, timeLabel)} icon={Icon} />;
   })}</div>;
 }
 
