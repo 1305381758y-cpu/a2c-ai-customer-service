@@ -4,7 +4,7 @@ import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVersion } from "../types.js";
 import { ScriptFlowDetailPanel } from "./ScriptFlowDetailPanel.js";
 import { ScriptFlowListPanel } from "./ScriptFlowListPanel.js";
-import { validateScriptFlowDraft } from "./ScriptFlowValidation.js";
+import { validateScriptFlowIssues } from "./ScriptFlowValidation.js";
 import { ResourceErrorNotice } from "../ui/components.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
@@ -24,7 +24,7 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   const [file, setFile] = useState<File | null>(null);
   const [flowName, setFlowName] = useState("");
   const [enableError, setEnableError] = useState("");
-  const validationWarnings = useMemo(() => detail ? validateScriptFlowDraft(detail.steps) : [], [detail]);
+  const validationIssues = useMemo(() => detail ? validateScriptFlowIssues(detail.steps) : [], [detail]);
 
   const reload = async () => {
     setRowsLoading(true);
@@ -133,6 +133,6 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   return <div className="script-flow-page work-split">
     <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
     <ScriptFlowListPanel platform={platform} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
-    <ScriptFlowDetailPanel detail={detail} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationWarnings={validationWarnings} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
+    <ScriptFlowDetailPanel detail={detail} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationIssues={validationIssues} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
   </div>;
 }

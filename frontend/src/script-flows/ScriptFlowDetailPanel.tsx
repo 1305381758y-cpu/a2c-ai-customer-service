@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 
 import { api } from "../app/api.js";
 import type { MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVersion } from "../types.js";
@@ -7,6 +7,7 @@ import { AsyncButton, ConfirmActionButton, Editor } from "../ui/components.js";
 import { countryLabel, formatDateTime, label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { ScriptFlowStepEditor } from "./ScriptFlowStepEditor.js";
+import type { ScriptFlowValidationIssue } from "./ScriptFlowValidation.js";
 
 type ScriptFlowDetail = {
   flow: ScriptFlow;
@@ -22,7 +23,7 @@ export function ScriptFlowDetailPanel({
   selectedStep,
   setSelectedStep,
   enableError,
-  validationWarnings,
+  validationIssues,
   enableFlow,
   deleteFlow,
   addStep,
@@ -35,12 +36,20 @@ export function ScriptFlowDetailPanel({
   selectedStep: ScriptFlowStep | null;
   setSelectedStep: (step: ScriptFlowStep) => void;
   enableError: string;
-  validationWarnings: string[];
+  validationIssues: ScriptFlowValidationIssue[];
   enableFlow: () => Promise<void>;
   deleteFlow: () => Promise<void>;
   addStep: () => Promise<void>;
   refreshDetail: () => Promise<void>;
 }) {
+  const enabledSteps = detail?.steps.filter((step) => step.enabled).length ?? 0;
+  const registrationSteps = detail?.steps.filter((step) => step.enabled && (step.sendLink || step.sendInvite)).length ?? 0;
+  const ready = Boolean(detail && validationIssues.length === 0);
+  const locateFirstIssue = () => {
+    const issue = validationIssues.find((item) => item.stepId);
+    const step = detail?.steps.find((item) => item.id === issue?.stepId);
+    if (step) setSelectedStep(step);
+  };
   return <section className="script-flow-detail detail-panel">
     {detail ? <div className="script-flow-editor">
       <div className="detail-title-row">
@@ -49,7 +58,16 @@ export function ScriptFlowDetailPanel({
           <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
         </div>
         <div className="toolbar">
-          <AsyncButton busyText="启用中..." onClick={enableFlow}>启用流程</AsyncButton>
+          <ConfirmActionButton
+            disabled={!ready}
+            busyText="启用中..."
+            title="确认启用话本流程？"
+            detail="启用后，后续客户会话会按这套节点、话术和跳转规则推进。请确认注册链接、邀请码、教程图和老师TG链接均已配置正确。"
+            confirmText="启用流程"
+            onConfirm={enableFlow}
+          >
+            启用流程
+          </ConfirmActionButton>
           <ConfirmActionButton
             className="danger"
             busyText="删除中..."
@@ -63,10 +81,17 @@ export function ScriptFlowDetailPanel({
         </div>
       </div>
       {enableError && <div className="warning action-warning" role="alert"><strong>启用失败</strong><span>{enableError}</span></div>}
-      {validationWarnings.length > 0 && <div className="notice action-warning" role="status">
-        <strong>启用前建议检查</strong>
-        <span>{validationWarnings.slice(0, 5).join("；")}</span>
-      </div>}
+      <div className={`script-readiness ${ready ? "ready" : "blocked"}`} role="status">
+        <div className="script-readiness-icon">{ready ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}</div>
+        <div><strong>{ready ? "流程已通过启用检查" : `还有 ${validationIssues.length} 项需要修复`}</strong><span>{ready ? "节点、跳转和必填变量完整，可以启用。" : validationIssues.slice(0, 3).map((issue) => issue.message).join("；")}</span></div>
+        {!ready && validationIssues.some((issue) => issue.stepId) && <button className="ghost" onClick={locateFirstIssue}>定位首个问题</button>}
+      </div>
+      <div className="script-flow-summary" aria-label="流程概况">
+        <span><strong>{detail.steps.length}</strong>全部节点</span>
+        <span><strong>{enabledSteps}</strong>启用节点</span>
+        <span><strong>{registrationSteps}</strong>注册发送节点</span>
+        <span><strong>{detail.versions.length}</strong>历史版本</span>
+      </div>
       <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
       <div className="script-flow-columns">
         <div className="script-step-list">

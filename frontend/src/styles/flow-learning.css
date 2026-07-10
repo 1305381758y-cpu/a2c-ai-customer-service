@@ -26,7 +26,7 @@
 .script-step-editor,
 .version-panel {
   border: 1px solid #dfe6f1;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fff;
   padding: 12px;
   min-width: 0;
@@ -35,7 +35,7 @@
 .script-step-card {
   width: 100%;
   border: 1px solid #e1e8f2;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
   text-align: left;
   display: grid;
@@ -55,6 +55,161 @@
   gap: 12px;
 }
 
+.script-step-list {
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.script-readiness {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.script-readiness.ready {
+  border-color: #b7e4ca;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.script-readiness.blocked {
+  border-color: #f4d8a7;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.script-readiness-icon {
+  display: grid;
+  place-items: center;
+}
+
+.script-readiness > div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.script-readiness span {
+  color: var(--muted-strong);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.script-flow-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.script-flow-summary span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.script-flow-summary strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.script-editor-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.script-editor-group-title {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--brand);
+}
+
+.script-editor-group-title > div {
+  display: grid;
+  gap: 2px;
+}
+
+.script-editor-group-title span,
+.script-editor-group summary small {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.script-standard-reply {
+  min-height: 132px !important;
+}
+
+.script-variable-help {
+  display: grid;
+  grid-template-columns: auto auto minmax(90px, 1fr);
+  gap: 6px 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.script-variable-help strong {
+  grid-row: 1 / span 4;
+  align-self: start;
+  color: var(--text);
+}
+
+.script-variable-help code {
+  width: max-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--brand-strong);
+}
+
+.script-editor-group.optional-group {
+  padding: 0;
+}
+
+.script-editor-group.optional-group > summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 13px 14px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.script-editor-group.optional-group > summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.script-editor-group.optional-group[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.script-editor-group.optional-group > .form-grid {
+  padding: 14px;
+}
+
 .script-node-form textarea {
   min-height: 78px;
   resize: vertical;
@@ -67,8 +222,37 @@
   align-items: center;
   padding: 8px;
   border: 1px solid #e1e8f2;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #f8fafc;
+}
+
+@media (max-width: 1180px) {
+  .script-step-list {
+    max-height: 42vh;
+  }
+
+  .script-flow-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .script-readiness {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .script-readiness > button {
+    grid-column: 1 / -1;
+  }
+
+  .script-flow-summary,
+  .script-variable-help {
+    grid-template-columns: 1fr;
+  }
+
+  .script-variable-help strong {
+    grid-row: auto;
+  }
 }
 
 .intent-learning-page {

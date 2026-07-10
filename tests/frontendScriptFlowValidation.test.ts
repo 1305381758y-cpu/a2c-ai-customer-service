@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateScriptFlowDraft } from "../frontend/src/script-flows/ScriptFlowValidation.js";
+import { validateScriptFlowDraft, validateScriptFlowIssues } from "../frontend/src/script-flows/ScriptFlowValidation.js";
 import type { ScriptFlowStep } from "../frontend/src/types.js";
 
 describe("frontend script flow validation", () => {
@@ -39,6 +39,19 @@ describe("frontend script flow validation", () => {
     expect(warnings).toContain("流程编号重复：A");
     expect(warnings).toContain("节点 的下一流程编号不存在");
     expect(warnings).toContain("节点 的下一系统步骤不存在");
+  });
+
+  it("matches backend required fields and identifies the node to repair", () => {
+    const issues = validateScriptFlowIssues([
+      step({ id: 37, flowCode: "", flowName: "", standardReply: "" })
+    ]);
+
+    expect(issues.map((issue) => issue.message)).toEqual([
+      "未命名节点 缺少流程编号",
+      "未命名节点 缺少流程名称",
+      "未命名节点 缺少客服标准话术"
+    ]);
+    expect(issues.every((issue) => issue.stepId === 37)).toBe(true);
   });
 
   it("accepts complete registration and Telegram link nodes", () => {
