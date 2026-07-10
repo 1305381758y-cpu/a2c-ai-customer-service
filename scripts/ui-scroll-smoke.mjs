@@ -467,7 +467,10 @@ async function smokeAgentProfileSave(page) {
   await page.getByLabel("智能体名称").fill(`验收接待专员-${Date.now()}`);
   await page.getByRole("button", { name: "保存智能体配置", exact: true }).click();
   await page.waitForFunction(() => document.body.textContent?.includes("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。"), { timeout: 10_000 });
-  return "商户管理员/智能体配置: 保存按钮生效";
+  await page.locator(".agent-version-panel > summary").click();
+  await page.locator(".agent-version-panel .config-version-row").first().waitFor({ state: "visible" });
+  await page.locator(".agent-version-panel .config-version-row").first().getByRole("button", { name: "恢复", exact: true }).waitFor({ state: "visible" });
+  return "商户管理员/智能体配置: 保存和版本记录生效";
 }
 
 async function smokeScriptFlowCreateAndDelete(page) {
@@ -495,6 +498,8 @@ async function smokeMerchantOperatorPermissions(page) {
 
   await clickNav(page, "智能体配置");
   if (await page.getByRole("button", { name: "保存智能体配置", exact: true }).count()) throw new Error("商户运营不应保存智能体配置");
+  await page.locator(".agent-version-panel > summary").click();
+  if (await page.locator(".agent-version-panel").getByRole("button", { name: "恢复", exact: true }).count()) throw new Error("商户运营不应恢复智能体版本");
 
   await clickNav(page, "话本流程");
   await page.locator(".table tbody tr.clickable").first().click();

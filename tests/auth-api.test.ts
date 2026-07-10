@@ -98,6 +98,36 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("records and restores merchant agent profile versions", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "admin@test.local", password: "Admin123456" } });
+    const cookie = String(login.headers["set-cookie"]);
+    const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie }, payload: { name: "智能体版本测试" } });
+    const merchantId = merchant.json().id as string;
+    const base = `/api/admin/merchants/${merchantId}/agent-profile`;
+
+    await app.inject({ method: "PATCH", url: base, headers: { cookie }, payload: { agentName: "第一版专员", toneStyle: "简短耐心" } });
+    await app.inject({ method: "PATCH", url: base, headers: { cookie }, payload: { agentName: "第二版专员" } });
+    const versions = await app.inject({ method: "GET", url: `${base}/versions`, headers: { cookie } });
+    expect(versions.statusCode).toBe(200);
+    expect(versions.json().rows).toHaveLength(2);
+    expect(versions.json().rows[0]).toMatchObject({ version: 2, changedKeys: ["agentName"], createdBy: "平台管理员" });
+    expect(versions.json().rows[0]).not.toHaveProperty("snapshot");
+
+    const restored = await app.inject({ method: "POST", url: `${base}/versions/${versions.json().rows[1].id}/restore`, headers: { cookie } });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json()).toMatchObject({ agentName: "第一版专员", toneStyle: "简短耐心" });
+    const afterRestore = await app.inject({ method: "GET", url: `${base}/versions`, headers: { cookie } });
+    expect(afterRestore.json().rows[0]).toMatchObject({ version: 3, note: "恢复版本 1" });
+    await app.close();
+  });
+
   it("keeps merchant data isolated and ignores masked secret patches", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",

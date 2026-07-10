@@ -8,10 +8,12 @@ import { buildMerchantDashboard } from "../services/merchantDashboard.js";
 import {
   getMaskedMerchantConfig,
   getMerchantAgentProfile,
+  listMerchantAgentProfileVersions,
   listMerchantConfigVersions,
   maskConfig,
   patchMaskedMerchantConfig,
   patchMerchantAgentProfile,
+  restoreMerchantAgentProfileVersion,
   restoreMerchantConfigVersion
 } from "../services/merchantSettings.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
@@ -60,8 +62,15 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
     getMerchantAgentProfile(deps.repos, request.params.id)
   );
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) =>
-    patchMerchantAgentProfile(deps.repos, request.params.id, request.body ?? {})
+    patchMerchantAgentProfile(deps.repos, request.params.id, request.body ?? {}, requestUser(request).name)
   );
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile/versions", { preHandler: deps.adminOnly }, async (request) =>
+    listMerchantAgentProfileVersions(deps.repos, request.params.id)
+  );
+  app.post<{ Params: { id: string; versionId: string } }>("/api/admin/merchants/:id/agent-profile/versions/:versionId/restore", { preHandler: deps.adminOnly }, async (request, reply) => {
+    const restored = restoreMerchantAgentProfileVersion(deps.repos, request.params.id, request.params.versionId, requestUser(request).name);
+    return restored ? restored : reply.code(404).send({ error: "智能体配置版本不存在" });
+  });
 }
 
 function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantSettingsRoutesDeps): void {
@@ -83,8 +92,15 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
     getMerchantAgentProfile(deps.repos, scopedMerchantId(request))
   );
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/agent-profile", { preHandler: deps.merchantAdmins }, async (request) =>
-    patchMerchantAgentProfile(deps.repos, scopedMerchantId(request), request.body ?? {})
+    patchMerchantAgentProfile(deps.repos, scopedMerchantId(request), request.body ?? {}, requestUser(request).name)
   );
+  app.get("/api/merchant/agent-profile/versions", { preHandler: deps.merchantRoles }, async (request) =>
+    listMerchantAgentProfileVersions(deps.repos, scopedMerchantId(request))
+  );
+  app.post<{ Params: { versionId: string } }>("/api/merchant/agent-profile/versions/:versionId/restore", { preHandler: deps.merchantAdmins }, async (request, reply) => {
+    const restored = restoreMerchantAgentProfileVersion(deps.repos, scopedMerchantId(request), request.params.versionId, requestUser(request).name);
+    return restored ? restored : reply.code(404).send({ error: "智能体配置版本不存在" });
+  });
 }
 
 export function registerStaticFrontendRoute(app: FastifyInstance): void {

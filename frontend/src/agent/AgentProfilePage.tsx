@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { History, RefreshCw } from "lucide-react";
 
-import type { AgentProfile, Merchant, Toast } from "../types.js";
+import type { AgentProfile, AgentProfileVersion, Merchant, Toast } from "../types.js";
+import { ConfirmActionButton } from "../ui/components.js";
+import { formatDateTime, label } from "../ui/formatters.js";
 
 type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
 type Notify = (type: Toast["type"], title: string, detail?: string) => void;
@@ -34,6 +36,9 @@ export function AgentProfilePage({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const url = platform ? `/api/admin/merchants/${merchantId}/agent-profile` : "/api/merchant/agent-profile";
+  const versionsUrl = `${url}/versions`;
+  const [versions, setVersions] = useState<AgentProfileVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   useEffect(() => {
     if (!platform) {
@@ -44,9 +49,19 @@ export function AgentProfilePage({
   }, [loadRows, platform]);
 
   const load = async () => setForm(await api<AgentProfile>(url));
+  const loadVersions = async () => {
+    setVersionsLoading(true);
+    try {
+      const result = await api<{ rows: AgentProfileVersion[] }>(versionsUrl);
+      setVersions(result.rows);
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "加载智能体配置失败"));
+    loadVersions().catch((err) => setError(err instanceof Error ? err.message : "智能体版本加载失败"));
   }, [url]);
 
   const fields: Array<[keyof AgentProfile, string, string]> = [
@@ -69,9 +84,16 @@ export function AgentProfilePage({
       setForm(saved);
       setMessage("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。");
       notify("success", "智能体配置已保存");
+      await loadVersions();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     }
+  };
+  const restoreVersion = async (version: AgentProfileVersion) => {
+    const restored = await api<AgentProfile>(`${versionsUrl}/${version.id}/restore`, { method: "POST" });
+    setForm(restored);
+    await loadVersions();
+    notify("success", `已恢复智能体版本 ${version.version}`, "恢复操作已生成新的版本记录。");
   };
 
   return <section className="single-column">
@@ -87,6 +109,18 @@ export function AgentProfilePage({
           {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
         </div>
         <div className="toolbar sticky-actions">{canEdit && <AsyncButton onClick={save} busyText="保存中...">保存智能体配置</AsyncButton>}<AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
+        <details className="config-version-panel agent-version-panel">
+          <summary><History size={17}/><span><strong>智能体版本记录</strong><small>{versionsLoading ? "加载中" : versions.length ? `最近 ${versions.length} 个版本` : "保存后会自动记录"}</small></span></summary>
+          <div className="config-version-list">
+            {!versionsLoading && !versions.length && <div className="empty-state">暂无智能体版本记录。</div>}
+            {versions.map((version) => <article key={version.id} className="config-version-row">
+              <div><strong>版本 {version.version}</strong><span>{version.note || "保存智能体配置"}</span></div>
+              <p>{version.changedKeys.length ? version.changedKeys.map(label).join("、") : "未记录变更字段"}</p>
+              <small>{version.createdBy || "系统"} · {formatDateTime(version.createdAt)}</small>
+              {canEdit && <ConfirmActionButton className="ghost" busyText="恢复中..." title={`确认恢复智能体版本 ${version.version}？`} detail="恢复后，角色、语气、目标、边界和转人工条件都会回到该版本，并影响后续真实回复、模拟训练和复盘。" confirmText="恢复此版本" onConfirm={() => restoreVersion(version)}>恢复</ConfirmActionButton>}
+            </article>)}
+          </div>
+        </details>
       </> : <div className="empty-state">正在加载智能体配置...</div>}
     </div>
   </section>;

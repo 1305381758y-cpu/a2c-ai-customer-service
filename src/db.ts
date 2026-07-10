@@ -452,6 +452,22 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS merchant_agent_profile_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      changed_keys_json TEXT NOT NULL DEFAULT '[]',
+      note TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, version),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_profile_versions_merchant
+      ON merchant_agent_profile_versions(merchant_id, version DESC);
+
     CREATE TABLE IF NOT EXISTS conversation_reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT NOT NULL,

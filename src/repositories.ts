@@ -26,6 +26,7 @@ import type {
   ScriptFlowVersionRecord,
   ScriptFlowRuntime,
   MerchantAgentProfileRecord,
+  MerchantAgentProfileVersionRecord,
   ConversationReviewRecord,
   ConversationReviewItemRecord,
   ConversationReviewInput,
@@ -59,6 +60,7 @@ export type {
   ScriptFlowVersionRecord,
   ScriptFlowRuntime,
   MerchantAgentProfileRecord,
+  MerchantAgentProfileVersionRecord,
   ConversationReviewRecord,
   ConversationReviewItemRecord,
   ConversationReviewInput,
@@ -443,6 +445,18 @@ export class Repositories {
 
   patchMerchantAgentProfile(merchantId: string, patch: Record<string, unknown>): MerchantAgentProfileRecord {
     return this.agentProfiles.patch(merchantId, patch);
+  }
+
+  recordMerchantAgentProfileVersion(merchantId: string, changedKeys: string[], userName: string, note = "保存智能体配置"): MerchantAgentProfileVersionRecord {
+    return this.agentProfiles.recordVersion(merchantId, changedKeys, userName, note);
+  }
+
+  listMerchantAgentProfileVersions(merchantId: string): MerchantAgentProfileVersionRecord[] {
+    return this.agentProfiles.listVersions(merchantId);
+  }
+
+  restoreMerchantAgentProfileVersion(merchantId: string, versionId: number, userName: string): MerchantAgentProfileRecord | undefined {
+    return this.agentProfiles.restoreVersion(merchantId, versionId, userName);
   }
 
   getConversationReview(conversationId: string, merchantId?: string): { review: ConversationReviewRecord; items: ConversationReviewItemRecord[] } | undefined {

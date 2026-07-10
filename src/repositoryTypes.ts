@@ -320,6 +320,16 @@ export interface MerchantAgentProfileRecord {
   updatedAt: string;
 }
 
+export interface MerchantAgentProfileVersionRecord {
+  id: number;
+  merchantId: string;
+  version: number;
+  changedKeys: string[];
+  note: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface ConversationReviewRecord {
   id: number;
   merchantId: string;

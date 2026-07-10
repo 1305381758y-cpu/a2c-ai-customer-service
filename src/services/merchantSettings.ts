@@ -50,9 +50,22 @@ export function getMerchantAgentProfile(repos: Repositories, merchantId: string)
 export function patchMerchantAgentProfile(
   repos: Repositories,
   merchantId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  userName = "系统"
 ): MerchantAgentProfileRecord {
-  return repos.patchMerchantAgentProfile(merchantId, cleanAgentProfilePatch(patch));
+  const cleaned = cleanAgentProfilePatch(patch);
+  const saved = repos.patchMerchantAgentProfile(merchantId, cleaned);
+  const changedKeys = Object.keys(cleaned);
+  if (changedKeys.length) repos.recordMerchantAgentProfileVersion(merchantId, changedKeys, userName);
+  return saved;
+}
+
+export function listMerchantAgentProfileVersions(repos: Repositories, merchantId: string): { rows: ReturnType<Repositories["listMerchantAgentProfileVersions"]> } {
+  return { rows: repos.listMerchantAgentProfileVersions(merchantId) };
+}
+
+export function restoreMerchantAgentProfileVersion(repos: Repositories, merchantId: string, versionId: string, userName: string): MerchantAgentProfileRecord | undefined {
+  return repos.restoreMerchantAgentProfileVersion(merchantId, Number(versionId), userName);
 }
 
 export function maskConfig(config: MerchantConfigRecord): Record<string, unknown> {
