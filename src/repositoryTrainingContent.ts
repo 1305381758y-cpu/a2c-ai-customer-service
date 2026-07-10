@@ -76,8 +76,10 @@ export class TrainingContentRepository {
     return { id: Number(row.id) };
   }
 
-  listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
+  listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean; limit?: number; offset?: number } = {}): TrainingSampleForSearch[] {
     const { where, params } = buildTrainingSampleWhere(filters);
+    const limit = clampTrainingLimit(filters.limit, 500, 500);
+    const offset = Math.max(filters.offset ?? 0, 0);
     return this.db.sqlite
       .prepare(`
         SELECT id, country_id AS countryId, customer_message AS customerMessage, standard_reply AS standardReply,
@@ -85,9 +87,14 @@ export class TrainingContentRepository {
         FROM training_samples
         ${where}
         ORDER BY priority DESC, id DESC
-        LIMIT 500
+        LIMIT ? OFFSET ?
       `)
-      .all(...params) as unknown as TrainingSampleForSearch[];
+      .all(...params, limit, offset) as unknown as TrainingSampleForSearch[];
+  }
+
+  countTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): number {
+    const { where, params } = buildTrainingSampleWhere(filters);
+    return Number((this.db.sqlite.prepare(`SELECT COUNT(*) AS total FROM training_samples ${where}`).get(...params) as { total: number }).total);
   }
 
   patchTrainingSample(id: number, patch: Record<string, unknown>, merchantId?: string): Record<string, unknown> | undefined {
@@ -109,18 +116,25 @@ export class TrainingContentRepository {
     return result.changes > 0;
   }
 
-  listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): KnowledgeItemRecord[] {
+  listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean; limit?: number; offset?: number } = {}): KnowledgeItemRecord[] {
     const { where, params } = buildKnowledgeItemWhere(filters);
+    const limit = clampTrainingLimit(filters.limit, 500, 500);
+    const offset = Math.max(filters.offset ?? 0, 0);
     return this.db.sqlite
       .prepare(`
         SELECT id, merchant_id, country_id, type, title, content, language, priority, enabled
         FROM knowledge_items
         ${where}
         ORDER BY priority DESC, id DESC
-        LIMIT 500
+        LIMIT ? OFFSET ?
       `)
-      .all(...params)
+      .all(...params, limit, offset)
       .map((row) => mapKnowledgeItem(row as Record<string, unknown>));
+  }
+
+  countKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): number {
+    const { where, params } = buildKnowledgeItemWhere(filters);
+    return Number((this.db.sqlite.prepare(`SELECT COUNT(*) AS total FROM knowledge_items ${where}`).get(...params) as { total: number }).total);
   }
 
   createKnowledgeItem(merchantId: string, input: Record<string, unknown>): KnowledgeItemRecord {
@@ -249,10 +263,11 @@ export class TrainingContentRepository {
     return deleteTrainingMaterialRecord(this.db, id, merchantId);
   }
 
-  listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {
+  listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number; offset?: number } = {}): TrainingMaterialRecord[] {
     const { where, params } = buildTrainingMaterialWhere(filters);
     const limit = clampTrainingLimit(filters.limit, 100, 500);
-    params.push(limit);
+    const offset = Math.max(filters.offset ?? 0, 0);
+    params.push(limit, offset);
     return this.db.sqlite
       .prepare(`
         SELECT tm.*, co.code AS country_code, co.name AS country_name
@@ -260,10 +275,15 @@ export class TrainingContentRepository {
         LEFT JOIN merchant_countries co ON co.id = tm.country_id
         ${where}
         ORDER BY tm.id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
       .all(...params)
       .map((row) => mapTrainingMaterial(row as Record<string, unknown>));
+  }
+
+  countTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string } = {}): number {
+    const { where, params } = buildTrainingMaterialWhere(filters);
+    return Number((this.db.sqlite.prepare(`SELECT COUNT(*) AS total FROM training_materials tm ${where}`).get(...params) as { total: number }).total);
   }
 
   getTrainingMaterial(id: number, merchantId?: string): TrainingMaterialRecord | undefined {

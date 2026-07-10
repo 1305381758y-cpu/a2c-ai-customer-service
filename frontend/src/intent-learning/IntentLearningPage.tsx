@@ -4,24 +4,28 @@ import { api, useRows, withQuery } from "../app/api.js";
 import type { Filters, IntentLearningEvent, MerchantCountry } from "../types.js";
 import { AsyncButton, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { countryLabel, formatDateTime, label, languageName, statusTone, type TimeDisplayMode } from "../ui/formatters.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
-import { intentActiveCountry, intentMetrics, intentQueryFilters, intentTimeLabelFor, intentTimeZoneFor } from "./IntentLearningPageHelpers.js";
+import { intentActiveCountry, intentQueryFilters, intentTimeLabelFor, intentTimeZoneFor } from "./IntentLearningPageHelpers.js";
 
 export function IntentLearningPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
   const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
-  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" };
+  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "" };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const activeCountry = intentActiveCountry(countries, filters.countryId || "");
   const intentTimeZone = intentTimeZoneFor(platform, timeMode, activeCountry);
   const intentTimeLabel = intentTimeLabelFor(platform, timeMode, activeCountry);
-  const rowsUrl = withQuery(base, intentQueryFilters(platform, filters, intentTimeZone));
+  const rowsUrl = withQuery(base, intentQueryFilters(platform, filters, intentTimeZone, page, pageSize));
   const [rows, setRows] = useState<IntentLearningEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
+  const [metrics, setMetrics] = useState({ candidate: 0, reviewed: 0, promoted: 0, ignored: 0 });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [selected, setSelected] = useState<IntentLearningEvent | null>(null);
   const [detailDraft, setDetailDraft] = useState({ status: "candidate", displayName: "", description: "" });
 
@@ -34,10 +38,10 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
     setRowsLoading(true);
     setRowsError(null);
     try {
-      const result = await api<{ rows: IntentLearningEvent[]; total: number }>(rowsUrl);
+      const result = await api<{ rows: IntentLearningEvent[]; total: number; metrics: typeof metrics }>(rowsUrl);
       setRows(result.rows);
       setTotal(result.total);
-      pager.setPage(1);
+      setMetrics(result.metrics);
       setSelected((current) => current ? result.rows.find((item) => item.id === current.id) || null : null);
     } catch (err) {
       setRowsError(err instanceof Error ? err.message : "意图学习数据加载失败，请稍后重试。");
@@ -47,16 +51,15 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
     }
   };
   useEffect(() => { void reload().catch(() => undefined); }, [rowsUrl]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const patchSelected = async (patch: Record<string, unknown>, message = "意图候选已更新") => {
     if (!selected) return;
     const saved = await api<IntentLearningEvent>(`${base}/${selected.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-    setRows((current) => current.map((item) => item.id === saved.id ? saved : item));
     setSelected(saved);
+    await reload();
     notify("success", message);
   };
-
-  const metrics = intentMetrics(rows);
 
   return <div className="intent-learning-page work-split">
     <section className="work-panel">
@@ -77,12 +80,12 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"] : ["q", "countryId", "status", "suggestedIntent", "startAt", "endAt", "limit"]}
+        fields={platform ? ["merchantId", "q", "countryId", "status", "suggestedIntent", "startAt", "endAt"] : ["q", "countryId", "status", "suggestedIntent", "startAt", "endAt"]}
         selects={{ countryId: ["", ...countries.map((country) => country.id)], status: ["", "candidate", "reviewed", "promoted", "ignored"] }}
         resetValues={defaultFilters}
-        onApply={reload}
+        onApply={async () => { if (page === 1) await reload(); else setPage(1); }}
       />
-      <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle="暂无意图候选" emptyDetail="系统发现新的识别盲区后，会在这里生成待处理候选。" />
+      <Table rows={rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle="暂无意图候选" emptyDetail="系统发现新的识别盲区后，会在这里生成待处理候选。" />
       <Pagination pager={pager} />
     </section>
     <section className="detail-panel">

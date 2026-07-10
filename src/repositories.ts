@@ -202,7 +202,7 @@ export class Repositories {
     return this.intentLearning.get(id, merchantId);
   }
 
-  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+  listIntentLearningEvents(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number; offset?: number } = {}): IntentLearningEventRecord[] {
     return this.intentLearning.list(filters);
   }
 
@@ -270,7 +270,7 @@ export class Repositories {
     return this.conversations.patchCustomerMemory(conversationId, merchantId, patch);
   }
 
-  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; startAt?: string; endAt?: string; limit?: number } = {}): Conversation[] {
+  listConversations(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; handoffStatus?: string; a2cAccountPhone?: string; customerPhone?: string; startAt?: string; endAt?: string; limit?: number; offset?: number } = {}): Conversation[] {
     return this.conversations.list(filters);
   }
 
@@ -294,8 +294,12 @@ export class Repositories {
     this.customers.refreshAfterConversationDelete(merchantId, countryId, customerKey);
   }
 
-  listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): TrainingSampleForSearch[] {
+  listTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean; limit?: number; offset?: number } = {}): TrainingSampleForSearch[] {
     return this.trainingContent.listTrainingSamples(filters);
+  }
+
+  countTrainingSamples(filters: { merchantId?: string; countryId?: string; language?: string; intent?: string; stage?: string; enabled?: boolean } = {}): number {
+    return this.trainingContent.countTrainingSamples(filters);
   }
 
   patchTrainingSample(id: number, patch: Record<string, unknown>, merchantId?: string): Record<string, unknown> | undefined {
@@ -306,8 +310,12 @@ export class Repositories {
     return this.trainingContent.deleteTrainingSample(id, merchantId);
   }
 
-  listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): KnowledgeItemRecord[] {
+  listKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean; limit?: number; offset?: number } = {}): KnowledgeItemRecord[] {
     return this.trainingContent.listKnowledgeItems(filters);
+  }
+
+  countKnowledgeItems(filters: { merchantId?: string; countryId?: string; type?: string; enabled?: boolean } = {}): number {
+    return this.trainingContent.countKnowledgeItems(filters);
   }
 
   createKnowledgeItem(merchantId: string, input: Record<string, unknown>): KnowledgeItemRecord {
@@ -359,8 +367,12 @@ export class Repositories {
     return this.trainingContent.deleteTrainingMaterial(id, merchantId);
   }
 
-  listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number } = {}): TrainingMaterialRecord[] {
+  listTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string; limit?: number; offset?: number } = {}): TrainingMaterialRecord[] {
     return this.trainingContent.listTrainingMaterials(filters);
+  }
+
+  countTrainingMaterials(filters: { merchantId?: string; countryId?: string; sourceType?: string; status?: string } = {}): number {
+    return this.trainingContent.countTrainingMaterials(filters);
   }
 
   getTrainingMaterial(id: number, merchantId?: string): TrainingMaterialRecord | undefined {

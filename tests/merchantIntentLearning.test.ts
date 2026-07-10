@@ -68,6 +68,22 @@ describe("merchantIntentLearning service", () => {
     expect(result.total).toBe(2);
   });
 
+  it("uses server offsets and returns status metrics for the full filtered range", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("意图分页商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    const first = recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "问题一", candidateKey: "page-1" });
+    recordEvent(repos, { merchantId: merchant.id, countryId: country.id, customerText: "问题二", candidateKey: "page-2" });
+    repos.patchIntentLearningEvent(first.id, { status: "reviewed" }, merchant.id);
+
+    const result = listMerchantIntentLearningEvents(repos, merchant.id, { limit: "1", offset: "1" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.total).toBe(2);
+    expect(result.metrics).toMatchObject({ candidate: 1, reviewed: 1, promoted: 0, ignored: 0 });
+  });
+
   it("filters by the last seen time range", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

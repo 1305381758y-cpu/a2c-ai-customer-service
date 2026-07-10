@@ -13,6 +13,7 @@ export interface ConversationListFilters {
   startAt?: string;
   endAt?: string;
   limit?: number;
+  offset?: number;
 }
 
 export interface ConversationListQuery {
@@ -31,7 +32,7 @@ export function buildConversationListQuery(filters: ConversationListFilters = {}
   addFilter(clauses, params, "c.a2c_account_phone", filters.a2cAccountPhone);
   addFilter(clauses, params, "c.customer_phone", filters.customerPhone);
   addRangeFilter(clauses, params, "c.created_at", filters.startAt, filters.endAt);
-  params.push(clampConversationListLimit(filters.limit));
+  params.push(clampConversationListLimit(filters.limit), Math.max(filters.offset ?? 0, 0));
   return {
     where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
     params
@@ -50,7 +51,7 @@ export function listConversations(db: Db, filters: ConversationListFilters = {})
                c.pinned_at DESC,
                CASE WHEN c.unread_count > 0 THEN 0 ELSE 1 END,
                c.updated_at DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `)
     .all(...params)
     .map((row) => mapConversation(row as Record<string, unknown>));

@@ -80,17 +80,18 @@ export class IntentLearningRepository {
     return row ? mapIntentLearningEvent(row) : undefined;
   }
 
-  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number } = {}): IntentLearningEventRecord[] {
+  list(filters: { merchantId?: string; countryId?: string; status?: string; suggestedIntent?: string; q?: string; startAt?: string; endAt?: string; limit?: number; offset?: number } = {}): IntentLearningEventRecord[] {
     const { where, params } = this.buildListWhere(filters);
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
-    params.push(limit);
+    const offset = Math.max(filters.offset ?? 0, 0);
+    params.push(limit, offset);
     return this.db.sqlite
       .prepare(`
         SELECT *
         FROM intent_learning_events
         ${where}
         ORDER BY occurrence_count DESC, last_seen_at DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
       `)
       .all(...params)
       .map((row) => mapIntentLearningEvent(row as Record<string, unknown>));

@@ -20,6 +20,32 @@ function setup() {
 }
 
 describe("TrainingContentRepository", () => {
+  it("paginates training data while keeping database totals independent from page size", () => {
+    const { merchant, country, training } = setup();
+    for (const index of [1, 2, 3]) {
+      training.createTrainingSample(merchant.id, {
+        customerMessage: `问题 ${index}`,
+        standardReply: `回复 ${index}`,
+        stage: "need_platform_register",
+        intent: "ask_platform_register",
+        language: "zh",
+        keywords: "测试",
+        priority: index,
+        enabled: true
+      }, country.id);
+      training.createKnowledgeItem(merchant.id, { countryId: country.id, title: `知识 ${index}`, content: `内容 ${index}`, type: "faq" });
+      training.createTrainingMaterial({ merchantId: merchant.id, countryId: country.id, sourceType: "txt", filename: `material-${index}.txt`, mimeType: "text/plain", rawText: `素材 ${index}`, warnings: [] });
+    }
+
+    const scope = { merchantId: merchant.id, countryId: country.id };
+    expect(training.countTrainingSamples(scope)).toBe(3);
+    expect(training.listTrainingSamples({ ...scope, limit: 1, offset: 1 })).toHaveLength(1);
+    expect(training.countKnowledgeItems(scope)).toBe(3);
+    expect(training.listKnowledgeItems({ ...scope, limit: 1, offset: 2 })).toHaveLength(1);
+    expect(training.countTrainingMaterials(scope)).toBe(3);
+    expect(training.listTrainingMaterials({ ...scope, limit: 2, offset: 2 })).toHaveLength(1);
+  });
+
   it("keeps sample, knowledge, and material operations behind the training-content module", () => {
     const { merchant, country, training } = setup();
 

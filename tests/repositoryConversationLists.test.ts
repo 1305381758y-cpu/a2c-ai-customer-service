@@ -22,7 +22,8 @@ describe("repository conversation list query builder", () => {
         "pending",
         "5917000",
         "customer-1",
-        30
+        30,
+        0
       ]
     });
   });
@@ -51,7 +52,8 @@ describe("repository conversation list query builder", () => {
         "customer-1",
         "2026-07-04 00:00:00",
         "2026-07-04 23:59:59",
-        50
+        50,
+        0
       ]
     });
   });
@@ -59,12 +61,12 @@ describe("repository conversation list query builder", () => {
   it("uses the default list limit without filters", () => {
     expect(buildConversationListQuery()).toEqual({
       where: "",
-      params: [100]
+      params: [100, 0]
     });
   });
 
   it("clamps list limits to the supported range", () => {
-    expect(buildConversationListQuery({ limit: -5 }).params).toEqual([1]);
-    expect(buildConversationListQuery({ limit: 99999 }).params).toEqual([50000]);
+    expect(buildConversationListQuery({ limit: -5 }).params).toEqual([1, 0]);
+    expect(buildConversationListQuery({ limit: 99999, offset: 25 }).params).toEqual([50000, 25]);
   });
 });

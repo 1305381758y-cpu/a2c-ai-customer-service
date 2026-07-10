@@ -1,4 +1,4 @@
-import type { Filters, IntentLearningEvent, MerchantCountry } from "../types.js";
+import type { Filters, MerchantCountry } from "../types.js";
 import { countryLabel, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 
 export function intentActiveCountry(countries: MerchantCountry[], countryId: string) {
@@ -16,8 +16,9 @@ export function intentTimeLabelFor(platform: boolean, timeMode: TimeDisplayMode,
   return timeDisplayModeLabel("beijing");
 }
 
-export function intentQueryFilters(platform: boolean, filters: Filters, timeZone: string) {
-  if (platform) return { ...filters, timeZone: "Asia/Shanghai" };
+export function intentQueryFilters(platform: boolean, filters: Filters, timeZone: string, page = 1, pageSize = 20) {
+  const paging = { limit: String(pageSize), offset: String((page - 1) * pageSize) };
+  if (platform) return { ...filters, timeZone: "Asia/Shanghai", ...paging };
   return {
     countryId: filters.countryId,
     status: filters.status,
@@ -26,15 +27,6 @@ export function intentQueryFilters(platform: boolean, filters: Filters, timeZone
     startAt: filters.startAt,
     endAt: filters.endAt,
     timeZone,
-    limit: filters.limit
-  };
-}
-
-export function intentMetrics(rows: IntentLearningEvent[]) {
-  return {
-    candidate: rows.filter((item) => item.status === "candidate").length,
-    reviewed: rows.filter((item) => item.status === "reviewed").length,
-    promoted: rows.filter((item) => item.status === "promoted").length,
-    ignored: rows.filter((item) => item.status === "ignored").length
+    ...paging
   };
 }

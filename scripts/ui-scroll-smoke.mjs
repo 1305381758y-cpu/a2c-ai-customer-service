@@ -131,6 +131,20 @@ function seedMerchantConversation(merchantResult) {
         (merchant_id, country_id, customer_key, nickname, first_a2c_account_phone, last_a2c_account_phone, language, stage, status, conversation_count, last_conversation_id, first_seen_at, last_seen_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
     `).run(merchantId, countryId, "591700000001", "验收客户", "7000000001", "7000000001", "es", "need_platform_register", "active", "ui-smoke-conversation-1", timestamp, timestamp, timestamp, timestamp);
+    for (let index = 2; index <= 22; index += 1) {
+      const conversationId = `ui-smoke-conversation-${index}`;
+      const customerPhone = `5917000000${String(index).padStart(2, "0")}`;
+      db.prepare(`
+        INSERT OR IGNORE INTO conversations
+          (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname, language, stage, flow_step, status, handoff_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(conversationId, merchantId, countryId, customerPhone, "7000000001", `验收客户${index}`, "es", "need_platform_register", "wait_registration", "active", "pending", timestamp, timestamp);
+      db.prepare(`
+        INSERT OR IGNORE INTO customers
+          (merchant_id, country_id, customer_key, nickname, first_a2c_account_phone, last_a2c_account_phone, language, stage, status, conversation_count, last_conversation_id, first_seen_at, last_seen_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+      `).run(merchantId, countryId, customerPhone, `验收客户${index}`, "7000000001", "7000000001", "es", "need_platform_register", "active", conversationId, timestamp, timestamp, timestamp, timestamp);
+    }
     db.prepare(`
       INSERT INTO ai_call_logs
         (merchant_id, country_id, provider, model, task_type, status, duration_ms, error, request_summary, response_summary, created_at)
@@ -432,6 +446,18 @@ async function smokeConversationWorkspacePanels(page) {
   return "商户管理员/会话: 客户列表和右侧会话辅助区可收起与展开";
 }
 
+async function smokeConversationServerPagination(page) {
+  await clickNav(page, "会话");
+  const pager = page.locator(".customer-list .pagination");
+  await pager.locator("select").selectOption("10");
+  const [response] = await Promise.all([
+    waitForQueryResponse(page, "/api/merchant/conversations", { limit: "10", offset: "10", a2cAccountPhone: "7000000001" }),
+    pager.getByRole("button", { name: "下一页", exact: true }).click()
+  ]);
+  if (!response.ok()) throw new Error(`商户管理员/会话 服务端分页失败：${response.status()}`);
+  return "商户管理员/会话: 服务端分页和真实总数生效";
+}
+
 function waitForQueryResponse(page, endpointPart, expected) {
   return page.waitForResponse((res) => {
     if (!res.url().includes(endpointPart)) return false;
@@ -560,6 +586,7 @@ async function main() {
     report.push(await smokeAiCallsTaskTypeFilter(page));
     report.push(await smokeCustomerFilterAndExport(page));
     report.push(await smokeConversationFilterAndExport(page));
+    report.push(await smokeConversationServerPagination(page));
     report.push(await smokeConversationWorkspacePanels(page));
     report.push(await smokeAgentProfileSave(page));
     report.push(await smokeScriptFlowCreateAndDelete(page));

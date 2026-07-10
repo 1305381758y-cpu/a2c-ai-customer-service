@@ -12,11 +12,11 @@ describe("frontend training materials page helpers", () => {
   });
 
   it("keeps merchant list filters scoped to supported fields", () => {
-    expect(trainingMaterialsRowsUrl(false, { merchantId: "m-1", countryId: "bo", sourceType: "txt", status: "enabled", limit: "100" })).toBe(
-      "/api/merchant/training-materials?countryId=bo&sourceType=txt&status=enabled&limit=100"
+    expect(trainingMaterialsRowsUrl(false, { merchantId: "m-1", countryId: "bo", sourceType: "txt", status: "enabled" }, 2, 20)).toBe(
+      "/api/merchant/training-materials?countryId=bo&sourceType=txt&status=enabled&limit=20&offset=20"
     );
-    expect(trainingMaterialsRowsUrl(true, { merchantId: "m-1", countryId: "bo", limit: "100" })).toBe(
-      "/api/admin/training-materials?merchantId=m-1&countryId=bo&limit=100"
+    expect(trainingMaterialsRowsUrl(true, { merchantId: "m-1", countryId: "bo" }, 1, 50)).toBe(
+      "/api/admin/training-materials?merchantId=m-1&countryId=bo&limit=50&offset=0"
     );
   });
 

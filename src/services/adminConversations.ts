@@ -55,6 +55,7 @@ export type AdminIntentLearningListQuery = {
   endAt?: string;
   timeZone?: string;
   limit?: string;
+  offset?: string;
 };
 
 export function listAdminConversations(repos: Repositories, query: AdminConversationListQuery): { rows: Conversation[]; total: number } {
@@ -73,7 +74,8 @@ export function listAdminConversations(repos: Repositories, query: AdminConversa
   return {
     rows: repos.listConversations({
       ...filters,
-      limit: query.limit ? Number(query.limit) : undefined
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined
     }),
     total: repos.countConversations(filters)
   };
@@ -103,7 +105,7 @@ export function listAdminCustomers(repos: Repositories, query: AdminCustomerList
 export function listAdminIntentLearningEvents(
   repos: Repositories,
   query: AdminIntentLearningListQuery
-): { rows: IntentLearningEventRecord[]; total: number } {
+): { rows: IntentLearningEventRecord[]; total: number; metrics: Record<"candidate" | "reviewed" | "promoted" | "ignored", number> } {
   const range = normalizeSqlTimeRange({ startAt: query.startAt, endAt: query.endAt, timeZone: query.timeZone });
   const filters = {
     merchantId: query.merchantId,
@@ -117,10 +119,16 @@ export function listAdminIntentLearningEvents(
   return {
     rows: repos.listIntentLearningEvents({
       ...filters,
-      limit: query.limit ? Number(query.limit) : undefined
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined
     }),
-    total: repos.countIntentLearningEvents(filters)
+    total: repos.countIntentLearningEvents(filters),
+    metrics: intentStatusMetrics(repos, { ...filters, status: undefined })
   };
+}
+
+function intentStatusMetrics(repos: Repositories, filters: Omit<Parameters<Repositories["countIntentLearningEvents"]>[0], "status">) {
+  return Object.fromEntries(["candidate", "reviewed", "promoted", "ignored"].map((status) => [status, repos.countIntentLearningEvents({ ...filters, status })])) as Record<"candidate" | "reviewed" | "promoted" | "ignored", number>;
 }
 
 export function patchAdminIntentLearningEvent(

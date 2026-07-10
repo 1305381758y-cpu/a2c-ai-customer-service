@@ -103,7 +103,7 @@ export function ConversationCustomerList({
             {error && <div className="error">{error}</div>}
           </div>
         </details>
-        <div className="table-helper">当前筛选共 {totalRows} 个客户会话，列表展示前 {pager.total} 个。</div>
+        <div className="table-helper">当前筛选共 {totalRows} 个客户会话，当前页展示 {pager.rows.length} 个。</div>
       </div>
       <div className="stack-list conversation-list">
         {loading && <div className="empty-state">客户会话加载中...</div>}

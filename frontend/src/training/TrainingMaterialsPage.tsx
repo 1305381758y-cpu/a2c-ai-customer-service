@@ -1,23 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 
-import { api, loadRows, useRows } from "../app/api.js";
+import { api, useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, TrainingMaterial, TrainingMaterialItem } from "../types.js";
 import { AsyncButton, ConfirmActionButton, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { countryLabel, label, languageName } from "../ui/formatters.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { trainingImportEndpoint, trainingImportMessage, trainingMaterialColumns, trainingMaterialsBase, trainingMaterialsRowsUrl, trainingPasteFile, trainingSelectedCountryId, type TrainingImportResult } from "./TrainingMaterialsPageHelpers.js";
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = trainingMaterialsBase(platform);
-  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
-  const rowsUrl = trainingMaterialsRowsUrl(platform, filters);
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const rowsUrl = trainingMaterialsRowsUrl(platform, filters, page, pageSize);
   const [rows, setRows] = useState<TrainingMaterial[]>([]);
+  const [total, setTotal] = useState(0);
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [file, setFile] = useState<File | null>(null);
   const [pasted, setPasted] = useState("");
   const [selected, setSelected] = useState<TrainingMaterial | null>(null);
@@ -28,16 +32,19 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
     setMaterialsLoading(true);
     setMaterialsError(null);
     try {
-      setRows(await loadRows(rowsUrl));
-      pager.setPage(1);
+      const result = await api<{ rows: TrainingMaterial[]; total: number }>(rowsUrl);
+      setRows(result.rows);
+      setTotal(result.total);
     } catch (err) {
       setRows([]);
+      setTotal(0);
       setMaterialsError(err instanceof Error ? err.message : "学习资料加载失败，请稍后重试。");
     } finally {
       setMaterialsLoading(false);
     }
   };
   useEffect(() => { void reload(); }, [rowsUrl]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const loadDetail = async (row: TrainingMaterial) => {
     setSelected(row);
@@ -70,9 +77,9 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        fields={platform ? ["merchantId", "countryId", "sourceType", "status", "limit"] : ["countryId", "sourceType", "status", "limit"]}
+        fields={platform ? ["merchantId", "countryId", "sourceType", "status"] : ["countryId", "sourceType", "status"]}
         selects={{ countryId: ["", ...countries.map((country) => country.id)], sourceType: ["", "csv", "xlsx", "docx", "txt", "image"], status: ["", "enabled", "disabled"] }}
-        onApply={reload}
+        onApply={async () => { if (page === 1) await reload(); else setPage(1); }}
       />
       {!platform && <div className="material-uploader compact-uploader training-uploader">
         <div className="toolbar">
@@ -95,7 +102,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
         {message && <div className="notice" role="status">{message}</div>}
       </div>}
       <Table
-        rows={pager.rows}
+        rows={rows}
         columns={columns}
         onRow={loadDetail}
         loading={materialsLoading}

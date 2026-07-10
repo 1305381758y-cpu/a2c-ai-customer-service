@@ -21,7 +21,9 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
   const [accounts, setAccounts, accountsState] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
-  const [filters, setFiltersState] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
+  const [filters, setFiltersState] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "" });
+  const [conversationPage, setConversationPage] = useState(1);
+  const [conversationPageSize, setConversationPageSize] = useState(20);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [draftCustomer, setDraftCustomer] = useState<{ customerPhone: string; nickname: string } | null>(null);
   const [newCustomer, setNewCustomer] = useState({ customerPhone: "", nickname: "" });
@@ -30,12 +32,13 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
   const [accountStatus, setAccountStatus] = useState("");
   const [error, setError] = useState("");
   const conversationTimeZone = conversationTimeZoneFor(selectedAccount, timeMode);
-  const rowsUrl = conversationRowsQuery(filters, conversationTimeZone, selectedAccount);
+  const rowsUrl = conversationRowsQuery(filters, conversationTimeZone, selectedAccount, conversationPage, conversationPageSize);
   const [rows, setRows] = useState<Conversation[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 10);
+  const conversationTotalPages = Math.max(1, Math.ceil(totalRows / conversationPageSize));
+  const pager = { rows, page: conversationPage, pageSize: conversationPageSize, total: totalRows, totalPages: conversationTotalPages, setPage: (value: number) => setConversationPage(Math.min(Math.max(1, value), conversationTotalPages)), setPageSize: (value: number) => { setConversationPageSize(value); setConversationPage(1); } };
   const filteredAccounts = useMemo(() => {
     return filterConversationAccounts(accounts, { keyword: accountKeyword, status: accountStatus });
   }, [accounts, accountKeyword, accountStatus]);
@@ -54,7 +57,9 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
   useEffect(() => {
     setSelected(null);
     setDraftCustomer(null);
+    setConversationPage(1);
   }, [selectedAccount?.apiPhone]);
+  useEffect(() => { if (conversationPage > conversationTotalPages) setConversationPage(conversationTotalPages); }, [conversationPage, conversationTotalPages]);
 
   const reloadAccounts = async () => {
     setAccounts(await loadRows("/api/merchant/a2c/accounts"));
@@ -155,6 +160,7 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
   const exportFilters = conversationExportFilters(filters, conversationTimeZone, selectedAccount);
   const setFilters = (next: Filters) => {
     setFiltersState(normalizeConversationFilters(next, handoffs));
+    setConversationPage(1);
   };
   const exportBase = "/api/merchant/conversations/export";
 
@@ -208,7 +214,7 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
       onOpenNewCustomer={openNewCustomer}
       onRetry={reloadRows}
       onExportStarted={notifyExportStarted}
-      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "startAt", "endAt", "limit"] : ["status", "handoffStatus", "language", "startAt", "endAt", "limit"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
+      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "startAt", "endAt"] : ["status", "handoffStatus", "language", "startAt", "endAt"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
     />
     <section className="chat-pane">{selected ? <ConversationDetail canApplyTraining={canApplyTraining} canDelete={canDelete} conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;

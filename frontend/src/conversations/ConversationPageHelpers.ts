@@ -23,9 +23,9 @@ export function conversationExportFilters(filters: Filters, timeZone: string, ac
   return { ...filters, timeZone, a2cAccountPhone: account.apiPhone, limit: "50000" };
 }
 
-export function conversationRowsQuery(filters: Filters, timeZone: string, account: A2CAccount | null) {
+export function conversationRowsQuery(filters: Filters, timeZone: string, account: A2CAccount | null, page = 1, pageSize = 20) {
   if (!account) return "";
-  return withQuery("/api/merchant/conversations", { ...filters, timeZone, a2cAccountPhone: account.apiPhone });
+  return withQuery("/api/merchant/conversations", { ...filters, timeZone, a2cAccountPhone: account.apiPhone, limit: String(pageSize), offset: String((page - 1) * pageSize) });
 }
 
 export function accountUnreadCount(unread: UnreadSummary[], apiPhone: string) {

@@ -3,20 +3,23 @@ import React, { useEffect, useState } from "react";
 import { api, withQuery } from "../app/api.js";
 import type { Conversation, Filters } from "../types.js";
 import { FilterBar, Table } from "../ui/components.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notifyExportStarted } from "../ui/toast.js";
 import { ConversationDetail } from "./ConversationDetail.js";
 import { ConversationExportBar } from "./ConversationExport.js";
 
 export function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const base = "/api/admin/conversations";
-  const [filters, setFiltersState] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
-  const rowsUrl = withQuery(base, filters);
+  const [filters, setFiltersState] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const rowsUrl = withQuery(base, { ...filters, limit: String(pageSize), offset: String((page - 1) * pageSize) });
   const [rows, setRows] = useState<Conversation[]>([]);
   const [total, setTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [selected, setSelected] = useState<Conversation | null>(null);
   const reload = async () => {
     setRowsLoading(true);
@@ -25,7 +28,6 @@ export function PlatformConversations({ handoffs = false }: { handoffs?: boolean
       const result = await api<{ rows: Conversation[]; total: number }>(rowsUrl);
       setRows(result.rows);
       setTotal(result.total);
-      pager.setPage(1);
     } catch (err) {
       setRows([]);
       setTotal(0);
@@ -35,8 +37,10 @@ export function PlatformConversations({ handoffs = false }: { handoffs?: boolean
     }
   };
   useEffect(() => { void reload(); }, [rowsUrl]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
   const setFilters = (next: Filters) => {
     setFiltersState(handoffs ? { ...next, status: "human_handoff", handoffStatus: "pending" } : next);
+    setPage(1);
   };
   return <div className={selected ? "split conversation-admin-layout work-split" : "single-column work-split"}>
     <section className="work-panel">
@@ -45,13 +49,13 @@ export function PlatformConversations({ handoffs = false }: { handoffs?: boolean
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        fields={handoffs ? ["merchantId", "language", "startAt", "endAt", "limit"] : ["merchantId", "status", "handoffStatus", "language", "startAt", "endAt", "limit"]}
+        fields={handoffs ? ["merchantId", "language", "startAt", "endAt"] : ["merchantId", "status", "handoffStatus", "language", "startAt", "endAt"]}
         selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }}
         onApply={reload}
       />
-      <div className="table-helper">当前筛选共 {total} 个会话，列表展示前 {rows.length} 个。</div>
+      <div className="table-helper">当前筛选共 {total} 个会话，当前页展示 {rows.length} 个。</div>
       <Table
-        rows={pager.rows}
+        rows={rows}
         columns={["merchantId", "countryName", "customerPhone", "nickname", "language", "stage", "status", "handoffStatus"]}
         onRow={setSelected}
         selectedKey={selected?.id}

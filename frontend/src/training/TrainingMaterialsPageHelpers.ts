@@ -12,14 +12,14 @@ export function trainingMaterialsBase(platform: boolean) {
   return platform ? "/api/admin/training-materials" : "/api/merchant/training-materials";
 }
 
-export function trainingMaterialsRowsUrl(platform: boolean, filters: Filters) {
+export function trainingMaterialsRowsUrl(platform: boolean, filters: Filters, page: number, pageSize: number) {
   const base = trainingMaterialsBase(platform);
-  return withQuery(base, platform ? filters : {
+  const scoped = platform ? filters : {
     countryId: filters.countryId,
     sourceType: filters.sourceType,
-    status: filters.status,
-    limit: filters.limit
-  });
+    status: filters.status
+  };
+  return withQuery(base, { ...scoped, limit: String(pageSize), offset: String((page - 1) * pageSize) });
 }
 
 export function trainingImportEndpoint(platform: boolean) {

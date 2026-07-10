@@ -12,7 +12,7 @@ describe("conversation list totals", () => {
       repos.getOrCreateConversation(`customer-${index}`, "a2c-1", `客户${index}`, merchant.id);
     }
 
-    const result = listMerchantConversations(repos, merchant.id, { limit: "1" });
+    const result = listMerchantConversations(repos, merchant.id, { limit: "1", offset: "2" });
 
     expect(result.rows).toHaveLength(1);
     expect(result.total).toBe(3);
@@ -26,7 +26,7 @@ describe("conversation list totals", () => {
     repos.getOrCreateConversation("match-2", "a2c-1", "匹配2", merchantA.id);
     repos.getOrCreateConversation("other-1", "a2c-1", "其他", merchantB.id);
 
-    const result = listAdminConversations(repos, { merchantId: merchantA.id, limit: "1" });
+    const result = listAdminConversations(repos, { merchantId: merchantA.id, limit: "1", offset: "1" });
 
     expect(result.rows).toHaveLength(1);
     expect(result.total).toBe(2);

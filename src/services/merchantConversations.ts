@@ -27,6 +27,7 @@ export type MerchantConversationListQuery = {
   endAt?: string;
   timeZone?: string;
   limit?: string;
+  offset?: string;
 };
 
 export function listMerchantConversations(
@@ -49,7 +50,8 @@ export function listMerchantConversations(
   return {
     rows: repos.listConversations({
       ...filters,
-      limit: query.limit ? Number(query.limit) : undefined
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined
     }),
     total: repos.countConversations(filters)
   };

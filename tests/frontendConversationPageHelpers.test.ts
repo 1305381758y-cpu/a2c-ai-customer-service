@@ -16,8 +16,8 @@ describe("frontend conversation page helpers", () => {
   });
 
   it("builds conversation rows query with account and time zone", () => {
-    expect(conversationRowsQuery({ status: "active", limit: "100" }, "America/La_Paz", account({ apiPhone: "591" }))).toBe(
-      "/api/merchant/conversations?status=active&limit=100&timeZone=America%2FLa_Paz&a2cAccountPhone=591"
+    expect(conversationRowsQuery({ status: "active" }, "America/La_Paz", account({ apiPhone: "591" }), 2, 50)).toBe(
+      "/api/merchant/conversations?status=active&timeZone=America%2FLa_Paz&a2cAccountPhone=591&limit=50&offset=50"
     );
     expect(conversationRowsQuery({}, "Asia/Shanghai", null)).toBe("");
   });

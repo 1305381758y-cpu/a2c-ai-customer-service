@@ -1,39 +1,47 @@
 import React, { useEffect, useState } from "react";
 import { Upload } from "lucide-react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, Sample } from "../types.js";
 import { AsyncButton, Editor, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel } from "../ui/formatters.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 
 export function SamplesPage({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
-  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", language: "", intent: "", stage: "", enabled: "" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, language: filters.language, intent: filters.intent, stage: filters.stage, enabled: filters.enabled });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const query = platform ? filters : { countryId: filters.countryId, language: filters.language, intent: filters.intent, stage: filters.stage, enabled: filters.enabled };
+  const rowsUrl = withQuery(base, { ...query, limit: String(pageSize), offset: String((page - 1) * pageSize) });
   const [rows, setRows] = useState<Sample[]>([]);
+  const [total, setTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [file, setFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Sample | null>(null);
   const reload = async () => {
     setRowsLoading(true);
     setRowsError(null);
     try {
-      setRows(await loadRows(rowsUrl));
-      pager.setPage(1);
+      const result = await api<{ rows: Sample[]; total: number }>(rowsUrl);
+      setRows(result.rows);
+      setTotal(result.total);
     } catch (err) {
       setRows([]);
+      setTotal(0);
       setRowsError(err instanceof Error ? err.message : "样本加载失败，请稍后重试。");
     } finally {
       setRowsLoading(false);
     }
   };
   useEffect(() => { void reload(); }, [rowsUrl]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
   return <div className={selected ? "split work-split" : "single-column work-split"}>
     <section className="work-panel">
       <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
@@ -42,7 +50,7 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
         setFilters={setFilters}
         fields={platform ? ["merchantId", "countryId", "language", "intent", "stage", "enabled"] : ["countryId", "language", "intent", "stage", "enabled"]}
         selects={{ countryId: ["", ...countries.map((country) => country.id)], enabled: ["", "true", "false"] }}
-        onApply={reload}
+        onApply={async () => { if (page === 1) await reload(); else setPage(1); }}
       />
       {!platform && <div className="material-uploader compact-uploader">
         <div className="toolbar">
@@ -72,7 +80,7 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
         <small>支持 CSV、Excel、Word、TXT、截图/图片。表格直接生成样本；文本、Word、截图会自动提取话术。</small>
       </div>}
       <Table
-        rows={pager.rows}
+        rows={rows}
         columns={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "priority", "enabled"]}
         onRow={setSelected}
         loading={rowsLoading}

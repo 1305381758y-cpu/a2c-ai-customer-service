@@ -15,6 +15,8 @@ export type KnowledgeListQuery = {
   countryId?: string;
   type?: string;
   enabled?: string;
+  limit?: string;
+  offset?: string;
 };
 
 export type TrainingMaterialListQuery = {
@@ -23,6 +25,7 @@ export type TrainingMaterialListQuery = {
   sourceType?: string;
   status?: string;
   limit?: string;
+  offset?: string;
 };
 
 export type TrainingSampleListQuery = {
@@ -32,16 +35,20 @@ export type TrainingSampleListQuery = {
   intent?: string;
   stage?: string;
   enabled?: string;
+  limit?: string;
+  offset?: string;
 };
 
-export function listKnowledgeItems(repos: Repositories, query: KnowledgeListQuery = {}): { rows: KnowledgeItemRecord[] } {
+export function listKnowledgeItems(repos: Repositories, query: KnowledgeListQuery = {}): { rows: KnowledgeItemRecord[]; total: number } {
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    type: query.type,
+    enabled: parseOptionalBoolean(query.enabled)
+  };
   return {
-    rows: repos.listKnowledgeItems({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      type: query.type,
-      enabled: parseOptionalBoolean(query.enabled)
-    })
+    rows: repos.listKnowledgeItems({ ...filters, limit: parseLimit(query.limit), offset: parseOffset(query.offset) }),
+    total: repos.countKnowledgeItems(filters)
   };
 }
 
@@ -85,15 +92,16 @@ export function deleteKnowledgeItem(
 export function listTrainingMaterials(
   repos: Repositories,
   query: TrainingMaterialListQuery = {}
-): { rows: TrainingMaterialRecord[] } {
+): { rows: TrainingMaterialRecord[]; total: number } {
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    sourceType: query.sourceType,
+    status: query.status
+  };
   return {
-    rows: repos.listTrainingMaterials({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      sourceType: query.sourceType,
-      status: query.status,
-      limit: query.limit ? Number(query.limit) : undefined
-    })
+    rows: repos.listTrainingMaterials({ ...filters, limit: parseLimit(query.limit), offset: parseOffset(query.offset) }),
+    total: repos.countTrainingMaterials(filters)
   };
 }
 
@@ -124,16 +132,18 @@ export function deleteTrainingMaterial(
 export function listTrainingSamples(
   repos: Repositories,
   query: TrainingSampleListQuery = {}
-): { rows: TrainingSampleForSearch[] } {
+): { rows: TrainingSampleForSearch[]; total: number } {
+  const filters = {
+    merchantId: query.merchantId,
+    countryId: query.countryId,
+    language: query.language,
+    intent: query.intent,
+    stage: query.stage,
+    enabled: parseOptionalBoolean(query.enabled)
+  };
   return {
-    rows: repos.listTrainingSamples({
-      merchantId: query.merchantId,
-      countryId: query.countryId,
-      language: query.language,
-      intent: query.intent,
-      stage: query.stage,
-      enabled: parseOptionalBoolean(query.enabled)
-    })
+    rows: repos.listTrainingSamples({ ...filters, limit: parseLimit(query.limit), offset: parseOffset(query.offset) }),
+    total: repos.countTrainingSamples(filters)
   };
 }
 
@@ -164,6 +174,16 @@ export function deleteTrainingSample(
 
 function parseOptionalBoolean(value?: string): boolean | undefined {
   return value === undefined ? undefined : value === "true" || value === "1";
+}
+
+function parseLimit(value?: string): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseOffset(value?: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function parseId(value: string): number | undefined {

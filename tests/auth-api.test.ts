@@ -56,6 +56,7 @@ describe("auth api", () => {
 
     const readable = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: operatorCookie } });
     expect(readable.statusCode).toBe(200);
+    expect(readable.json()).toMatchObject({ rows: [], total: 0 });
     for (const request of [
       { method: "POST" as const, url: "/api/merchant/training-samples/import" },
       { method: "POST" as const, url: "/api/merchant/training-materials/import" },

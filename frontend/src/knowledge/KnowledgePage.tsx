@@ -1,39 +1,47 @@
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import { api, useRows, withQuery } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
 import { AsyncButton, Editor, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, label } from "../ui/formatters.js";
-import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { Pagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
   const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
-  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
-  const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const query = platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled };
+  const rowsUrl = withQuery(base, { ...query, limit: String(pageSize), offset: String((page - 1) * pageSize) });
   const [rows, setRows] = useState<Knowledge[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pager = useClientPagination(rows, 20);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
   const reload = async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await loadRows(rowsUrl));
-      pager.setPage(1);
+      const result = await api<{ rows: Knowledge[]; total: number }>(rowsUrl);
+      setRows(result.rows);
+      setTotal(result.total);
     } catch (err) {
       setRows([]);
+      setTotal(0);
       setError(err instanceof Error ? err.message : "知识库加载失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => { void reload(); }, [rowsUrl]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
@@ -44,7 +52,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
           setFilters={setFilters}
           fields={platform ? ["merchantId", "countryId", "type", "enabled"] : ["countryId", "type", "enabled"]}
           selects={{ countryId: ["", ...countries.map((country) => country.id)], type: ["", "faq", "script", "rule", "forbidden"], enabled: ["", "true", "false"] }}
-          onApply={reload}
+          onApply={async () => { if (page === 1) await reload(); else setPage(1); }}
         />
         <div className="toolbar wrap compact-create">
           {platform && <input placeholder={label("merchantId")} value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })} />}
@@ -72,7 +80,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
           </AsyncButton>
         </div>
         <Table
-          rows={pager.rows}
+          rows={rows}
           columns={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
           onRow={setSelected}
           loading={loading}
