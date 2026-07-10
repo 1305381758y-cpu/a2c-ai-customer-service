@@ -67,8 +67,8 @@ export function requireUser(config: AppConfig, repos: Repositories, roles?: User
     const user = repos.getUserById(session.id);
     if (!user || user.status !== "active") return reply.code(401).send({ error: "unauthorized" });
     const fresh = toSessionUser(user);
-    if (roles && !roles.includes(fresh.role)) return reply.code(403).send({ error: "forbidden" });
     (request as FastifyRequest & { user: SessionUser }).user = fresh;
+    if (roles && !roles.includes(fresh.role)) return reply.code(403).send({ error: "forbidden" });
   };
 }
 

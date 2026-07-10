@@ -14,6 +14,7 @@ import { ScriptFlowRepository } from "./repositoryScriptFlows.js";
 import { TrainingContentRepository } from "./repositoryTrainingContent.js";
 import { TeacherTgLinkRepository } from "./repositoryTeacherTgLinks.js";
 import { UserRepository } from "./repositoryUsers.js";
+import { OperationLogRepository } from "./repositoryOperationLogs.js";
 import type { ImportedTrainingSample } from "./import/trainingSamples.js";
 import type { KnowledgeItemRecord } from "./repositoryTypes.js";
 
@@ -41,6 +42,7 @@ export interface RepositoryModules {
   teacherTgLinks: TeacherTgLinkRepository;
   users: UserRepository;
   aiCalls: AiCallRepository;
+  operationLogs: OperationLogRepository;
 }
 
 export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallbacks): RepositoryModules {
@@ -79,6 +81,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
   const teacherTgLinks = new TeacherTgLinkRepository(db);
   const users = new UserRepository(db);
   const aiCalls = new AiCallRepository(db);
+  const operationLogs = new OperationLogRepository(db);
 
   return {
     settings,
@@ -95,6 +98,7 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     trainingContent,
     teacherTgLinks,
     users,
-    aiCalls
+    aiCalls,
+    operationLogs
   };
 }

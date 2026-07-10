@@ -38,7 +38,8 @@ import type {
   IntentLearningInput,
   AiCallLogInput,
   AiCallStats,
-  TeacherTgLinkRecord
+  TeacherTgLinkRecord,
+  OperationLogRecord
 } from "./repositoryTypes.js";
 export type {
   Conversation,
@@ -72,7 +73,8 @@ export type {
   IntentLearningInput,
   AiCallLogInput,
   AiCallStats,
-  TeacherTgLinkRecord
+  TeacherTgLinkRecord,
+  OperationLogRecord
 } from "./repositoryTypes.js";
 
 export class Repositories {
@@ -457,6 +459,14 @@ export class Repositories {
 
   restoreMerchantAgentProfileVersion(merchantId: string, versionId: number, userName: string): MerchantAgentProfileRecord | undefined {
     return this.agentProfiles.restoreVersion(merchantId, versionId, userName);
+  }
+
+  recordOperationLog(input: Omit<OperationLogRecord, "id" | "createdAt">): void {
+    this.modules.operationLogs.record(input);
+  }
+
+  listOperationLogs(filters: { merchantId?: string; action?: string; resourceType?: string; status?: string; q?: string; startAt?: string; endAt?: string; limit?: number; offset?: number }): { rows: OperationLogRecord[]; total: number } {
+    return this.modules.operationLogs.list(filters);
   }
 
   getConversationReview(conversationId: string, merchantId?: string): { review: ConversationReviewRecord; items: ConversationReviewItemRecord[] } | undefined {

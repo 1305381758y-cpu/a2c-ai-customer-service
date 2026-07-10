@@ -26,6 +26,7 @@ export type ConversationReviewResponse = { review: ConversationReview | null; it
 export type SimulatorResponse = { status: string; conversation?: Conversation; rows: ChatMessage[] };
 export type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 export type MerchantConfigVersion = { id: number; merchantId: string; version: number; changedKeys: string[]; note: string; createdBy: string; createdAt: string };
+export type OperationLog = { id: number; merchantId: string; actorUserId: string; actorName: string; actorRole: string; action: string; resourceType: string; targetId: string; route: string; method: string; status: "success" | "error"; httpStatus: number; createdAt: string };
 export type Filters = Record<string, string>;
 export type Toast = { id: number; type: "success" | "error" | "info"; title: string; detail?: string };
 export type AiCallStats = {

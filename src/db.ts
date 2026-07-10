@@ -468,6 +468,25 @@ export function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_agent_profile_versions_merchant
       ON merchant_agent_profile_versions(merchant_id, version DESC);
 
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT DEFAULT '',
+      actor_user_id TEXT DEFAULT '',
+      actor_name TEXT DEFAULT '',
+      actor_role TEXT DEFAULT '',
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      target_id TEXT DEFAULT '',
+      route TEXT NOT NULL,
+      method TEXT NOT NULL,
+      status TEXT NOT NULL,
+      http_status INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_operation_logs_merchant_time
+      ON operation_logs(merchant_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS conversation_reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT NOT NULL,

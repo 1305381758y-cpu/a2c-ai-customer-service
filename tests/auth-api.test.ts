@@ -64,6 +64,14 @@ describe("auth api", () => {
       const response = await app.inject({ ...request, headers: { cookie: operatorCookie } });
       expect(response.statusCode).toBe(403);
     }
+    const deniedAudit = await app.inject({ method: "GET", url: "/api/merchant/operation-logs", headers: { cookie: operatorCookie } });
+    expect(deniedAudit.statusCode).toBe(403);
+    const audit = await app.inject({ method: "GET", url: `/api/admin/operation-logs?merchantId=${merchant.json().id}&status=error`, headers: { cookie: adminCookie } });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json().total).toBe(3);
+    expect(audit.json().rows[0]).toMatchObject({ actorName: "商户运营", status: "error", httpStatus: 403 });
+    const futureAudit = await app.inject({ method: "GET", url: `/api/admin/operation-logs?merchantId=${merchant.json().id}&startAt=2099-01-01T00%3A00%3A00&timeZone=Asia%2FShanghai`, headers: { cookie: adminCookie } });
+    expect(futureAudit.json().total).toBe(0);
     await app.close();
   });
 

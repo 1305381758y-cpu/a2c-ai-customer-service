@@ -17,7 +17,7 @@ export function displayValue(column: string, value: unknown, row?: Record<string
   if (isDateTimeColumn(column)) return formatDateTime(String(value), row);
   if (["countryId", "countryName", "countryCode"].includes(column)) return countryLabel(value);
   if (["language", "defaultLanguage"].includes(column)) return languageName(String(value));
-  if (["status", "enabled", "role", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind", "taskType", "provider", "flowStep", "nextFlowStep", "strictFlowStep", "replyMode", "suggestedIntent", "detectedIntent", "inferredIntent", "contextualIntent", "nextAction"].includes(column)) {
+  if (["status", "enabled", "role", "actorRole", "action", "resourceType", "stage", "intent", "type", "sourceType", "handoffStatus", "msgType", "kind", "taskType", "provider", "flowStep", "nextFlowStep", "strictFlowStep", "replyMode", "suggestedIntent", "detectedIntent", "inferredIntent", "contextualIntent", "nextAction"].includes(column)) {
     const text = label(String(value));
     if (["status", "enabled", "handoffStatus", "stage", "intent"].includes(column)) return <span className={`status-pill ${statusTone(String(value))}`}>{text}</span>;
     return text;

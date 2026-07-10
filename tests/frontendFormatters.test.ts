@@ -30,6 +30,12 @@ describe("frontend time formatters", () => {
     expect(label("active")).toBe("当前启用");
   });
 
+  it("does not expose operation log enum values", () => {
+    expect(displayValue("actorRole", "platform_admin")).toBe("平台管理员");
+    expect(displayValue("action", "restore")).toBe("恢复");
+    expect(displayValue("resourceType", "agent_profile")).toBe("智能体配置");
+  });
+
   it("localizes country select options instead of exposing internal ids", () => {
     expect(optionLabel("countryId", "default:br")).toBe("巴西");
     expect(optionLabel("countryName", "bolivia")).toBe("玻利维亚");

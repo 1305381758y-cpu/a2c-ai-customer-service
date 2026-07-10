@@ -1,9 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import { Bot, Building2, Contact, FileText, Lightbulb, MessageSquare, Settings, Sparkles, Upload, Users, Workflow } from "lucide-react";
+import { Bot, Building2, ClipboardList, Contact, FileText, Lightbulb, MessageSquare, Settings, Sparkles, Upload, Users, Workflow } from "lucide-react";
 
 import type { User } from "../types.js";
 
-export type PortalView = "dashboard" | "aiCalls" | "merchants" | "users" | "config" | "agentProfile" | "customers" | "scriptFlows" | "intentLearning" | "materials" | "knowledge" | "samples" | "conversations" | "handoffs" | "training" | "simulator";
+export type PortalView = "dashboard" | "aiCalls" | "operationLogs" | "merchants" | "users" | "config" | "agentProfile" | "customers" | "scriptFlows" | "intentLearning" | "materials" | "knowledge" | "samples" | "conversations" | "handoffs" | "training" | "simulator";
 
 export type NavigationItem = {
   key: PortalView;
@@ -14,6 +14,7 @@ export type NavigationItem = {
 const PLATFORM_NAVIGATION: NavigationItem[] = [
   { key: "dashboard", label: "总览", icon: Bot },
   { key: "aiCalls", label: "模型调用", icon: Sparkles },
+  { key: "operationLogs", label: "操作日志", icon: ClipboardList },
   { key: "merchants", label: "商户", icon: Building2 },
   { key: "users", label: "后台账号", icon: Users },
   { key: "config", label: "配置", icon: Settings },
@@ -31,6 +32,7 @@ const PLATFORM_NAVIGATION: NavigationItem[] = [
 const MERCHANT_NAVIGATION: NavigationItem[] = [
   { key: "dashboard", label: "总览", icon: Bot },
   { key: "aiCalls", label: "模型调用", icon: Sparkles },
+  { key: "operationLogs", label: "操作日志", icon: ClipboardList },
   { key: "training", label: "训练中心", icon: Upload },
   { key: "simulator", label: "模拟训练", icon: MessageSquare },
   { key: "agentProfile", label: "智能体配置", icon: Bot },

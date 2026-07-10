@@ -330,6 +330,22 @@ export interface MerchantAgentProfileVersionRecord {
   createdAt: string;
 }
 
+export interface OperationLogRecord {
+  id: number;
+  merchantId: string;
+  actorUserId: string;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  resourceType: string;
+  targetId: string;
+  route: string;
+  method: string;
+  status: "success" | "error";
+  httpStatus: number;
+  createdAt: string;
+}
+
 export interface ConversationReviewRecord {
   id: number;
   merchantId: string;

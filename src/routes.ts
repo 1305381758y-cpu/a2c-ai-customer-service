@@ -21,6 +21,7 @@ import { registerTelegramWebhookRoutes } from "./http/merchantTelegramRoutes.js"
 import { registerAdminMerchantRoutes } from "./http/adminMerchantRoutes.js";
 import { registerInternalMaintenanceRoutes } from "./http/internalMaintenanceRoutes.js";
 import { registerAiCallStatsRoutes } from "./http/aiCallStatsRoutes.js";
+import { registerOperationAuditRoutes } from "./http/operationAuditRoutes.js";
 
 export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
@@ -30,6 +31,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   app.get("/health", async () => ({ ok: true }));
 
   registerAuthRoutes(app, deps);
+  registerOperationAuditRoutes(app, { repos: deps.repos, adminOnly, merchantAdmins });
 
   registerAdminDashboardRoutes(app, { repos: deps.repos, adminOnly });
 

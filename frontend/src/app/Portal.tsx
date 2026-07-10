@@ -10,6 +10,7 @@ import { IntentLearningPage } from "../intent-learning/IntentLearningPage.js";
 import { KnowledgePage } from "../knowledge/KnowledgePage.js";
 import { MerchantsPage } from "../merchants/MerchantsPage.js";
 import { AiCallsPage } from "../model-calls/AiCallsPage.js";
+import { OperationLogsPage } from "../operation-logs/OperationLogsPage.js";
 import { SamplesPage } from "../samples/SamplesPage.js";
 import { ScriptFlowsPage } from "../script-flows/ScriptFlowsPage.js";
 import { Config } from "../settings/ConfigPage.js";
@@ -57,6 +58,7 @@ function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; ti
   switch (view) {
     case "dashboard": return <Dashboard platform={platform} api={api} timeMode={timeMode} />;
     case "aiCalls": return <AiCallsPage platform={platform} timeMode={timeMode} />;
+    case "operationLogs": return <OperationLogsPage platform={platform} timeMode={timeMode} />;
     case "merchants": return <MerchantsPage />;
     case "users": return <UsersPage />;
     case "config": return <Config platform={platform} canEdit={canManage} />;

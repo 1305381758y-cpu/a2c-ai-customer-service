@@ -491,7 +491,7 @@ async function smokeScriptFlowCreateAndDelete(page) {
 }
 
 async function smokeMerchantOperatorPermissions(page) {
-  const forbiddenNavigation = ["模型调用", "训练中心", "模拟训练", "意图学习"];
+  const forbiddenNavigation = ["模型调用", "操作日志", "训练中心", "模拟训练", "意图学习"];
   for (const label of forbiddenNavigation) {
     if (await page.locator("aside nav").getByRole("button", { name: label, exact: true }).count()) throw new Error(`商户运营不应看到${label}`);
   }
@@ -535,12 +535,13 @@ async function main() {
     const merchantResult = await createMerchantUser(page);
     await createMerchantOperator(page, merchantResult.merchant.id);
     seedMerchantConversation(merchantResult);
-    report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "商户", "后台账号", "配置", "智能体配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
+    report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "操作日志", "商户", "后台账号", "配置", "智能体配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
     await logout(page);
     await login(page, "merchant-scroll@example.com", "Merchant123456");
-    report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
+    report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "操作日志", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
     report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
     report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
+    report.push(await smokeDateFilterRequest(page, "操作日志", "/api/merchant/operation-logs", "商户管理员/操作日志"));
     report.push(await smokeAiCallsTaskTypeFilter(page));
     report.push(await smokeCustomerFilterAndExport(page));
     report.push(await smokeConversationFilterAndExport(page));
