@@ -1,4 +1,5 @@
 import { countryLabel } from "./countryFormatters.js";
+import { LANGUAGE_NAMES, REPLY_MODE_LABELS, STATUS_TONE_VALUES } from "./displayLabelMaps.js";
 import { formatDateTime } from "./timeFormatters.js";
 
 export { COUNTRY_PRESETS, countryLabel, inferCountryProfile } from "./countryFormatters.js";
@@ -96,9 +97,9 @@ export function optionLabel(field: string, option: string) {
 }
 
 export function statusTone(value: string) {
-  if (["active", "enabled", "ok", "bound", "done", "ready_for_handoff", "available", "reviewed", "promoted"].includes(value)) return "success";
-  if (["pending", "processing", "waiting", "need_platform_register", "need_phone_or_tg", "reserved", "candidate"].includes(value)) return "warning";
-  if (["disabled", "error", "invalid", "human_handoff", "irrelevant_or_spam", "ignored"].includes(value)) return "danger";
+  if (STATUS_TONE_VALUES.success.includes(value)) return "success";
+  if (STATUS_TONE_VALUES.warning.includes(value)) return "warning";
+  if (STATUS_TONE_VALUES.danger.includes(value)) return "danger";
   return "neutral";
 }
 
@@ -118,29 +119,11 @@ export function translateSystemMessage(message: unknown) {
 }
 
 export function languageName(code: unknown) {
-  return ({
-    zh: "中文",
-    "zh-CN": "中文",
-    en: "英语",
-    ja: "日语",
-    "pt-BR": "葡语",
-    pt: "葡语",
-    es: "西语",
-    ms: "马来语",
-    id: "印尼语",
-    th: "泰语",
-    vi: "越南语",
-    unknown: "未知"
-  } as Record<string, string>)[String(code || "")] || String(code || "");
+  return LANGUAGE_NAMES[String(code || "")] || String(code || "");
 }
 
 export function replyModeLabel(mode?: string) {
-  return ({
-    strict_flow: "话本流程",
-    gemini: "普通回复",
-    fallback: "兜底回复",
-    manual: "人工发送"
-  } as Record<string, string>)[String(mode || "")] || "未记录";
+  return REPLY_MODE_LABELS[String(mode || "")] || "未记录";
 }
 
 export function label(key: string) {
