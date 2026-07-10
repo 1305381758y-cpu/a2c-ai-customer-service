@@ -19,6 +19,8 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
   const rowsUrl = withQuery(base, intentQueryFilters(platform, filters, intentTimeZone));
   const [rows, setRows] = useState<IntentLearningEvent[]>([]);
   const [total, setTotal] = useState(0);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
   const pager = useClientPagination(rows, 20);
   const [selected, setSelected] = useState<IntentLearningEvent | null>(null);
   const [detailDraft, setDetailDraft] = useState({ status: "candidate", displayName: "", description: "" });
@@ -29,13 +31,22 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
   }, [selected]);
 
   const reload = async () => {
-    const result = await api<{ rows: IntentLearningEvent[]; total: number }>(rowsUrl);
-    setRows(result.rows);
-    setTotal(result.total);
-    pager.setPage(1);
-    setSelected((current) => current ? result.rows.find((item) => item.id === current.id) || null : null);
+    setRowsLoading(true);
+    setRowsError(null);
+    try {
+      const result = await api<{ rows: IntentLearningEvent[]; total: number }>(rowsUrl);
+      setRows(result.rows);
+      setTotal(result.total);
+      pager.setPage(1);
+      setSelected((current) => current ? result.rows.find((item) => item.id === current.id) || null : null);
+    } catch (err) {
+      setRowsError(err instanceof Error ? err.message : "意图学习数据加载失败，请稍后重试。");
+      throw err;
+    } finally {
+      setRowsLoading(false);
+    }
   };
-  useEffect(() => { reload().catch(() => { setRows([]); setTotal(0); }); }, [rowsUrl]);
+  useEffect(() => { void reload().catch(() => undefined); }, [rowsUrl]);
 
   const patchSelected = async (patch: Record<string, unknown>, message = "意图候选已更新") => {
     if (!selected) return;
@@ -70,7 +81,7 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
         resetValues={defaultFilters}
         onApply={reload}
       />
-      <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} />
+      <Table rows={pager.rows} columns={["displayName", "suggestedIntent", "occurrenceCount", "customerText", "flowStep", "status", "lastSeenAt"]} onRow={setSelected} selectedKey={selected?.id} rowKey={(row) => row.id} loading={rowsLoading} error={rowsError} onRetry={reload} emptyTitle="暂无意图候选" emptyDetail="系统发现新的识别盲区后，会在这里生成待处理候选。" />
       <Pagination pager={pager} />
     </section>
     <section className="detail-panel">
