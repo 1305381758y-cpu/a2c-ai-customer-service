@@ -9,11 +9,12 @@ import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 type CustomerDetailPanelProps = {
   platform: boolean;
   customer: Customer;
+  canDelete: boolean;
   onDelete: () => Promise<void>;
   renderConversation: (conversation: Conversation, reloadHistory: () => Promise<void>) => React.ReactNode;
 };
 
-export function CustomerDetailPanel({ platform, customer, onDelete, renderConversation }: CustomerDetailPanelProps) {
+export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, renderConversation }: CustomerDetailPanelProps) {
   return <section className="detail-panel customer-detail-panel">
     <div>
       <div className="detail-title-row">
@@ -21,7 +22,7 @@ export function CustomerDetailPanel({ platform, customer, onDelete, renderConver
           <h3>{customer.customerKey}</h3>
           <p>{countryLabel(customer.countryName)} · {customer.nickname || "无昵称"} · {label(customer.status)} · {languageName(customer.language)}</p>
         </div>
-        <ConfirmActionButton
+        {canDelete && <ConfirmActionButton
           className="danger"
           busyText="删除中..."
           title="确认彻底删除客户？"
@@ -30,7 +31,7 @@ export function CustomerDetailPanel({ platform, customer, onDelete, renderConver
           onConfirm={onDelete}
         >
           删除客户
-        </ConfirmActionButton>
+        </ConfirmActionButton>}
       </div>
       <div className="form-grid">
         <label>首次接收账号<input readOnly value={customer.firstA2CAccountPhone || ""} /></label>

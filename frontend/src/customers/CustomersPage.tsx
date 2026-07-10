@@ -12,11 +12,12 @@ import { customerActiveCountry, customerColumns, customerExportFilters, customer
 
 type CustomersPageProps = {
   platform?: boolean;
+  canDelete?: boolean;
   timeMode: TimeDisplayMode;
   renderConversation: (conversation: Conversation, reloadHistory: () => Promise<void>) => React.ReactNode;
 };
 
-export function CustomersPage({ platform = false, timeMode, renderConversation }: CustomersPageProps) {
+export function CustomersPage({ platform = false, canDelete = true, timeMode, renderConversation }: CustomersPageProps) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
   const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
@@ -111,7 +112,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
         <Pagination pager={pager} />
       </section>
       {selected && (
-        <CustomerDetailPanel platform={platform} customer={selected} onDelete={deleteSelected} renderConversation={renderConversation} />
+        <CustomerDetailPanel platform={platform} customer={selected} canDelete={canDelete} onDelete={deleteSelected} renderConversation={renderConversation} />
       )}
     </div>
   );

@@ -17,6 +17,7 @@ type ScriptFlowDetail = {
 
 export function ScriptFlowDetailPanel({
   detail,
+  canEdit,
   base,
   stepBase,
   countries,
@@ -30,6 +31,7 @@ export function ScriptFlowDetailPanel({
   refreshDetail
 }: {
   detail: ScriptFlowDetail | null;
+  canEdit: boolean;
   base: string;
   stepBase: string;
   countries: MerchantCountry[];
@@ -57,7 +59,7 @@ export function ScriptFlowDetailPanel({
           <h3>{detail.flow.name}</h3>
           <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
         </div>
-        <div className="toolbar">
+        {canEdit && <div className="toolbar">
           <ConfirmActionButton
             disabled={!ready}
             busyText="启用中..."
@@ -78,7 +80,7 @@ export function ScriptFlowDetailPanel({
           >
             删除流程
           </ConfirmActionButton>
-        </div>
+        </div>}
       </div>
       {enableError && <div className="warning action-warning" role="alert"><strong>启用失败</strong><span>{enableError}</span></div>}
       <div className={`script-readiness ${ready ? "ready" : "blocked"}`} role="status">
@@ -92,10 +94,10 @@ export function ScriptFlowDetailPanel({
         <span><strong>{registrationSteps}</strong>注册发送节点</span>
         <span><strong>{detail.versions.length}</strong>历史版本</span>
       </div>
-      <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} />
+      {canEdit ? <Editor title="流程基础信息" value={{ name: detail.flow.name, status: detail.flow.status, countryId: detail.flow.countryId }} fields={["name", "status", "countryId"]} selects={{ status: ["draft", "active", "disabled"], countryId: countries.map((country) => country.id) }} onSave={async (patch) => { await api(`${base}/${detail.flow.id}`, { method: "PATCH", body: JSON.stringify(patch) }); notify("success", "流程信息已保存"); await refreshDetail(); }} /> : <div className="script-readonly-facts"><span><strong>流程名称</strong>{detail.flow.name}</span><span><strong>状态</strong>{detail.flow.active ? "当前启用" : label(detail.flow.status)}</span><span><strong>国家</strong>{countryLabel(detail.flow.countryName)}</span></div>}
       <div className="script-flow-columns">
         <div className="script-step-list">
-          <div className="panel-title"><h3>流程节点</h3><AsyncButton busyText="新增中..." onClick={addStep}><Plus size={16}/>新增节点</AsyncButton></div>
+          <div className="panel-title"><h3>流程节点</h3>{canEdit && <AsyncButton busyText="新增中..." onClick={addStep}><Plus size={16}/>新增节点</AsyncButton>}</div>
           {detail.steps.map((step) => <button key={step.id} className={`script-step-card ${selectedStep?.id === step.id ? "active" : ""} ${step.enabled ? "enabled" : "disabled"}`} onClick={() => setSelectedStep(step)}>
             <span className="script-step-card-head">
               <strong>{step.flowCode || "未编号"} · {step.flowName || label(step.flowStep)}</strong>
@@ -107,13 +109,13 @@ export function ScriptFlowDetailPanel({
           {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入话本文件。</div>}
         </div>
         <div className="script-step-editor">
-          {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后编辑话术和跳转规则。</div>}
+          {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} canEdit={canEdit} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后查看话术和跳转规则。</div>}
         </div>
       </div>
       <details className="version-panel">
         <summary>版本记录</summary>
         <div className="stack-list">
-          {detail.versions.map((version) => <div key={version.id} className="version-row"><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span><ConfirmActionButton busyText="恢复中..." title="确认恢复话本版本？" detail={`恢复到版本 ${version.version} 后，当前流程节点和话术会被该版本覆盖。建议确认内容无误后再操作。`} confirmText="恢复版本" onConfirm={async () => { await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</ConfirmActionButton></div>)}
+          {detail.versions.map((version) => <div key={version.id} className={`version-row ${canEdit ? "" : "read-only"}`}><span>版本 {version.version}</span><span>{version.note || "保存"}</span><span>{version.createdBy || "系统"} · {formatDateTime(version.createdAt, detail.flow.countryName || detail.flow.countryId)}</span>{canEdit && <ConfirmActionButton busyText="恢复中..." title="确认恢复话本版本？" detail={`恢复到版本 ${version.version} 后，当前流程节点和话术会被该版本覆盖。建议确认内容无误后再操作。`} confirmText="恢复版本" onConfirm={async () => { await api(`${base}/${detail.flow.id}/versions/${version.id}/restore`, { method: "POST" }); notify("success", "版本已恢复"); await refreshDetail(); }}>恢复</ConfirmActionButton>}</div>)}
         </div>
       </details>
     </div> : <div className="empty-chat"><h3>选择话本流程</h3><p>上传或选择一个流程后，可以在这里编辑每一步话术、触发条件和下一步规则。</p></div>}

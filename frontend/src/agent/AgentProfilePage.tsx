@@ -80,12 +80,13 @@ export function AgentProfilePage({
       {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select>}
       {error && <div className="error">{error}</div>}
       {message && <div className="notice">{message}</div>}
+      {!canEdit && <div className="permission-notice"><strong>当前为只读智能体配置</strong><span>商户运营可以查看角色、语气、目标和边界，但不能修改或停用配置。</span></div>}
       {form ? <>
-        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露智能服务、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div><button className={form.enabled ? "ghost" : ""} disabled={!canEdit} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button></div>
+        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露智能服务、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div>{canEdit && <button className={form.enabled ? "ghost" : ""} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button>}</div>
         <div className="form-grid elevated-form agent-profile-grid">
           {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
         </div>
-        <div className="toolbar sticky-actions"><AsyncButton disabled={!canEdit} onClick={save} busyText="保存中...">保存智能体配置</AsyncButton><AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
+        <div className="toolbar sticky-actions">{canEdit && <AsyncButton onClick={save} busyText="保存中...">保存智能体配置</AsyncButton>}<AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
       </> : <div className="empty-state">正在加载智能体配置...</div>}
     </div>
   </section>;

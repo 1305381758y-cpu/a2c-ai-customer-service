@@ -53,15 +53,16 @@ export function Portal({ user, requestedView, setView, onLogout }: { user: User;
 
 function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; timeMode: TimeDisplayMode }) {
   const platform = user.role === "platform_admin";
+  const canManage = user.role !== "merchant_operator";
   switch (view) {
     case "dashboard": return <Dashboard platform={platform} api={api} timeMode={timeMode} />;
     case "aiCalls": return <AiCallsPage platform={platform} timeMode={timeMode} />;
     case "merchants": return <MerchantsPage />;
     case "users": return <UsersPage />;
-    case "config": return <Config platform={platform} />;
+    case "config": return <Config platform={platform} canEdit={canManage} />;
     case "agentProfile": return <AgentProfilePage platform={platform} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />;
-    case "customers": return <CustomersPage platform={platform} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={platform} conversation={conversation} refresh={reloadHistory} onDeleted={reloadHistory} />} />;
-    case "scriptFlows": return <ScriptFlowsPage platform={platform} />;
+    case "customers": return <CustomersPage platform={platform} canDelete={canManage} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={platform} conversation={conversation} refresh={reloadHistory} onDeleted={reloadHistory} />} />;
+    case "scriptFlows": return <ScriptFlowsPage platform={platform} canEdit={canManage} />;
     case "intentLearning": return <IntentLearningPage platform={platform} timeMode={timeMode} />;
     case "training": return <TrainingMaterialsPage platform={false} simple />;
     case "simulator": return <TrainingSimulator api={api} notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} />;

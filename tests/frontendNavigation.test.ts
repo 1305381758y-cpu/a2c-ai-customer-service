@@ -12,8 +12,14 @@ describe("portal navigation", () => {
 
   it("maps legacy merchant training links to the training center", () => {
     expect(resolvePortalView("merchant_admin", "materials")).toBe("training");
-    expect(resolvePortalView("merchant_operator", "knowledge")).toBe("training");
     expect(resolvePortalView("merchant_admin", "samples")).toBe("training");
+  });
+
+  it("keeps merchant operators on operational and read-only pages", () => {
+    const operatorViews = navigationForRole("merchant_operator").map((item) => item.key);
+    expect(operatorViews).toEqual(["dashboard", "agentProfile", "scriptFlows", "customers", "conversations", "handoffs", "config"]);
+    expect(resolvePortalView("merchant_operator", "knowledge")).toBe("dashboard");
+    expect(resolvePortalView("merchant_operator", "training")).toBe("dashboard");
   });
 
   it("falls back safely when a role requests an unavailable page", () => {

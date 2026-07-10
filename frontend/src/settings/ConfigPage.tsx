@@ -6,7 +6,7 @@ import { A2CAccountsPanel } from "./InviteCodePanel.js";
 import { ConfigSwitchCards, CountryMarketSettingsCard, TelegramHandoffCard, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { coercePatch } from "../ui/form.js";
 import { inferCountryProfile, languageName, translateSystemMessage } from "../ui/formatters.js";
-import { ResourceErrorNotice } from "../ui/components.js";
+import { AsyncButton, ResourceErrorNotice } from "../ui/components.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
@@ -14,7 +14,7 @@ import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFiel
 import { DEFAULT_COUNTRY_DRAFT, configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "./ConfigPageHelpers.js";
 import { SettingsSection, SettingsWorkspace } from "./SettingsWorkspace.js";
 
-export function Config({ platform }: { platform: boolean }) {
+export function Config({ platform, canEdit = true }: { platform: boolean; canEdit?: boolean }) {
   const [merchants, , merchantsState] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<Record<string, string | boolean>>({});
@@ -186,9 +186,10 @@ export function Config({ platform }: { platform: boolean }) {
   return <section className="settings-page">
     <ResourceErrorNotice label="商户选项" error={merchantsState.error} onRetry={merchantsState.reload} />
     {platform && <label className="settings-merchant-selector"><span>当前商户</span><select value={merchantId} onChange={(event) => setMerchantId(event.target.value)}>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select></label>}
+    {!canEdit && <div className="permission-notice"><strong>当前为只读配置</strong><span>商户运营可以查看配置和执行连通性检测，但不能保存、同步、启停或删除核心配置。</span></div>}
     <ConfigSetupSteps />
-    <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} />
-    <SettingsWorkspace>
+    {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
+    <SettingsWorkspace readOnly={!canEdit}>
       <SettingsSection
         id="runtime"
         title="运行模式"

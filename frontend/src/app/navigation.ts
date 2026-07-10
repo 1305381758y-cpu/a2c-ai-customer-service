@@ -42,15 +42,26 @@ const MERCHANT_NAVIGATION: NavigationItem[] = [
   { key: "config", label: "设置", icon: Settings }
 ];
 
+const MERCHANT_OPERATOR_NAVIGATION: NavigationItem[] = [
+  { key: "dashboard", label: "总览", icon: Bot },
+  { key: "agentProfile", label: "智能体配置", icon: Bot },
+  { key: "scriptFlows", label: "话本流程", icon: Workflow },
+  { key: "customers", label: "客户", icon: Contact },
+  { key: "conversations", label: "会话", icon: MessageSquare },
+  { key: "handoffs", label: "接管", icon: Workflow },
+  { key: "config", label: "设置", icon: Settings }
+];
+
 const MERCHANT_TRAINING_ALIASES = new Set<PortalView>(["materials", "knowledge", "samples"]);
 
 export function navigationForRole(role: User["role"]): NavigationItem[] {
-  return role === "platform_admin" ? PLATFORM_NAVIGATION : MERCHANT_NAVIGATION;
+  if (role === "platform_admin") return PLATFORM_NAVIGATION;
+  return role === "merchant_operator" ? MERCHANT_OPERATOR_NAVIGATION : MERCHANT_NAVIGATION;
 }
 
 export function resolvePortalView(role: User["role"], requestedView: string): PortalView {
   const requested = requestedView as PortalView;
-  if (role !== "platform_admin" && MERCHANT_TRAINING_ALIASES.has(requested)) return "training";
+  if (role === "merchant_admin" && MERCHANT_TRAINING_ALIASES.has(requested)) return "training";
   return navigationForRole(role).some((item) => item.key === requested) ? requested : "dashboard";
 }
 

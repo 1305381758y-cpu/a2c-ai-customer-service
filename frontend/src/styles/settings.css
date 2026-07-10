@@ -150,8 +150,43 @@
 .settings-section-body {
   display: grid;
   gap: 14px;
+  margin: 0;
   padding: 16px 20px 20px;
+  border: 0;
   min-width: 0;
+}
+
+.settings-section-body:disabled {
+  opacity: .78;
+}
+
+.settings-section-body:disabled input,
+.settings-section-body:disabled select,
+.settings-section-body:disabled textarea {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+}
+
+.permission-notice,
+.config-readonly-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid #f4d8a7;
+  border-radius: 8px;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.permission-notice span,
+.config-readonly-actions .notice,
+.config-readonly-actions .error {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted-strong);
 }
 
 .settings-section-body > .memory,

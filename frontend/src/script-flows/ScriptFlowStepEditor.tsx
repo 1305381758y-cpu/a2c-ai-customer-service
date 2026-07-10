@@ -22,7 +22,7 @@ const STRICT_STEP_OPTIONS = [
   "ended"
 ];
 
-export function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: ScriptFlowStep; endpoint: string; onSaved: () => Promise<void> }) {
+export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved }: { step: ScriptFlowStep; endpoint: string; canEdit?: boolean; onSaved: () => Promise<void> }) {
   const [draft, setDraft] = useState<ScriptFlowStep>(step);
   useEffect(() => setDraft(step), [step]);
   const set = (key: keyof ScriptFlowStep, value: string | boolean | number) => setDraft({ ...draft, [key]: value } as ScriptFlowStep);
@@ -41,7 +41,7 @@ export function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: Script
     notify("success", "流程节点已删除");
     await onSaved();
   };
-  return <div className="script-node-form">
+  return <fieldset className="script-node-form" disabled={!canEdit}>
     <section className="script-editor-group">
       <div className="script-editor-group-title"><Route size={17}/><div><strong>节点与推进</strong><span>定义这个节点在流程中的位置和下一步。</span></div></div>
       <div className="form-grid compact-fields">
@@ -83,6 +83,6 @@ export function ScriptFlowStepEditor({ step, endpoint, onSaved }: { step: Script
         <label>备注<textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} /></label>
       </div>
     </details>
-    <div className="toolbar"><AsyncButton busyText="保存中..." onClick={save}>保存节点</AsyncButton><AsyncButton busyText="复制中..." onClick={duplicate}><Copy size={16}/>复制节点</AsyncButton><ConfirmActionButton className="danger" busyText="删除中..." title="确认删除流程节点？" detail="删除后不可恢复。如果其他节点引用了这个节点，需要先修改引用关系，否则流程可能断开。" confirmText="删除节点" onConfirm={remove}>删除节点</ConfirmActionButton></div>
-  </div>;
+    {canEdit && <div className="toolbar"><AsyncButton busyText="保存中..." onClick={save}>保存节点</AsyncButton><AsyncButton busyText="复制中..." onClick={duplicate}><Copy size={16}/>复制节点</AsyncButton><ConfirmActionButton className="danger" busyText="删除中..." title="确认删除流程节点？" detail="删除后不可恢复。如果其他节点引用了这个节点，需要先修改引用关系，否则流程可能断开。" confirmText="删除节点" onConfirm={remove}>删除节点</ConfirmActionButton></div>}
+  </fieldset>;
 }

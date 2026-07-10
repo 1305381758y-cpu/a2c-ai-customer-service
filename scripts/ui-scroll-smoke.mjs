@@ -82,6 +82,23 @@ async function createMerchantUser(page) {
   return result;
 }
 
+async function createMerchantOperator(page, merchantId) {
+  await page.evaluate(async (targetMerchantId) => {
+    const response = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        merchantId: targetMerchantId,
+        email: "merchant-operator-scroll@example.com",
+        name: "滚动测试商户运营",
+        password: "Operator123456",
+        role: "merchant_operator"
+      })
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || response.statusText);
+  }, merchantId);
+}
+
 function seedMerchantConversation(merchantResult) {
   const merchantId = merchantResult?.merchant?.id;
   const countryId = merchantResult?.country?.id;
@@ -467,6 +484,37 @@ async function smokeScriptFlowCreateAndDelete(page) {
   return "商户管理员/话本流程: 内置流程可创建、编辑节点并删除";
 }
 
+async function smokeMerchantOperatorPermissions(page) {
+  const forbiddenNavigation = ["模型调用", "训练中心", "模拟训练", "意图学习"];
+  for (const label of forbiddenNavigation) {
+    if (await page.locator("aside nav").getByRole("button", { name: label, exact: true }).count()) throw new Error(`商户运营不应看到${label}`);
+  }
+
+  await clickNav(page, "智能体配置");
+  if (await page.getByRole("button", { name: "保存智能体配置", exact: true }).count()) throw new Error("商户运营不应保存智能体配置");
+
+  await clickNav(page, "话本流程");
+  await page.locator(".table tbody tr.clickable").first().click();
+  await page.getByText("当前为只读话本", { exact: true }).waitFor({ state: "visible" });
+  for (const name of ["上传并生成节点", "使用内置11步创建", "启用流程", "删除流程", "新增节点", "保存节点"]) {
+    if (await page.getByRole("button", { name, exact: true }).count()) throw new Error(`商户运营不应看到${name}`);
+  }
+
+  await clickNav(page, "客户");
+  await page.getByLabel("开始时间").fill("2026-07-01T00:00:01");
+  await page.getByLabel("结束时间").fill("2026-07-01T23:59:59");
+  await page.getByRole("button", { name: "筛选", exact: true }).click();
+  await page.locator(".table tbody tr.clickable").first().click();
+  if (await page.getByRole("button", { name: "删除客户", exact: true }).count()) throw new Error("商户运营不应删除客户");
+
+  await clickNav(page, "设置");
+  await page.getByText("当前为只读配置", { exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "检测当前配置", exact: true }).waitFor({ state: "visible" });
+  const enabledFields = await page.locator(".settings-section-body input:enabled, .settings-section-body select:enabled, .settings-section-body textarea:enabled, .settings-section-body button:enabled").count();
+  if (enabledFields) throw new Error(`商户运营设置页仍有 ${enabledFields} 个可编辑控件`);
+  return "商户运营: 菜单和核心配置保持只读";
+}
+
 async function main() {
   await waitForHealth();
   const browser = await chromium.launch({ headless: true });
@@ -475,6 +523,7 @@ async function main() {
   try {
     await login(page, "admin@example.com", "Admin123456");
     const merchantResult = await createMerchantUser(page);
+    await createMerchantOperator(page, merchantResult.merchant.id);
     seedMerchantConversation(merchantResult);
     report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "商户", "后台账号", "配置", "智能体配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
     await logout(page);
@@ -491,6 +540,11 @@ async function main() {
     report.push(await smokeMerchantSettingsToggles(page));
     await page.setViewportSize({ width: 1024, height: 768 });
     report.push(...await smokeRole(page, "商户管理员-窄屏1024", ["总览", "模型调用", "话本流程", "会话", "设置"]));
+    await logout(page);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await login(page, "merchant-operator-scroll@example.com", "Operator123456");
+    report.push(...await smokeRole(page, "商户运营", ["总览", "智能体配置", "话本流程", "客户", "会话", "接管", "设置"]));
+    report.push(await smokeMerchantOperatorPermissions(page));
     console.log(report.join("\n"));
   } finally {
     await browser.close();

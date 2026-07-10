@@ -9,7 +9,7 @@ import { ResourceErrorNotice } from "../ui/components.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
-export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
+export function ScriptFlowsPage({ platform = false, canEdit = true }: { platform?: boolean; canEdit?: boolean }) {
   const base = platform ? "/api/admin/script-flows" : "/api/merchant/script-flows";
   const stepBase = platform ? "/api/admin/script-flow-steps" : "/api/merchant/script-flow-steps";
   const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
@@ -132,7 +132,7 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
 
   return <div className="script-flow-page work-split">
     <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
-    <ScriptFlowListPanel platform={platform} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
-    <ScriptFlowDetailPanel detail={detail} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationIssues={validationIssues} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
+    <ScriptFlowListPanel platform={platform} canEdit={canEdit} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
+    <ScriptFlowDetailPanel detail={detail} canEdit={canEdit} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationIssues={validationIssues} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
   </div>;
 }
