@@ -386,6 +386,29 @@ async function smokeConversationFilterAndExport(page) {
   return "商户管理员/会话: 时间筛选、全部导出和当前账号导出生效";
 }
 
+async function smokeConversationWorkspacePanels(page) {
+  await clickNav(page, "会话");
+  await page.locator(".conversation-row").first().click();
+  await page.locator(".conversation-detail.wechat-detail").waitFor({ state: "visible" });
+
+  const customerCollapse = page.getByTitle("收起客户列表");
+  await customerCollapse.click();
+  await page.getByTitle("展开客户列表").waitFor({ state: "visible" });
+  await page.getByTitle("展开客户列表").click();
+  await customerCollapse.waitFor({ state: "visible" });
+
+  const assistantExpand = page.getByRole("button", { name: "展开会话辅助区", exact: true });
+  await assistantExpand.waitFor({ state: "visible" });
+  await assistantExpand.click();
+  await page.waitForFunction(() => !document.querySelector(".conversation-detail.wechat-detail")?.classList.contains("assistant-collapsed"), { timeout: 10_000 });
+  const assistantCollapse = page.locator(".assistant-panel-head").getByRole("button", { name: "收起会话辅助区", exact: true });
+  await assistantCollapse.waitFor({ state: "visible" });
+  await page.screenshot({ path: join(outDir, "商户管理员-会话-辅助区展开.png"), fullPage: true });
+  await assistantCollapse.click();
+  await assistantExpand.waitFor({ state: "visible" });
+  return "商户管理员/会话: 客户列表和右侧会话辅助区可收起与展开";
+}
+
 function waitForQueryResponse(page, endpointPart, expected) {
   return page.waitForResponse((res) => {
     if (!res.url().includes(endpointPart)) return false;
@@ -458,6 +481,7 @@ async function main() {
     report.push(await smokeAiCallsTaskTypeFilter(page));
     report.push(await smokeCustomerFilterAndExport(page));
     report.push(await smokeConversationFilterAndExport(page));
+    report.push(await smokeConversationWorkspacePanels(page));
     report.push(await smokeAgentProfileSave(page));
     report.push(await smokeScriptFlowCreateAndDelete(page));
     report.push(await smokeMerchantSettingsToggles(page));

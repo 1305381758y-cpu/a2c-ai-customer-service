@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BookOpen, Contact, FileText, Lightbulb, MessageSquare, Sparkles, ThumbsDown, ThumbsUp, Workflow } from "lucide-react";
+import { BookOpen, Check, Contact, FileText, Lightbulb, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, ThumbsDown, ThumbsUp, Workflow } from "lucide-react";
 
 import type { ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, Knowledge, Sample, ScriptFlowDetail, ScriptFlowStep } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
@@ -13,6 +13,8 @@ import { firstMatchedKnowledge, firstMatchedSample, firstReviewCandidate, traini
 export { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, ScriptProgress } from "./ConversationScriptHelpers.js";
 
 export function TrainingLoopPanel({
+  collapsed,
+  onToggleCollapsed,
   platform,
   conversation,
   flowStep,
@@ -34,6 +36,8 @@ export function TrainingLoopPanel({
   onApply,
   setDraft
 }: {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   platform: boolean;
   conversation: Conversation;
   flowStep: string;
@@ -61,7 +65,11 @@ export function TrainingLoopPanel({
   const firstSample = firstMatchedSample(trainingSamples);
   const firstReviewItem = firstReviewCandidate(review);
   const references = trainingReferenceCounts(lastOutboundPayload);
-  return <aside className="training-loop-panel">
+  if (collapsed) return <section className="training-loop-panel collapsed">
+    <button className="assistant-panel-toggle" title="展开会话辅助区" aria-label="展开会话辅助区" onClick={onToggleCollapsed}><PanelRightOpen size={18}/><span>展开辅助区</span></button>
+  </section>;
+  return <section className="training-loop-panel">
+    <div className="assistant-panel-head"><strong>会话辅助</strong><button className="icon-only ghost" title="收起会话辅助区" aria-label="收起会话辅助区" onClick={onToggleCollapsed}><PanelRightClose size={18}/></button></div>
     <div className="assistant-tabs">
       <button className={activeTab === "assistant" ? "active" : ""} onClick={() => setActiveTab("assistant")}>智能助手</button>
       <button className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}>客户资料</button>
@@ -144,5 +152,5 @@ export function TrainingLoopPanel({
         <article><strong>运行引用</strong><p>样本 {references.samples} 条 · 资料 {references.materials} 条 · 回复模式 {replyModeLabel(lastOutboundPayload.replyMode)}</p></article>
       </div>
     </section>}
-  </aside>;
+  </section>;
 }

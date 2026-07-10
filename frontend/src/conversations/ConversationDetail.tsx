@@ -25,6 +25,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
   const [memoryError, setMemoryError] = useState("");
   const [reviewError, setReviewError] = useState("");
   const [contextError, setContextError] = useState("");
+  const [assistantCollapsed, setAssistantCollapsed] = useState(() => window.innerWidth < 1500);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const endpoints = conversationDetailEndpoints(platform, conversation.id);
   const loadMessages = async (showLoading = false) => {
@@ -147,7 +148,7 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
       setError(err instanceof Error ? err.message : "发送失败");
     }
   }}>{children}</AsyncButton>;
-  return <div className="conversation-detail wechat-detail">
+  return <div className={`conversation-detail wechat-detail ${assistantCollapsed ? "assistant-collapsed" : ""}`}>
     <ConversationChatColumn
       platform={platform}
       conversation={conversation}
@@ -173,6 +174,8 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
       setStatusMessage={setStatusMessage}
     />
     <TrainingLoopPanel
+      collapsed={assistantCollapsed}
+      onToggleCollapsed={() => setAssistantCollapsed((current) => !current)}
       platform={platform}
       conversation={conversation}
       flowStep={flowStep}

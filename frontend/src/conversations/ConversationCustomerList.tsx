@@ -79,30 +79,32 @@ export function ConversationCustomerList({
       <button className="ghost icon-only" title={collapsed ? "展开客户列表" : "收起客户列表"} onClick={onToggleCollapsed}>{collapsed ? <ChevronsRight size={16}/> : <ChevronsLeft size={16}/>}</button>
     </div>
     {!collapsed && <>
-      <div className="conversation-list-toolbar">
-        <button className="export-primary compact-action" onClick={() => downloadConversationExport(exportBase, EXPORT_ALL_FILTERS, "csv", onExportStarted)}><FileText size={15}/>导出全部</button>
-        {exportFilters && <button className="ghost compact-action" onClick={() => downloadConversationExport(exportBase, exportFilters, "csv", onExportStarted)}><FileText size={15}/>导出当前账号</button>}
-        <button className="ghost" disabled={!selectedAccount || !selectedAccountUnread} onClick={onMarkAllRead}><CheckCheck size={15}/>一键已读</button>
-        {handoffs && <span className="status-pill warning">只显示待接管</span>}
-      </div>
-      <details className="conversation-tools export-tool">
-        <summary>更多导出格式</summary>
-        <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact onExportStarted={onExportStarted} />
-      </details>
-      <details className="conversation-tools">
-        <summary>筛选客户</summary>
-        {renderFilterBar()}
-      </details>
-      <details className="conversation-tools">
-        <summary>主动新建对话</summary>
-        <div className="proactive-panel compact">
-          <input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(event) => onNewCustomerChange({ ...newCustomer, customerPhone: event.target.value })} />
-          <input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(event) => onNewCustomerChange({ ...newCustomer, nickname: event.target.value })} />
-          <button disabled={!selectedAccount} onClick={onOpenNewCustomer}>打开对话框</button>
-          {error && <div className="error">{error}</div>}
+      <div className="customer-list-controls">
+        <div className="conversation-list-toolbar">
+          <button className="export-primary compact-action" onClick={() => downloadConversationExport(exportBase, EXPORT_ALL_FILTERS, "csv", onExportStarted)}><FileText size={15}/>导出全部</button>
+          {exportFilters && <button className="ghost compact-action" onClick={() => downloadConversationExport(exportBase, exportFilters, "csv", onExportStarted)}><FileText size={15}/>导出当前账号</button>}
+          <button className="ghost" disabled={!selectedAccount || !selectedAccountUnread} onClick={onMarkAllRead}><CheckCheck size={15}/>一键已读</button>
+          {handoffs && <span className="status-pill warning">只显示待接管</span>}
         </div>
-      </details>
-      <div className="table-helper">当前筛选共 {totalRows} 个客户会话，列表展示前 {pager.total} 个。</div>
+        <details className="conversation-tools export-tool">
+          <summary>更多导出格式</summary>
+          <ConversationExportBar base={exportBase} scopedFilters={exportFilters} scopedLabel={selectedAccount ? "当前客服账号" : "当前账号"} compact onExportStarted={onExportStarted} />
+        </details>
+        <details className="conversation-tools">
+          <summary>筛选客户</summary>
+          {renderFilterBar()}
+        </details>
+        <details className="conversation-tools">
+          <summary>主动新建对话</summary>
+          <div className="proactive-panel compact">
+            <input placeholder="客户号码 / A2C 客户标识" value={newCustomer.customerPhone} onChange={(event) => onNewCustomerChange({ ...newCustomer, customerPhone: event.target.value })} />
+            <input placeholder="昵称，可选" value={newCustomer.nickname} onChange={(event) => onNewCustomerChange({ ...newCustomer, nickname: event.target.value })} />
+            <button disabled={!selectedAccount} onClick={onOpenNewCustomer}>打开对话框</button>
+            {error && <div className="error">{error}</div>}
+          </div>
+        </details>
+        <div className="table-helper">当前筛选共 {totalRows} 个客户会话，列表展示前 {pager.total} 个。</div>
+      </div>
       <div className="stack-list conversation-list">
         {loading && <div className="empty-state">客户会话加载中...</div>}
         {!loading && loadError && <div className="empty-state error-state"><strong>客户会话加载失败</strong><span>{loadError}</span>{onRetry && <button className="ghost" onClick={() => void onRetry()}>重新加载</button>}</div>}
