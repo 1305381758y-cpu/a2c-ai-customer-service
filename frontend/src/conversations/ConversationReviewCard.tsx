@@ -5,12 +5,13 @@ type ConversationReviewCardProps = {
   data: ConversationReviewResponse;
   error?: string;
   platform: boolean;
+  canApplyTraining: boolean;
   onGenerate: () => Promise<void>;
   onApply: (itemId: number) => Promise<void>;
   renderAction: (options: { children: React.ReactNode; busyText: string; onClick: () => Promise<void> }) => React.ReactNode;
 };
 
-export function ConversationReviewCard({ data, error = "", platform, onGenerate, onApply, renderAction }: ConversationReviewCardProps) {
+export function ConversationReviewCard({ data, error = "", platform, canApplyTraining, onGenerate, onApply, renderAction }: ConversationReviewCardProps) {
   const review = data.review;
   return <details className="memory review-card review-card-collapsible">
     <summary className="review-summary">
@@ -22,7 +23,7 @@ export function ConversationReviewCard({ data, error = "", platform, onGenerate,
     </summary>
     <div className="review-card-body">
       <div className="toolbar">
-        {renderAction({ onClick: onGenerate, busyText: "生成中...", children: "生成复盘" })}
+        {(platform || canApplyTraining) && renderAction({ onClick: onGenerate, busyText: "生成中...", children: "生成复盘" })}
         {review?.goalCompleted && <span className="status-pill ok">目标已完成</span>}
       </div>
       {error && <div className="warning">对话复盘加载失败：{error}</div>}
@@ -39,7 +40,7 @@ export function ConversationReviewCard({ data, error = "", platform, onGenerate,
             <strong>{item.title}</strong>
             <small>{item.itemType === "sample" ? "样本候选" : "知识候选"} · {item.status === "applied" ? "已加入" : "待审核"}</small>
           </div>
-          {!platform && item.status !== "applied" && renderAction({ onClick: () => onApply(item.id), busyText: "加入中...", children: "加入训练中心" })}
+          {!platform && canApplyTraining && item.status !== "applied" && renderAction({ onClick: () => onApply(item.id), busyText: "加入中...", children: "加入训练中心" })}
         </article>)}
       </div>}
     </div>

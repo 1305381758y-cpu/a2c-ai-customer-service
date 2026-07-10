@@ -522,6 +522,14 @@ async function smokeMerchantOperatorPermissions(page) {
   await page.locator(".table tbody tr.clickable").first().click();
   if (await page.getByRole("button", { name: "删除客户", exact: true }).count()) throw new Error("商户运营不应删除客户");
 
+  await clickNav(page, "会话");
+  await page.locator(".conversation-row").first().click();
+  const assistantExpand = page.getByRole("button", { name: "展开会话辅助区", exact: true });
+  if (await assistantExpand.count()) await assistantExpand.click();
+  for (const name of ["删除会话", "一键提升为训练样本", "生成复盘", "加入训练中心"]) {
+    if (await page.getByRole("button", { name, exact: true }).count()) throw new Error(`商户运营不应看到${name}`);
+  }
+
   await clickNav(page, "设置");
   await page.getByText("当前为只读配置", { exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "检测当前配置", exact: true }).waitFor({ state: "visible" });

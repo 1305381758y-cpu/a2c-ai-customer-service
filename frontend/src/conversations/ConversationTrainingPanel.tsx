@@ -16,6 +16,7 @@ export function TrainingLoopPanel({
   collapsed,
   onToggleCollapsed,
   platform,
+  canApplyTraining,
   conversation,
   flowStep,
   lastOutboundPayload,
@@ -39,6 +40,7 @@ export function TrainingLoopPanel({
   collapsed: boolean;
   onToggleCollapsed: () => void;
   platform: boolean;
+  canApplyTraining: boolean;
   conversation: Conversation;
   flowStep: string;
   lastOutboundPayload: NonNullable<ChatMessage["rawPayload"]>;
@@ -103,7 +105,7 @@ export function TrainingLoopPanel({
         {review.items.slice(0, 2).map((item) => <article key={item.id} className="sample-suggestion">
           <strong>{item.title}</strong>
           <p>{displayReviewItemContent(item)}</p>
-          {!platform && item.status !== "applied" && <AsyncButton busyText="加入中..." onClick={() => onApply(item.id)}>引用</AsyncButton>}
+          {!platform && canApplyTraining && item.status !== "applied" && <AsyncButton busyText="加入中..." onClick={() => onApply(item.id)}>加入训练中心</AsyncButton>}
         </article>)}
         {!review.items.length && trainingSamples.slice(0, 2).map((sample) => <article key={sample.id} className="sample-suggestion">
           <strong>{label(sample.intent)} · {label(sample.stage)}</strong>
@@ -114,8 +116,8 @@ export function TrainingLoopPanel({
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><Lightbulb size={17}/><div><h3>训练提升</h3><p>当前对话可沉淀为训练内容</p></div></div>
-        <div className="training-actions"><span className="muted-hint">生成复盘后，可逐条确认优秀回复和待补充知识。</span>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
-        <ConversationReviewCard platform={platform} data={review} error={reviewError} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
+        <div className="training-actions"><span className="muted-hint">生成复盘后，可逐条确认优秀回复和待补充知识。</span>{!platform && canApplyTraining && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
+        <ConversationReviewCard platform={platform} canApplyTraining={canApplyTraining} data={review} error={reviewError} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
       </section>
     </>}
     {activeTab === "profile" && <section className="assistant-card customer-profile-panel">

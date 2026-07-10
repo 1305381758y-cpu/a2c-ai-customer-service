@@ -77,7 +77,7 @@ export function registerMerchantConversationRoutes(app: FastifyInstance, deps: M
     return sendResult(reply, getMerchantConversationReview(deps.repos, scopedMerchantId(request), request.params.id));
   });
 
-  app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantRoles }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     return sendResult(reply, await generateMerchantConversationReview(deps.repos, deps.config, scopedMerchantId(request), request.params.id));
   });
 

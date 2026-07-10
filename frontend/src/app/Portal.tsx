@@ -63,7 +63,7 @@ function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; ti
     case "users": return <UsersPage />;
     case "config": return <Config platform={platform} canEdit={canManage} />;
     case "agentProfile": return <AgentProfilePage platform={platform} canEdit={user.role !== "merchant_operator"} api={api} notify={notify} AsyncButton={AsyncButton} loadRows={loadRows} />;
-    case "customers": return <CustomersPage platform={platform} canDelete={canManage} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={platform} conversation={conversation} refresh={reloadHistory} onDeleted={reloadHistory} />} />;
+    case "customers": return <CustomersPage platform={platform} canDelete={canManage} timeMode={timeMode} renderConversation={(conversation, reloadHistory) => <ConversationDetail platform={platform} canApplyTraining={!platform && canManage} canDelete={canManage} conversation={conversation} refresh={reloadHistory} onDeleted={reloadHistory} />} />;
     case "scriptFlows": return <ScriptFlowsPage platform={platform} canEdit={canManage} />;
     case "intentLearning": return <IntentLearningPage platform={platform} timeMode={timeMode} />;
     case "training": return <TrainingMaterialsPage platform={false} simple />;
@@ -71,7 +71,7 @@ function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; ti
     case "materials": return <TrainingMaterialsPage platform={platform} />;
     case "knowledge": return <KnowledgePage platform={platform} />;
     case "samples": return <SamplesPage platform={platform} />;
-    case "conversations": return <Conversations platform={platform} timeMode={timeMode} />;
-    case "handoffs": return <Conversations platform={platform} handoffs timeMode={timeMode} />;
+    case "conversations": return <Conversations platform={platform} timeMode={timeMode} canApplyTraining={!platform && canManage} canDelete={canManage} />;
+    case "handoffs": return <Conversations platform={platform} handoffs timeMode={timeMode} canApplyTraining={!platform && canManage} canDelete={canManage} />;
   }
 }

@@ -9,7 +9,7 @@ import { ConversationChatColumn } from "./ConversationChatColumn.js";
 import { conversationDetailEndpoints, detailFlowStep, lastOutboundPayload, resetSentDraft, textSuggestionDraft } from "./ConversationDetailHelpers.js";
 import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
 
-export function ConversationDetail({ platform = false, conversation, refresh, onDeleted }: { platform?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
+export function ConversationDetail({ platform = false, canApplyTraining = false, canDelete = true, conversation, refresh, onDeleted }: { platform?: boolean; canApplyTraining?: boolean; canDelete?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memory, setMemory] = useState<CustomerMemory | null>(null);
   const [review, setReview] = useState<ConversationReviewResponse>({ review: null, items: [] });
@@ -151,6 +151,8 @@ export function ConversationDetail({ platform = false, conversation, refresh, on
   return <div className={`conversation-detail wechat-detail ${assistantCollapsed ? "assistant-collapsed" : ""}`}>
     <ConversationChatColumn
       platform={platform}
+      canDelete={canDelete}
+      canApplyTraining={canApplyTraining}
       conversation={conversation}
       messages={messages}
       messagesRef={messagesRef}

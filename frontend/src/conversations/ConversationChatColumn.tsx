@@ -12,6 +12,7 @@ import { MessageTimeline } from "./MessageTimeline.js";
 
 type ConversationChatColumnProps = {
   platform: boolean;
+  canDelete: boolean;
   conversation: Conversation;
   messages: ChatMessage[];
   messagesRef: RefObject<HTMLDivElement | null>;
@@ -37,6 +38,7 @@ type ConversationChatColumnProps = {
 
 export function ConversationChatColumn({
   platform,
+  canDelete,
   conversation,
   messages,
   messagesRef,
@@ -78,7 +80,7 @@ export function ConversationChatColumn({
         await loadReview().catch(() => null);
         refresh();
       }}
-      renderDeleteAction={() => <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除会话？" detail="该会话的聊天记录、接管记录和相关状态会一起删除，此操作不可恢复。" confirmText="删除会话" onConfirm={async () => { await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</ConfirmActionButton>}
+      renderDeleteAction={() => canDelete ? <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除会话？" detail="该会话的聊天记录、接管记录和相关状态会一起删除，此操作不可恢复。" confirmText="删除会话" onConfirm={async () => { await api(`${platform ? "/api/admin" : "/api/merchant"}/conversations/${conversation.id}`, { method: "DELETE" }); notify("success", "会话已彻底删除"); await onDeleted?.(); }}>删除会话</ConfirmActionButton> : null}
     />
     {error && <div className="error" role="alert">{error}</div>}
     {statusMessage && <div className="notice" role="status">{statusMessage}</div>}
