@@ -45,9 +45,9 @@ export function registerMerchantTrainingRoutes(app: FastifyInstance, deps: Merch
     return sendResult(reply, deleteKnowledgeItem(deps.repos, request.params.id, scopedMerchantId(request)));
   });
 
-  app.post("/api/merchant/training-samples/import", { preHandler: deps.merchantRoles }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
+  app.post("/api/merchant/training-samples/import", { preHandler: deps.merchantAdmins }, async (request, reply) => importSamples(request, reply, deps, scopedMerchantId(request)));
 
-  app.post("/api/merchant/training-materials/import", { preHandler: deps.merchantRoles }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
+  app.post("/api/merchant/training-materials/import", { preHandler: deps.merchantAdmins }, async (request, reply) => importMaterial(request, reply, deps, scopedMerchantId(request)));
 
   app.get<{ Querystring: Omit<TrainingMaterialListQuery, "merchantId"> }>("/api/merchant/training-materials", { preHandler: deps.merchantRoles }, async (request) =>
     listTrainingMaterials(deps.repos, { ...request.query, merchantId: scopedMerchantId(request) })
@@ -65,7 +65,7 @@ export function registerMerchantTrainingRoutes(app: FastifyInstance, deps: Merch
     listTrainingSamples(deps.repos, { ...request.query, merchantId: scopedMerchantId(request) })
   );
 
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/training-samples/:id", { preHandler: deps.merchantRoles }, async (request, reply) => {
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/merchant/training-samples/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     return sendResult(reply, patchTrainingSample(deps.repos, request.params.id, request.body ?? {}, scopedMerchantId(request)));
   });
 

@@ -34,6 +34,39 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("keeps training writes admin-only while merchant operators can read", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+    const adminLogin = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "admin@test.local", password: "Admin123456" } });
+    const adminCookie = String(adminLogin.headers["set-cookie"]);
+    const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie }, payload: { name: "运营权限测试" } });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie },
+      payload: { merchantId: merchant.json().id, email: "operator@test.local", name: "商户运营", password: "Operator123456", role: "merchant_operator" }
+    });
+    const operatorLogin = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "operator@test.local", password: "Operator123456" } });
+    const operatorCookie = String(operatorLogin.headers["set-cookie"]);
+
+    const readable = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: operatorCookie } });
+    expect(readable.statusCode).toBe(200);
+    for (const request of [
+      { method: "POST" as const, url: "/api/merchant/training-samples/import" },
+      { method: "POST" as const, url: "/api/merchant/training-materials/import" },
+      { method: "PATCH" as const, url: "/api/merchant/training-samples/1", payload: { enabled: false } }
+    ]) {
+      const response = await app.inject({ ...request, headers: { cookie: operatorCookie } });
+      expect(response.statusCode).toBe(403);
+    }
+    await app.close();
+  });
+
   it("keeps merchant data isolated and ignores masked secret patches", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",
