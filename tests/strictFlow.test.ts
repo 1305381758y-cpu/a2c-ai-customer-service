@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeNaturalizedText } from "../src/clients/gemini.js";
+import { sanitizeNaturalizedText } from "../src/clients/aiStrictFlowNaturalization.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { suppressRegistrationDetailsForNonLinkStep } from "../src/domain/registrationPolicy.js";
 import { buildRuleContextualIntent, buildStrictFlowReply, isStrictFlowEnabled, resolveEffectiveStrictFlowStep, strictFlowNeedsInviteCode, type StrictFlowReply } from "../src/domain/strictFlow.js";

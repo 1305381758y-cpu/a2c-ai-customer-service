@@ -75,6 +75,7 @@ export function sanitizeNaturalizedText(text: string, fallback: string, allowLin
     .trim();
   if (!cleaned) return "";
   if (looksLikeStructuredAiPayload(cleaned)) return fallback;
+  cleaned = sanitizeRegionalChatAppComparisons(cleaned);
   if (/(我是|作为|身为).{0,8}(AI|人工智能|机器人|機器人|模型|自动客服|自動客服)|\b(AI|robot|bot|model)\b/i.test(cleaned)) {
     return fallback;
   }
@@ -111,4 +112,15 @@ function asksForUnsupportedManualRegistration(text: string): boolean {
 function looksLikeStructuredAiPayload(text: string): boolean {
   const trimmed = text.trim();
   return (trimmed.startsWith("{") && trimmed.endsWith("}")) || /"reply"\s*:/.test(trimmed);
+}
+
+function sanitizeRegionalChatAppComparisons(text: string): string {
+  return text
+    .replace(/(?:就)?像\s*(?:微信|WeChat)\s*一样[，,、\s]*/gi, "")
+    .replace(/(?:和|跟|与)?\s*(?:微信|WeChat)\s*(?:差不多|类似|一样)[，,、\s]*/gi, "")
+    .replace(/(?:类似|像)\s*(?:微信|WeChat)[，,、\s]*/gi, "")
+    .replace(/(?:微信|WeChat)/gi, "聊天工具")
+    .replace(/Telegram\s*[,，]?\s*是个聊天工具/gi, "Telegram 是个聊天工具")
+    .replace(/Telegram\s*[,，]?\s*是一个聊天工具/gi, "Telegram 是个聊天工具")
+    .trim();
 }

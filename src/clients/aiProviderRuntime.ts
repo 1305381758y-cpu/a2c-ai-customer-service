@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import { generateGeminiText, geminiApiKey } from "./gemini.js";
+import { generateGeminiText, geminiApiKey } from "./aiGeminiTransport.js";
 import { deepseekApiKey, deepSeekEffectiveMaxTokens, deepseekModel, generateDeepSeekText, generateMiniMaxText, minimaxApiKey, minimaxModel } from "./aiProviderTransport.js";
 import type { AiProviderName, AiTextOptions, AiTextPart } from "./aiProviderTypes.js";
 
@@ -49,7 +49,7 @@ export async function generateAiText(
   const requestSummary = summarizeAiRequest(contents, options, provider);
   try {
     const text = provider === "gemini"
-      ? await generateGeminiText(config, contents as Parameters<typeof generateGeminiText>[1], options)
+      ? await generateGeminiText(config, contents, options)
       : provider === "deepseek"
         ? await generateDeepSeekText(config, contents, options)
         : await generateMiniMaxText(config, contents, options);
