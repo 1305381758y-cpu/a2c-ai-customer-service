@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { api, useRows, withQuery } from "../app/api.js";
 import type { Filters, IntentLearningEvent, MerchantCountry } from "../types.js";
-import { AsyncButton, FilterBar, Table } from "../ui/components.js";
+import { AsyncButton, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { countryLabel, formatDateTime, label, languageName, statusTone, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
@@ -10,7 +10,7 @@ import { intentActiveCountry, intentMetrics, intentQueryFilters, intentTimeLabel
 
 export function IntentLearningPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
-  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "", limit: "100" };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const activeCountry = intentActiveCountry(countries, filters.countryId || "");
@@ -73,6 +73,7 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
         <span>已沉淀 <strong>{metrics.promoted}</strong></span>
         <span>已忽略 <strong>{metrics.ignored}</strong></span>
       </div>
+      <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
       <FilterBar
         filters={filters}
         setFilters={setFilters}

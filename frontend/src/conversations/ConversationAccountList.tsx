@@ -1,6 +1,7 @@
 import type React from "react";
 import { RefreshCw } from "lucide-react";
 import type { A2CAccount } from "../types.js";
+import { ResourceErrorNotice } from "../ui/components.js";
 import { AccountPagination, type PagerState } from "../ui/Pagination.js";
 
 type AccountPager = PagerState & { rows: A2CAccount[] };
@@ -18,6 +19,8 @@ type ConversationAccountListProps = {
   onStatusChange: (value: string) => void;
   onSelectAccount: (account: A2CAccount) => void;
   renderSyncButton: (children: React.ReactNode) => React.ReactNode;
+  loadError: string | null;
+  onRetry: () => Promise<void>;
 };
 
 export function ConversationAccountList({
@@ -32,7 +35,9 @@ export function ConversationAccountList({
   onKeywordChange,
   onStatusChange,
   onSelectAccount,
-  renderSyncButton
+  renderSyncButton,
+  loadError,
+  onRetry
 }: ConversationAccountListProps) {
   return <section className="account-list">
     <div className="account-list-head">
@@ -42,6 +47,7 @@ export function ConversationAccountList({
       </div>
       {renderSyncButton(<><RefreshCw size={14}/>同步</>)}
     </div>
+    <ResourceErrorNotice label="客服账号" error={loadError} onRetry={onRetry} />
     {accounts.length ? <>
       <div className="account-list-filter">
         <input

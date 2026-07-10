@@ -16,6 +16,14 @@ export function StateView({ type, title, detail, actionLabel, onAction }: { type
   </div>;
 }
 
+export function ResourceErrorNotice({ label: resourceLabel, error, onRetry }: { label: string; error: string | null; onRetry: () => Promise<void> }) {
+  if (!error) return null;
+  return <div className="error resource-error-notice" role="alert">
+    <span>{resourceLabel}加载失败：{error}</span>
+    <AsyncButton className="ghost" busyText="重试中..." onClick={onRetry}>重新加载</AsyncButton>
+  </div>;
+}
+
 export function Table<T extends Record<string, any>>({
   rows,
   columns,

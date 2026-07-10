@@ -298,3 +298,19 @@ tbody tr.selected {
   justify-content: center;
   vertical-align: middle;
 }
+.resource-error-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.resource-error-notice button {
+  flex: 0 0 auto;
+}
+
+.script-flow-page > .resource-error-notice {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}

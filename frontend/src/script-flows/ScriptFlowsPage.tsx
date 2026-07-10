@@ -5,13 +5,14 @@ import type { Filters, MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVe
 import { ScriptFlowDetailPanel } from "./ScriptFlowDetailPanel.js";
 import { ScriptFlowListPanel } from "./ScriptFlowListPanel.js";
 import { validateScriptFlowDraft } from "./ScriptFlowValidation.js";
+import { ResourceErrorNotice } from "../ui/components.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
 export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/script-flows" : "/api/merchant/script-flows";
   const stepBase = platform ? "/api/admin/script-flow-steps" : "/api/merchant/script-flow-steps";
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", status: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, status: filters.status });
   const [rows, setRows] = useState<ScriptFlow[]>([]);
@@ -130,6 +131,7 @@ export function ScriptFlowsPage({ platform = false }: { platform?: boolean }) {
   };
 
   return <div className="script-flow-page work-split">
+    <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
     <ScriptFlowListPanel platform={platform} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
     <ScriptFlowDetailPanel detail={detail} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationWarnings={validationWarnings} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
   </div>;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { Filters } from "../types.js";
 import { translateSystemMessage } from "../ui/formatters.js";
@@ -10,16 +10,42 @@ export async function api<T>(url: string, options: RequestInit = {}): Promise<T>
   return response.json() as Promise<T>;
 }
 
-export function useRows<T>(url: string): [T[], (rows: T[]) => void] {
+export type RowsResourceState = {
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+};
+
+export function useRows<T>(url: string): [T[], Dispatch<SetStateAction<T[]>>, RowsResourceState] {
   const [rows, setRows] = useState<T[]>([]);
-  useEffect(() => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+  const reload = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     if (!url) {
       setRows([]);
+      setLoading(false);
+      setError(null);
       return;
     }
-    loadRows<T>(url).then(setRows).catch(() => setRows([]));
+    setLoading(true);
+    setError(null);
+    try {
+      const nextRows = await loadRows<T>(url);
+      if (requestId === requestSequence.current) setRows(nextRows);
+    } catch (err) {
+      if (requestId === requestSequence.current) setError(err instanceof Error ? err.message : "数据加载失败，请稍后重试。");
+      throw err;
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
+    }
   }, [url]);
-  return [rows, setRows];
+  useEffect(() => {
+    void reload().catch(() => undefined);
+    return () => { requestSequence.current += 1; };
+  }, [reload]);
+  return [rows, setRows, { loading, error, reload }];
 }
 
 export async function loadRows<T>(url: string): Promise<T[]> {

@@ -6,6 +6,7 @@ import { A2CAccountsPanel } from "./InviteCodePanel.js";
 import { ConfigSwitchCards, CountryMarketSettingsCard, TelegramHandoffCard, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { coercePatch } from "../ui/form.js";
 import { inferCountryProfile, languageName, translateSystemMessage } from "../ui/formatters.js";
+import { ResourceErrorNotice } from "../ui/components.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
@@ -13,7 +14,7 @@ import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFiel
 import { DEFAULT_COUNTRY_DRAFT, configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "./ConfigPageHelpers.js";
 
 export function Config({ platform }: { platform: boolean }) {
-  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
+  const [merchants, , merchantsState] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [message, setMessage] = useState("");
@@ -176,6 +177,7 @@ export function Config({ platform }: { platform: boolean }) {
     }
   };
   return <section>
+    <ResourceErrorNotice label="商户选项" error={merchantsState.error} onRetry={merchantsState.reload} />
     {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
     <ConfigSetupSteps />
     <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />

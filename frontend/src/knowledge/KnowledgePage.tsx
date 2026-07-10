@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, Knowledge, MerchantCountry } from "../types.js";
-import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
+import { AsyncButton, Editor, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, label } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
@@ -11,7 +11,7 @@ import { notify } from "../ui/toast.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
   const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, type: filters.type, enabled: filters.enabled });
   const [rows, setRows] = useState<Knowledge[]>([]);
@@ -38,6 +38,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
       <section className="work-panel">
+        <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
         <FilterBar
           filters={filters}
           setFilters={setFilters}

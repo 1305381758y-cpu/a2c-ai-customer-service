@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
-import { Table } from "../ui/components.js";
+import { ResourceErrorNotice, Table } from "../ui/components.js";
 import { label, type TimeDisplayMode } from "../ui/formatters.js";
 import { AiCallFilters } from "./AiCallFilters.js";
 import { AiCallMetricGrid } from "./AiCallMetricGrid.js";
@@ -13,7 +13,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
   const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
-  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [data, setData] = useState<AiCallStats>(EMPTY_AI_CALL_STATS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -55,6 +55,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
   };
   return <div className="ai-calls-page work-split single-column">
     <section className="work-panel">
+      <ResourceErrorNotice label="国家时间配置" error={countriesState.error} onRetry={countriesState.reload} />
       <div className="training-center-hero compact">
         <div>
           <h3>大模型调用统计</h3>

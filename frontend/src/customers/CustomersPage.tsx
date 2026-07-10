@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { api, useRows, withQuery } from "../app/api.js";
 import { ConversationExportBar } from "../conversations/ConversationExport.js";
 import type { Conversation, Customer, Filters, MerchantCountry } from "../types.js";
-import { FilterBar, Table } from "../ui/components.js";
+import { FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import type { TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
@@ -18,7 +18,7 @@ type CustomersPageProps = {
 
 export function CustomersPage({ platform = false, timeMode, renderConversation }: CustomersPageProps) {
   const base = platform ? "/api/admin/customers" : "/api/merchant/customers";
-  const [countries] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const defaultRange = todayBeijingDateRange();
   const defaultFilters: Filters = { merchantId: "", countryId: "", status: "", language: "", q: "", startAt: defaultRange.startAt, endAt: defaultRange.endAt };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
@@ -83,6 +83,7 @@ export function CustomersPage({ platform = false, timeMode, renderConversation }
   return (
     <div className={selected ? "split work-split" : "single-column work-split"}>
       <section className="work-panel customer-list-panel">
+        <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
         <div className="customer-export-top">
           <ConversationExportBar base={exportBase} scopedFilters={scopedExportFilters} scopedLabel="当前筛选" onExportStarted={notifyExportStarted} />
         </div>

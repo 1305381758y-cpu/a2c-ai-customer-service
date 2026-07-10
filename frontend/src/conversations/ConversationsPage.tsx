@@ -18,7 +18,7 @@ export function Conversations({ platform = false, handoffs = false, timeMode }: 
 }
 
 function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: boolean; timeMode: TimeDisplayMode }) {
-  const [accounts, setAccounts] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
+  const [accounts, setAccounts, accountsState] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
   const [filters, setFiltersState] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", limit: "100" });
@@ -177,6 +177,8 @@ function MerchantConversations({ handoffs = false, timeMode }: { handoffs?: bool
         accountPager.setPage(1);
       }}
       onSelectAccount={setSelectedAccount}
+      loadError={accountsState.error}
+      onRetry={accountsState.reload}
       renderSyncButton={(children) => <AsyncButton className="sync-compact-button" busyText="同步中..." onClick={async () => { await api("/api/merchant/a2c/accounts/sync", { method: "POST" }); await reloadAccounts(); }}>{children}</AsyncButton>}
     />
     <ConversationCustomerList

@@ -3,7 +3,7 @@ import { FileText, Upload } from "lucide-react";
 
 import { api, loadRows, useRows } from "../app/api.js";
 import type { Filters, MerchantCountry, TrainingMaterial, TrainingMaterialItem } from "../types.js";
-import { AsyncButton, ConfirmActionButton, FilterBar, Table } from "../ui/components.js";
+import { AsyncButton, ConfirmActionButton, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { countryLabel, label, languageName } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
@@ -11,7 +11,7 @@ import { trainingImportEndpoint, trainingImportMessage, trainingMaterialColumns,
 
 export function TrainingMaterialsPage({ platform = false, simple = false }: { platform?: boolean; simple?: boolean }) {
   const base = trainingMaterialsBase(platform);
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", sourceType: "", status: "", limit: "100" });
   const rowsUrl = trainingMaterialsRowsUrl(platform, filters);
   const [rows, setRows] = useState<TrainingMaterial[]>([]);
@@ -59,6 +59,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
 
   return <div className={selected && detail ? "split work-split" : "single-column work-split"}>
     <section className="work-panel">
+      <ResourceErrorNotice label="国家选项" error={countriesState.error} onRetry={countriesState.reload} />
       {simple && <div className="training-center-hero">
         <div>
           <h3>上传资料，系统自动学习</h3>

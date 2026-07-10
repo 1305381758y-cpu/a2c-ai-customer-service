@@ -3,7 +3,7 @@ import { Upload } from "lucide-react";
 
 import { api, loadRows, useRows, withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry, Sample } from "../types.js";
-import { AsyncButton, Editor, FilterBar, Table } from "../ui/components.js";
+import { AsyncButton, Editor, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel } from "../ui/formatters.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
@@ -11,7 +11,7 @@ import { notify } from "../ui/toast.js";
 
 export function SamplesPage({ platform = false }: { platform?: boolean }) {
   const base = platform ? "/api/admin/training-samples" : "/api/merchant/training-samples";
-  const [countries] = useRows<MerchantCountry>("/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>("/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", language: "", intent: "", stage: "", enabled: "" });
   const rowsUrl = withQuery(base, platform ? filters : { countryId: filters.countryId, language: filters.language, intent: filters.intent, stage: filters.stage, enabled: filters.enabled });
   const [rows, setRows] = useState<Sample[]>([]);
@@ -36,6 +36,7 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
   useEffect(() => { void reload(); }, [rowsUrl]);
   return <div className={selected ? "split work-split" : "single-column work-split"}>
     <section className="work-panel">
+      <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
       <FilterBar
         filters={filters}
         setFilters={setFilters}
