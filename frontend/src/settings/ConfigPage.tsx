@@ -12,6 +12,7 @@ import { notify } from "../ui/toast.js";
 import { ConfigActionBar } from "./ConfigActionBar.js";
 import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
 import { DEFAULT_COUNTRY_DRAFT, configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "./ConfigPageHelpers.js";
+import { SettingsSection, SettingsWorkspace } from "./SettingsWorkspace.js";
 
 export function Config({ platform }: { platform: boolean }) {
   const [merchants, , merchantsState] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -176,17 +177,82 @@ export function Config({ platform }: { platform: boolean }) {
       setError(err instanceof Error ? err.message : "TG 绑定失败");
     }
   };
-  return <section>
+  const selectedProvider = String(form.aiProvider || "minimax");
+  const providerKey = selectedProvider === "deepseek" ? form.deepseekApiKey : selectedProvider === "gemini" ? form.googleAiApiKey : form.minimaxApiKey;
+  const a2cConfigured = Boolean(form.a2cAppId && form.a2cAppSecret);
+  const aiConfigured = Boolean(providerKey);
+  const telegramBound = form.telegramHandoffChatStatus === "bound";
+
+  return <section className="settings-page">
     <ResourceErrorNotice label="商户选项" error={merchantsState.error} onRetry={merchantsState.reload} />
-    {platform && <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>{merchants.map((m) => <option value={m.id} key={m.id}>{m.name}</option>)}</select>}
+    {platform && <label className="settings-merchant-selector"><span>当前商户</span><select value={merchantId} onChange={(event) => setMerchantId(event.target.value)}>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select></label>}
     <ConfigSetupSteps />
-    <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
-    <ConfigSwitchCards form={form} saveConfigFlag={saveConfigFlag} />
-    <ConfigCredentialFields form={form} onChange={setForm} />
-    <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
     <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} />
-    <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={endpoints.teacherTgLinks} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
-    <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} />
-    <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
+    <SettingsWorkspace>
+      <SettingsSection
+        id="runtime"
+        title="运行模式"
+        description="控制真实客户是否自动回复、是否进入模拟训练，以及是否按启用中的话本流程推进。"
+        status={form.smartReplyEnabled === false ? "智能回复已关闭" : form.trainingSimulationEnabled ? "模拟训练中" : "真实回复中"}
+        statusTone={form.smartReplyEnabled === false || form.trainingSimulationEnabled ? "warning" : "ok"}
+        impact="会直接影响新收到的真实客户消息，请确认当前环境和话本配置后再切换。"
+      >
+        <ConfigSwitchCards form={form} saveConfigFlag={saveConfigFlag} />
+      </SettingsSection>
+      <SettingsSection
+        id="a2c"
+        title="A2C 接入"
+        description="维护 A2C 密钥、接收账号和当前商户专属 Webhook 地址。"
+        status={a2cConfigured ? "密钥已填写" : "待配置"}
+        statusTone={a2cConfigured ? "ok" : "warning"}
+        impact="影响客户消息接收、自动回复发送和客服账号同步。修改后请先保存，再执行真实配置检测。"
+      >
+        <ConfigCredentialFields group="a2c" form={form} onChange={setForm} />
+        <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
+      </SettingsSection>
+      <SettingsSection
+        id="ai"
+        title="智能供应商"
+        description="选择负责翻译、语言识别、意图理解、自然回复、图片分析和复盘的模型供应商。"
+        status={aiConfigured ? `${selectedProvider === "deepseek" ? "DeepSeek" : selectedProvider === "gemini" ? "Gemini兼容" : "MiniMax"} 已配置` : "待配置 Key"}
+        statusTone={aiConfigured ? "ok" : "warning"}
+        impact="影响翻译、意图识别、上下文理解、客户回复、截图分析和对话复盘。保存后请点击“检测配置”。"
+      >
+        <ConfigCredentialFields group="ai" form={form} onChange={setForm} />
+      </SettingsSection>
+      <SettingsSection
+        id="market"
+        title="国家与引导"
+        description="设置商户目标国家、默认语言、注册链接、TG 引导地址、注册目标和教程图片。"
+        status={countries[0] ? `${countries[0].name} · ${languageName(countries[0].defaultLanguage)}` : "待设置国家"}
+        statusTone={countries[0] ? "ok" : "warning"}
+        impact="影响客户回复语言、话本检索、注册链接、资料完成条件和导师 TG 链接分配。"
+      >
+        <ConfigCredentialFields group="fallback" form={form} onChange={setForm} />
+        <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
+        <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={endpoints.teacherTgLinks} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
+      </SettingsSection>
+      <SettingsSection
+        id="accounts"
+        title="客服账号与邀请码"
+        description="查看已同步客服账号，为每个账号维护独立邀请码池并控制启用状态。"
+        status={`已保存 ${a2cAccounts.length} 个账号`}
+        statusTone={a2cAccounts.length ? "ok" : "warning"}
+        impact="账号停用后不会继续参与回复；邀请码只会分配给其绑定的客服账号。"
+      >
+        <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} />
+      </SettingsSection>
+      <SettingsSection
+        id="handoff"
+        title="TG 接管"
+        description="配置接管机器人并绑定唯一接管群，资料齐全或异常升级时会通知人工。"
+        status={telegramBound ? String(form.telegramHandoffChatTitle || "已绑定接管群") : "未绑定"}
+        statusTone={telegramBound ? "ok" : form.telegramHandoffChatStatus === "invalid" ? "danger" : "warning"}
+        impact="影响人工接管通知。更换机器人或群组后，需要重新执行绑定并刷新状态。"
+      >
+        <ConfigCredentialFields group="telegram" form={form} onChange={setForm} />
+        <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
+      </SettingsSection>
+    </SettingsWorkspace>
   </section>;
 }

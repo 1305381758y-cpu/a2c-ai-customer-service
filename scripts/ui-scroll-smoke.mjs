@@ -212,6 +212,27 @@ async function smokeMerchantSettingsToggles(page) {
   await ensureActiveScriptFlow(page);
   await clickNav(page, "设置");
 
+  const settingsSections = [
+    ["运行模式", "settings-runtime"],
+    ["A2C 接入", "settings-a2c"],
+    ["智能供应商", "settings-ai"],
+    ["国家与引导", "settings-market"],
+    ["客服账号与邀请码", "settings-accounts"],
+    ["TG 接管", "settings-handoff"]
+  ];
+  for (const [label, id] of settingsSections) {
+    await page.locator(".settings-navigation").getByRole("button", { name: label, exact: true }).click();
+    await page.locator(`#${id}`).waitFor({ state: "visible" });
+  }
+
+  const providerSelect = page.getByLabel("智能供应商");
+  await providerSelect.selectOption("deepseek");
+  await page.getByLabel("DeepSeek密钥").waitFor({ state: "visible" });
+  await providerSelect.selectOption("gemini");
+  await page.getByLabel("兼容Gemini密钥").waitFor({ state: "visible" });
+  await providerSelect.selectOption("minimax");
+  await page.getByLabel("MiniMax密钥").waitFor({ state: "visible" });
+
   await page.getByRole("button", { name: "关闭智能回复", exact: true }).click();
   await confirmDialogAction(page, "关闭智能回复");
   await page.waitForFunction(() => document.body.textContent?.includes("已关闭：系统只接收消息、翻译、更新记忆和触发接管，不会自动回复客户。"), { timeout: 10_000 });
@@ -241,7 +262,7 @@ async function smokeMerchantSettingsToggles(page) {
   await confirmDialogAction(page, "关闭话本流程");
   await page.waitForFunction(() => document.body.textContent?.includes("已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"), { timeout: 10_000 });
 
-  return "商户管理员/设置: 3 个高风险开关点击生效";
+  return "商户管理员/设置: 6 个配置分组导航、供应商切换和 3 个高风险开关生效";
 }
 
 async function ensureActiveScriptFlow(page) {
