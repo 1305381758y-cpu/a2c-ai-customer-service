@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BookOpen, Check, Contact, FileText, Lightbulb, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, ThumbsDown, ThumbsUp, Workflow } from "lucide-react";
+import { BookOpen, Check, Contact, FileText, Lightbulb, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, Workflow } from "lucide-react";
 
 import type { ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, Knowledge, Sample, ScriptFlowDetail, ScriptFlowStep } from "../types.js";
 import { AsyncButton } from "../ui/components.js";
@@ -86,7 +86,7 @@ export function TrainingLoopPanel({
           <span>{lastOutboundPayload.scriptFlowName ? `话本流程：${lastOutboundPayload.scriptFlowName}` : lastOutboundPayload.strictFlowEnabled === true ? "系统流程已启用" : lastOutboundPayload.strictFlowEnabled === false ? "话本流程未启用" : "话本流程待判断"}</span>
           <span>引用样本 {references.samples} 条 · 资料 {references.materials} 条</span>
         </div>
-        <div className="confidence-row"><span>业务来源 <strong>{trainingBusinessSource(currentScriptStep, firstSample, firstReviewItem)}</strong></span><button onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框"); }}>使用回复</button><button className="ghost" onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框", "请在发送前按客户情况微调。"); }}>微调后使用</button><button className="icon-only ghost" title="回复合适" onClick={() => notify("success", "已记录反馈", "这条建议会作为后续优化参考。")}><ThumbsUp size={16}/></button><button className="icon-only ghost" title="回复不合适" onClick={() => notify("info", "已记录反馈", "建议生成复盘后沉淀为改进样本。")}><ThumbsDown size={16}/></button></div>
+        <div className="confidence-row"><span>业务来源 <strong>{trainingBusinessSource(currentScriptStep, firstSample, firstReviewItem)}</strong></span><button onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框"); }}>使用回复</button><button className="ghost" onClick={() => { setDraft(suggestedReply); notify("success", "已填入回复框", "请在发送前按客户情况微调。"); }}>微调后使用</button></div>
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><BookOpen size={17}/><div><h3>匹配知识</h3><p>{conversation.countryName ? `${countryLabel(conversation.countryName)} · ${languageName(conversation.language)}` : "当前客户上下文"}</p></div><span className="status-pill ok">{firstKnowledge ? "已匹配" : "待补充"}</span></div>
@@ -114,7 +114,7 @@ export function TrainingLoopPanel({
       </section>
       <section className="assistant-card">
         <div className="assistant-card-title"><Lightbulb size={17}/><div><h3>训练提升</h3><p>当前对话可沉淀为训练内容</p></div></div>
-        <div className="training-actions"><button className="ghost" onClick={() => notify("info", "已标记：不准确", "请点击“一键提升为训练样本”生成复盘候选后再处理。")}>不准确</button><button className="ghost" onClick={() => notify("info", "已标记：不完整", "请点击“一键提升为训练样本”补全复盘候选。")}>不完整</button>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
+        <div className="training-actions"><span className="muted-hint">生成复盘后，可逐条确认优秀回复和待补充知识。</span>{!platform && <AsyncButton busyText="生成中..." onClick={onGenerate}>一键提升为训练样本</AsyncButton>}</div>
         <ConversationReviewCard platform={platform} data={review} error={reviewError} onGenerate={onGenerate} onApply={onApply} renderAction={({ children, busyText, onClick }) => <AsyncButton onClick={onClick} busyText={busyText}>{children}</AsyncButton>} />
       </section>
     </>}

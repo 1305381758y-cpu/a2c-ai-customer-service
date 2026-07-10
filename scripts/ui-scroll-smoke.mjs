@@ -467,10 +467,17 @@ async function smokeAgentProfileSave(page) {
   await page.getByLabel("智能体名称").fill(`验收接待专员-${Date.now()}`);
   await page.getByRole("button", { name: "保存智能体配置", exact: true }).click();
   await page.waitForFunction(() => document.body.textContent?.includes("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。"), { timeout: 10_000 });
+  await page.locator(".toggle-control input").uncheck();
+  await page.getByText("启停状态已修改，保存后才会影响后续回复。", { exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "保存智能体配置", exact: true }).click();
+  await confirmDialogAction(page, "停用并保存");
+  await page.locator(".toggle-control input").check();
+  await page.getByRole("button", { name: "保存智能体配置", exact: true }).click();
+  await confirmDialogAction(page, "启用并保存");
   await page.locator(".agent-version-panel > summary").click();
   await page.locator(".agent-version-panel .config-version-row").first().waitFor({ state: "visible" });
   await page.locator(".agent-version-panel .config-version-row").first().getByRole("button", { name: "恢复", exact: true }).waitFor({ state: "visible" });
-  return "商户管理员/智能体配置: 保存和版本记录生效";
+  return "商户管理员/智能体配置: 保存、启停确认和版本记录生效";
 }
 
 async function smokeScriptFlowCreateAndDelete(page) {

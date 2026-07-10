@@ -33,6 +33,7 @@ export function AgentProfilePage({
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [merchantId, setMerchantId] = useState("default");
   const [form, setForm] = useState<AgentProfile | null>(null);
+  const [persistedEnabled, setPersistedEnabled] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const url = platform ? `/api/admin/merchants/${merchantId}/agent-profile` : "/api/merchant/agent-profile";
@@ -48,7 +49,11 @@ export function AgentProfilePage({
     loadRows<Merchant>("/api/admin/merchants").then(setMerchants).catch((err) => setError(err instanceof Error ? err.message : "商户列表加载失败"));
   }, [loadRows, platform]);
 
-  const load = async () => setForm(await api<AgentProfile>(url));
+  const load = async () => {
+    const loaded = await api<AgentProfile>(url);
+    setForm(loaded);
+    setPersistedEnabled(loaded.enabled);
+  };
   const loadVersions = async () => {
     setVersionsLoading(true);
     try {
@@ -82,6 +87,7 @@ export function AgentProfilePage({
     try {
       const saved = await api<AgentProfile>(url, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
+      setPersistedEnabled(saved.enabled);
       setMessage("智能体配置已保存，后续话本流程、普通回复和模拟训练都会使用这份设定。");
       notify("success", "智能体配置已保存");
       await loadVersions();
@@ -92,6 +98,7 @@ export function AgentProfilePage({
   const restoreVersion = async (version: AgentProfileVersion) => {
     const restored = await api<AgentProfile>(`${versionsUrl}/${version.id}/restore`, { method: "POST" });
     setForm(restored);
+    setPersistedEnabled(restored.enabled);
     await loadVersions();
     notify("success", `已恢复智能体版本 ${version.version}`, "恢复操作已生成新的版本记录。");
   };
@@ -104,11 +111,11 @@ export function AgentProfilePage({
       {message && <div className="notice">{message}</div>}
       {!canEdit && <div className="permission-notice"><strong>当前为只读智能体配置</strong><span>商户运营可以查看角色、语气、目标和边界，但不能修改或停用配置。</span></div>}
       {form ? <>
-        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露智能服务、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p></div>{canEdit && <button className={form.enabled ? "ghost" : ""} onClick={() => setForm({ ...form, enabled: !form.enabled })}>{form.enabled ? "停用配置" : "启用配置"}</button>}</div>
+        <div className="smart-reply-card on"><div><h3>表达边界</h3><p>客户可见回复仍禁止暴露智能服务、机器人、模型、自动客服身份；业务不确定时，以页面或人工确认为准。</p>{canEdit && form.enabled !== persistedEnabled && <small className="warning-text">启停状态已修改，保存后才会影响后续回复。</small>}</div>{canEdit && <label className="toggle-control"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })}/><span>{form.enabled ? "启用" : "停用"}</span></label>}</div>
         <div className="form-grid elevated-form agent-profile-grid">
           {fields.map(([key, title, help]) => <label key={key}>{title}<textarea disabled={!canEdit} value={String(form[key] ?? "")} placeholder={help} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /><small>{help}</small></label>)}
         </div>
-        <div className="toolbar sticky-actions">{canEdit && <AsyncButton onClick={save} busyText="保存中...">保存智能体配置</AsyncButton>}<AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
+        <div className="toolbar sticky-actions">{canEdit && (form.enabled !== persistedEnabled ? <ConfirmActionButton busyText="保存中..." title={`确认${form.enabled ? "启用" : "停用"}智能体配置？`} detail={form.enabled ? "启用后，后续话本自然化、普通回复和模拟训练会使用这份角色与边界配置。" : "停用后，后续回复将不再使用这份商户智能体配置，可能影响语气和回答边界。"} confirmText={`${form.enabled ? "启用" : "停用"}并保存`} onConfirm={save}>保存智能体配置</ConfirmActionButton> : <AsyncButton onClick={save} busyText="保存中...">保存智能体配置</AsyncButton>)}<AsyncButton onClick={load} busyText="刷新中..."><RefreshCw size={16}/>刷新</AsyncButton></div>
         <details className="config-version-panel agent-version-panel">
           <summary><History size={17}/><span><strong>智能体版本记录</strong><small>{versionsLoading ? "加载中" : versions.length ? `最近 ${versions.length} 个版本` : "保存后会自动记录"}</small></span></summary>
           <div className="config-version-list">
