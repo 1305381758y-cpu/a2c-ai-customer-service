@@ -1267,7 +1267,7 @@ describe("portal api", () => {
     }
 
     expect(repos.countCustomers({ merchantId: merchant.id })).toBe(501);
-    expect(repos.listCustomers({ merchantId: merchant.id, limit: 600 })).toHaveLength(500);
+    expect(repos.listCustomers({ merchantId: merchant.id, limit: 600 })).toHaveLength(501);
 
     const firstPage = repos.listCustomers({ merchantId: merchant.id, limit: 20 });
     const secondPage = repos.listCustomers({ merchantId: merchant.id, limit: 20, offset: 20 });

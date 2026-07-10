@@ -92,7 +92,10 @@ export class CustomerRepository {
       params.push(filters.endAt);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    // Pagination is still applied for response size, but the server must not
+    // make a large merchant look capped at 500 customers. The total always
+    // comes from COUNT(*); this upper bound only protects one response body.
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 50000);
     const offset = Math.max(filters.offset ?? 0, 0);
     params.push(limit, offset);
     return this.db.sqlite
