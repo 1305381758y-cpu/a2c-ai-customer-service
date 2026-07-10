@@ -31,6 +31,14 @@ services:
         sync: false
       - key: GOOGLE_AI_MODEL
         value: gemini-2.5-flash
+      - key: MINIMAX_API_KEY
+        sync: false
+      - key: MINIMAX_MODEL
+        value: MiniMax-M3
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_HANDOFF_CHAT_ID

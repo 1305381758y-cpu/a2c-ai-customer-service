@@ -1,6 +1,8 @@
 # A2C AI Customer Service
 
-首版实现“样本驱动的 AI 话术/知识库训练 + 客户意图分析”。
+当前版本实现多商户、可配置话本流程、客户上下文理解、模拟训练和可观测的大模型调用。
+
+核心运行原则：话本流程决定下一步，AI 只负责意图理解和自然表达；模拟训练不会调用 A2C 或 Telegram；所有资源按商户、国家、客服账号和会话隔离。
 
 ## Quick Start
 
@@ -19,7 +21,9 @@ npm run dev
 - `GET /internal/conversations/:id/messages` 查询会话消息，需 `X-API-Key`。
 - `POST /webhooks/a2c` 接收 A2C Webhook。
 - `GET /health` 健康检查。
-- `/` 前端管理系统入口，默认管理员由 `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` 配置。
+ - `/` 前端管理系统入口，默认管理员由 `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` 配置。
+
+AI 供应商默认使用 MiniMax，也支持 DeepSeek 和 Gemini。供应商、模型和密钥可在商户设置中单独配置；调用失败会记录任务类型、供应商、模型、HTTP 状态、结束原因和响应摘要，客户侧使用规则兜底，不会因为模型异常中断流程。
 
 样本推荐字段：
 

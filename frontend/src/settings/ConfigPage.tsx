@@ -151,6 +151,12 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     setForm(result.config);
     await reloadA2CAccounts();
   };
+  const changeA2CAccountCountry = async (row: A2CAccount, countryId: string) => {
+    if (!countryId) return;
+    await api(configA2CAccountPatchEndpoint(platform, row.id), { method: "PATCH", body: JSON.stringify({ countryId }) });
+    await reloadA2CAccounts();
+    notify("success", "客服账号国家已更新", "后续新会话会按新的国家配置使用语言、话本和资源。");
+  };
   const saveCountry = async () => {
     const payload = coercePatch(countryDraft);
     await api(endpoints.countries, { method: "POST", body: JSON.stringify(payload) });
@@ -262,7 +268,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         statusTone={a2cAccounts.length ? "ok" : "warning"}
         impact="账号停用后不会继续参与回复；邀请码只会分配给其绑定的客服账号。"
       >
-        <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} />
+        <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} onCountry={changeA2CAccountCountry} />
       </SettingsSection>
       <SettingsSection
         id="handoff"

@@ -33,7 +33,9 @@ DEFAULT_ADMIN_EMAIL=默认平台管理员邮箱
 DEFAULT_ADMIN_PASSWORD=默认平台管理员密码，至少8位
 A2C_APP_ID=A2C开放平台App ID
 A2C_APP_SECRET=A2C开放平台App Secret
-GOOGLE_AI_API_KEY=Google AI Studio API Key
+GOOGLE_AI_API_KEY=Google AI Studio API Key（兼容供应商，可为空）
+MINIMAX_API_KEY=MiniMax Open Platform API Key（使用 MiniMax 时填写）
+DEEPSEEK_API_KEY=DeepSeek API Key（使用 DeepSeek 时填写）
 TELEGRAM_BOT_TOKEN=Telegram机器人Token
 TELEGRAM_HANDOFF_CHAT_ID=人工接管群ID
 PLATFORM_REGISTER_URL=甲方平台开户链接
@@ -47,9 +49,11 @@ NODE_VERSION=24.14.1
 DATABASE_URL=/var/data/app.db
 A2C_BASE_URL=https://openapi.a2c.chat/api/openapi
 GOOGLE_AI_MODEL=gemini-2.5-flash
+MINIMAX_MODEL=MiniMax-M3
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
-如果 Google AI Studio 账号需要指定其他模型，可在 Render 环境变量里把 `GOOGLE_AI_MODEL` 改成可用的 Gemini 模型。
+系统默认供应商为 MiniMax。商户后台可以按商户选择 MiniMax、DeepSeek 或 Gemini；平台环境变量只用于补充默认配置，商户自己的配置优先。模型调用失败时会记录供应商、任务类型、HTTP 状态、结束原因和响应摘要，客户消息仍会保留并走规则兜底。
 
 ## A2C Webhook 地址
 

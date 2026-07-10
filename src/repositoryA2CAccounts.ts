@@ -12,6 +12,7 @@ export class MerchantA2CAccountRepository {
     private readonly db: Db,
     private readonly countries: {
       defaultCountryId: (merchantId: string) => string;
+      validCountryId: (merchantId: string, countryId: string) => string;
     },
     private readonly configs: {
       getMerchantConfig: (merchantId: string) => MerchantConfigRecord;
@@ -117,7 +118,7 @@ export class MerchantA2CAccountRepository {
     }
     if (typeof patch.countryId === "string") {
       updates.push("country_id = ?");
-      values.push(this.countries.defaultCountryId(account.merchantId));
+      values.push(this.countries.validCountryId(account.merchantId, patch.countryId) || this.countries.defaultCountryId(account.merchantId));
     }
     if (updates.length) {
       this.db.sqlite
@@ -267,6 +268,7 @@ export class MerchantA2CAccountRepository {
         FROM a2c_invite_codes ic
         LEFT JOIN merchant_countries co ON co.id = ic.country_id
         WHERE ic.merchant_id = ?
+          AND (ic.country_id = ? OR ic.country_id = '' OR ic.country_id IS NULL)
           AND ic.status = 'available'
         ORDER BY
           CASE WHEN ic.country_id = ? THEN 0 WHEN ic.country_id = '' THEN 1 ELSE 2 END,
@@ -278,7 +280,7 @@ export class MerchantA2CAccountRepository {
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);
-    this.db.sqlite
+    const updateResult = this.db.sqlite
       .prepare(`
         UPDATE a2c_invite_codes
         SET status = 'reserved',
@@ -290,6 +292,9 @@ export class MerchantA2CAccountRepository {
         WHERE id = ? AND merchant_id = ? AND status = 'available'
       `)
       .run(conversation.countryId, conversation.customerPhone, conversation.id, code.id, conversation.merchantId);
+    if (!updateResult.changes) {
+      return this.reserveInviteCodeForConversation(conversation);
+    }
     return this.getInviteCode(code.id, conversation.merchantId);
   }
 

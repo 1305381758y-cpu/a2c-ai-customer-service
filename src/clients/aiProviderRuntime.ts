@@ -88,7 +88,14 @@ export function hasUsableAiKey(config: AppConfig): boolean {
 }
 
 export function stripJsonFence(text: string): string {
-  return text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const firstObject = cleaned.indexOf("{");
+  const lastObject = cleaned.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) return cleaned.slice(firstObject, lastObject + 1).trim();
+  const firstArray = cleaned.indexOf("[");
+  const lastArray = cleaned.lastIndexOf("]");
+  if (firstArray >= 0 && lastArray > firstArray) return cleaned.slice(firstArray, lastArray + 1).trim();
+  return cleaned;
 }
 
 function aiModelName(config: AppConfig, provider: AiProviderName): string {

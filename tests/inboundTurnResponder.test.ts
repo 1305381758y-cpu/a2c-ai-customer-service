@@ -200,21 +200,17 @@ describe("inboundTurnResponder", () => {
     expect(aiReply).not.toHaveBeenCalled();
   });
 
-  it("falls back to ordinary AI when strict flow does not handle the turn", async () => {
+  it("does not fall through to ordinary AI when strict flow is enabled", async () => {
     const input = baseInput();
     const strictFlowReply = vi.fn(async () => ({ handled: false, status: "not_strict_flow", conversationId: "conversation-1" }));
     const aiReply = vi.fn(async () => ({ status: "replied", conversationId: "conversation-1" }));
 
     await expect(respondToInboundTurn(input, { strictFlowReply: strictFlowReply as never, aiReply: aiReply as never })).resolves.toEqual({
-      status: "replied",
+      status: "not_strict_flow",
       conversationId: "conversation-1"
     });
 
     expect(strictFlowReply).toHaveBeenCalledOnce();
-    expect(aiReply).toHaveBeenCalledWith(expect.objectContaining({
-      conversation: input.conversation,
-      inboundMemory: input.inboundMemory,
-      strictFlowEnabled: true
-    }));
+    expect(aiReply).not.toHaveBeenCalled();
   });
 });

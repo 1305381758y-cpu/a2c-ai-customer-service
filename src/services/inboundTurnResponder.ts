@@ -113,6 +113,14 @@ export async function respondToInboundTurn(
     if (strictReply.handled) {
       return { status: strictReply.status, conversationId: strictReply.conversationId };
     }
+    // Once strict flow is enabled, an unhandled result must not fall through
+    // to the unrestricted reply path. That would let the system template or
+    // ordinary AI decide a customer-visible next step.
+    if (input.strictFlowEnabled) {
+      input.repos.updateConversation(input.conversation);
+      input.repos.upsertCustomerFromConversation(input.conversation);
+      return { status: strictReply.status, conversationId: strictReply.conversationId };
+    }
   }
 
   return (handlers.aiReply || generateAndRecordAiConversationReply)({

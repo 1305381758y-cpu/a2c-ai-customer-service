@@ -172,4 +172,41 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.reply).toContain("https://register.example/?code=INV-TURN");
     expect(result.strictReply.reply).not.toContain("正在确认");
   });
+
+  it("keeps a complete enabled script flow in its own nodes after registration confirmation", () => {
+    const context = setupConversation("wait_registration");
+    const flow = createBuiltInStrictScriptFlow(context.repos, context.merchant.id, {
+      countryId: context.country.id,
+      name: "完整话本副本"
+    }, "运营");
+    if (!flow.ok) throw new Error(flow.error);
+    const waitStep = flow.value.steps.find((step) => step.flowStep === "wait_registration");
+    if (!waitStep) throw new Error("missing wait registration step");
+    context.repos.patchScriptFlowStep(waitStep.id, context.merchant.id, { standardReply: "注册好后把手机号发给我，我再帮您核对。" }, "运营");
+    context.repos.enableScriptFlow(flow.value.flow.id, context.merchant.id, "运营");
+    const activeFlow = context.repos.getActiveScriptFlow(context.merchant.id, context.country.id);
+    const analysis = analyzeMessage("注册好了", "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText: "注册好了",
+      inferredIntent: "platform_register_done"
+    });
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText: "注册好了",
+      strictFlowEnabled: true,
+      inferredIntent: "platform_register_done",
+      contextualIntent,
+      scriptFlow: activeFlow
+    });
+
+    expect(result.strictReply.nextFlowStep).toBe("wait_registration");
+    expect(result.strictReply.reply).toContain("注册好后把手机号发给我");
+    expect(result.strictReply.reply).not.toContain("开户链接");
+    expect(result.strictReply.reply).not.toContain("邀请码");
+  });
 });

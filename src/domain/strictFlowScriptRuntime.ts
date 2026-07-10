@@ -1,12 +1,35 @@
-import type { A2CInviteCodeRecord, ScriptFlowStepRecord } from "../repositories.js";
+import type { A2CInviteCodeRecord, ScriptFlowRuntime, ScriptFlowStepRecord } from "../repositories.js";
 import { strictFlowScriptLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep } from "./strictFlowState.js";
 import type { StrictFlowInput, StrictFlowStep } from "./strictFlowTypes.js";
+
+const BUSINESS_SCRIPT_KEYS = new Set([
+  "first_greeting",
+  "interest_screening",
+  "interest_screening_retry",
+  "project_intro",
+  "registration_intent",
+  "send_register_link",
+  "wait_registration",
+  "ask_registered_phone",
+  "telegram_confirm",
+  "telegram_download",
+  "collect_telegram",
+  "human_handoff",
+  "ended"
+]);
 
 export function flowScriptLine(input: StrictFlowInput, key: string, language: string): string {
   const step = activeScriptStep(input, key);
   if (step?.standardReply) {
     return applyScriptVariables(step.standardReply, input, language, "");
+  }
+  // A complete active merchant flow owns its business wording. Returning a
+  // built-in business line here makes a copied flow look enabled while still
+  // executing the system template. Helper lines (error/help acknowledgements)
+  // may still use the shared safety wording below.
+  if (input.scriptFlow?.flow.active && isCompleteMerchantFlow(input.scriptFlow) && BUSINESS_SCRIPT_KEYS.has(key)) {
+    return "";
   }
   return strictFlowScriptLine(key, language);
 }
@@ -17,6 +40,12 @@ export function activeScriptStep(input: StrictFlowInput, key: string): ScriptFlo
   const normalizedKey = key.toLowerCase();
   const exact = enabledSteps.find((step) => step.flowStep === key || step.flowCode.toLowerCase() === normalizedKey);
   if (exact) return exact;
+
+  const alias = canonicalScriptKey(key);
+  if (alias) {
+    const canonical = enabledSteps.find((step) => step.flowStep === alias);
+    if (canonical) return canonical;
+  }
 
   if (key === "first_greeting" || key === "interest_screening_retry") {
     return enabledSteps.find((step) => step.flowStep === "interest_screening");
@@ -46,6 +75,30 @@ export function activeScriptStep(input: StrictFlowInput, key: string): ScriptFlo
   }
 
   return undefined;
+}
+
+export function isCompleteMerchantFlow(scriptFlow?: ScriptFlowRuntime): boolean {
+  if (!scriptFlow?.flow.active) return false;
+  const enabled = new Set(scriptFlow.steps.filter((step) => step.enabled).map((step) => step.flowStep));
+  return [
+    "first_greeting",
+    "interest_screening",
+    "project_intro",
+    "registration_intent",
+    "send_register_link",
+    "wait_registration",
+    "telegram_confirm",
+    "telegram_download",
+    "collect_telegram",
+    "human_handoff",
+    "ended"
+  ].every((step) => enabled.has(step));
+}
+
+function canonicalScriptKey(key: string): string {
+  if (key === "interest_screening_retry") return "interest_screening";
+  if (key === "ask_registered_phone") return "wait_registration";
+  return BUSINESS_SCRIPT_KEYS.has(key) ? key : "";
 }
 
 function findScriptStepByName(steps: ScriptFlowStepRecord[], pattern: RegExp): ScriptFlowStepRecord | undefined {

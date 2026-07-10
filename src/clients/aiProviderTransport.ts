@@ -31,8 +31,8 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
   const apiKey = deepseekApiKey(config);
   if (!apiKey) throw new Error("DeepSeek Key 未配置");
   if (hasImagePart(contents)) throw new Error("DeepSeek 暂不支持图片输入，请切换 MiniMax/Gemini 处理图片");
-  const maxTokens = deepSeekEffectiveMaxTokens(options);
-  const response = await fetch(`${normalizeDeepSeekBaseUrl(config)}/chat/completions`, {
+  const initialMaxTokens = deepSeekEffectiveMaxTokens(options);
+  const request = (maxTokens: number) => fetch(`${normalizeDeepSeekBaseUrl(config)}/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -49,14 +49,32 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
     }),
     signal: AbortSignal.timeout(AI_TIMEOUT_MS)
   });
-  const payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
-  const providerError = extractProviderError(payload);
+
+  let response = await request(initialMaxTokens);
+  let payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
+  let providerError = extractProviderError(payload);
   if (!response.ok || providerError) throw aiProviderResponseError(
     `DeepSeek 调用失败：${providerError || response.statusText}`,
     response.status,
     summarizeChatCompletionPayload(payload)
   );
-  const text = extractTextFromChatCompletion(payload).trim();
+
+  let text = extractTextFromChatCompletion(payload).trim();
+  // Reasoning models can consume the entire output budget and return HTTP 200
+  // with an empty customer-facing content. Retry once with a larger budget;
+  // otherwise this looks like a mysterious "empty" business failure.
+  if (!text && finishReason(payload) === "length") {
+    const retryMaxTokens = Math.min(Math.max(initialMaxTokens * 2, 1800), 4000);
+    response = await request(retryMaxTokens);
+    payload = await response.json().catch(async () => ({ error: { message: await response.text().catch(() => response.statusText) } })) as Record<string, unknown>;
+    providerError = extractProviderError(payload);
+    if (!response.ok || providerError) throw aiProviderResponseError(
+      `DeepSeek 调用失败：${providerError || response.statusText}`,
+      response.status,
+      summarizeChatCompletionPayload(payload)
+    );
+    text = extractTextFromChatCompletion(payload).trim();
+  }
   if (!text) throw aiProviderResponseError(
     "DeepSeek 返回内容为空",
     response.status,
@@ -67,8 +85,8 @@ export async function generateDeepSeekText(config: AppConfig, contents: string |
 
 export function deepSeekEffectiveMaxTokens(options: AiTextOptions): number {
   const requested = options.maxOutputTokens ?? 1200;
-  if (options.taskType === "intent_classification") return Math.max(requested, 512);
-  if (options.taskType === "contextual_intent") return Math.max(requested, 900);
+  if (options.taskType === "intent_classification") return Math.max(requested, 1200);
+  if (options.taskType === "contextual_intent") return Math.max(requested, 1800);
   return requested;
 }
 
@@ -280,6 +298,12 @@ function extractTextFromChatCompletion(payload: Record<string, unknown>): string
     }).join("").trim();
   }
   return "";
+}
+
+function finishReason(payload: Record<string, unknown>): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const first = choices[0] as Record<string, unknown> | undefined;
+  return typeof first?.finish_reason === "string" ? first.finish_reason : "";
 }
 
 function extractTextFromAnthropicMessage(payload: Record<string, unknown>): string {

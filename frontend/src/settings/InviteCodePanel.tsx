@@ -21,7 +21,8 @@ export function A2CAccountsPanel({
   onKeywordChange,
   onStatusChange,
   onCountryChange,
-  onToggle
+  onToggle,
+  onCountry
 }: {
   accounts: A2CAccount[];
   filteredAccounts: A2CAccount[];
@@ -35,6 +36,7 @@ export function A2CAccountsPanel({
   onStatusChange: (value: string) => void;
   onCountryChange: (value: string) => void;
   onToggle: (account: A2CAccount) => Promise<void>;
+  onCountry: (account: A2CAccount, countryId: string) => Promise<void>;
 }) {
   return <div className="memory">
     <div className="account-section-head">
@@ -48,7 +50,7 @@ export function A2CAccountsPanel({
     </div>
     <div className="account-list-meta">当前筛选 {filteredAccounts.length} 个账号，显示第 {(pager.page - 1) * pager.pageSize + (pager.total ? 1 : 0)} - {Math.min(pager.page * pager.pageSize, pager.total)} 个。</div>
     <div className="account-grid">
-      {pager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => onToggle(row)} onCountry={async () => undefined} />)}
+      {pager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => onToggle(row)} onCountry={(countryId) => onCountry(row, countryId)} />)}
       {!accounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}
       {accounts.length > 0 && !filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}
     </div>
@@ -87,7 +89,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
       <ConfirmActionButton busyText="处理中..." title={account.enabled ? "确认停用客服账号？" : "确认启用客服账号？"} detail={account.enabled ? "停用后，该 A2C 客服账号不会再用于自动回复和分配邀请码；已有会话记录仍会保留。" : "启用后，该 A2C 客服账号会参与自动回复和邀请码分配，请确认账号国家和邀请码池配置正确。"} confirmText={account.enabled ? "停用账号" : "启用账号"} onConfirm={onToggle}>{account.enabled ? "停用账号" : "启用账号"}</ConfirmActionButton>
     </div>
     <div className="account-settings-row">
-      <div className="account-country">归属国家：{countryLabel(account.countryName || countries[0]?.name || "默认国家")}</div>
+      <label className="account-country">归属国家<select aria-label={`${account.apiPhone}归属国家`} value={account.countryId || countries[0]?.id || ""} onChange={(event) => void onCountry(event.target.value)}>{countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}</select></label>
       <div className="invite-stats"><span>可用 {stats.available}</span><span>已分配 {stats.reserved}</span><span>已使用 {stats.used}</span><span>停用 {stats.disabled}</span></div>
     </div>
     <details className="invite-panel">

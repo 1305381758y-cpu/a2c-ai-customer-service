@@ -49,7 +49,10 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
   const settings = new MerchantSettingsRepository(db);
   const a2cAccounts = new MerchantA2CAccountRepository(
     db,
-    { defaultCountryId: (merchantId) => settings.defaultCountryId(merchantId) },
+    {
+      defaultCountryId: (merchantId) => settings.defaultCountryId(merchantId),
+      validCountryId: (merchantId, countryId) => settings.validCountryId(merchantId, countryId)
+    },
     { getMerchantConfig: (merchantId) => settings.getConfig(merchantId) }
   );
   const conversations = new ConversationRepository(db, {

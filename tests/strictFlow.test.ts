@@ -1854,7 +1854,7 @@ describe("strict Aston Brazil flow", () => {
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("注册步骤");
     expect(result.reply).toContain("邀请码");
-    expect(result.reply).toContain("教程图片");
+    expect(result.reply).not.toContain("教程图片");
     expect(result.tutorialImageRequested).toBe(true);
   });
 

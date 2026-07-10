@@ -79,8 +79,8 @@ describe("MiniMax request queue", () => {
 
 describe("DeepSeek provider", () => {
   it("uses one shared effective token policy for DeepSeek requests and telemetry", () => {
-    expect(deepSeekEffectiveMaxTokens({ taskType: "intent_classification", maxOutputTokens: 80 })).toBe(512);
-    expect(deepSeekEffectiveMaxTokens({ taskType: "contextual_intent", maxOutputTokens: 260 })).toBe(900);
+    expect(deepSeekEffectiveMaxTokens({ taskType: "intent_classification", maxOutputTokens: 80 })).toBe(1200);
+    expect(deepSeekEffectiveMaxTokens({ taskType: "contextual_intent", maxOutputTokens: 260 })).toBe(1800);
     expect(deepSeekEffectiveMaxTokens({ taskType: "translation", maxOutputTokens: 80 })).toBe(80);
     expect(deepSeekEffectiveMaxTokens({})).toBe(1200);
   });
@@ -141,7 +141,7 @@ describe("DeepSeek provider", () => {
     }), "classify", { taskType: "intent_classification", maxOutputTokens: 80 });
 
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
-    expect(body.max_tokens).toBe(512);
+    expect(body.max_tokens).toBe(1200);
   });
 
   it("raises DeepSeek token budget for contextual intent JSON classification", async () => {
@@ -166,7 +166,7 @@ describe("DeepSeek provider", () => {
     }), "classify context", { taskType: "contextual_intent", maxOutputTokens: 260 });
 
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
-    expect(body.max_tokens).toBe(900);
+    expect(body.max_tokens).toBe(1800);
   });
 
   it("does not treat top-level OK message as a provider error when choices exist", async () => {
@@ -231,7 +231,7 @@ describe("DeepSeek provider", () => {
     expect(JSON.parse(calls[0].requestSummary || "{}")).toMatchObject({
       taskType: "intent_classification",
       maxOutputTokens: 32,
-      effectiveMaxOutputTokens: 512,
+      effectiveMaxOutputTokens: 1200,
       userContentLength: 8
     });
     expect(JSON.parse(calls[0].responseSummary || "{}")).toMatchObject({
