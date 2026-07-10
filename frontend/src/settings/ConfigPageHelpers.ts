@@ -31,6 +31,7 @@ export type ConfigPageEndpoints = {
   a2cSync: string;
   teacherTgLinks: string;
   check: string;
+  versions: string;
 };
 
 export function configPageEndpoints(platform: boolean, merchantId: string): ConfigPageEndpoints {
@@ -41,7 +42,8 @@ export function configPageEndpoints(platform: boolean, merchantId: string): Conf
       a2cAccounts: `/api/admin/merchants/${merchantId}/a2c/accounts`,
       a2cSync: `/api/admin/merchants/${merchantId}/a2c/accounts/sync`,
       teacherTgLinks: `/api/admin/merchants/${merchantId}/teacher-tg-links`,
-      check: `/api/admin/merchants/${merchantId}/config/check`
+      check: `/api/admin/merchants/${merchantId}/config/check`,
+      versions: `/api/admin/merchants/${merchantId}/config/versions`
     }
     : {
       config: "/api/merchant/config",
@@ -49,7 +51,8 @@ export function configPageEndpoints(platform: boolean, merchantId: string): Conf
       a2cAccounts: "/api/merchant/a2c/accounts",
       a2cSync: "/api/merchant/a2c/accounts/sync",
       teacherTgLinks: "/api/merchant/teacher-tg-links",
-      check: "/api/merchant/config/check"
+      check: "/api/merchant/config/check",
+      versions: "/api/merchant/config/versions"
     };
 }
 

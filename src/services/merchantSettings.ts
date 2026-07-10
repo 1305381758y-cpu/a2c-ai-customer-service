@@ -12,7 +12,8 @@ export function getMaskedMerchantConfig(repos: Repositories, merchantId: string)
 export function patchMaskedMerchantConfig(
   repos: Repositories,
   merchantId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  userName = "系统"
 ): MerchantConfigPatchResult {
   const cleaned = cleanConfigPatch(patch);
   if (isEnablingStrictScriptFlow(cleaned)) {
@@ -26,7 +27,20 @@ export function patchMaskedMerchantConfig(
       return { ok: false, statusCode: 400, error: `当前启用话本存在问题：${validationErrors.join("；")}` };
     }
   }
-  return { ok: true, value: maskConfig(repos.patchMerchantConfig(merchantId, cleaned)) };
+  const saved = repos.patchMerchantConfig(merchantId, cleaned);
+  const changedKeys = Object.keys(cleaned);
+  if (changedKeys.length) repos.recordMerchantConfigVersion(merchantId, changedKeys, userName);
+  return { ok: true, value: maskConfig(saved) };
+}
+
+export function listMerchantConfigVersions(repos: Repositories, merchantId: string): { rows: ReturnType<Repositories["listMerchantConfigVersions"]> } {
+  return { rows: repos.listMerchantConfigVersions(merchantId) };
+}
+
+export function restoreMerchantConfigVersion(repos: Repositories, merchantId: string, versionId: string, userName: string): MerchantConfigPatchResult {
+  const restored = repos.restoreMerchantConfigVersion(merchantId, Number(versionId), userName);
+  if (!restored) return { ok: false, statusCode: 400, error: "配置版本不存在或不属于当前商户" };
+  return { ok: true, value: maskConfig(restored) };
 }
 
 export function getMerchantAgentProfile(repos: Repositories, merchantId: string): MerchantAgentProfileRecord {

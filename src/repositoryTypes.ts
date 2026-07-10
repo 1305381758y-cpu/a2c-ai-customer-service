@@ -79,6 +79,16 @@ export interface MerchantConfigRecord {
   registrationTutorialImageUrl: string;
 }
 
+export interface MerchantConfigVersionRecord {
+  id: number;
+  merchantId: string;
+  version: number;
+  changedKeys: string[];
+  note: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface FollowUpCandidate {
   conversation: Conversation;
   lastMessageId: number;

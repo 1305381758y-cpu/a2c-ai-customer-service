@@ -3,7 +3,7 @@ import type { Db } from "./db.js";
 import { inferCountryProfile } from "./repositoryCountryProfile.js";
 import { mapMerchantConfig, mapMerchantCountry } from "./repositoryMerchantMappers.js";
 import { booleanPatchValue } from "./repositoryPatchValues.js";
-import type { MerchantConfigRecord, MerchantCountryRecord } from "./repositoryTypes.js";
+import type { MerchantConfigRecord, MerchantConfigVersionRecord, MerchantCountryRecord } from "./repositoryTypes.js";
 
 export class MerchantSettingsRepository {
   constructor(private readonly db: Db) {}
@@ -54,6 +54,44 @@ export class MerchantSettingsRepository {
       }), merchantId);
     }
     return this.getConfig(merchantId);
+  }
+
+  recordConfigVersion(merchantId: string, changedKeys: string[], userName: string, note = "保存配置"): MerchantConfigVersionRecord {
+    const current = this.getConfig(merchantId);
+    const version = Number((this.db.sqlite.prepare("SELECT COALESCE(MAX(version), 0) + 1 AS version FROM merchant_config_versions WHERE merchant_id = ?").get(merchantId) as { version: number }).version);
+    const result = this.db.sqlite.prepare(`
+      INSERT INTO merchant_config_versions (merchant_id, version, snapshot_json, changed_keys_json, note, created_by)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(merchantId, version, JSON.stringify(configSnapshot(current)), JSON.stringify([...new Set(changedKeys)]), note, userName);
+    return {
+      id: Number(result.lastInsertRowid),
+      merchantId,
+      version,
+      changedKeys: [...new Set(changedKeys)],
+      note,
+      createdBy: userName,
+      createdAt: String((this.db.sqlite.prepare("SELECT created_at FROM merchant_config_versions WHERE id = ?").get(Number(result.lastInsertRowid)) as { created_at: string }).created_at)
+    };
+  }
+
+  listConfigVersions(merchantId: string, limit = 20): MerchantConfigVersionRecord[] {
+    const rows = this.db.sqlite.prepare(`
+      SELECT id, merchant_id, version, changed_keys_json, note, created_by, created_at
+      FROM merchant_config_versions
+      WHERE merchant_id = ?
+      ORDER BY version DESC
+      LIMIT ?
+    `).all(merchantId, Math.max(1, Math.min(limit, 100))) as Array<Record<string, unknown>>;
+    return rows.map(mapConfigVersion);
+  }
+
+  restoreConfigVersion(merchantId: string, versionId: number, userName: string): MerchantConfigRecord | undefined {
+    const row = this.db.sqlite.prepare("SELECT version, snapshot_json FROM merchant_config_versions WHERE id = ? AND merchant_id = ?").get(versionId, merchantId) as { version: number; snapshot_json: string } | undefined;
+    if (!row) return undefined;
+    const snapshot = JSON.parse(row.snapshot_json) as Record<string, unknown>;
+    const restored = this.patchConfig(merchantId, snapshot);
+    this.recordConfigVersion(merchantId, Object.keys(snapshot), userName, `恢复版本 ${row.version}`);
+    return restored;
   }
 
   tokenStore(merchantId: string): A2CTokenStore {
@@ -294,4 +332,35 @@ export class MerchantSettingsRepository {
     this.db.sqlite.prepare("UPDATE training_material_items SET country_id = ? WHERE merchant_id = ?").run(countryId, merchantId);
     this.db.sqlite.prepare("UPDATE a2c_invite_codes SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
   }
+}
+
+function configSnapshot(config: MerchantConfigRecord): Record<string, unknown> {
+  const {
+    a2cTokenCacheKey: _cacheKey,
+    a2cAccessToken: _accessToken,
+    a2cTokenExpiresAt: _expiresAt,
+    a2cAuthBlockedUntil: _blockedUntil,
+    merchantId: _merchantId,
+    ...editable
+  } = config;
+  return editable;
+}
+
+function mapConfigVersion(row: Record<string, unknown>): MerchantConfigVersionRecord {
+  let changedKeys: string[] = [];
+  try {
+    const parsed = JSON.parse(String(row.changed_keys_json || "[]"));
+    if (Array.isArray(parsed)) changedKeys = parsed.map(String);
+  } catch {
+    changedKeys = [];
+  }
+  return {
+    id: Number(row.id),
+    merchantId: String(row.merchant_id),
+    version: Number(row.version),
+    changedKeys,
+    note: String(row.note || ""),
+    createdBy: String(row.created_by || ""),
+    createdAt: String(row.created_at || "")
+  };
 }

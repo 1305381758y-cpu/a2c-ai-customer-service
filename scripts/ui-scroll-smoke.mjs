@@ -281,7 +281,10 @@ async function smokeMerchantSettingsToggles(page) {
   await confirmDialogAction(page, "关闭话本流程");
   await page.waitForFunction(() => document.body.textContent?.includes("已关闭：非指定商户可能走普通回复；如要固定按开户注册话本推进，请开启。"), { timeout: 10_000 });
 
-  return "商户管理员/设置: 6 个配置分组导航、供应商切换和 3 个高风险开关生效";
+  await page.locator(".config-version-panel > summary").click();
+  await page.locator(".config-version-row").first().waitFor({ state: "visible" });
+  await page.locator(".config-version-row").first().getByRole("button", { name: "恢复", exact: true }).waitFor({ state: "visible" });
+  return "商户管理员/设置: 6 个配置分组、供应商切换、高风险开关和配置版本记录生效";
 }
 
 async function ensureActiveScriptFlow(page) {
@@ -512,6 +515,8 @@ async function smokeMerchantOperatorPermissions(page) {
   await page.getByRole("button", { name: "检测当前配置", exact: true }).waitFor({ state: "visible" });
   const enabledFields = await page.locator(".settings-section-body input:enabled, .settings-section-body select:enabled, .settings-section-body textarea:enabled, .settings-section-body button:enabled").count();
   if (enabledFields) throw new Error(`商户运营设置页仍有 ${enabledFields} 个可编辑控件`);
+  await page.locator(".config-version-panel > summary").click();
+  if (await page.locator(".config-version-row").getByRole("button", { name: "恢复", exact: true }).count()) throw new Error("商户运营不应恢复配置版本");
   return "商户运营: 菜单和核心配置保持只读";
 }
 

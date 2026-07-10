@@ -10,6 +10,7 @@ import type {
   Conversation,
   MerchantRecord,
   MerchantConfigRecord,
+  MerchantConfigVersionRecord,
   FollowUpCandidate,
   MerchantA2CAccountRecord,
   A2CInviteCodeRecord,
@@ -42,6 +43,7 @@ export type {
   Conversation,
   MerchantRecord,
   MerchantConfigRecord,
+  MerchantConfigVersionRecord,
   FollowUpCandidate,
   MerchantA2CAccountRecord,
   A2CInviteCodeRecord,
@@ -529,6 +531,18 @@ export class Repositories {
 
   patchMerchantConfig(merchantId: string, patch: Record<string, unknown>): MerchantConfigRecord {
     return this.settings.patchConfig(merchantId, patch);
+  }
+
+  recordMerchantConfigVersion(merchantId: string, changedKeys: string[], userName: string, note = "保存配置"): MerchantConfigVersionRecord {
+    return this.settings.recordConfigVersion(merchantId, changedKeys, userName, note);
+  }
+
+  listMerchantConfigVersions(merchantId: string, limit = 20): MerchantConfigVersionRecord[] {
+    return this.settings.listConfigVersions(merchantId, limit);
+  }
+
+  restoreMerchantConfigVersion(merchantId: string, versionId: number, userName: string): MerchantConfigRecord | undefined {
+    return this.settings.restoreConfigVersion(merchantId, versionId, userName);
   }
 
   listMerchantA2CAccounts(filters: { merchantId?: string; enabled?: boolean } = {}): MerchantA2CAccountRecord[] {

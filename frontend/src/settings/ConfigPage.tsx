@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import { api, loadRows, useRows } from "../app/api.js";
-import type { A2CAccount, ConfigCheck, Merchant, MerchantCountry, TeacherTgLink } from "../types.js";
+import type { A2CAccount, ConfigCheck, Merchant, MerchantConfigVersion, MerchantCountry, TeacherTgLink } from "../types.js";
 import { A2CAccountsPanel } from "./InviteCodePanel.js";
 import { ConfigSwitchCards, CountryMarketSettingsCard, TelegramHandoffCard, TutorialImageUploadCard, WebhookCopyCard } from "./SettingsEditors.js";
 import { coercePatch } from "../ui/form.js";
@@ -13,6 +13,7 @@ import { ConfigActionBar } from "./ConfigActionBar.js";
 import { ConfigCredentialFields, ConfigSetupSteps } from "./ConfigCredentialFields.js";
 import { DEFAULT_COUNTRY_DRAFT, configA2CAccountPatchEndpoint, configPageEndpoints, configSaveSuccessMessage, configTelegramSetupEndpoint, configTutorialImageEndpoint, configWebhookUrl, countryToDraft, filterA2CAccounts, teacherTgImportPayload } from "./ConfigPageHelpers.js";
 import { SettingsSection, SettingsWorkspace } from "./SettingsWorkspace.js";
+import { ConfigVersionHistory } from "./ConfigVersionHistory.js";
 
 export function Config({ platform, canEdit = true }: { platform: boolean; canEdit?: boolean }) {
   const [merchants, , merchantsState] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
@@ -28,11 +29,22 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
   const endpoints = configPageEndpoints(platform, merchantId);
   const a2cWebhookUrl = configWebhookUrl(window.location.origin, platform, merchantId, form);
   const [checks, setChecks] = useState<ConfigCheck[]>([]);
+  const [configVersions, setConfigVersions] = useState<MerchantConfigVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
   const [tutorialImageFile, setTutorialImageFile] = useState<File | null>(null);
   const [accountKeyword, setAccountKeyword] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [accountCountryId, setAccountCountryId] = useState("");
   const reloadConfig = async () => setForm(await api<Record<string, string | boolean>>(endpoints.config));
+  const reloadConfigVersions = async () => {
+    setVersionsLoading(true);
+    try {
+      const result = await api<{ rows: MerchantConfigVersion[] }>(endpoints.versions);
+      setConfigVersions(result.rows);
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
   useEffect(() => {
     reloadConfig().catch((err) => setError(err instanceof Error ? err.message : "配置加载失败"));
   }, [endpoints.config]);
@@ -46,6 +58,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     loadRows<TeacherTgLink>(endpoints.teacherTgLinks).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
   }, [endpoints.teacherTgLinks]);
   useEffect(() => { setChecks([]); }, [merchantId]);
+  useEffect(() => { void reloadConfigVersions().catch((err) => setError(err instanceof Error ? err.message : "配置版本加载失败")); }, [endpoints.versions]);
   const applyCountryDraft = (country: MerchantCountry) => setCountryDraft(countryToDraft(country));
   useEffect(() => {
     const country = countries[0];
@@ -98,6 +111,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
       const saved = await api<Record<string, string | boolean>>(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
       setMessage(configSaveSuccessMessage(saved));
+      await reloadConfigVersions();
     } catch (error) {
       setError(error instanceof Error ? error.message : "保存配置失败");
     }
@@ -110,6 +124,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
       setForm(saved);
       setMessage(successMessage);
       notify("success", successMessage);
+      await reloadConfigVersions();
     } catch (err) {
       const detail = err instanceof Error ? err.message : "保存开关失败";
       setError(detail);
@@ -182,6 +197,12 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
   const a2cConfigured = Boolean(form.a2cAppId && form.a2cAppSecret);
   const aiConfigured = Boolean(providerKey);
   const telegramBound = form.telegramHandoffChatStatus === "bound";
+  const restoreConfigVersion = async (version: MerchantConfigVersion) => {
+    const restored = await api<Record<string, string | boolean>>(`${endpoints.versions}/${version.id}/restore`, { method: "POST" });
+    setForm(restored);
+    await reloadConfigVersions();
+    notify("success", `已恢复配置版本 ${version.version}`, "恢复操作已生成新的配置版本记录。");
+  };
 
   return <section className="settings-page">
     <ResourceErrorNotice label="商户选项" error={merchantsState.error} onRetry={merchantsState.reload} />
@@ -255,5 +276,6 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
       </SettingsSection>
     </SettingsWorkspace>
+    <ConfigVersionHistory rows={configVersions} loading={versionsLoading} canRestore={canEdit} onRestore={restoreConfigVersion} />
   </section>;
 }

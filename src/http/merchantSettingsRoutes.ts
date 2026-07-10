@@ -8,9 +8,11 @@ import { buildMerchantDashboard } from "../services/merchantDashboard.js";
 import {
   getMaskedMerchantConfig,
   getMerchantAgentProfile,
+  listMerchantConfigVersions,
   maskConfig,
   patchMaskedMerchantConfig,
-  patchMerchantAgentProfile
+  patchMerchantAgentProfile,
+  restoreMerchantConfigVersion
 } from "../services/merchantSettings.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
 import { registerMerchantConfigCheckRoutes } from "./merchantConfigCheckRoutes.js";
@@ -20,6 +22,7 @@ import { registerMerchantRegistrationTutorialRoutes } from "./merchantRegistrati
 import { registerMerchantTelegramRoutes } from "./merchantTelegramRoutes.js";
 import { scopedMerchantId } from "./routeHelpers.js";
 import { sendResult } from "./routeResponses.js";
+import { requestUser } from "../auth.js";
 
 type MerchantSettingsRoutesDeps = {
   config: AppConfig;
@@ -45,7 +48,13 @@ function registerAdminMerchantSettingsRoutes(app: FastifyInstance, deps: Merchan
     getMaskedMerchantConfig(deps.repos, request.params.id)
   );
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/merchants/:id/config", { preHandler: deps.adminOnly }, async (request, reply) =>
-    sendResult(reply, patchMaskedMerchantConfig(deps.repos, request.params.id, request.body ?? {}))
+    sendResult(reply, patchMaskedMerchantConfig(deps.repos, request.params.id, request.body ?? {}, requestUser(request).name))
+  );
+  app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/versions", { preHandler: deps.adminOnly }, async (request) =>
+    listMerchantConfigVersions(deps.repos, request.params.id)
+  );
+  app.post<{ Params: { id: string; versionId: string } }>("/api/admin/merchants/:id/config/versions/:versionId/restore", { preHandler: deps.adminOnly }, async (request, reply) =>
+    sendResult(reply, restoreMerchantConfigVersion(deps.repos, request.params.id, request.params.versionId, requestUser(request).name))
   );
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/agent-profile", { preHandler: deps.adminOnly }, async (request) =>
     getMerchantAgentProfile(deps.repos, request.params.id)
@@ -62,7 +71,13 @@ function registerMerchantOwnSettingsRoutes(app: FastifyInstance, deps: MerchantS
     getMaskedMerchantConfig(deps.repos, scopedMerchantId(request))
   );
   app.patch<{ Body: Record<string, unknown> }>("/api/merchant/config", { preHandler: deps.merchantAdmins }, async (request, reply) =>
-    sendResult(reply, patchMaskedMerchantConfig(deps.repos, scopedMerchantId(request), request.body ?? {}))
+    sendResult(reply, patchMaskedMerchantConfig(deps.repos, scopedMerchantId(request), request.body ?? {}, requestUser(request).name))
+  );
+  app.get("/api/merchant/config/versions", { preHandler: deps.merchantRoles }, async (request) =>
+    listMerchantConfigVersions(deps.repos, scopedMerchantId(request))
+  );
+  app.post<{ Params: { versionId: string } }>("/api/merchant/config/versions/:versionId/restore", { preHandler: deps.merchantAdmins }, async (request, reply) =>
+    sendResult(reply, restoreMerchantConfigVersion(deps.repos, scopedMerchantId(request), request.params.versionId, requestUser(request).name))
   );
   app.get("/api/merchant/agent-profile", { preHandler: deps.merchantRoles }, async (request) =>
     getMerchantAgentProfile(deps.repos, scopedMerchantId(request))

@@ -369,6 +369,21 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(flow_id) REFERENCES script_flows(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS merchant_config_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      changed_keys_json TEXT NOT NULL DEFAULT '[]',
+      note TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, version)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_merchant_config_versions_merchant
+      ON merchant_config_versions(merchant_id, version DESC);
+
     CREATE TABLE IF NOT EXISTS conversation_script_state (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT NOT NULL,

@@ -11,7 +11,8 @@ describe("frontend config page helpers", () => {
       a2cAccounts: "/api/merchant/a2c/accounts",
       a2cSync: "/api/merchant/a2c/accounts/sync",
       teacherTgLinks: "/api/merchant/teacher-tg-links",
-      check: "/api/merchant/config/check"
+      check: "/api/merchant/config/check",
+      versions: "/api/merchant/config/versions"
     });
   });
 
@@ -22,7 +23,8 @@ describe("frontend config page helpers", () => {
       a2cAccounts: "/api/admin/merchants/merchant-1/a2c/accounts",
       a2cSync: "/api/admin/merchants/merchant-1/a2c/accounts/sync",
       teacherTgLinks: "/api/admin/merchants/merchant-1/teacher-tg-links",
-      check: "/api/admin/merchants/merchant-1/config/check"
+      check: "/api/admin/merchants/merchant-1/config/check",
+      versions: "/api/admin/merchants/merchant-1/config/versions"
     });
   });
 
