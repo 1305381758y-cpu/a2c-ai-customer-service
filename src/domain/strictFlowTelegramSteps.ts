@@ -34,10 +34,33 @@ export function buildTelegramStepReply(input: StrictFlowInput, context: Telegram
       naturalizeStrictReply(input, context.step, context.text, context.language, flowScriptLine(input, "not_registered_ack", context.language), "wait_registration", "not_registered")
     );
   }
+  // Asking why Telegram is needed is not confirmation and must never send the
+  // tutor link or trigger handoff. Keep the current step and answer first.
+  if (asksTelegramExplanation(context.text) || context.contextualLabel === "ask_tg_register" || context.inferredIntent === "ask_tg_register") {
+    return buildTelegramQuestionReply(input, context);
+  }
   if (context.contextualLabel === "telegram_submission") {
     return buildTelegramLinkReply(input, context.language);
   }
   if (context.step === "telegram_confirm") return buildTelegramConfirmReply(input, context);
+  if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
+  return buildCollectTelegramReply(input, context);
+}
+
+function buildTelegramQuestionReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
+  // Reuse each node's normal question handling so the answer still moves the
+  // customer toward the next action, while never entering the tutor-link
+  // branch. The collect step intentionally becomes the download step here.
+  if (context.step === "telegram_confirm") {
+    const { language, text } = context;
+    return buildStrictFlowResponse(
+      input,
+      language,
+      "telegram_confirm",
+      "need_tg_register",
+      naturalizeStrictReply(input, "telegram_confirm", text, language, flowScriptLine(input, "telegram_confirm_question", language), "telegram_confirm", "ask_tg_register")
+    );
+  }
   if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
   return buildCollectTelegramReply(input, context);
 }

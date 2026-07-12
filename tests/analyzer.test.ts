@@ -13,6 +13,10 @@ describe("message analyzer", () => {
     expect(analyzeMessage(url).phone).toBe("");
   });
 
+  it("extracts an eight-digit phone embedded in a registration completion message", () => {
+    expect(extractPhone("好的，打开了，我已经注册完毕了78567876")).toBe("78567876");
+  });
+
   it("detects languages", () => {
     expect(detectLanguage("你好")).toBe("zh");
     expect(detectLanguage("hello")).toBe("en");

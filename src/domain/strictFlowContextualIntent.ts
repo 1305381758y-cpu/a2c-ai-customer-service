@@ -55,6 +55,17 @@ export function buildRuleContextualIntent(
   if (step === "wait_registration" && hasIncompleteRegistrationPhone(text)) {
     return base("incomplete_phone", { nextAction: "need_complete_phone", reason: "registration done with incomplete phone" });
   }
+  // A Telegram explanation question must stay in the current node even if a
+  // generic classifier incorrectly labels it as a Telegram submission.
+  if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && asksTelegramExplanation(text)) {
+    return base("ask_tg_register", {
+      answeredPreviousQuestion: Boolean(previousAssistantMessage),
+      isQuestion: true,
+      shouldPause: false,
+      nextAction: "answer Telegram question and keep current step",
+      reason: "Telegram explanation question"
+    });
+  }
   if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
   if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
 

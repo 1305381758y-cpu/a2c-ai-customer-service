@@ -128,4 +128,13 @@ describe("strict flow wait-registration step", () => {
     expect(result.stage).toBe("need_tg_register");
     expect(result.reply).toContain("Telegram");
   });
+
+  it("moves to Telegram confirmation when the phone is embedded in the completion message", () => {
+    const result = reply("好的，打开了，我已经注册完毕了78567876");
+
+    expect(result.nextFlowStep).toBe("telegram_confirm");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).toContain("Telegram");
+    expect(result.reply).not.toContain("请将您注册时使用的电话号码");
+  });
 });

@@ -108,6 +108,16 @@ describe("strict flow Telegram steps", () => {
     expect(result.reply).toContain("https://t.me/teacher");
   });
 
+  it("answers why Telegram is needed without sending the tutor link or handing off", () => {
+    const result = reply("为什么要用Telegram", "telegram_confirm");
+
+    expect(result.nextFlowStep).toBe("telegram_confirm");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).not.toContain("https://t.me/teacher");
+    expect(result.reply).not.toContain("500 到 2800 BOB");
+    expect(result.reply).toMatch(/Telegram/);
+  });
+
   it("sends the teacher link after a customer submits an @ Telegram username", () => {
     const result = reply("@telegram888", "collect_telegram");
 

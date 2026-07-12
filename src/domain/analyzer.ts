@@ -72,7 +72,10 @@ const telegramRegexes = [
 ];
 
 export function extractPhone(text: string): string {
-  const matches = stripUrls(text).match(/(?:\+?\d[\s-]?){8,16}\d/g);
+  // Registration messages can contain surrounding words, such as
+  // "注册完成了 78567876". Keep the whole numeric token and accept the
+  // eight-digit numbers used by the configured test/market flow.
+  const matches = stripUrls(text).match(/\+?\d(?:[\s-]?\d){7,15}/g);
   if (!matches) return "";
   const normalized = matches
     .map((match) => match.replace(/[^\d+]/g, ""))

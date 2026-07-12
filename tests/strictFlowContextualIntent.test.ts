@@ -86,4 +86,17 @@ describe("strictFlowContextualIntent", () => {
     expect(result.intent).toBe("incomplete_phone");
     expect(result.nextAction).toBe("need_complete_phone");
   });
+
+  it("keeps a Telegram explanation question in the Telegram step", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("telegram_confirm"),
+      analysis: analyzeMessage("为什么要用Telegram", "zh"),
+      customerText: "为什么要用Telegram",
+      inferredIntent: "ask_tg_register"
+    });
+
+    expect(result.intent).toBe("ask_tg_register");
+    expect(result.nextAction).toBe("answer Telegram question and keep current step");
+    expect(result.isQuestion).toBe(true);
+  });
 });
