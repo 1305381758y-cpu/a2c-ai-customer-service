@@ -400,6 +400,142 @@ th { background: var(--surface-soft); }
   overflow: auto;
 }
 
+/* Conversation workspace: keep the timeline dominant and make the right rail
+   inspectable instead of rendering every auxiliary block at once. */
+.conversation-detail.wechat-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(248px, 288px);
+}
+
+.training-loop-panel {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.assistant-collapsible {
+  padding: 0;
+}
+
+.assistant-collapsible > summary {
+  padding: 10px 12px;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.assistant-collapsible > summary::-webkit-details-marker,
+.script-progress > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assistant-collapsible > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.assistant-collapsible[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+}
+
+.assistant-collapsible[open] > summary::after { content: "-"; }
+
+.assistant-collapsible > :not(summary) {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.assistant-collapsible > p,
+.assistant-collapsible > small,
+.assistant-collapsible > strong {
+  display: block;
+  margin-top: 9px;
+}
+
+.script-progress {
+  padding: 0;
+  min-height: 38px;
+  max-height: 46px;
+  overflow: hidden;
+}
+
+.script-progress[open] {
+  max-height: 154px;
+  overflow: auto;
+}
+
+.script-progress > summary {
+  min-height: 38px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.script-progress > summary::after {
+  content: "+";
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.script-progress[open] > summary::after { content: "-"; }
+
+.script-progress .script-rail {
+  padding: 0 12px 10px;
+  gap: 4px;
+}
+
+.script-progress .script-rail > div {
+  gap: 3px;
+  font-size: 10px;
+}
+
+.script-progress .script-rail span {
+  width: 18px;
+  height: 18px;
+}
+
+.send.chat-composer {
+  grid-template-rows: auto minmax(48px, auto) auto;
+}
+
+.composer-tabs {
+  max-height: 42px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
+.composer-tabs button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.composer-search { display: none; }
+
+.composer-body {
+  padding: 7px 10px;
+}
+
+.composer-body textarea {
+  min-height: 52px;
+  max-height: 88px;
+  line-height: 1.45;
+}
+
+.composer-footer {
+  gap: 8px;
+  padding: 6px 10px 8px;
+}
+
+.composer-tools {
+  gap: 5px;
+}
+
+.composer-tools input { max-width: 220px; }
+
 .portal-page-dashboard .metrics,
 .portal-page-aiCalls .metrics {
   align-items: stretch;

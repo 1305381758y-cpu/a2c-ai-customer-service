@@ -46,15 +46,16 @@ export function ScriptProgress({ flowStep, scriptFlow }: { flowStep: string; scr
     : STRICT_FLOW_STEP_LABELS;
   const steps = runtimeSteps.length ? runtimeSteps : STRICT_FLOW_STEP_LABELS;
   const activeIndex = Math.max(0, steps.findIndex(([key]) => normalizeBusinessStep(key) === normalizeBusinessStep(flowStep)));
-  return <div className="script-progress">
-    <div className="script-progress-head"><strong>脚本流程：{scriptFlow?.flow.name || "严格业务流程"}</strong><span>{scriptFlow ? `版本 ${scriptFlow.flow.version}` : "系统内置"}</span></div>
-    <div className="script-rail">
+  const currentText = steps[activeIndex]?.[1] || label(flowStep);
+  return <details className="script-progress">
+    <summary className="script-progress-head"><strong>流程：{currentText}</strong><span>{steps.length} 步 · {scriptFlow ? `版本 ${scriptFlow.flow.version}` : "系统内置"}</span></summary>
+    <div className="script-rail" aria-label="流程节点">
       {steps.map(([key, text], index) => <div key={key} className={index <= activeIndex ? "done" : ""}>
         <span>{index < activeIndex ? <Check size={12}/> : index + 1}</span>
         <small>{text}</small>
       </div>)}
     </div>
-  </div>;
+  </details>;
 }
 
 export function firstSuggestedReply(review: ConversationReviewResponse) {
