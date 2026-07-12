@@ -118,6 +118,15 @@ describe("strict flow Telegram steps", () => {
     expect(result.reply).toMatch(/Telegram/);
   });
 
+  it("answers repeated trust questions while staying in the current Telegram node", () => {
+    const result = reply("Telegram不是骗人的软件吗？", "telegram_confirm");
+
+    expect(result.nextFlowStep).toBe("telegram_confirm");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).toMatch(/规则|页面|转账|充值|Telegram/);
+    expect(result.reply).not.toContain("https://t.me/teacher");
+  });
+
   it("sends the teacher link after a customer submits an @ Telegram username", () => {
     const result = reply("@telegram888", "collect_telegram");
 

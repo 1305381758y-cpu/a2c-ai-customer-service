@@ -1,5 +1,13 @@
 import type { ContextualIntentLabel, InternalIntentLabel } from "./analyzer.js";
-import { asksGenericQuestionPermission, asksTelegramExplanation } from "./strictFlowPredicates.js";
+import {
+  asksEarningConcern,
+  asksGenericQuestionPermission,
+  asksInvestmentConcern,
+  asksPaymentConcern,
+  asksTelegramExplanation,
+  asksTrustConcern,
+  looksLikeQuestion
+} from "./strictFlowPredicates.js";
 import { buildStrictFlowResponse, naturalizeStrictReply } from "./strictFlowResponseBuilder.js";
 import { applyScriptVariables, configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { stageForFlowStep } from "./strictFlowState.js";
@@ -39,12 +47,45 @@ export function buildTelegramStepReply(input: StrictFlowInput, context: Telegram
   if (asksTelegramExplanation(context.text) || context.contextualLabel === "ask_tg_register" || context.inferredIntent === "ask_tg_register") {
     return buildTelegramQuestionReply(input, context);
   }
+  if (isRepeatedNodeQuestion(context)) {
+    return buildStrictFlowResponse(
+      input,
+      context.language,
+      context.step,
+      "need_tg_register",
+      naturalizeStrictReply(
+        input,
+        context.step,
+        context.text,
+        context.language,
+        flowScriptLine(input, context.step === "telegram_confirm" ? "telegram_confirm_question" : "collect_telegram_wait", context.language),
+        context.step,
+        context.contextualLabel
+      )
+    );
+  }
   if (context.contextualLabel === "telegram_submission") {
     return buildTelegramLinkReply(input, context.language);
   }
   if (context.step === "telegram_confirm") return buildTelegramConfirmReply(input, context);
   if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
   return buildCollectTelegramReply(input, context);
+}
+
+function isRepeatedNodeQuestion(context: TelegramStepReplyContext): boolean {
+  const text = context.text.trim();
+  if (context.contextualLabel === "telegram_username_help" || context.contextualLabel === "no_telegram" || context.contextualLabel === "telegram_installed") return false;
+  return context.contextualLabel === "trust_concern" ||
+    context.contextualLabel === "payment_concern" ||
+    context.contextualLabel === "investment_concern" ||
+    context.contextualLabel === "earning_concern" ||
+    context.contextualLabel === "workflow_question" ||
+    context.contextualLabel === "need_help" ||
+    asksTrustConcern(text) ||
+    asksPaymentConcern(text) ||
+    asksInvestmentConcern(text) ||
+    asksEarningConcern(text) ||
+    (!asksTelegramExplanation(text) && looksLikeQuestion(text));
 }
 
 function buildTelegramQuestionReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
