@@ -17,6 +17,12 @@ describe("strict flow follow-up policy", () => {
     expect(buildStrictFlowFollowUp("collect_telegram", "en")).toContain("Telegram");
   });
 
+  it("uses the customer's Spanish language for idle follow-ups", () => {
+    expect(buildStrictFlowFollowUp("wait_registration", "es")).toContain("¿En qué etapa del registro está ahora?");
+    expect(buildStrictFlowFollowUp("wait_registration", "es-BO")).toContain("¿En qué etapa del registro está ahora?");
+    expect(buildStrictFlowFollowUp("wait_registration", "es")).not.toContain("您注册到哪一步");
+  });
+
   it("falls back to a generic current-step reminder for unknown steps", () => {
     expect(buildStrictFlowFollowUp("unknown-step", "unknown")).toContain("准备好了");
     expect(buildStrictFlowFollowUp("unknown-step", "en")).toContain("current step");

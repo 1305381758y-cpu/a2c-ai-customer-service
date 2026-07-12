@@ -26,7 +26,7 @@ import { isNegativeTelegramAnswer } from "./strictFlowTelegram.js";
 import { buildRegistrationStepReply } from "./strictFlowRegistrationSteps.js";
 import type { ControlledQuestionType, StrictContextualIntent, StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
 export { STRICT_FLOW_STEPS, type ControlledQuestionType, type StrictContextualIntent, type StrictFlowInput, type StrictFlowReply, type StrictFlowStep } from "./strictFlowTypes.js";
-export { buildStrictFlowFollowUp } from "./strictFlowFollowUp.js";
+export { buildStrictFlowFollowUp, normalizeFollowUpLanguage } from "./strictFlowFollowUp.js";
 export { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
 export { strictFlowNeedsInviteCode } from "./strictFlowInvitePolicy.js";
 export { isStrictFlowEnabled } from "./strictFlowMarketPolicy.js";

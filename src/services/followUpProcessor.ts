@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import { buildStrictFlowFollowUp } from "../domain/strictFlow.js";
+import { buildStrictFlowFollowUp, normalizeFollowUpLanguage } from "../domain/strictFlow.js";
 import type { Repositories } from "../repositories.js";
 import type { ConversationFollowUpResult } from "./conversationEngine.js";
 import { createA2CFollowUpSender, type FollowUpSender } from "./followUpSender.js";
@@ -50,9 +50,10 @@ export class FollowUpProcessor {
       const country = this.repos.getMerchantCountry(conversation.countryId);
       const runtimeConfig = appConfigForMerchant(this.config, merchantConfig, country);
       const flowStep = conversation.flowStep || conversation.stage || "unknown";
+      const language = normalizeFollowUpLanguage(conversation.language, normalizeFollowUpLanguage(country?.defaultLanguage || "zh"));
       const content = this.contentBuilder.build({
         flowStep,
-        language: conversation.language || country?.defaultLanguage || "zh"
+        language
       });
       const sendResult = await this.sender.send({
         runtimeConfig,

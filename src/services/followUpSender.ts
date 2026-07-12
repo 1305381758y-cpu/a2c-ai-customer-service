@@ -1,4 +1,5 @@
 import { A2CClient } from "../clients/a2c.js";
+import { normalizeFollowUpLanguage } from "../domain/strictFlow.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantCountryRecord, Repositories } from "../repositories.js";
 import { recordOutboundConversationMessage, type OutboundConversationRecordResult } from "./outboundConversationRecorder.js";
@@ -39,7 +40,7 @@ export function createA2CFollowUpSender(repos: Repositories): FollowUpSender {
         message: {
           content: input.content,
           msgType: "text",
-          language: input.conversation.language || input.country?.defaultLanguage || "unknown",
+          language: normalizeFollowUpLanguage(input.conversation.language, normalizeFollowUpLanguage(input.country?.defaultLanguage || "unknown", "unknown")),
           intent: "unknown",
           rawPayload: {
             replyMode: "strict_flow",
