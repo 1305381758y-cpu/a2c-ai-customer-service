@@ -1,0 +1,259 @@
+/* V2 design system: shared visual and interaction baseline for every portal page. */
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --surface-strong: #eef3f8;
+  --line: #dbe3ee;
+  --line-soft: #e8edf4;
+  --text: #17202f;
+  --muted: #7b8798;
+  --muted-strong: #526173;
+  --brand: #2563eb;
+  --brand-strong: #1d4ed8;
+  --brand-soft: #eff6ff;
+  --green: #027a48;
+  --green-soft: #ecfdf3;
+  --amber: #b54708;
+  --amber-soft: #fffaeb;
+  --red: #b42318;
+  --red-soft: #fff1f1;
+  --shadow: 0 8px 24px rgba(16, 24, 40, .06);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  grid-template-columns: 232px minmax(0, 1fr);
+  background: var(--bg);
+}
+
+aside {
+  background: #0f172a;
+  padding: 20px 16px;
+  gap: 16px;
+}
+
+.side-brand > span {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--brand);
+}
+
+.side-brand h2 { font-size: 17px; }
+.side-brand small { color: #9aa8bb; }
+
+.side-user {
+  padding: 12px;
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .1);
+}
+
+aside nav { gap: 4px; }
+
+aside nav button {
+  min-height: 38px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  color: #b6c2d2;
+  font-size: 13px;
+}
+
+aside nav button.active {
+  background: var(--brand);
+  border-color: rgba(255, 255, 255, .22);
+  color: #fff;
+}
+
+main {
+  padding: 24px 28px 32px;
+  min-width: 0;
+}
+
+header {
+  margin: -24px -28px 24px;
+  padding: 22px 28px 16px;
+  background: rgba(245, 247, 250, .9);
+  border-bottom-color: var(--line);
+}
+
+header h1 {
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+header p { color: var(--muted-strong); }
+
+section {
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .025), 0 8px 24px rgba(16, 24, 40, .035);
+}
+
+button {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+button:hover { box-shadow: 0 4px 12px rgba(37, 99, 235, .14); }
+
+input, select, textarea { border-radius: 8px; }
+
+.metrics { gap: 12px; }
+.metrics section { min-height: 112px; }
+.metrics section strong { font-size: 30px; }
+
+.filters,
+.dashboard-filter,
+.upload-strip {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.table { border-color: var(--line); box-shadow: none; }
+th { background: var(--surface-soft); }
+
+.status-pill { min-height: 22px; padding: 2px 8px; }
+
+.conversation-workspace {
+  grid-template-columns: minmax(232px, 260px) minmax(280px, 320px) minmax(0, 1fr);
+  gap: 12px;
+  height: calc(100dvh - 132px);
+  min-height: 600px;
+}
+
+.conversation-workspace.customers-collapsed {
+  grid-template-columns: minmax(232px, 260px) 48px minmax(0, 1fr);
+}
+
+.conversation-workspace > section,
+.conversation-detail > section,
+.wechat-chat-column {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.conversation-workspace > section { padding: 12px; }
+
+.account-list-head,
+.panel-title,
+.chat-header { border-bottom-color: var(--line-soft); }
+
+.list-item { box-shadow: none; border-color: var(--line); }
+.list-item.active { background: var(--brand-soft); border-color: var(--brand); }
+
+.conversation-detail.wechat-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(272px, 320px);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.conversation-detail.wechat-detail.assistant-collapsed {
+  grid-template-columns: minmax(0, 1fr) 40px;
+}
+
+.wechat-chat-column {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+}
+
+.chat-window {
+  padding: 10px 4px;
+  background: var(--surface-soft);
+  border-radius: 8px;
+}
+
+.chat-composer,
+.send.chat-composer {
+  border-color: var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.script-flow-page {
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.script-flow-list,
+.script-flow-detail,
+.script-step-list,
+.script-step-editor,
+.version-panel {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.script-step-list { scrollbar-gutter: stable; }
+
+.script-step-card { border-color: var(--line); box-shadow: none; }
+.script-step-card.active { background: var(--brand-soft); border-color: var(--brand); }
+
+.sticky-actions { border-color: var(--line); box-shadow: var(--shadow); }
+
+.empty-state,
+.error-state,
+.permission-state {
+  min-height: 160px;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--muted-strong);
+}
+
+.error { border-radius: 8px; }
+
+@media (max-width: 1280px) {
+  .conversation-workspace { grid-template-columns: minmax(210px, 240px) minmax(260px, 300px) minmax(0, 1fr); }
+  .conversation-detail.wechat-detail { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
+@media (max-width: 1024px) {
+  .app { grid-template-columns: 72px minmax(0, 1fr); }
+  aside { padding: 16px 10px; }
+  .side-brand div,
+  .side-user,
+  aside nav button svg + span,
+  aside nav button:not(.active) { font-size: 0; }
+  .side-brand { justify-content: center; }
+  aside nav button { justify-content: center; padding: 8px; }
+  main { padding: 20px; }
+  header { margin: -20px -20px 20px; padding: 18px 20px 14px; }
+  .conversation-workspace { grid-template-columns: minmax(210px, 240px) minmax(0, 1fr); min-height: 620px; }
+  .conversation-workspace > .customer-list { display: none; }
+  .conversation-workspace.customers-collapsed { grid-template-columns: minmax(210px, 240px) minmax(0, 1fr); }
+  .conversation-detail.wechat-detail { grid-template-columns: minmax(0, 1fr); }
+  .conversation-detail.wechat-detail > .training-loop-panel { display: none; }
+}
+
+@media (max-width: 720px) {
+  .app { display: block; }
+  aside { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }
+  .side-brand { flex: 0 0 auto; }
+  aside nav { display: flex; flex: 1; min-width: max-content; }
+  aside nav button { width: auto; }
+  aside .logout { margin-top: 0; width: auto; }
+  main { padding: 16px; }
+  header { margin: -16px -16px 16px; padding: 16px; }
+  header h1 { font-size: 22px; }
+  .conversation-workspace { display: block; height: auto; min-height: 0; }
+  .conversation-workspace > section { min-height: 260px; margin-bottom: 12px; }
+  .conversation-workspace > .account-list { min-height: 220px; }
+  .conversation-workspace > .customer-list { display: flex; }
+  .conversation-detail.wechat-detail { min-height: 680px; }
+}

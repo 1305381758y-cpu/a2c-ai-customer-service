@@ -10,6 +10,7 @@
 @import "./styles/components.css";
 @import "./styles/conversations.css";
 @import "./styles/flow-learning.css";
+@import "./styles/design-system-v2.css";
 
 @media (max-width: 1200px) {
   .conversation-workspace { grid-template-columns: 1fr; height: auto; min-height: 0; }
