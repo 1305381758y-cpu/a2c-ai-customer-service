@@ -22,7 +22,7 @@ import { countryLabel, displayValue, formatDateTime, getTimeDisplayMode, setTime
 import { notify } from "../ui/toast.js";
 import { UsersPage } from "../users/UsersPage.js";
 import { api, loadRows } from "./api.js";
-import { navigationForRole, portalViewLabel, resolvePortalView, roleName, type PortalView } from "./navigation.js";
+import { navigationForRole, portalViewDescription, portalViewLabel, resolvePortalView, roleName, type PortalView } from "./navigation.js";
 
 export function Portal({ user, requestedView, setView, onLogout }: { user: User; requestedView: string; setView: (view: PortalView) => void; onLogout: () => void }) {
   const [timeMode, setTimeModeState] = useState<TimeDisplayMode>(() => getTimeDisplayMode());
@@ -42,11 +42,11 @@ export function Portal({ user, requestedView, setView, onLogout }: { user: User;
     <aside>
       <div className="side-brand"><span>智</span><div><h2>A2C 智能客服</h2><small>智能客服工作台</small></div></div>
       <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
-      <nav>{navigation.map(({ key, label, icon: Icon }) => <button key={key} className={activeView === key ? "active" : ""} onClick={() => setView(key)}><Icon size={17}/>{label}</button>)}</nav>
+      <nav>{navigation.map(({ key, label, icon: Icon, group }, index) => <React.Fragment key={key}>{(index === 0 || navigation[index - 1]?.group !== group) && <span className="nav-group-label">{group}</span>}<button title={label} key={key} className={activeView === key ? "active" : ""} onClick={() => setView(key)}><Icon size={17}/><span className="nav-label">{label}</span></button></React.Fragment>)}</nav>
       <ConfirmActionButton className="logout" busyText="退出中..." title="确认退出登录？" detail="退出后需要重新输入账号密码才能进入后台。" confirmText="退出登录" onConfirm={async () => { await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</ConfirmActionButton>
     </aside>
     <main>
-      <header><div><h1>{portalViewLabel(user.role, activeView)}</h1><p>{user.name} · {roleName(user.role)}</p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
+      <header><div><h1>{portalViewLabel(user.role, activeView)}</h1><p>{portalViewDescription(activeView)} <span className="header-context">{user.name} · {roleName(user.role)}</span></p></div><div className="header-actions"><label className="time-zone-toggle"><span>时间</span><select value={timeMode} onChange={(event) => changeTimeMode(event.target.value as TimeDisplayMode)} aria-label="时间显示"><option value="beijing">北京时间</option><option value="country">国家时间</option></select><small>{timeDisplayModeLabel(timeMode)}</small></label><span className="live-pill"><CheckCircle2 size={15}/>线上服务已连接</span></div></header>
       <PortalPage user={user} view={activeView} timeMode={timeMode} />
     </main>
   </div>;
@@ -55,7 +55,7 @@ export function Portal({ user, requestedView, setView, onLogout }: { user: User;
 function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; timeMode: TimeDisplayMode }) {
   const platform = user.role === "platform_admin";
   const canManage = user.role !== "merchant_operator";
-  switch (view) {
+  const page = (() => { switch (view) {
     case "dashboard": return <Dashboard platform={platform} api={api} timeMode={timeMode} />;
     case "aiCalls": return <AiCallsPage platform={platform} timeMode={timeMode} />;
     case "operationLogs": return <OperationLogsPage platform={platform} timeMode={timeMode} />;
@@ -73,5 +73,6 @@ function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; ti
     case "samples": return <SamplesPage platform={platform} />;
     case "conversations": return <Conversations platform={platform} timeMode={timeMode} canApplyTraining={!platform && canManage} canDelete={canManage} />;
     case "handoffs": return <Conversations platform={platform} handoffs timeMode={timeMode} canApplyTraining={!platform && canManage} canDelete={canManage} />;
-  }
+  }})();
+  return <div className={`portal-page-v2 portal-page-${view}`}>{page}</div>;
 }

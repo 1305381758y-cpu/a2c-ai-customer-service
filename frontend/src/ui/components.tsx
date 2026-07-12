@@ -7,7 +7,7 @@ import { notify } from "./toast.js";
 
 export function StateView({ type, title, detail, actionLabel, onAction }: { type: "loading" | "empty" | "error" | "permission" | "noResults"; title: string; detail?: string; actionLabel?: string; onAction?: () => void | Promise<void> }) {
   const isLoading = type === "loading";
-  const icon = isLoading ? <Loader2 size={22} className="spin" /> : type === "error" ? <AlertTriangle size={22} /> : <Search size={22} />;
+  const icon = isLoading ? <Loader2 size={22} className="spin" /> : type === "error" || type === "permission" ? <AlertTriangle size={22} /> : <Search size={22} />;
   return <div className={`state-view ${type}`} role={type === "error" ? "alert" : "status"}>
     <div className="state-icon">{icon}</div>
     <strong>{title}</strong>
@@ -67,7 +67,7 @@ export function Table<T extends Record<string, any>>({
     <div className="table-scroll" tabIndex={columns.length > 6 ? 0 : undefined} aria-label={columns.length > 6 ? "表格可横向滚动" : undefined}>
       <table>
         <thead><tr>{columns.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead>
-        <tbody>{loading ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="loading" title="加载中" detail="正在读取数据，请稍候。" /></td></tr> : error ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="error" title="加载失败" detail={error} actionLabel={onRetry ? "重新加载" : undefined} onAction={onRetry} /></td></tr> : rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }}>{columns.map((c) => <td key={c}>{displayValue(c, row[c], row)}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}><StateView type="empty" title={emptyTitle} detail={emptyDetail} /></td></tr>}</tbody>
+        <tbody>{loading ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="loading" title="加载中" detail="正在读取数据，请稍候。" /></td></tr> : error ? <tr className="empty-row"><td colSpan={columns.length}><StateView type="error" title="加载失败" detail={error} actionLabel={onRetry ? "重新加载" : undefined} onAction={onRetry} /></td></tr> : rows.length ? rows.map((row, i) => { const key = rowKey?.(row, i) ?? row.id ?? i; return <tr key={key} className={`${onRow ? "clickable" : ""} ${activeKey !== undefined && String(key) === String(activeKey) ? "selected" : ""}`} onClick={() => { if (!onRow) return; setInternalSelected(key); onRow(row); }} onKeyDown={(event) => { if (!onRow || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); setInternalSelected(key); onRow(row); }} tabIndex={onRow ? 0 : undefined}>{columns.map((c) => <td key={c}>{displayValue(c, row[c], row)}</td>)}</tr>; }) : <tr className="empty-row"><td colSpan={columns.length}><StateView type="empty" title={emptyTitle} detail={emptyDetail} /></td></tr>}</tbody>
       </table>
     </div>
   </div>;
@@ -81,6 +81,12 @@ export function AsyncButton({ children, busyText, onClick, className, disabled =
 
 export function ConfirmActionButton({ children, title, detail, confirmText = "确认操作", cancelText = "取消", busyText, className, disabled = false, onConfirm }: { children: React.ReactNode; title: string; detail: string; confirmText?: string; cancelText?: string; busyText: string; className?: string; disabled?: boolean; onConfirm: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
   return <>
     <button className={className} disabled={disabled} onClick={() => setOpen(true)}>{children}</button>
     {open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
@@ -138,5 +144,6 @@ export function FilterBar({ filters, setFilters, fields, selects = {}, resetValu
   })}<AsyncButton onClick={onApply} busyText="筛选中..."><Search size={16}/>筛选</AsyncButton><button type="button" className="ghost" onClick={() => {
     const reset = Object.fromEntries(Object.keys(filters).map((key) => [key, key === "limit" ? "100" : ""]));
     setFilters({ ...reset, ...(resetValues || {}) });
+    void onApply();
   }}><X size={16}/>重置</button></div>;
 }
