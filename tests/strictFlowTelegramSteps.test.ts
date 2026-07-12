@@ -107,4 +107,14 @@ describe("strict flow Telegram steps", () => {
     expect(result.stage).toBe("ready_for_handoff");
     expect(result.reply).toContain("https://t.me/teacher");
   });
+
+  it("sends the teacher link after a customer submits an @ Telegram username", () => {
+    const result = reply("@telegram888", "collect_telegram");
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.reply).toContain("https://t.me/teacher");
+    expect(result.reply).toMatch(/点击|联系导师|主动联系/);
+    expect(result.reply).not.toMatch(/我加您|加你/);
+  });
 });

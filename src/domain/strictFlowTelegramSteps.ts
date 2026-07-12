@@ -34,6 +34,9 @@ export function buildTelegramStepReply(input: StrictFlowInput, context: Telegram
       naturalizeStrictReply(input, context.step, context.text, context.language, flowScriptLine(input, "not_registered_ack", context.language), "wait_registration", "not_registered")
     );
   }
+  if (context.contextualLabel === "telegram_submission") {
+    return buildTelegramLinkReply(input, context.language);
+  }
   if (context.step === "telegram_confirm") return buildTelegramConfirmReply(input, context);
   if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
   return buildCollectTelegramReply(input, context);
@@ -122,16 +125,36 @@ function telegramLinkInstruction(input: StrictFlowInput, language: string, link:
   const custom = flowScriptLine(input, "collect_telegram", language);
   if (custom && !/(@ 开头|@开头|Telegram 用户名|Telegram username|nome de usuário do Telegram|usuario de Telegram|usuario de telegram)/i.test(custom)) {
     const withVariables = applyScriptVariables(custom, input, language, "");
-    return withVariables.includes(link) ? withVariables : `${withVariables}\n${link}`;
+    const cleaned = removeCustomerAddWording(withVariables);
+    const withContactInstruction = ensureTeacherContactInstruction(cleaned, language);
+    return withContactInstruction.includes(link) ? withContactInstruction : `${withContactInstruction}\n${link}`;
   }
   if (language === "en") {
-    return `Now I will send you the teacher's Telegram link. She will guide you to complete the tasks and then tell you how to withdraw.\n${link}\nPlease follow her instructions. She will continue guiding you so you can earn 500 to 2800 BOB net salary per day.`;
+    return `I am sending you the teacher's Telegram link now. Please open it and contact her directly. She will guide you through the tasks and explain the next steps.\n${link}\nPlease follow her instructions.`;
   }
   if (language === "pt-BR") {
-    return `Agora vou enviar o link do Telegram da professora. Ela vai orientar você a concluir as tarefas e depois explicar como sacar.\n${link}\nSiga as instruções dela. Ela continuará orientando você para ganhar de 500 a 2800 BOB de salário líquido por dia.`;
+    return `Agora vou enviar o link do Telegram da professora. Abra o link e entre em contato diretamente com ela. Ela vai orientar você nas tarefas e explicar os próximos passos.\n${link}\nSiga as instruções dela.`;
   }
   if (language === "es") {
-    return `Ahora le voy a enviar el enlace de Telegram de la profesora. Ella le guiará para completar las tareas y después le dirá cómo retirar.\n${link}\nSiga sus instrucciones. Ella seguirá guiándole para que pueda ganar de 500 a 2800 BOB de salario neto por día.`;
+    return `Ahora le voy a enviar el enlace de Telegram de la profesora. Abra el enlace y contacte directamente con ella. Le guiará en las tareas y le explicará los siguientes pasos.\n${link}\nSiga sus instrucciones.`;
   }
-  return `现在我会给您老师的 Telegram 链接，她会指导您完成任务。完成后，她会告诉您如何提现。\n${link}\n按照她的指示去做。她会继续指导您，让您每天赚取 500 到 2800 BOB 的净工资。`;
+  return `现在我把老师的 Telegram 链接发给您。请点击链接，主动联系导师。她会继续指导您完成任务，并说明后续操作。\n${link}\n请按照她的指示进行。`;
+}
+
+function ensureTeacherContactInstruction(content: string, language: string): string {
+  if (/(主动联系|点击.*链接.*联系|contact(?:e|ar)?(?: directly)?|entre em contato|contacte directamente|contácte|contactar)/i.test(content)) return content;
+  if (language === "en") return `${content}\nPlease open the link and contact the teacher directly.`;
+  if (language === "pt-BR") return `${content}\nAbra o link e entre em contato diretamente com a professora.`;
+  if (language === "es") return `${content}\nAbra el enlace y contacte directamente con la profesora.`;
+  return `${content}\n请点击链接，主动联系导师。`;
+}
+
+function removeCustomerAddWording(content: string): string {
+  return content
+    .replace(/，?这样我就能加(?:您|你)[。！!]?/g, "")
+    .replace(/，?我(?:来|会|能)?加(?:您|你)[。！!]?/g, "")
+    .replace(/,?\s*así podré agregarte[.!]?/gi, ".")
+    .replace(/,?\s*para que pueda agregarte[.!]?/gi, ".")
+    .replace(/,?\s*para poder agregarle[.!]?/gi, ".")
+    .trim();
 }
