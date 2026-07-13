@@ -5,9 +5,17 @@ import { translateSystemMessage } from "../ui/formatters.js";
 
 export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   const headers = { ...(options.body === undefined ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
-  const response = await fetch(url, { ...options, headers });
-  if (!response.ok) throw new Error(translateSystemMessage((await response.json().catch(() => ({}))).error || response.statusText));
+  const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
+  if (!response.ok) {
+    const error = new Error(translateSystemMessage((await response.json().catch(() => ({}))).error || response.statusText));
+    Object.assign(error, { status: response.status });
+    throw error;
+  }
   return response.json() as Promise<T>;
+}
+
+export function apiErrorStatus(error: unknown): number | undefined {
+  return typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : undefined;
 }
 
 export type RowsResourceState = {
