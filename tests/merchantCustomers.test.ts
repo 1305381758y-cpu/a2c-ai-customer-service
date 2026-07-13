@@ -146,6 +146,24 @@ describe("merchantCustomers service", () => {
     expect(repos.listConversations({ merchantId: merchant.id })).toHaveLength(0);
   });
 
+  it("deletes a conversation together with its script state", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("话本状态删除商户");
+    const conversation = repos.getOrCreateConversation("script-state-customer", "script-state-a2c", "待删客户", merchant.id);
+
+    db.sqlite.prepare(`
+      INSERT INTO conversation_script_state
+        (merchant_id, conversation_id, flow_version, current_flow_step)
+      VALUES (?, ?, 1, 'wait_registration')
+    `).run(merchant.id, conversation.id);
+
+    expect(repos.deleteConversation(conversation.id, merchant.id)).toBe(true);
+    expect(db.sqlite.prepare("SELECT COUNT(*) AS count FROM conversation_script_state WHERE conversation_id = ?").get(conversation.id)).toEqual({ count: 0 });
+    expect(repos.getConversation(conversation.id)).toBeUndefined();
+    db.sqlite.close();
+  });
+
   it("returns not found when deleting a missing customer", () => {
     const db = openDb(":memory:");
     const repos = new Repositories(db);

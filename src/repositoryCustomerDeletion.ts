@@ -44,6 +44,7 @@ function deleteCustomerConversationData(db: Db, merchantId: string, customerKey:
   db.sqlite.prepare(`DELETE FROM conversation_review_items WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM conversation_reviews WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM conversation_followups WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
+  db.sqlite.prepare(`DELETE FROM conversation_script_state WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...conversationIds);
