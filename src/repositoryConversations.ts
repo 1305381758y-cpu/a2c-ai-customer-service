@@ -46,25 +46,38 @@ export class ConversationRepository {
   ) {}
 
   getOrCreate(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId: string, chargeSession = true): Conversation {
-    const existing = this.db.sqlite
-      .prepare("SELECT * FROM conversations WHERE merchant_id = ? AND customer_phone = ? AND a2c_account_phone = ?")
-      .get(merchantId, customerPhone, a2cAccountPhone) as Record<string, unknown> | undefined;
-    if (existing) {
-      const mapped = mapConversation(existing);
-      if (!mapped.countryId || mapped.countryId === `${mapped.merchantId}:default` && countryId !== mapped.countryId) {
-        this.db.sqlite.prepare("UPDATE conversations SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(countryId, mapped.id);
-        return this.get(mapped.id)!;
+    this.db.sqlite.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.db.sqlite
+        .prepare("SELECT * FROM conversations WHERE merchant_id = ? AND customer_phone = ? AND a2c_account_phone = ?")
+        .get(merchantId, customerPhone, a2cAccountPhone) as Record<string, unknown> | undefined;
+      if (existing) {
+        const mapped = mapConversation(existing);
+        if (!mapped.countryId || mapped.countryId === `${mapped.merchantId}:default` && countryId !== mapped.countryId) {
+          this.db.sqlite.prepare("UPDATE conversations SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(countryId, mapped.id);
+          const updated = this.get(mapped.id);
+          if (!updated) throw new Error("会话更新后无法读取");
+          this.db.sqlite.exec("COMMIT");
+          return updated;
+        }
+        this.db.sqlite.exec("COMMIT");
+        return mapped;
       }
-      return mapped;
-    }
 
-    const id = randomUUID();
-    const charge = chargeSession ? this.deps.chargeSession(merchantId, customerPhone) : { status: "free" as const, amount: 0 };
-    this.db.sqlite.prepare(`
-      INSERT INTO conversations (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname, billing_status, session_charge_amount, session_charged_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'charged' THEN CURRENT_TIMESTAMP ELSE '' END)
-    `).run(id, merchantId, countryId, customerPhone, a2cAccountPhone, nickname, charge.status, charge.amount, charge.status);
-    return this.get(id)!;
+      const id = randomUUID();
+      const charge = chargeSession ? this.deps.chargeSession(merchantId, customerPhone) : { status: "free" as const, amount: 0 };
+      this.db.sqlite.prepare(`
+        INSERT INTO conversations (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname, billing_status, session_charge_amount, session_charged_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'charged' THEN CURRENT_TIMESTAMP ELSE '' END)
+      `).run(id, merchantId, countryId, customerPhone, a2cAccountPhone, nickname, charge.status, charge.amount, charge.status);
+      const created = this.get(id);
+      if (!created) throw new Error("会话创建后无法读取");
+      this.db.sqlite.exec("COMMIT");
+      return created;
+    } catch (error) {
+      this.db.sqlite.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   get(id: string): Conversation | undefined {

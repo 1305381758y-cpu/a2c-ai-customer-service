@@ -217,7 +217,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     {!canEdit && <div className="permission-notice"><strong>当前为只读配置</strong><span>商户运营可以查看配置和执行连通性检测，但不能保存、同步、启停或删除核心配置。</span></div>}
     <ConfigSetupSteps platform={platform} />
     {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={platform ? undefined : () => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
-    <SettingsWorkspace readOnly={!canEdit} showAi={false}>
+    <SettingsWorkspace readOnly={!canEdit} showAi={platform}>
       <SettingsSection
         id="billing"
         title="会话计费与余额"
@@ -254,7 +254,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <ConfigCredentialFields group="a2c" form={form} onChange={setForm} />
         <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
       </SettingsSection>}
-      {false && <SettingsSection
+      {platform && <SettingsSection
         id="ai"
         title="智能供应商"
         description="选择负责翻译、语言识别、意图理解、自然回复、图片分析和复盘的模型供应商。"
