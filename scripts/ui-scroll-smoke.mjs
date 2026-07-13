@@ -248,7 +248,6 @@ async function smokeMerchantSettingsToggles(page) {
   const settingsSections = [
     ["运行模式", "settings-runtime"],
     ["A2C 接入", "settings-a2c"],
-    ["智能供应商", "settings-ai"],
     ["国家与引导", "settings-market"],
     ["客服账号与邀请码", "settings-accounts"],
     ["TG 接管", "settings-handoff"]
@@ -257,14 +256,6 @@ async function smokeMerchantSettingsToggles(page) {
     await page.locator(".settings-navigation").getByRole("button", { name: label, exact: true }).click();
     await page.locator(`#${id}`).waitFor({ state: "visible" });
   }
-
-  const providerSelect = page.getByLabel("智能供应商");
-  await providerSelect.selectOption("deepseek");
-  await page.getByLabel("DeepSeek密钥").waitFor({ state: "visible" });
-  await providerSelect.selectOption("gemini");
-  await page.getByLabel("兼容Gemini密钥").waitFor({ state: "visible" });
-  await providerSelect.selectOption("minimax");
-  await page.getByLabel("MiniMax密钥").waitFor({ state: "visible" });
 
   await page.getByRole("button", { name: "关闭智能回复", exact: true }).click();
   await confirmDialogAction(page, "关闭智能回复");
@@ -298,7 +289,7 @@ async function smokeMerchantSettingsToggles(page) {
   await page.locator(".config-version-panel > summary").click();
   await page.locator(".config-version-row").first().waitFor({ state: "visible" });
   await page.locator(".config-version-row").first().getByRole("button", { name: "恢复", exact: true }).waitFor({ state: "visible" });
-  return "商户管理员/设置: 6 个配置分组、供应商切换、高风险开关和配置版本记录生效";
+  return "商户管理员/设置: A2C、计费、运行开关、国家引导、账号和接管配置及版本记录生效";
 }
 
 async function ensureActiveScriptFlow(page) {
@@ -339,7 +330,7 @@ async function smokeAiCallsTaskTypeFilter(page) {
   await page.getByLabel("开始时间").fill("2026-07-01T00:00:01");
   await page.getByLabel("结束时间").fill("2026-07-01T23:59:59");
   const [response] = await Promise.all([
-    waitForQueryResponse(page, "/api/merchant/ai-calls/stats", {
+    waitForQueryResponse(page, "/api/admin/ai-calls/stats", {
       provider: "deepseek",
       taskType: "intent_classification",
       status: "success",
@@ -350,7 +341,7 @@ async function smokeAiCallsTaskTypeFilter(page) {
     page.getByRole("button", { name: "筛选", exact: true }).click()
   ]);
   if (!response.ok()) throw new Error(`商户管理员/模型调用 调用类型筛选失败：${response.status()}`);
-  return "商户管理员/模型调用: 供应商、调用类型和状态筛选请求生效";
+  return "平台管理员/模型调用: 供应商、调用类型和状态筛选请求生效";
 }
 
 async function smokeCustomerFilterAndExport(page) {
@@ -577,13 +568,13 @@ async function main() {
     await createMerchantOperator(page, merchantResult.merchant.id);
     seedMerchantConversation(merchantResult);
     report.push(...await smokeRole(page, "平台管理员", ["总览", "模型调用", "操作日志", "商户", "后台账号", "配置", "智能体配置", "客户", "话本流程", "意图学习", "素材", "知识库", "样本", "会话", "接管"]));
+    report.push(await smokeDateFilterRequest(page, "模型调用", "/api/admin/ai-calls/stats", "平台管理员/模型调用"));
+    report.push(await smokeAiCallsTaskTypeFilter(page));
     await logout(page);
     await login(page, "merchant-scroll@example.com", "Merchant123456");
-    report.push(...await smokeRole(page, "商户管理员", ["总览", "模型调用", "操作日志", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
+    report.push(...await smokeRole(page, "商户管理员", ["总览", "操作日志", "训练中心", "模拟训练", "智能体配置", "话本流程", "意图学习", "客户", "会话", "接管", "设置"]));
     report.push(await smokeDateFilterRequest(page, "总览", "/api/merchant/dashboard", "商户管理员/总览"));
-    report.push(await smokeDateFilterRequest(page, "模型调用", "/api/merchant/ai-calls/stats", "商户管理员/模型调用"));
     report.push(await smokeDateFilterRequest(page, "操作日志", "/api/merchant/operation-logs", "商户管理员/操作日志"));
-    report.push(await smokeAiCallsTaskTypeFilter(page));
     report.push(await smokeCustomerFilterAndExport(page));
     report.push(await smokeConversationFilterAndExport(page));
     report.push(await smokeConversationServerPagination(page));
@@ -592,7 +583,7 @@ async function main() {
     report.push(await smokeScriptFlowCreateAndDelete(page));
     report.push(await smokeMerchantSettingsToggles(page));
     await page.setViewportSize({ width: 1024, height: 768 });
-    report.push(...await smokeRole(page, "商户管理员-窄屏1024", ["总览", "模型调用", "话本流程", "会话", "设置"]));
+    report.push(...await smokeRole(page, "商户管理员-窄屏1024", ["总览", "话本流程", "会话", "设置"]));
     await logout(page);
     await page.setViewportSize({ width: 1366, height: 768 });
     await login(page, "merchant-operator-scroll@example.com", "Operator123456");
