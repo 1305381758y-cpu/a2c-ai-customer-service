@@ -9,6 +9,10 @@ export function getMaskedMerchantConfig(repos: Repositories, merchantId: string)
   return maskConfig(repos.getMerchantConfig(merchantId));
 }
 
+export function getMerchantVisibleConfig(repos: Repositories, merchantId: string): Record<string, unknown> {
+  return stripAiConfig(maskConfig(repos.getMerchantConfig(merchantId)));
+}
+
 export function patchMaskedMerchantConfig(
   repos: Repositories,
   merchantId: string,
@@ -33,6 +37,10 @@ export function patchMaskedMerchantConfig(
   return { ok: true, value: maskConfig(saved) };
 }
 
+export function patchMerchantVisibleConfig(repos: Repositories, merchantId: string, patch: Record<string, unknown>, userName = "系统"): MerchantConfigPatchResult {
+  return patchMaskedMerchantConfig(repos, merchantId, stripMerchantEditableConfig(patch), userName);
+}
+
 export function listMerchantConfigVersions(repos: Repositories, merchantId: string): { rows: ReturnType<Repositories["listMerchantConfigVersions"]> } {
   return { rows: repos.listMerchantConfigVersions(merchantId) };
 }
@@ -41,6 +49,22 @@ export function restoreMerchantConfigVersion(repos: Repositories, merchantId: st
   const restored = repos.restoreMerchantConfigVersion(merchantId, Number(versionId), userName);
   if (!restored) return { ok: false, statusCode: 400, error: "配置版本不存在或不属于当前商户" };
   return { ok: true, value: maskConfig(restored) };
+}
+
+export function restoreMerchantVisibleConfigVersion(repos: Repositories, merchantId: string, versionId: string, userName: string): MerchantConfigPatchResult {
+  const current = repos.getMerchantConfig(merchantId);
+  const restored = repos.restoreMerchantConfigVersion(merchantId, Number(versionId), userName);
+  if (!restored) return { ok: false, statusCode: 400, error: "配置版本不存在或不属于当前商户" };
+  const preserved = repos.patchMerchantConfig(merchantId, {
+    aiProvider: current.aiProvider,
+    minimaxApiKey: current.minimaxApiKey,
+    minimaxModel: current.minimaxModel,
+    deepseekApiKey: current.deepseekApiKey,
+    deepseekModel: current.deepseekModel,
+    googleAiApiKey: current.googleAiApiKey,
+    googleAiModel: current.googleAiModel
+  });
+  return { ok: true, value: stripAiConfig(maskConfig(preserved)) };
 }
 
 export function getMerchantAgentProfile(repos: Repositories, merchantId: string): MerchantAgentProfileRecord {
@@ -122,4 +146,16 @@ function cleanAgentProfilePatch(patch: Record<string, unknown>): Record<string, 
     cleaned[key] = key === "enabled" ? Boolean(value) : String(value ?? "").trim();
   }
   return cleaned;
+}
+
+function stripAiConfig(value: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...value };
+  for (const key of ["openaiApiKey", "openaiModel", "aiProvider", "minimaxApiKey", "minimaxModel", "deepseekApiKey", "deepseekModel", "googleAiApiKey", "googleAiModel"]) delete result[key];
+  return result;
+}
+
+function stripMerchantEditableConfig(value: Record<string, unknown>): Record<string, unknown> {
+  const result = stripAiConfig(value);
+  for (const key of ["sessionPrice", "balance", "balanceCurrency"]) delete result[key];
+  return result;
 }

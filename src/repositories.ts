@@ -130,8 +130,8 @@ export class Repositories {
     this.users.ensureBootstrapAdmin(input);
   }
 
-  getOrCreateConversation(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId = this.countryIdForA2CAccount(merchantId, a2cAccountPhone)): Conversation {
-    return this.conversations.getOrCreate(customerPhone, a2cAccountPhone, nickname, merchantId, countryId);
+  getOrCreateConversation(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId = this.countryIdForA2CAccount(merchantId, a2cAccountPhone), chargeSession = true): Conversation {
+    return this.conversations.getOrCreate(customerPhone, a2cAccountPhone, nickname, merchantId, countryId, chargeSession);
   }
 
   getConversation(id: string): Conversation | undefined {

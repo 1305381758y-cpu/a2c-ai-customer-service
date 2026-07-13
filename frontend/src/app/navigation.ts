@@ -41,7 +41,6 @@ const MERCHANT_NAVIGATION: NavigationItem[] = [
   { key: "intentLearning", label: "意图学习", icon: Lightbulb, group: "训练与规则" },
   { key: "agentProfile", label: "智能体配置", icon: Bot, group: "配置" },
   { key: "config", label: "设置", icon: Settings, group: "配置" },
-  { key: "aiCalls", label: "模型调用", icon: Sparkles, group: "配置" },
   { key: "operationLogs", label: "操作日志", icon: ClipboardList, group: "配置" }
 ];
 

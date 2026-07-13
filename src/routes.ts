@@ -47,7 +47,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerMerchantIntentLearningRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantConversationRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
-  registerAiCallStatsRoutes(app, { repos: deps.repos, adminOnly, merchantRoles });
+  registerAiCallStatsRoutes(app, { repos: deps.repos, adminOnly });
 
   registerInternalMaintenanceRoutes(app, { config: deps.config, repos: deps.repos });
   registerConversationIngressRoutes(app, deps);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
-import { patchMaskedMerchantConfig } from "../src/services/merchantSettings.js";
+import { getMerchantVisibleConfig, patchMaskedMerchantConfig, patchMerchantVisibleConfig } from "../src/services/merchantSettings.js";
 import { createBuiltInStrictScriptFlow, enableScriptFlow } from "../src/services/scriptFlows.js";
 
 describe("merchant settings service", () => {
@@ -43,5 +43,43 @@ describe("merchant settings service", () => {
       statusCode: 400,
       error: "当前启用话本存在问题：首次问候 缺少客服标准话术"
     });
+  });
+
+  it("keeps model configuration platform-only while exposing billing to merchants", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("计费权限商户");
+    patchMaskedMerchantConfig(repos, merchant.id, {
+      aiProvider: "deepseek",
+      deepseekApiKey: "platform-key",
+      sessionPrice: 2.5,
+      balance: 20,
+      balanceCurrency: "CNY"
+    });
+
+    const visible = getMerchantVisibleConfig(repos, merchant.id);
+    expect(visible).toMatchObject({ sessionPrice: 2.5, balance: 20, balanceCurrency: "CNY" });
+    expect(visible).not.toHaveProperty("aiProvider");
+    expect(visible).not.toHaveProperty("deepseekApiKey");
+
+    patchMerchantVisibleConfig(repos, merchant.id, { aiProvider: "gemini", deepseekApiKey: "merchant-key", balance: 30, sessionPrice: 1 });
+    expect(repos.getMerchantConfig(merchant.id)).toMatchObject({ aiProvider: "deepseek", deepseekApiKey: "platform-key", balance: 20, sessionPrice: 2.5 });
+  });
+
+  it("charges a new conversation once and blocks new conversations when balance is insufficient", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("会话余额商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    patchMaskedMerchantConfig(repos, merchant.id, { sessionPrice: 3, balance: 5 });
+
+    const first = repos.getOrCreateConversation("customer-1", "a2c-1", "", merchant.id, country.id);
+    expect(first).toMatchObject({ billingStatus: "charged", sessionChargeAmount: 3 });
+    expect(repos.getMerchantConfig(merchant.id).balance).toBe(2);
+    const same = repos.getOrCreateConversation("customer-1", "a2c-1", "", merchant.id, country.id);
+    expect(same.id).toBe(first.id);
+    expect(repos.getMerchantConfig(merchant.id).balance).toBe(2);
+
+    const second = repos.getOrCreateConversation("customer-2", "a2c-1", "", merchant.id, country.id);
+    expect(second.billingStatus).toBe("insufficient");
+    expect(repos.getMerchantConfig(merchant.id).balance).toBe(2);
   });
 });

@@ -14,7 +14,7 @@ type MerchantConfigCheckRoutesDeps = {
 
 export function registerMerchantConfigCheckRoutes(app: FastifyInstance, deps: MerchantConfigCheckRoutesDeps): void {
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/config/check", { preHandler: deps.adminOnly }, async (request, reply) => sendConfigCheck(reply, await checkMerchantConfig(deps.repos, deps.config, request.params.id)));
-  app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => sendConfigCheck(reply, await checkMerchantConfig(deps.repos, deps.config, scopedMerchantId(request))));
+  app.get("/api/merchant/config/check", { preHandler: deps.merchantRoles }, async (request, reply) => sendConfigCheck(reply, await checkMerchantConfig(deps.repos, deps.config, scopedMerchantId(request), undefined, {}, false)));
 }
 
 function sendConfigCheck(reply: FastifyReply, result: MerchantConfigCheckResult) {

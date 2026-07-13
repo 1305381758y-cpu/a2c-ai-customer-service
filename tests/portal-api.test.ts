@@ -3244,7 +3244,6 @@ describe("portal api", () => {
       expect(checked.json().ok).toBe(true);
       expect(checked.json().rows.map((row: { key: string; ok: boolean }) => [row.key, row.ok])).toEqual([
         ["a2c", true],
-        ["ai", true],
         ["telegram", true],
         ["platformRegisterUrl", true]
       ]);

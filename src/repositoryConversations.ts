@@ -35,6 +35,7 @@ import type {
 
 export interface ConversationRepositoryDeps {
   refreshCustomerAfterConversationDelete(merchantId: string, countryId: string, customerKey: string): void;
+  chargeSession(merchantId: string): { status: "free" | "charged" | "insufficient"; amount: number };
 }
 
 export class ConversationRepository {
@@ -43,7 +44,7 @@ export class ConversationRepository {
     private readonly deps: ConversationRepositoryDeps
   ) {}
 
-  getOrCreate(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId: string): Conversation {
+  getOrCreate(customerPhone: string, a2cAccountPhone: string, nickname = "", merchantId = "default", countryId: string, chargeSession = true): Conversation {
     const existing = this.db.sqlite
       .prepare("SELECT * FROM conversations WHERE merchant_id = ? AND customer_phone = ? AND a2c_account_phone = ?")
       .get(merchantId, customerPhone, a2cAccountPhone) as Record<string, unknown> | undefined;
@@ -57,12 +58,11 @@ export class ConversationRepository {
     }
 
     const id = randomUUID();
-    this.db.sqlite
-      .prepare(`
-        INSERT INTO conversations (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `)
-      .run(id, merchantId, countryId, customerPhone, a2cAccountPhone, nickname);
+    const charge = chargeSession ? this.deps.chargeSession(merchantId) : { status: "free" as const, amount: 0 };
+    this.db.sqlite.prepare(`
+      INSERT INTO conversations (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname, billing_status, session_charge_amount, session_charged_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'charged' THEN CURRENT_TIMESTAMP ELSE '' END)
+    `).run(id, merchantId, countryId, customerPhone, a2cAccountPhone, nickname, charge.status, charge.amount, charge.status);
     return this.get(id)!;
   }
 

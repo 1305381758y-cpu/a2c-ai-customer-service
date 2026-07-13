@@ -69,6 +69,9 @@ export function migrate(db: DatabaseSync): void {
       platform_register_url TEXT DEFAULT '',
       tg_register_guide_url TEXT DEFAULT '',
       registration_tutorial_image_url TEXT DEFAULT '',
+      session_price REAL DEFAULT 0,
+      balance REAL DEFAULT 0,
+      balance_currency TEXT DEFAULT 'CNY',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
@@ -143,6 +146,9 @@ export function migrate(db: DatabaseSync): void {
       handoff_notified INTEGER DEFAULT 0,
       unread_count INTEGER DEFAULT 0,
       pinned_at TEXT DEFAULT '',
+      billing_status TEXT DEFAULT 'free',
+      session_charge_amount REAL DEFAULT 0,
+      session_charged_at TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(merchant_id, customer_phone, a2c_account_phone)
@@ -591,6 +597,12 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "training_simulation_enabled", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_configs", "strict_script_flow_enabled", "INTEGER DEFAULT 0");
   ensureColumn(db, "merchant_configs", "registration_tutorial_image_url", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_configs", "session_price", "REAL DEFAULT 0");
+  ensureColumn(db, "merchant_configs", "balance", "REAL DEFAULT 0");
+  ensureColumn(db, "merchant_configs", "balance_currency", "TEXT DEFAULT 'CNY'");
+  ensureColumn(db, "conversations", "billing_status", "TEXT DEFAULT 'free'");
+  ensureColumn(db, "conversations", "session_charge_amount", "REAL DEFAULT 0");
+  ensureColumn(db, "conversations", "session_charged_at", "TEXT DEFAULT ''");
   ensureColumn(db, "messages", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "handoff_events", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "knowledge_items", "merchant_id", "TEXT DEFAULT 'default'");

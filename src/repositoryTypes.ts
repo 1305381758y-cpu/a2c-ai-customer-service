@@ -25,6 +25,9 @@ export interface Conversation {
   unreadCount: number;
   pinnedAt?: string;
   updatedAt?: string;
+  billingStatus?: "free" | "charged" | "insufficient";
+  sessionChargeAmount?: number;
+  sessionChargedAt?: string;
 }
 
 export interface TeacherTgLinkRecord {
@@ -77,6 +80,9 @@ export interface MerchantConfigRecord {
   platformRegisterUrl: string;
   tgRegisterGuideUrl: string;
   registrationTutorialImageUrl: string;
+  sessionPrice?: number;
+  balance?: number;
+  balanceCurrency?: string;
 }
 
 export interface MerchantConfigVersionRecord {

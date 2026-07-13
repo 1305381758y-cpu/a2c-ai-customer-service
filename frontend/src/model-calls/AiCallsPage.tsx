@@ -9,22 +9,32 @@ import { AiCallMetricGrid } from "./AiCallMetricGrid.js";
 import { aiCallActiveCountry, aiCallErrorKey, aiCallStatsQuery, aiCallTimeLabelFor, aiCallTimeZoneFor, EMPTY_AI_CALL_STATS, formatAiCallSummary } from "./AiCallsPageHelpers.js";
 
 export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
+  if (!platform) {
+    return <div className="empty-state">
+      <h3>暂无权限访问此页面</h3>
+      <p>模型调用统计由平台管理员统一查看和管理。</p>
+    </div>;
+  }
+  return <PlatformAiCallsPage timeMode={timeMode} />;
+}
+
+function PlatformAiCallsPage({ timeMode }: { timeMode: TimeDisplayMode }) {
   const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
-  const endpoint = platform ? "/api/admin/ai-calls/stats" : "/api/merchant/ai-calls/stats";
+  const endpoint = "/api/admin/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
-  const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
+  const [countries, , countriesState] = useRows<MerchantCountry>("/api/admin/countries");
   const [data, setData] = useState<AiCallStats>(EMPTY_AI_CALL_STATS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const activeCountry = aiCallActiveCountry(countries);
-  const statsTimeZone = aiCallTimeZoneFor(platform, timeMode, activeCountry);
-  const statsTimeLabel = aiCallTimeLabelFor(platform, timeMode, activeCountry);
+  const statsTimeZone = aiCallTimeZoneFor(true, timeMode, activeCountry);
+  const statsTimeLabel = aiCallTimeLabelFor(true, timeMode, activeCountry);
   const reload = async () => {
     setLoading(true);
     setError("");
     try {
-      const query = aiCallStatsQuery(platform, filters, statsTimeZone);
+      const query = aiCallStatsQuery(true, filters, statsTimeZone);
       const nextData = await api<AiCallStats>(withQuery(endpoint, query));
       setData(nextData);
       if (selectedTaskType && !nextData.byType.some((row) => row.taskType === selectedTaskType)) setSelectedTaskType("");
@@ -35,14 +45,14 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
       setLoading(false);
     }
   };
-  useEffect(() => { reload().catch(() => undefined); }, [platform, statsTimeZone]);
+  useEffect(() => { reload().catch(() => undefined); }, [statsTimeZone]);
   const activeTaskType = filters.taskType || selectedTaskType;
   const detailRows = activeTaskType ? data.byTypeDetails.filter((row) => row.taskType === activeTaskType) : data.byTypeDetails;
   const applyTaskType = async (taskType: string) => {
     setSelectedTaskType(taskType);
     const nextFilters = { ...filters, taskType };
     setFilters(nextFilters);
-    const query = aiCallStatsQuery(platform, nextFilters, statsTimeZone);
+    const query = aiCallStatsQuery(true, nextFilters, statsTimeZone);
     setLoading(true);
     setError("");
     try {
@@ -63,7 +73,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
         </div>
       </div>
       <AiCallFilters
-        platform={platform}
+        platform={true}
         filters={filters}
         loading={loading}
         availableProviders={data.availableProviders}

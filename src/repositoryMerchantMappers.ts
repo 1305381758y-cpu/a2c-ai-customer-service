@@ -43,7 +43,10 @@ export function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigR
     strictScriptFlowEnabled: Boolean(Number(row.strict_script_flow_enabled ?? 0)),
     platformRegisterUrl: String(row.platform_register_url ?? ""),
     tgRegisterGuideUrl: String(row.tg_register_guide_url ?? ""),
-    registrationTutorialImageUrl: String(row.registration_tutorial_image_url ?? "")
+    registrationTutorialImageUrl: String(row.registration_tutorial_image_url ?? ""),
+    sessionPrice: Number(row.session_price ?? 0),
+    balance: Number(row.balance ?? 0),
+    balanceCurrency: String(row.balance_currency ?? "CNY")
   };
 }
 

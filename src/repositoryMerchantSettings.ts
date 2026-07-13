@@ -39,21 +39,36 @@ export class MerchantSettingsRepository {
       strictScriptFlowEnabled: "strict_script_flow_enabled",
       platformRegisterUrl: "platform_register_url",
       tgRegisterGuideUrl: "tg_register_guide_url",
-      registrationTutorialImageUrl: "registration_tutorial_image_url"
+      registrationTutorialImageUrl: "registration_tutorial_image_url",
+      sessionPrice: "session_price",
+      balance: "balance",
+      balanceCurrency: "balance_currency"
     };
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean"));
+    const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean" || typeof value === "number"));
     if (entries.length) {
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
       this.db.sqlite.prepare(`UPDATE merchant_configs SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).run(...entries.map(([key, value]) => {
         if (key === "smartReplyEnabled") return booleanPatchValue(value, true);
         if (key === "trainingSimulationEnabled") return booleanPatchValue(value, false);
         if (key === "strictScriptFlowEnabled") return booleanPatchValue(value, false);
+        if (key === "sessionPrice" || key === "balance") return Math.max(0, Number(value) || 0);
         if (key === "aiProvider") return value === "gemini" || value === "deepseek" ? value : "minimax";
         return value as string;
       }), merchantId);
     }
     return this.getConfig(merchantId);
+  }
+
+  chargeSession(merchantId: string): { status: "free" | "charged" | "insufficient"; amount: number } {
+    const amount = Math.max(0, Number(this.getConfig(merchantId).sessionPrice ?? 0));
+    if (amount <= 0) return { status: "free", amount: 0 };
+    const result = this.db.sqlite.prepare(`
+      UPDATE merchant_configs
+      SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE merchant_id = ? AND balance >= ?
+    `).run(amount, merchantId, amount);
+    return result.changes > 0 ? { status: "charged", amount } : { status: "insufficient", amount };
   }
 
   recordConfigVersion(merchantId: string, changedKeys: string[], userName: string, note = "保存配置"): MerchantConfigVersionRecord {

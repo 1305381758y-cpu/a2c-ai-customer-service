@@ -22,7 +22,7 @@ import { generateAndRecordStrictFlowReply, type StrictFlowReplyResult } from "./
 import type { InternalIntentLabel } from "../domain/analyzer.js";
 
 export type InboundTurnResponseResult =
-  | { status: "already_handoff" | "auto_reply_disabled"; conversationId: string }
+  | { status: "already_handoff" | "auto_reply_disabled" | "insufficient_balance"; conversationId: string }
   | ConversationGoalCompletionResult
   | AiConversationReplyResult
   | { status: StrictFlowReplyResult["status"]; conversationId: string };
@@ -64,6 +64,12 @@ export async function respondToInboundTurn(
     input.repos.updateConversation(input.conversation);
     input.repos.upsertCustomerFromConversation(input.conversation);
     return { status: "already_handoff", conversationId: input.conversation.id };
+  }
+
+  if (input.conversation.billingStatus === "insufficient" && !input.simulation) {
+    input.repos.updateConversation(input.conversation);
+    input.repos.upsertCustomerFromConversation(input.conversation);
+    return { status: "insufficient_balance", conversationId: input.conversation.id };
   }
 
   if (isConversationGoalComplete(input.conversation, input.country)) {

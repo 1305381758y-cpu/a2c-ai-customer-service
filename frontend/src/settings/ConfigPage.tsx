@@ -218,6 +218,21 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
     <SettingsWorkspace readOnly={!canEdit}>
       <SettingsSection
+        id="billing"
+        title="会话计费与余额"
+        description={platform ? "为当前商户设置每个新会话的计费金额和可用余额。相同客户在同一客服账号下继续聊天不会重复扣费。" : "查看当前商户的会话计费状态和余额。计费规则由平台管理员统一维护。"}
+        status={`${Number(form.balance || 0).toFixed(2)} ${String(form.balanceCurrency || "CNY")}`}
+        statusTone={Number(form.balance || 0) > 0 ? "ok" : "warning"}
+        impact={platform ? "余额不足时新会话仍会入库，但不会发起自动回复；模拟训练不消耗余额。" : "如余额不足，请联系平台管理员充值或调整计费规则。"}
+      >
+        <div className="form-grid elevated-form settings-credential-grid">
+          <label>单次会话金额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.sessionPrice || "0")} onChange={(event) => setForm({ ...form, sessionPrice: event.target.value })} /></label>
+          <label>当前余额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.balance || "0")} onChange={(event) => setForm({ ...form, balance: event.target.value })} /></label>
+          <label>结算币种<input value={String(form.balanceCurrency || "CNY")} disabled={!platform || !canEdit} onChange={(event) => setForm({ ...form, balanceCurrency: event.target.value.toUpperCase() })} /></label>
+        </div>
+        {!platform && <p className="field-help">商户端只展示余额，不开放金额、余额或模型配置修改。</p>}
+      </SettingsSection>
+      <SettingsSection
         id="runtime"
         title="运行模式"
         description="控制真实客户是否自动回复、是否进入模拟训练，以及是否按启用中的话本流程推进。"
@@ -238,7 +253,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <ConfigCredentialFields group="a2c" form={form} onChange={setForm} />
         <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
       </SettingsSection>
-      <SettingsSection
+      {platform && <SettingsSection
         id="ai"
         title="智能供应商"
         description="选择负责翻译、语言识别、意图理解、自然回复、图片分析和复盘的模型供应商。"
@@ -247,7 +262,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         impact="影响翻译、意图识别、上下文理解、客户回复、截图分析和对话复盘。保存后请点击“检测配置”。"
       >
         <ConfigCredentialFields group="ai" form={form} onChange={setForm} />
-      </SettingsSection>
+      </SettingsSection>}
       <SettingsSection
         id="market"
         title="国家与引导"

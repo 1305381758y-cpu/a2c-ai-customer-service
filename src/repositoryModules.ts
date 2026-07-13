@@ -56,7 +56,8 @@ export function createRepositoryModules(db: Db, callbacks: RepositoryModuleCallb
     { getMerchantConfig: (merchantId) => settings.getConfig(merchantId) }
   );
   const conversations = new ConversationRepository(db, {
-    refreshCustomerAfterConversationDelete: callbacks.refreshCustomerAfterConversationDelete
+    refreshCustomerAfterConversationDelete: callbacks.refreshCustomerAfterConversationDelete,
+    chargeSession: (merchantId) => settings.chargeSession(merchantId)
   });
   const customers = new CustomerRepository(db);
   const handoffs = new HandoffRepository(db);
