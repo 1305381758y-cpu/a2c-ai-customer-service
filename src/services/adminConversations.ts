@@ -11,7 +11,7 @@ import type {
 } from "../repositories.js";
 import { normalizeSqlTimeRange } from "./beijingTime.js";
 import { generateConversationReview } from "./conversationReview.js";
-import { appConfigForMerchant } from "./runtimeConfig.js";
+import { appConfigForConversation } from "./runtimeConfig.js";
 
 type AdminConversationResult<T> =
   | { ok: true; value: T }
@@ -223,8 +223,7 @@ export async function generateAdminConversationReview(
 ): Promise<AdminConversationResult<{ review: ConversationReviewRecord; items: ConversationReviewItemRecord[] }>> {
   const conversation = repos.getConversation(conversationId);
   if (!conversation) return conversationNotFound();
-  const cfg = repos.getMerchantConfig(conversation.merchantId);
-  const runtimeConfig = appConfigForMerchant(config, cfg, repos.getMerchantCountry(conversation.countryId));
+  const runtimeConfig = appConfigForConversation(config, repos, conversation);
   return { ok: true, value: await generateConversationReview(repos, runtimeConfig, conversation.id) };
 }
 

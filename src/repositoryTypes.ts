@@ -216,6 +216,21 @@ export interface CustomerRecord {
   lastConversationId: string;
   firstSeenAt: string;
   lastSeenAt: string;
+  balance: number;
+  balanceCurrency: string;
+  aiProvider: "" | "minimax" | "gemini" | "deepseek";
+  aiModel: string;
+}
+
+export interface CustomerBalanceTransactionRecord {
+  id: number;
+  merchantId: string;
+  customerKey: string;
+  amount: number;
+  note: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TrainingMaterialRecord {

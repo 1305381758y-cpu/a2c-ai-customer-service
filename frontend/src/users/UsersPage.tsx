@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Plus, Search } from "lucide-react";
 
-import { api, loadRows, withQuery } from "../app/api.js";
-import type { Filters } from "../types.js";
+import { api, loadRows, useRows, withQuery } from "../app/api.js";
+import type { Filters, Merchant } from "../types.js";
 import { AsyncButton, Editor, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 
 export function UsersPage() {
+  const [merchants] = useRows<Merchant>("/api/admin/merchants");
   const [filters, setFilters] = useState<Filters>({ merchantId: "" });
   const usersUrl = withQuery("/api/admin/users", filters);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
@@ -38,11 +39,12 @@ export function UsersPage() {
   return <div className="split work-split">
     <section className="work-panel">
       <div className="toolbar wrap">
-        <input placeholder="按商户ID筛选" value={filters.merchantId} onChange={(e) => setFilters({ merchantId: e.target.value })} />
+        <select value={filters.merchantId} onChange={(e) => setFilters({ merchantId: e.target.value })}><option value="">全部商户</option>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select>
         <AsyncButton busyText="筛选中..." onClick={reload}><Search size={16}/>筛选</AsyncButton>
       </div>
       <div className="toolbar wrap compact-create">
-        {["email", "name", "password", "merchantId"].map((key) => <input key={key} placeholder={label(key)} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />)}
+        {["email", "name", "password"].map((key) => <input key={key} placeholder={label(key)} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />)}
+        <select value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })}><option value="">不绑定商户</option>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select>
         <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
           <option value="merchant_admin">{label("merchant_admin")}</option>
           <option value="merchant_operator">{label("merchant_operator")}</option>

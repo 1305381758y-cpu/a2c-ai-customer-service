@@ -81,7 +81,10 @@ export async function prepareInboundConversationContext(input: {
     merchantId: input.merchantId,
     ...(knownMerchant ? { chargeSession: !simulation } : {})
   });
-  const runtimeConfig = appConfigForMerchant(input.config, merchantConfig, country);
+  const customer = typeof input.repos.upsertCustomerFromConversation === "function"
+    ? input.repos.upsertCustomerFromConversation(conversation)
+    : undefined;
+  const runtimeConfig = appConfigForMerchant(input.config, merchantConfig, country, customer);
   const imageAnalysis = shouldAnalyzeImage
     ? await input.ai.analyzeImage(runtimeConfig, mediaUrl)
     : { text: "", status: "skipped" as const };

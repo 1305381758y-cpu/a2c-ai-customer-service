@@ -52,8 +52,9 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     loadRows<MerchantCountry>(endpoints.countries).then(setCountries).catch((err) => setError(err instanceof Error ? err.message : "国家设置加载失败"));
   }, [endpoints.countries]);
   useEffect(() => {
+    if (platform) { setA2CAccounts([]); return; }
     loadRows<A2CAccount>(endpoints.a2cAccounts).then(setA2CAccounts).catch((err) => setError(err instanceof Error ? err.message : "A2C客服账号加载失败"));
-  }, [endpoints.a2cAccounts]);
+  }, [endpoints.a2cAccounts, platform]);
   useEffect(() => {
     loadRows<TeacherTgLink>(endpoints.teacherTgLinks).then(setTeacherTgLinks).catch((err) => setError(err instanceof Error ? err.message : "老师TG链接加载失败"));
   }, [endpoints.teacherTgLinks]);
@@ -215,9 +216,9 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     {platform && <label className="settings-merchant-selector"><span>当前商户</span><select value={merchantId} onChange={(event) => setMerchantId(event.target.value)}>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select></label>}
     {!canEdit && <div className="permission-notice"><strong>当前为只读配置</strong><span>商户运营可以查看配置和执行连通性检测，但不能保存、同步、启停或删除核心配置。</span></div>}
     <ConfigSetupSteps platform={platform} />
-    {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
-    <SettingsWorkspace readOnly={!canEdit} showAi={platform}>
-      <SettingsSection
+    {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={platform ? undefined : () => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
+    <SettingsWorkspace readOnly={!canEdit} showAi={false}>
+      {!platform && <SettingsSection
         id="billing"
         title="会话计费与余额"
         description={platform ? "为当前商户设置每个新会话的计费金额和可用余额。相同客户在同一客服账号下继续聊天不会重复扣费。" : "查看当前商户的会话计费状态和余额。计费规则由平台管理员统一维护。"}
@@ -231,7 +232,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
           <label>结算币种<input value="默认币种" disabled readOnly /></label>
         </div>
         {!platform && <p className="field-help">商户端只展示余额，不开放金额、余额或模型配置修改。</p>}
-      </SettingsSection>
+      </SettingsSection>}
       <SettingsSection
         id="runtime"
         title="运行模式"
@@ -242,7 +243,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
       >
         <ConfigSwitchCards form={form} saveConfigFlag={saveConfigFlag} />
       </SettingsSection>
-      <SettingsSection
+      {!platform && <SettingsSection
         id="a2c"
         title="A2C 接入"
         description="维护 A2C 密钥、接收账号和当前商户专属 Webhook 地址。"
@@ -252,8 +253,8 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
       >
         <ConfigCredentialFields group="a2c" form={form} onChange={setForm} />
         <WebhookCopyCard a2cWebhookUrl={a2cWebhookUrl} onCopied={() => setMessage("Webhook 地址已复制。")} />
-      </SettingsSection>
-      {platform && <SettingsSection
+      </SettingsSection>}
+      {false && <SettingsSection
         id="ai"
         title="智能供应商"
         description="选择负责翻译、语言识别、意图理解、自然回复、图片分析和复盘的模型供应商。"
@@ -275,7 +276,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
         <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={endpoints.teacherTgLinks} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
       </SettingsSection>
-      <SettingsSection
+      {!platform && <SettingsSection
         id="accounts"
         title="客服账号与邀请码"
         description="查看已同步客服账号，为每个账号维护独立邀请码池并控制启用状态。"
@@ -283,8 +284,8 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         statusTone={a2cAccounts.length ? "ok" : "warning"}
         impact="账号停用后不会继续参与回复；邀请码只会分配给其绑定的客服账号。"
       >
-        <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} onCountry={changeA2CAccountCountry} />
-      </SettingsSection>
+      {!platform && <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} onCountry={changeA2CAccountCountry} />}
+      </SettingsSection>}
       <SettingsSection
         id="handoff"
         title="TG 接管"

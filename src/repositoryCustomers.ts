@@ -1,7 +1,7 @@
 import type { Db } from "./db.js";
 import { deleteCustomerRecord } from "./repositoryCustomerDeletion.js";
-import { mapCustomer } from "./repositoryCustomerMappers.js";
-import type { Conversation, CustomerRecord } from "./repositoryTypes.js";
+import { mapCustomer, mapCustomerBalanceTransaction } from "./repositoryCustomerMappers.js";
+import type { Conversation, CustomerBalanceTransactionRecord, CustomerRecord } from "./repositoryTypes.js";
 
 export class CustomerRepository {
   constructor(private readonly db: Db) {}
@@ -155,6 +155,62 @@ export class CustomerRepository {
   delete(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {
     const customer = this.get(merchantId, customerKey);
     return deleteCustomerRecord(this.db, { merchantId, customerKey, exists: Boolean(customer) });
+  }
+
+  patch(merchantId: string, customerKey: string, patch: Record<string, unknown>): CustomerRecord | undefined {
+    const allowed = new Set(["aiProvider", "aiModel", "nickname"]);
+    const entries = Object.entries(patch).filter(([key]) => allowed.has(key));
+    if (!entries.length) return this.get(merchantId, customerKey);
+    const sets: string[] = [];
+    const values: Array<string> = [];
+    for (const [key, value] of entries) {
+      const column = key === "aiProvider" ? "ai_provider" : key === "aiModel" ? "ai_model" : "nickname";
+      if (key === "aiProvider" && value !== "" && value !== "minimax" && value !== "gemini" && value !== "deepseek") continue;
+      sets.push(`${column} = ?`);
+      values.push(String(value ?? ""));
+    }
+    if (!sets.length) return this.get(merchantId, customerKey);
+    values.push(merchantId, customerKey);
+    this.db.sqlite.prepare(`UPDATE customers SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ? AND customer_key = ?`).run(...values);
+    return this.get(merchantId, customerKey);
+  }
+
+  listBalanceTransactions(merchantId: string, customerKey: string): CustomerBalanceTransactionRecord[] {
+    return this.db.sqlite.prepare(`SELECT * FROM customer_balance_transactions WHERE merchant_id = ? AND customer_key = ? ORDER BY created_at DESC, id DESC`).all(merchantId, customerKey).map((row) => mapCustomerBalanceTransaction(row as Record<string, unknown>));
+  }
+
+  createBalanceTransaction(merchantId: string, customerKey: string, amount: number, note: string, createdBy: string): CustomerBalanceTransactionRecord | undefined {
+    if (!this.get(merchantId, customerKey) || !Number.isFinite(amount) || amount === 0) return undefined;
+    const result = this.db.sqlite.prepare(`INSERT INTO customer_balance_transactions (merchant_id, customer_key, amount, note, created_by) VALUES (?, ?, ?, ?, ?)`).run(merchantId, customerKey, amount, note, createdBy);
+    this.recalculateBalance(merchantId, customerKey);
+    return this.getBalanceTransaction(Number(result.lastInsertRowid), merchantId);
+  }
+
+  patchBalanceTransaction(id: number, merchantId: string, patch: { amount?: number; note?: string }): CustomerBalanceTransactionRecord | undefined {
+    const current = this.getBalanceTransaction(id, merchantId);
+    if (!current) return undefined;
+    const amount = patch.amount === undefined ? current.amount : patch.amount;
+    if (!Number.isFinite(amount) || amount === 0) return undefined;
+    this.db.sqlite.prepare(`UPDATE customer_balance_transactions SET amount = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?`).run(amount, patch.note ?? current.note, id, merchantId);
+    this.recalculateBalance(merchantId, current.customerKey);
+    return this.getBalanceTransaction(id, merchantId);
+  }
+
+  deleteBalanceTransaction(id: number, merchantId: string): boolean {
+    const current = this.getBalanceTransaction(id, merchantId);
+    if (!current) return false;
+    this.db.sqlite.prepare("DELETE FROM customer_balance_transactions WHERE id = ? AND merchant_id = ?").run(id, merchantId);
+    this.recalculateBalance(merchantId, current.customerKey);
+    return true;
+  }
+
+  private getBalanceTransaction(id: number, merchantId: string): CustomerBalanceTransactionRecord | undefined {
+    const row = this.db.sqlite.prepare("SELECT * FROM customer_balance_transactions WHERE id = ? AND merchant_id = ?").get(id, merchantId) as Record<string, unknown> | undefined;
+    return row ? mapCustomerBalanceTransaction(row) : undefined;
+  }
+
+  private recalculateBalance(merchantId: string, customerKey: string): void {
+    this.db.sqlite.prepare(`UPDATE customers SET balance = COALESCE((SELECT SUM(amount) FROM customer_balance_transactions WHERE merchant_id = ? AND customer_key = ?), 0), updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ? AND customer_key = ?`).run(merchantId, customerKey, merchantId, customerKey);
   }
 
   refreshAfterConversationDelete(merchantId: string, countryId: string, customerKey: string): void {

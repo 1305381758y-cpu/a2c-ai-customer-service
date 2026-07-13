@@ -214,9 +214,27 @@ export function migrate(db: DatabaseSync): void {
       last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      balance REAL DEFAULT 0,
+      balance_currency TEXT DEFAULT 'CNY',
+      ai_provider TEXT DEFAULT '',
+      ai_model TEXT DEFAULT '',
       UNIQUE(merchant_id, customer_key),
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
+
+    CREATE TABLE IF NOT EXISTS customer_balance_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      customer_key TEXT NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_balance_transactions_customer
+      ON customer_balance_transactions(merchant_id, customer_key, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -579,6 +597,10 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "customers", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customers", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "customers", "extracted_whatsapp", "TEXT DEFAULT ''");
+  ensureColumn(db, "customers", "balance", "REAL DEFAULT 0");
+  ensureColumn(db, "customers", "balance_currency", "TEXT DEFAULT 'CNY'");
+  ensureColumn(db, "customers", "ai_provider", "TEXT DEFAULT ''");
+  ensureColumn(db, "customers", "ai_model", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_title", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_status", "TEXT DEFAULT 'unbound'");
   ensureColumn(db, "merchant_configs", "telegram_handoff_chat_error", "TEXT DEFAULT ''");

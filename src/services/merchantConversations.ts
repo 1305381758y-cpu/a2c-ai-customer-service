@@ -10,7 +10,7 @@ import type {
 } from "../repositories.js";
 import { normalizeSqlTimeRange } from "./beijingTime.js";
 import { generateConversationReview } from "./conversationReview.js";
-import { appConfigForMerchant } from "./runtimeConfig.js";
+import { appConfigForConversation as runtimeConfigForConversation } from "./runtimeConfig.js";
 
 type MerchantConversationResult<T> =
   | { ok: true; value: T }
@@ -203,8 +203,7 @@ function getScopedConversation(repos: Repositories, merchantId: string, conversa
 }
 
 function appConfigForConversation(repos: Repositories, config: AppConfig, conversation: Conversation): AppConfig {
-  const cfg = repos.getMerchantConfig(conversation.merchantId);
-  return appConfigForMerchant(config, cfg, repos.getMerchantCountry(conversation.countryId));
+  return runtimeConfigForConversation(config, repos, conversation);
 }
 
 function conversationNotFound(): MerchantConversationResult<never> {

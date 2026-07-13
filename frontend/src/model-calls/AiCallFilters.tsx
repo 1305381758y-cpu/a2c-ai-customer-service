@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 
-import type { Filters } from "../types.js";
+import { useRows } from "../app/api.js";
+import type { Filters, Merchant } from "../types.js";
 import { label } from "../ui/formatters.js";
 
 type AiCallFiltersProps = {
@@ -15,8 +16,9 @@ type AiCallFiltersProps = {
 };
 
 export function AiCallFilters({ platform, filters, loading, availableProviders, availableTaskTypes, onChange, onTaskTypeChange, onReload }: AiCallFiltersProps) {
+  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   return <div className="toolbar wrap filters">
-    {platform && <input placeholder="商户ID" value={filters.merchantId || ""} onChange={(event) => onChange({ ...filters, merchantId: event.target.value })} />}
+    {platform && <select aria-label="商户" value={filters.merchantId || ""} onChange={(event) => onChange({ ...filters, merchantId: event.target.value })}><option value="">全部商户</option>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select>}
     <select aria-label="智能供应商" value={filters.provider || ""} onChange={(event) => onChange({ ...filters, provider: event.target.value })}>
       <option value="">全部供应商</option>
       {availableProviders.map((provider) => <option key={provider} value={provider}>{label(provider)}</option>)}

@@ -2,7 +2,7 @@ import { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { Conversation, MerchantConfigRecord, Repositories } from "../repositories.js";
 import { recordOutboundConversationMessage, type OutboundConversationRecordResult } from "./outboundConversationRecorder.js";
-import { appConfigForMerchant } from "./runtimeConfig.js";
+import { appConfigForConversation } from "./runtimeConfig.js";
 import { translateForCustomer, type TranslationResult } from "./translation.js";
 
 export type ManualOutboundBody = {
@@ -42,9 +42,7 @@ export async function sendManualOutboundMessage(
     recordMemory?: boolean;
   }
 ): Promise<ManualOutboundSendResult> {
-  const cfg = deps.repos.getMerchantConfig(input.merchantId);
-  const country = deps.repos.getMerchantCountry(input.conversation.countryId);
-  const runtimeConfig = appConfigForMerchant(deps.config, cfg, country);
+  const runtimeConfig = appConfigForConversation(deps.config, deps.repos, input.conversation);
   const client = deps.a2cClientFactory
     ? deps.a2cClientFactory(runtimeConfig, input.merchantId)
     : new A2CClient(runtimeConfig, deps.repos.a2cTokenStore(input.merchantId));

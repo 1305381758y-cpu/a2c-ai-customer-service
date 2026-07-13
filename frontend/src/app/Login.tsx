@@ -6,7 +6,7 @@ import { canAccessPortal, portalModeLabel, type PortalMode } from "./portalMode.
 
 export function Login({ onLogin, portalMode = "shared" }: { onLogin: (user: User) => void; portalMode?: PortalMode }) {
   const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("Admin123456");
+  const [password, setPassword] = useState("Admin@2026A2c!");
   const [error, setError] = useState("");
 
   const login = async () => {

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Search, X } from "lucide-react";
 
-import type { Filters, MerchantCountry } from "../types.js";
+import type { Filters, Merchant, MerchantCountry } from "../types.js";
+import { useRows } from "../app/api.js";
 import { COUNTRY_PRESETS, displayValue, inferCountryProfile, label, languageName, optionLabel, translateSystemMessage } from "./formatters.js";
 import { notify } from "./toast.js";
 
@@ -137,7 +138,9 @@ export function CountrySettingsEditor({ value, onSave }: { value: MerchantCountr
 }
 
 export function FilterBar({ filters, setFilters, fields, selects = {}, resetValues, onApply }: { filters: Filters; setFilters: (filters: Filters) => void; fields: string[]; selects?: Record<string, string[]>; resetValues?: Filters; onApply: () => Promise<void> }) {
+  const [merchants] = useRows<Merchant>(fields.includes("merchantId") ? "/api/admin/merchants" : "");
   return <div className="toolbar wrap filters">{fields.map((field) => {
+    if (field === "merchantId") return <label key={field} className="filter-control"><span>商户</span><select value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}><option value="">全部商户</option>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select></label>;
     if (selects[field]) return <label key={field} className="filter-control"><span>{label(field)}</span><select value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{option ? optionLabel(field, option) : "全部"}</option>)}</select></label>;
     const isTimeFilter = field === "startAt" || field === "endAt";
     return <label key={field} className="filter-control"><span>{label(field)}</span><input type={isTimeFilter ? "datetime-local" : "text"} step={isTimeFilter ? 1 : undefined} placeholder={label(field)} aria-label={label(field)} value={filters[field] || ""} onChange={(e) => setFilters({ ...filters, [field]: e.target.value })} /></label>;

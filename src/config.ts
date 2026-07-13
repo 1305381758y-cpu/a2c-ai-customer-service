@@ -27,7 +27,7 @@ const envSchema = z.object({
   AI_TELEMETRY_COUNTRY_ID: z.string().optional().default(""),
   SESSION_SECRET: z.string().default("change-this-session-secret"),
   DEFAULT_ADMIN_EMAIL: z.string().default("admin@example.com"),
-  DEFAULT_ADMIN_PASSWORD: z.string().default("Admin123456")
+  DEFAULT_ADMIN_PASSWORD: z.string().default("Admin@2026A2c!")
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

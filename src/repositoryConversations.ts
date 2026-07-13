@@ -35,7 +35,7 @@ import type {
 
 export interface ConversationRepositoryDeps {
   refreshCustomerAfterConversationDelete(merchantId: string, countryId: string, customerKey: string): void;
-  chargeSession(merchantId: string): { status: "free" | "charged" | "insufficient"; amount: number };
+  chargeSession(merchantId: string, customerKey: string): { status: "free" | "charged" | "insufficient"; amount: number };
 }
 
 export class ConversationRepository {
@@ -58,7 +58,7 @@ export class ConversationRepository {
     }
 
     const id = randomUUID();
-    const charge = chargeSession ? this.deps.chargeSession(merchantId) : { status: "free" as const, amount: 0 };
+    const charge = chargeSession ? this.deps.chargeSession(merchantId, customerPhone) : { status: "free" as const, amount: 0 };
     this.db.sqlite.prepare(`
       INSERT INTO conversations (id, merchant_id, country_id, customer_phone, a2c_account_phone, nickname, billing_status, session_charge_amount, session_charged_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'charged' THEN CURRENT_TIMESTAMP ELSE '' END)

@@ -19,6 +19,7 @@ import type {
   KnowledgeItemRecord,
   CustomerMemoryRecord,
   CustomerRecord,
+  CustomerBalanceTransactionRecord,
   TrainingMaterialRecord,
   TrainingMaterialItemRecord,
   ScriptFlowRecord,
@@ -54,6 +55,7 @@ export type {
   KnowledgeItemRecord,
   CustomerMemoryRecord,
   CustomerRecord,
+  CustomerBalanceTransactionRecord,
   TrainingMaterialRecord,
   TrainingMaterialItemRecord,
   ScriptFlowRecord,
@@ -184,6 +186,26 @@ export class Repositories {
 
   countCreatedCustomers(filters: { merchantId?: string; countryId?: string; status?: string; language?: string; q?: string; startAt?: string; endAt?: string } = {}): number {
     return this.customers.countCreated(filters);
+  }
+
+  patchCustomer(merchantId: string, customerKey: string, patch: Record<string, unknown>): CustomerRecord | undefined {
+    return this.customers.patch(merchantId, customerKey, patch);
+  }
+
+  listCustomerBalanceTransactions(merchantId: string, customerKey: string): CustomerBalanceTransactionRecord[] {
+    return this.customers.listBalanceTransactions(merchantId, customerKey);
+  }
+
+  createCustomerBalanceTransaction(merchantId: string, customerKey: string, amount: number, note: string, createdBy: string): CustomerBalanceTransactionRecord | undefined {
+    return this.customers.createBalanceTransaction(merchantId, customerKey, amount, note, createdBy);
+  }
+
+  patchCustomerBalanceTransaction(id: number, merchantId: string, patch: { amount?: number; note?: string }): CustomerBalanceTransactionRecord | undefined {
+    return this.customers.patchBalanceTransaction(id, merchantId, patch);
+  }
+
+  deleteCustomerBalanceTransaction(id: number, merchantId: string): boolean {
+    return this.customers.deleteBalanceTransaction(id, merchantId);
   }
 
   deleteCustomer(merchantId: string, customerKey: string): { deleted: boolean; conversationsDeleted: number; messagesDeleted: number } {

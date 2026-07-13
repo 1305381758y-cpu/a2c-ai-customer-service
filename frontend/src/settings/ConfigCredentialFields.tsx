@@ -31,7 +31,7 @@ export function configFieldsForGroup(group: ConfigCredentialGroup, provider = "m
 
 export function ConfigSetupSteps({ platform }: { platform: boolean }) {
   return <div className="setup-strip">
-    <div><span>1</span><strong>填写接入信息</strong><small>{platform ? "A2C / 智能供应商 / TG" : "A2C / TG"}</small></div>
+    <div><span>1</span><strong>填写接入信息</strong><small>{platform ? "智能供应商 / TG" : "A2C / TG"}</small></div>
     <div><span>2</span><strong>设置国家</strong><small>商户单国家</small></div>
     <div><span>3</span><strong>同步账号</strong><small>自动归属国家</small></div>
     <div><span>4</span><strong>接入回调</strong><small>填写 Webhook</small></div>

@@ -61,9 +61,17 @@ export class MerchantSettingsRepository {
     return this.getConfig(merchantId);
   }
 
-  chargeSession(merchantId: string): { status: "free" | "charged" | "insufficient"; amount: number } {
+  chargeSession(merchantId: string, customerKey = ""): { status: "free" | "charged" | "insufficient"; amount: number } {
     const amount = Math.max(0, Number(this.getConfig(merchantId).sessionPrice ?? 0));
     if (amount <= 0) return { status: "free", amount: 0 };
+    if (customerKey) {
+      const customerResult = this.db.sqlite.prepare(`
+        UPDATE customers
+        SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE merchant_id = ? AND customer_key = ? AND balance >= ?
+      `).run(amount, merchantId, customerKey, amount);
+      if (Number(customerResult.changes) > 0) return { status: "charged", amount };
+    }
     const result = this.db.sqlite.prepare(`
       UPDATE merchant_configs
       SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP

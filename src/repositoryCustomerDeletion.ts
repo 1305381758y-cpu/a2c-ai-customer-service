@@ -18,6 +18,7 @@ export function deleteCustomerRecord(
   try {
     const messagesDeleted = conversations.length ? deleteCustomerConversationData(db, merchantId, customerKey, conversations) : 0;
     if (!conversations.length) releaseCustomerInviteCodes(db, merchantId, customerKey);
+    db.sqlite.prepare("DELETE FROM customer_balance_transactions WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
     db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
     const deleted = db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
     db.sqlite.exec("COMMIT");
