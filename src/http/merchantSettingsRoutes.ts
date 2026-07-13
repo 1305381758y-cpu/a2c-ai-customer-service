@@ -110,6 +110,6 @@ export function registerStaticFrontendRoute(app: FastifyInstance): void {
   app.get("/*", async (_request, reply) => {
     const indexPath = join(process.cwd(), "dist", "public", "index.html");
     if (existsSync(indexPath)) return reply.type("text/html; charset=utf-8").send(readFileSync(indexPath, "utf8"));
-    return reply.type("text/html; charset=utf-8").send("<h1>A2C 智能客服</h1><p>服务已在线运行</p>");
+    return reply.type("text/html; charset=utf-8").send("<h1>智能客服</h1><p>服务已在线运行</p>");
   });
 }

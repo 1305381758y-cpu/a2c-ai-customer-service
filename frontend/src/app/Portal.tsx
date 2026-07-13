@@ -40,7 +40,7 @@ export function Portal({ user, requestedView, setView, onLogout }: { user: User;
 
   return <div className="app">
     <aside>
-      <div className="side-brand"><span>智</span><div><h2>A2C 智能客服</h2><small>智能客服工作台</small></div></div>
+      <div className="side-brand"><span>智</span><div><h2>智能客服</h2><small>智能客服工作台</small></div></div>
       <div className="side-user"><strong>{user.name}</strong><span>{roleName(user.role)}</span></div>
       <nav>{navigation.map(({ key, label, icon: Icon, group }, index) => <React.Fragment key={key}>{(index === 0 || navigation[index - 1]?.group !== group) && <span className="nav-group-label">{group}</span>}<button title={label} key={key} className={activeView === key ? "active" : ""} onClick={() => setView(key)}><Icon size={17}/><span className="nav-label">{label}</span></button></React.Fragment>)}</nav>
       <ConfirmActionButton className="logout" busyText="退出中..." title="确认退出登录？" detail="退出后需要重新输入账号密码才能进入后台。" confirmText="退出登录" onConfirm={async () => { await api("/api/auth/logout", { method: "POST" }); notify("success", "已退出登录"); onLogout(); }}><LogOut size={17}/>退出</ConfirmActionButton>

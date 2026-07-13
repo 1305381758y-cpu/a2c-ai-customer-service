@@ -228,7 +228,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <div className="form-grid elevated-form settings-credential-grid">
           <label>单次会话金额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.sessionPrice || "0")} onChange={(event) => setForm({ ...form, sessionPrice: event.target.value })} /></label>
           <label>当前余额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.balance || "0")} onChange={(event) => setForm({ ...form, balance: event.target.value })} /></label>
-          <label>结算币种<input value="默认币种（CNY）" disabled readOnly /></label>
+          <label>结算币种<input value="默认币种" disabled readOnly /></label>
         </div>
         {!platform && <p className="field-help">商户端只展示余额，不开放金额、余额或模型配置修改。</p>}
       </SettingsSection>

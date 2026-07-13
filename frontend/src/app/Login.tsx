@@ -28,7 +28,7 @@ export function Login({ onLogin, portalMode = "shared" }: { onLogin: (user: User
 
   return <main className="login">
     <section className="login-panel">
-      <div className="brand-lockup"><span>智</span><div><h1>A2C 智能客服</h1><p>{portalModeLabel(portalMode)}</p></div></div>
+      <div className="brand-lockup"><span>智</span><div><h1>智能客服</h1><p>{portalModeLabel(portalMode)}</p></div></div>
       <label>邮箱<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void login(); }} /></label>
       {error && <div className="error" role="alert">{error}</div>}
