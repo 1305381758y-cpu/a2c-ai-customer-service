@@ -238,6 +238,38 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: true });
   });
 
+  it("keeps custom registration packages unchanged", async () => {
+    const configured = "好的，请按下面步骤注册。\n注册链接：https://example.test/register\n邀请码：BO-123\n注册步骤：\n1. 打开注册链接。\n2. 填写手机号。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成后告诉我。";
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Perfecto, abra el enlace y complete el registro.",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: configured,
+        needsInviteCode: true,
+        nextFlowStep: "wait_registration"
+      }),
+      customerText: "Sí",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe(configured);
+    expect(result.naturalized).toMatchObject({
+      used: false,
+      error: "注册链接、邀请码和步骤保留话本原文"
+    });
+  });
+
   it("changes a repeated custom-flow reply instead of sending the same tail again", async () => {
     const repeated = "De acuerdo, siga primero los pasos de la página. Después del registro, envíeme el teléfono usado.";
     const ai = {

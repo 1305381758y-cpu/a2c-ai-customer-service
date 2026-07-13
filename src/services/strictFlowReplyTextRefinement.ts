@@ -65,6 +65,29 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
+  // A registration package is operational content, not conversational copy.
+  // Keep the merchant's configured link, invite code, and step order intact;
+  // rewriting this block can silently remove required registration steps.
+  if (input.scriptFlow?.flow.active && input.strictReply.needsInviteCode) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: true
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "注册链接、邀请码和步骤保留话本原文"
+      },
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
+    };
+  }
+
   const naturalized = await naturalizeStrictReply(input.ai, input.runtimeConfig, {
     customerText: input.customerText,
     draftReply: input.strictReply.reply,
