@@ -3,6 +3,7 @@ import { openDb } from "../src/db.js";
 import { Repositories } from "../src/repositories.js";
 import { getMerchantVisibleConfig, patchMaskedMerchantConfig, patchMerchantVisibleConfig } from "../src/services/merchantSettings.js";
 import { createBuiltInStrictScriptFlow, enableScriptFlow } from "../src/services/scriptFlows.js";
+import { appConfigForMerchant } from "../src/services/runtimeConfig.js";
 
 describe("merchant settings service", () => {
   it("requires an active valid script flow before enabling script-flow mode", () => {
@@ -81,5 +82,29 @@ describe("merchant settings service", () => {
     const second = repos.getOrCreateConversation("customer-2", "a2c-1", "", merchant.id, country.id);
     expect(second.billingStatus).toBe("insufficient");
     expect(repos.getMerchantConfig(merchant.id).balance).toBe(2);
+  });
+
+  it("supports customer balance ledger CRUD and customer-level model override", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("客户账单与模型商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    const conversation = repos.getOrCreateConversation("customer-1", "a2c-1", "客户", merchant.id, country.id, false);
+    repos.upsertCustomerFromConversation(conversation);
+
+    const created = repos.createCustomerBalanceTransaction(merchant.id, "customer-1", 12.5, "测试充值", "管理员");
+    expect(created).toMatchObject({ amount: 12.5, note: "测试充值", createdBy: "管理员" });
+    expect(repos.getCustomer(merchant.id, "customer-1")).toMatchObject({ balance: 12.5, balanceCurrency: "CNY" });
+
+    const patched = repos.patchCustomerBalanceTransaction(created!.id, merchant.id, { amount: 20, note: "调整后" });
+    expect(patched).toMatchObject({ amount: 20, note: "调整后" });
+    expect(repos.getCustomer(merchant.id, "customer-1")?.balance).toBe(20);
+
+    expect(repos.patchCustomer(merchant.id, "customer-1", { aiProvider: "deepseek", aiModel: "deepseek-chat" })).toMatchObject({ aiProvider: "deepseek", aiModel: "deepseek-chat" });
+    const baseConfig = repos.getMerchantConfig(merchant.id);
+    const runtime = appConfigForMerchant({ AI_PROVIDER: "minimax", MINIMAX_MODEL: "MiniMax-M3", DEEPSEEK_MODEL: "deepseek-chat" } as any, baseConfig, country, { aiProvider: "deepseek", aiModel: "deepseek-reasoner" });
+    expect(runtime).toMatchObject({ AI_PROVIDER: "deepseek", DEEPSEEK_MODEL: "deepseek-reasoner" });
+
+    expect(repos.deleteCustomerBalanceTransaction(patched!.id, merchant.id)).toBe(true);
+    expect(repos.getCustomer(merchant.id, "customer-1")?.balance).toBe(0);
   });
 });

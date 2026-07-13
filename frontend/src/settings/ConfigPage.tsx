@@ -218,7 +218,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     <ConfigSetupSteps platform={platform} />
     {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={platform ? undefined : () => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
     <SettingsWorkspace readOnly={!canEdit} showAi={false}>
-      {!platform && <SettingsSection
+      <SettingsSection
         id="billing"
         title="会话计费与余额"
         description={platform ? "为当前商户设置每个新会话的计费金额和可用余额。相同客户在同一客服账号下继续聊天不会重复扣费。" : "查看当前商户的会话计费状态和余额。计费规则由平台管理员统一维护。"}
@@ -232,7 +232,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
           <label>结算币种<input value="默认币种" disabled readOnly /></label>
         </div>
         {!platform && <p className="field-help">商户端只展示余额，不开放金额、余额或模型配置修改。</p>}
-      </SettingsSection>}
+      </SettingsSection>
       <SettingsSection
         id="runtime"
         title="运行模式"

@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { api, useRows, withQuery } from "../app/api.js";
-import type { Filters, Knowledge, MerchantCountry } from "../types.js";
+import type { Filters, Knowledge, Merchant, MerchantCountry } from "../types.js";
 import { AsyncButton, Editor, FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { countryLabel, label } from "../ui/formatters.js";
@@ -11,6 +11,7 @@ import { notify } from "../ui/toast.js";
 
 export function KnowledgePage({ platform }: { platform: boolean }) {
   const base = platform ? "/api/admin/knowledge" : "/api/merchant/knowledge";
+  const [merchants] = useRows<Merchant>(platform ? "/api/admin/merchants" : "");
   const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
   const [filters, setFilters] = useState<Filters>({ merchantId: "", countryId: "", type: "", enabled: "" });
   const [page, setPage] = useState(1);
@@ -25,6 +26,11 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
   const pager = { rows, page, pageSize, total, totalPages, setPage: (value: number) => setPage(Math.min(Math.max(1, value), totalPages)), setPageSize: (value: number) => { setPageSize(value); setPage(1); } };
   const [form, setForm] = useState<Record<string, string>>({ merchantId: "default", countryId: "", type: "faq", title: "", content: "", language: "zh", priority: "0" });
   const [selected, setSelected] = useState<Knowledge | null>(null);
+  useEffect(() => {
+    if (!platform || !merchants.length) return;
+    const merchantId = filters.merchantId || merchants[0].id;
+    setForm((current) => current.merchantId === merchantId ? current : { ...current, merchantId });
+  }, [platform, filters.merchantId, merchants]);
   const reload = async () => {
     setLoading(true);
     setError(null);
@@ -55,7 +61,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
           onApply={async () => { if (page === 1) await reload(); else setPage(1); }}
         />
         <div className="toolbar wrap compact-create">
-          {platform && <input placeholder={label("merchantId")} value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })} />}
+          {platform && <select aria-label="新增知识所属商户" value={form.merchantId} onChange={(e) => setForm({ ...form, merchantId: e.target.value })}><option value="">选择商户</option>{merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}</select>}
           <select value={form.countryId || filters.countryId || countries[0]?.id || ""} onChange={(e) => setForm({ ...form, countryId: e.target.value })}>
             {countries.map((country) => <option key={country.id} value={country.id}>{countryLabel(country.name)}</option>)}
           </select>
