@@ -3,13 +3,14 @@ import { Search } from "lucide-react";
 import { withQuery } from "../app/api.js";
 import type { Filters, MerchantCountry } from "../types.js";
 import { timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 import { MetricGrid } from "./DashboardMetrics.js";
 
 type ApiClient = <T>(url: string, options?: RequestInit) => Promise<T>;
 
 export function Dashboard({ platform, api, timeMode }: { platform: boolean; api: ApiClient; timeMode: TimeDisplayMode }) {
   const [data, setData] = useState<Record<string, number>>({});
-  const [filters, setFilters] = useState<Filters>({ startAt: "", endAt: "" });
+  const [filters, setFilters] = useState<Filters>(todayDateTimeRange("Asia/Shanghai"));
   const [countries, setCountries] = useState<MerchantCountry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

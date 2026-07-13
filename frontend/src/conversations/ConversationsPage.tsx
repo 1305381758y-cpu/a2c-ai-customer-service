@@ -11,6 +11,7 @@ import { AsyncButton, FilterBar } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName, type TimeDisplayMode } from "../ui/formatters.js";
 import { useClientPagination } from "../ui/Pagination.js";
 import { notify, notifyExportStarted } from "../ui/toast.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 import { accountUnreadCount, conversationExportFilters, conversationRowsQuery, conversationTimeZoneFor, conversationUnreadCount, filterConversationAccounts, normalizeConversationFilters, proactiveCustomerDraft, selectedConversationAfterReload } from "./ConversationPageHelpers.js";
 
 export function Conversations({ platform = false, handoffs = false, timeMode, canApplyTraining = false, canDelete = true }: { platform?: boolean; handoffs?: boolean; timeMode: TimeDisplayMode; canApplyTraining?: boolean; canDelete?: boolean }) {
@@ -21,7 +22,8 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
   const [accounts, setAccounts, accountsState] = useRows<A2CAccount>("/api/merchant/a2c/accounts");
   const [unread, setUnread] = useState<UnreadSummary[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<A2CAccount | null>(null);
-  const [filters, setFiltersState] = useState<Filters>({ status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "" });
+  const defaultFilters: Filters = { status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", ...todayDateTimeRange("Asia/Shanghai") };
+  const [filters, setFiltersState] = useState<Filters>(defaultFilters);
   const [conversationPage, setConversationPage] = useState(1);
   const [conversationPageSize, setConversationPageSize] = useState(20);
   const [selected, setSelected] = useState<Conversation | null>(null);
@@ -214,7 +216,7 @@ function MerchantConversations({ handoffs = false, timeMode, canApplyTraining, c
       onOpenNewCustomer={openNewCustomer}
       onRetry={reloadRows}
       onExportStarted={notifyExportStarted}
-      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "startAt", "endAt"] : ["status", "handoffStatus", "language", "startAt", "endAt"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} onApply={reloadRows} />}
+      renderFilterBar={() => <FilterBar filters={filters} setFilters={setFilters} fields={handoffs ? ["language", "startAt", "endAt"] : ["status", "handoffStatus", "language", "startAt", "endAt"]} selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }} resetValues={defaultFilters} onApply={reloadRows} />}
     />
     <section className="chat-pane">{selected ? <ConversationDetail canApplyTraining={canApplyTraining} canDelete={canDelete} conversation={selected} refresh={async () => { await reloadRows(); await reloadUnread(); }} onDeleted={async () => { setSelected(null); await reloadRows(); await reloadUnread(); }} /> : selectedAccount && draftCustomer ? <ProactiveConversationDetail account={selectedAccount} target={draftCustomer} onCreated={async (conversation) => { setSelected(conversation); setDraftCustomer(null); setNewCustomer({ customerPhone: "", nickname: "" }); await reloadRows(); await reloadUnread(); }} /> : <div className="empty-chat export-empty-state"><h3>选择客户开始对话</h3><p>左侧选择客服账号，中间选择客户；也可以使用顶部工具条一键导出全部线上对话用于复盘、训练或交给同事分析。</p></div>}</section>
   </div>;

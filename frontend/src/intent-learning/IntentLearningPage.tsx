@@ -6,12 +6,13 @@ import { AsyncButton, FilterBar, ResourceErrorNotice, Table } from "../ui/compon
 import { countryLabel, formatDateTime, label, languageName, statusTone, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 import { intentActiveCountry, intentQueryFilters, intentTimeLabelFor, intentTimeZoneFor } from "./IntentLearningPageHelpers.js";
 
 export function IntentLearningPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/intent-learning" : "/api/merchant/intent-learning";
   const [countries, , countriesState] = useRows<MerchantCountry>(platform ? "/api/admin/countries" : "/api/merchant/countries");
-  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", startAt: "", endAt: "" };
+  const defaultFilters: Filters = { merchantId: "", countryId: "", status: "candidate", suggestedIntent: "", q: "", ...todayDateTimeRange("Asia/Shanghai") };
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);

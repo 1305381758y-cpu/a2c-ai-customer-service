@@ -5,12 +5,14 @@ import type { Conversation, Filters } from "../types.js";
 import { FilterBar, Table } from "../ui/components.js";
 import { Pagination } from "../ui/Pagination.js";
 import { notifyExportStarted } from "../ui/toast.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 import { ConversationDetail } from "./ConversationDetail.js";
 import { ConversationExportBar } from "./ConversationExport.js";
 
 export function PlatformConversations({ handoffs = false }: { handoffs?: boolean }) {
   const base = "/api/admin/conversations";
-  const [filters, setFiltersState] = useState<Filters>({ merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "" });
+  const defaultFilters: Filters = { merchantId: "", status: handoffs ? "human_handoff" : "", handoffStatus: handoffs ? "pending" : "", language: "", ...todayDateTimeRange("Asia/Shanghai") };
+  const [filters, setFiltersState] = useState<Filters>(defaultFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const rowsUrl = withQuery(base, { ...filters, limit: String(pageSize), offset: String((page - 1) * pageSize) });
@@ -51,6 +53,7 @@ export function PlatformConversations({ handoffs = false }: { handoffs?: boolean
         setFilters={setFilters}
         fields={handoffs ? ["merchantId", "language", "startAt", "endAt"] : ["merchantId", "status", "handoffStatus", "language", "startAt", "endAt"]}
         selects={{ status: ["", "active", "human_handoff"], handoffStatus: ["", "pending", "processing", "done"] }}
+        resetValues={defaultFilters}
         onApply={reload}
       />
       <div className="table-helper">当前筛选共 {total} 个会话，当前页展示 {rows.length} 个。</div>

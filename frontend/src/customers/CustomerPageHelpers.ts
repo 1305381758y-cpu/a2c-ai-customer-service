@@ -1,13 +1,9 @@
 import type { Filters, MerchantCountry } from "../types.js";
 import { countryLabel, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 
 export function todayBeijingDateRange() {
-  const now = new Date();
-  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const today = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
-  beijing.setUTCDate(beijing.getUTCDate() + 1);
-  const tomorrow = `${beijing.getUTCFullYear()}-${pad(beijing.getUTCMonth() + 1)}-${pad(beijing.getUTCDate())}`;
-  return { startAt: `${today}T00:00:00`, endAt: `${tomorrow}T00:00:00` };
+  return todayDateTimeRange("Asia/Shanghai");
 }
 
 export function customerActiveCountry(countries: MerchantCountry[], countryId: string) {
@@ -72,8 +68,4 @@ export function customerColumns(platform: boolean, selected: boolean) {
     ? ["merchantId", "countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"]
     : ["countryName", "customerKey", "nickname", "lastA2CAccountPhone", "language", "stage", "extractedPhone", "extractedTelegram", "extractedWhatsApp", "status", "conversationCount", "lastSeenAt"];
   return selected ? compact : full;
-}
-
-function pad(value: number) {
-  return String(value).padStart(2, "0");
 }

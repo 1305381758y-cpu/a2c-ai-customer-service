@@ -5,13 +5,15 @@ import type { Filters, MerchantCountry, OperationLog } from "../types.js";
 import { FilterBar, ResourceErrorNotice, Table } from "../ui/components.js";
 import { countryLabel, timeDisplayModeLabel, timeZoneForCountry, type TimeDisplayMode } from "../ui/formatters.js";
 import { Pagination } from "../ui/Pagination.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 
 const ACTIONS = ["", "create", "update", "delete", "import", "sync", "restore", "enable", "send", "mark_read"];
 const RESOURCES = ["", "merchant_config", "agent_profile", "script_flow", "training_material", "training_sample", "knowledge", "invite_code", "teacher_tg_link", "a2c_account", "country", "customer", "conversation", "user", "merchant", "intent_learning"];
 
 export function OperationLogsPage({ platform = false, timeMode }: { platform?: boolean; timeMode: TimeDisplayMode }) {
   const base = platform ? "/api/admin/operation-logs" : "/api/merchant/operation-logs";
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", q: "", action: "", resourceType: "", status: "", startAt: "", endAt: "" });
+  const defaultFilters: Filters = { merchantId: "", q: "", action: "", resourceType: "", status: "", ...todayDateTimeRange("Asia/Shanghai") };
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [rows, setRows] = useState<OperationLog[]>([]);
@@ -51,6 +53,7 @@ export function OperationLogsPage({ platform = false, timeMode }: { platform?: b
         setFilters={setFilters}
         fields={platform ? ["merchantId", "q", "action", "resourceType", "status", "startAt", "endAt"] : ["q", "action", "resourceType", "status", "startAt", "endAt"]}
         selects={{ action: ACTIONS, resourceType: RESOURCES, status: ["", "success", "error"] }}
+        resetValues={defaultFilters}
         onApply={async () => { setPage(1); await reload(); }}
       />
       <Table rows={rows} columns={["actorName", "actorRole", "action", "resourceType", "targetId", "status", "httpStatus", "createdAt"]} loading={loading} error={error} onRetry={reload} emptyTitle="暂无操作日志" emptyDetail="完成后台新增、修改、删除、同步或恢复操作后，记录会显示在这里。" />

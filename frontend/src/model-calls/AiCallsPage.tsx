@@ -4,6 +4,7 @@ import { api, useRows, withQuery } from "../app/api.js";
 import type { AiCallStats, Filters, MerchantCountry } from "../types.js";
 import { ResourceErrorNotice, Table } from "../ui/components.js";
 import { label, type TimeDisplayMode } from "../ui/formatters.js";
+import { todayDateTimeRange } from "../ui/timeFilters.js";
 import { AiCallFilters } from "./AiCallFilters.js";
 import { AiCallMetricGrid } from "./AiCallMetricGrid.js";
 import { aiCallActiveCountry, aiCallErrorKey, aiCallStatsQuery, aiCallTimeLabelFor, aiCallTimeZoneFor, EMPTY_AI_CALL_STATS, formatAiCallSummary } from "./AiCallsPageHelpers.js";
@@ -19,7 +20,7 @@ export function AiCallsPage({ platform = false, timeMode }: { platform?: boolean
 }
 
 function PlatformAiCallsPage({ timeMode }: { timeMode: TimeDisplayMode }) {
-  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", startAt: "", endAt: "" });
+  const [filters, setFilters] = useState<Filters>({ merchantId: "", provider: "", taskType: "", status: "", ...todayDateTimeRange("Asia/Shanghai") });
   const endpoint = "/api/admin/ai-calls/stats";
   const [selectedTaskType, setSelectedTaskType] = useState("");
   const [selectedError, setSelectedError] = useState<AiCallStats["byError"][number] | null>(null);
