@@ -19,6 +19,7 @@ export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, r
   const [provider, setProvider] = React.useState(customer.aiProvider || "");
   const [model, setModel] = React.useState(customer.aiModel || "");
   const [transactions, setTransactions] = React.useState<CustomerBalanceTransaction[]>([]);
+  const [balance, setBalance] = React.useState(Number(customer.balance || 0));
   const [amount, setAmount] = React.useState("");
   const [note, setNote] = React.useState("");
   const customerKey = encodeURIComponent(customer.customerKey);
@@ -27,8 +28,9 @@ export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, r
     if (!platform) return;
     const result = await api<{ rows: CustomerBalanceTransaction[] }>(`/api/admin/customers/${customerKey}/balance-transactions${merchantQuery}`);
     setTransactions(result.rows);
+    setBalance(result.rows.reduce((total, row) => total + Number(row.amount || 0), 0));
   };
-  React.useEffect(() => { setProvider(customer.aiProvider || ""); setModel(customer.aiModel || ""); void reloadTransactions().catch(() => undefined); }, [customer.id, platform]);
+  React.useEffect(() => { setProvider(customer.aiProvider || ""); setModel(customer.aiModel || ""); setBalance(Number(customer.balance || 0)); void reloadTransactions().catch(() => undefined); }, [customer.id, platform]);
   const saveAgent = async () => {
     await api<Customer>(`/api/admin/customers/${customerKey}${merchantQuery}`, { method: "PATCH", body: JSON.stringify({ aiProvider: provider, aiModel: model }) });
     notify("success", "客户智能供应商已保存", "后续该客户的新消息会优先使用这项配置。");
@@ -76,7 +78,7 @@ export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, r
           <AsyncButton busyText="保存中..." onClick={saveAgent}>保存客户模型配置</AsyncButton>
         </section>
         <section className="detail-subsection">
-          <div className="section-heading-row"><div><h4>客户余额与充值记录</h4><p>当前余额：{Number(customer.balance || 0).toFixed(2)} {customer.balanceCurrency === "CNY" ? "默认币种" : customer.balanceCurrency}</p></div></div>
+          <div className="section-heading-row"><div><h4>客户余额与充值记录</h4><p>当前余额：{balance.toFixed(2)} {customer.balanceCurrency === "CNY" ? "默认币种" : customer.balanceCurrency}</p></div></div>
           <div className="form-grid"><label>金额<input type="number" step="0.01" value={amount} placeholder="正数充值，负数扣减" onChange={(event) => setAmount(event.target.value)} /></label><label>备注<input value={note} onChange={(event) => setNote(event.target.value)} /></label></div>
           <AsyncButton busyText="提交中..." onClick={addBalance}>新增余额记录</AsyncButton>
           <div className="table-scroll compact"><table><thead><tr><th>金额</th><th>备注</th><th>操作人</th><th>时间</th><th>操作</th></tr></thead><tbody>{transactions.map((row) => <TransactionRow key={row.id} row={row} merchantQuery={merchantQuery} onChanged={reloadTransactions} />)}{!transactions.length && <tr><td colSpan={5}>暂无余额记录</td></tr>}</tbody></table></div>
