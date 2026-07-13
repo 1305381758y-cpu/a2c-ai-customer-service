@@ -53,12 +53,14 @@ export async function naturalizeStrictReply(
     history: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
     allowLinkOrInvite: boolean;
     agentProfile?: MerchantAgentProfileRecord;
+    forceNaturalize?: boolean;
+    avoidReplies?: string[];
   }
 ): Promise<{ reply: string; used: boolean; error?: string }> {
   if (!input.customerText.trim()) {
     return { reply: input.draftReply, used: false };
   }
-  if (input.questionType === "none" && input.draftReply.length <= 90 && !input.agentProfile?.enabled) {
+  if (!input.forceNaturalize && input.questionType === "none" && input.draftReply.length <= 90 && !input.agentProfile?.enabled) {
     return { reply: input.draftReply, used: false };
   }
   const result = await ai.naturalizeStrictFlowText(config, {
@@ -69,7 +71,8 @@ export async function naturalizeStrictReply(
     questionType: input.questionType,
     recentHistory: input.history,
     allowLinkOrInvite: input.allowLinkOrInvite,
-    agentProfile: input.agentProfile
+    agentProfile: input.agentProfile,
+    avoidReplies: input.avoidReplies
   });
   return { reply: result.text, used: result.used, error: result.error };
 }

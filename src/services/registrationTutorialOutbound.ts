@@ -13,8 +13,17 @@ export async function sendRegistrationTutorialImage(input: {
   language: string;
   tutorialImageUrl: string;
   simulation: boolean;
+  sourcePayloadId?: string;
 }): Promise<void> {
   if (!input.tutorialImageUrl) return;
+  const existing = input.sourcePayloadId
+    ? input.repos.listConversationMessages(input.conversation.id, 100).some((message) => {
+      if (message.direction !== "outbound" || message.msgType !== "image") return false;
+      const raw = message.rawPayload;
+      return raw.registrationTutorialImage === true && raw.sourcePayloadId === input.sourcePayloadId;
+    })
+    : false;
+  if (existing) return;
   const caption = registrationTutorialCaption(input.language);
   await recordOutboundConversationMessage({
     repos: input.repos,
@@ -46,6 +55,7 @@ export async function sendRegistrationTutorialImage(input: {
         strictFlow: true,
         strictFlowStep: input.conversation.flowStep || "wait_registration",
         registrationTutorialImage: true,
+        sourcePayloadId: input.sourcePayloadId || "",
         mediaUrl: input.tutorialImageUrl,
         caption
       }

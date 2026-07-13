@@ -209,7 +209,7 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: false, error: "接管提示保留固定话术" });
   });
 
-  it("preserves active merchant script-flow wording instead of rewriting it like built-in copy", async () => {
+  it("naturalizes active merchant script-flow wording without replacing its business content", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
         text: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento. ¿Tiene tiempo para continuar con el registro ahora?",
@@ -233,11 +233,30 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
-    expect(result.reply).toContain("Soy Laura");
-    expect(result.reply).toContain("proceso exacto del cliente");
-    expect(result.reply).not.toContain("este trabajo en línea ayuda a comerciantes");
-    expect(result.naturalized).toMatchObject({ used: false, error: "已启用商户话本流程，保留节点原话术" });
+    expect(ai.naturalizeStrictFlowText).toHaveBeenCalledOnce();
+    expect(result.reply).toContain("este trabajo en línea ayuda a comerciantes");
+    expect(result.naturalized).toMatchObject({ used: true });
+  });
+
+  it("changes a repeated custom-flow reply instead of sending the same tail again", async () => {
+    const repeated = "De acuerdo, siga primero los pasos de la página. Después del registro, envíeme el teléfono usado.";
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({ text: repeated, used: true, error: "" }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({ reply: repeated, language: "es", controlledQuestionType: "none" }),
+      customerText: "ok",
+      history: [{ direction: "outbound", content: repeated, intent: "unknown", createdAt: "" }],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).not.toBe(repeated);
+    expect(result.duplicateAvoided).toBe(true);
+    expect(result.variantApplied).toBe(true);
   });
 
   it("still lets active script-flow replies answer customer questions inside the current node", async () => {

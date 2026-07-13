@@ -130,7 +130,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
       data,
       language: strictReply.language,
       tutorialImageUrl: runtimeConfig.REGISTRATION_TUTORIAL_IMAGE_URL,
-      simulation
+      simulation,
+      sourcePayloadId: payloadId
     });
   }
 

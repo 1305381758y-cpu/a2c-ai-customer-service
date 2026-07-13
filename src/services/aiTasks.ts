@@ -56,6 +56,7 @@ export interface AiNaturalizeStrictFlowInput {
   recentHistory: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   allowLinkOrInvite: boolean;
   agentProfile?: MerchantAgentProfileRecord;
+  avoidReplies?: string[];
 }
 
 export interface AiTaskPorts {

@@ -12,6 +12,7 @@ export interface AiNaturalizeStrictFlowInput {
   recentHistory: Array<{ direction: string; content: string; intent: string; createdAt: string }>;
   allowLinkOrInvite: boolean;
   agentProfile?: MerchantAgentProfileRecord;
+  avoidReplies?: string[];
 }
 
 export interface AiNaturalizeStrictFlowRuntime {
@@ -36,6 +37,7 @@ export async function naturalizeStrictFlowText(
       questionType: input.questionType,
       allowLinkOrInvite: input.allowLinkOrInvite,
       agentProfile: safeAgentProfile(input.agentProfile),
+      avoidReplies: input.avoidReplies?.slice(-5) ?? [],
       recentHistory: input.recentHistory.slice(-6).map((item) => ({
         direction: item.direction,
         content: item.content,
@@ -58,6 +60,7 @@ export async function naturalizeStrictFlowText(
 - 客户问费用/投资时，表达当前引导阶段不会要求向客服私下转账或付款，具体以页面/人工确认为准。
 - 客户问收益时，表达按任务和平台规则核算，不能承诺固定收益。
 - 客户问未知问题时，表达以页面或人工确认为准，然后回到当前步骤。
+- 不要复用 avoidReplies 中最近的客服回复；即使意思相同，也要更换开头、句式或结尾。
 - 输出纯文本，不要 JSON，不要解释。
 `
     });

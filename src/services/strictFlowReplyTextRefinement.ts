@@ -12,6 +12,8 @@ export interface StrictFlowReplyTextRefinementResult {
     error?: string;
   };
   languageGuard: LanguageGuardResult;
+  duplicateAvoided: boolean;
+  variantApplied: boolean;
 }
 
 export async function refineStrictFlowReplyText(input: {
@@ -37,7 +39,9 @@ export async function refineStrictFlowReplyText(input: {
         used: false,
         error: "邀请码未分配时跳过口语化改写"
       },
-      languageGuard
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
     };
   }
 
@@ -55,25 +59,9 @@ export async function refineStrictFlowReplyText(input: {
         used: false,
         error: "接管提示保留固定话术"
       },
-      languageGuard
-    };
-  }
-
-  if (input.scriptFlow?.flow.active && shouldPreserveScriptFlowNodeText(input.strictReply)) {
-    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-      reply: input.strictReply.reply,
-      targetLanguage: input.strictReply.language,
-      flowStep: input.strictReply.nextFlowStep,
-      allowLinkOrInvite: input.strictReply.needsInviteCode
-    });
-    return {
-      reply: languageGuard.reply,
-      naturalized: {
-        reply: input.strictReply.reply,
-        used: false,
-        error: "已启用商户话本流程，保留节点原话术"
-      },
-      languageGuard
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
     };
   }
 
@@ -85,12 +73,18 @@ export async function refineStrictFlowReplyText(input: {
     questionType: input.strictReply.controlledQuestionType || "none",
     history: input.history,
     allowLinkOrInvite: input.strictReply.needsInviteCode,
-    agentProfile: input.agentProfile
+    agentProfile: input.agentProfile,
+    forceNaturalize: Boolean(input.scriptFlow?.flow.active),
+    avoidReplies: recentOutboundReplies(input.history)
   });
 
   const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
+  const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
+  const distinctReply = duplicate
+    ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language)
+    : safeNaturalizedReply.reply;
   const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-    reply: safeNaturalizedReply.reply,
+    reply: distinctReply,
     targetLanguage: input.strictReply.language,
     flowStep: input.strictReply.nextFlowStep,
     allowLinkOrInvite: input.strictReply.needsInviteCode
@@ -103,14 +97,10 @@ export async function refineStrictFlowReplyText(input: {
       used: false,
       error: "口语化改写越过流程边界，已回退"
     } : naturalized,
-    languageGuard
+    languageGuard,
+    duplicateAvoided: duplicate,
+    variantApplied: duplicate && distinctReply !== safeNaturalizedReply.reply
   };
-}
-
-function shouldPreserveScriptFlowNodeText(strictReply: StrictFlowReply): boolean {
-  const questionType = strictReply.controlledQuestionType || "none";
-  if (strictReply.controlledQuestionFallback) return false;
-  return questionType === "none";
 }
 
 function sanitizeStrictNaturalizedReply(reply: string, fallback: string): { reply: string; rejected: boolean } {
@@ -122,4 +112,61 @@ function sanitizeStrictNaturalizedReply(reply: string, fallback: string): { repl
 
 function asksForUnsupportedManualRegistration(text: string): boolean {
   return /(registramos|registrarlo|registrarle|lo registro|la registro|register you|sign you up|帮您登记|幫您登記|帮你登记|帮您注册|幫您註冊|帮你注册).{0,80}(por aqu[ií]|aqu[ií]|here|这里|這裡)|(?:nombre|name|姓名).{0,40}(tel[eé]fono|phone|手机号|手机号码).{0,40}(telegram|tg)/i.test(text);
+}
+
+function recentOutboundReplies(history: Array<{ direction: string; content: string }>): string[] {
+  return history.filter((item) => item.direction === "outbound").slice(-5).map((item) => item.content).filter(Boolean);
+}
+
+function isNearDuplicateOfRecentReply(reply: string, history: Array<{ direction: string; content: string }>): boolean {
+  const normalized = normalizeReply(reply);
+  if (!normalized) return false;
+  return recentOutboundReplies(history).some((previous) => {
+    const prior = normalizeReply(previous);
+    if (!prior) return false;
+    if (prior === normalized) return true;
+    const left = new Set(prior.split(" "));
+    const right = new Set(normalized.split(" "));
+    const overlap = [...left].filter((token) => right.has(token)).length;
+    const union = new Set([...left, ...right]).size;
+    return union > 0 && overlap / union >= 0.9;
+  });
+}
+
+function normalizeReply(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, "链接")
+    .replace(/\d+/g, "数字")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function makeDistinctReply(reply: string, language: string): string {
+  if (language === "es") {
+    return reply
+      .replace(/^de acuerdo[,.]?/i, "Perfecto,")
+      .replace(/por favor/gi, "cuando pueda")
+      .replace(/envíeme/gi, "mándeme")
+      .replace(/dígame/gi, "cuénteme");
+  }
+  if (language === "pt-BR") {
+    return reply
+      .replace(/^certo[,.]?/i, "Perfeito,")
+      .replace(/por favor/gi, "quando puder")
+      .replace(/envie/gi, "me mande");
+  }
+  if (language === "en") {
+    return reply
+      .replace(/^okay[,.]?/i, "Alright,")
+      .replace(/^ok[,.]?/i, "Got it,")
+      .replace(/please/gi, "when you can");
+  }
+  const changed = reply
+    .replace(/^好的[，,]?/, "没问题，")
+    .replace(/^好的[，,]?/, "明白了，")
+    .replace(/请告知我/, "完成后告诉我")
+    .replace(/请将/, "记得把");
+  return changed === reply ? `${reply}\n我这边等您继续。` : changed;
 }

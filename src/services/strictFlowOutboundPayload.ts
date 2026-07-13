@@ -6,6 +6,8 @@ import type { LanguageGuardResult } from "./replyLanguage.js";
 export interface NaturalizedStrictReplyDebug {
   used: boolean;
   error?: string;
+  duplicateAvoided?: boolean;
+  variantApplied?: boolean;
 }
 
 export interface StrictFlowOutboundPayloadInput {
@@ -44,6 +46,8 @@ export function buildStrictFlowOutboundRawPayload(input: StrictFlowOutboundPaylo
     nextAction: strictReply.contextualIntent?.nextAction || "",
     usedAiNaturalizer: naturalized.used,
     naturalizerError: naturalized.error || "",
+    duplicateAvoided: Boolean(naturalized.duplicateAvoided),
+    variantApplied: Boolean(naturalized.variantApplied),
     languageGuardTarget: languageGuard.targetLanguage,
     languageGuardStatus: languageGuard.status,
     languageGuardAttempts: languageGuard.attempts,
