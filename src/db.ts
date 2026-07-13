@@ -600,6 +600,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "merchant_configs", "session_price", "REAL DEFAULT 0");
   ensureColumn(db, "merchant_configs", "balance", "REAL DEFAULT 0");
   ensureColumn(db, "merchant_configs", "balance_currency", "TEXT DEFAULT 'CNY'");
+  db.prepare("UPDATE merchant_configs SET balance_currency = 'CNY' WHERE balance_currency IS NULL OR balance_currency = '' OR balance_currency <> 'CNY'").run();
   ensureColumn(db, "conversations", "billing_status", "TEXT DEFAULT 'free'");
   ensureColumn(db, "conversations", "session_charge_amount", "REAL DEFAULT 0");
   ensureColumn(db, "conversations", "session_charged_at", "TEXT DEFAULT ''");

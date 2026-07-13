@@ -5,10 +5,11 @@ import type { MerchantConfigVersion } from "../types.js";
 import { ConfirmActionButton } from "../ui/components.js";
 import { formatDateTime, label } from "../ui/formatters.js";
 
-export function ConfigVersionHistory({ rows, loading, canRestore, onRestore }: {
+export function ConfigVersionHistory({ rows, loading, canRestore, platform = false, onRestore }: {
   rows: MerchantConfigVersion[];
   loading: boolean;
   canRestore: boolean;
+  platform?: boolean;
   onRestore: (version: MerchantConfigVersion) => Promise<void>;
 }) {
   return <details className="config-version-panel">
@@ -24,7 +25,7 @@ export function ConfigVersionHistory({ rows, loading, canRestore, onRestore }: {
           className="ghost"
           busyText="恢复中..."
           title={`确认恢复配置版本 ${version.version}？`}
-          detail="恢复后，A2C、智能供应商、运行模式、注册链接和TG配置等会回到该版本，并自动生成一条新的恢复记录。请确认不会影响正在服务的真实客户。"
+          detail={platform ? "恢复后，A2C、智能供应商、运行模式、注册链接和TG配置等会回到该版本，并自动生成一条新的恢复记录。请确认不会影响正在服务的真实客户。" : "恢复后，A2C、运行模式、注册链接和TG配置等会回到该版本，并自动生成一条新的恢复记录。请确认不会影响正在服务的真实客户。"}
           confirmText="恢复此版本"
           onConfirm={() => onRestore(version)}
         >恢复</ConfirmActionButton>}

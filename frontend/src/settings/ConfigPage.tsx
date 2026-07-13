@@ -214,21 +214,21 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     <ResourceErrorNotice label="商户选项" error={merchantsState.error} onRetry={merchantsState.reload} />
     {platform && <label className="settings-merchant-selector"><span>当前商户</span><select value={merchantId} onChange={(event) => setMerchantId(event.target.value)}>{merchants.map((merchant) => <option value={merchant.id} key={merchant.id}>{merchant.name}</option>)}</select></label>}
     {!canEdit && <div className="permission-notice"><strong>当前为只读配置</strong><span>商户运营可以查看配置和执行连通性检测，但不能保存、同步、启停或删除核心配置。</span></div>}
-    <ConfigSetupSteps />
+    <ConfigSetupSteps platform={platform} />
     {canEdit ? <ConfigActionBar error={error} message={message} checks={checks} onSave={saveConfig} onSyncAccounts={() => syncA2CAccounts()} onRunCheck={runConfigCheck} /> : <div className="config-readonly-actions">{error && <div className="error">{error}</div>}{message && <div className="notice">{message}</div>}<AsyncButton busyText="检测中..." onClick={runConfigCheck}>检测当前配置</AsyncButton></div>}
-    <SettingsWorkspace readOnly={!canEdit}>
+    <SettingsWorkspace readOnly={!canEdit} showAi={platform}>
       <SettingsSection
         id="billing"
         title="会话计费与余额"
         description={platform ? "为当前商户设置每个新会话的计费金额和可用余额。相同客户在同一客服账号下继续聊天不会重复扣费。" : "查看当前商户的会话计费状态和余额。计费规则由平台管理员统一维护。"}
-        status={`${Number(form.balance || 0).toFixed(2)} ${String(form.balanceCurrency || "CNY")}`}
+        status={`${Number(form.balance || 0).toFixed(2)} 默认币种`}
         statusTone={Number(form.balance || 0) > 0 ? "ok" : "warning"}
         impact={platform ? "余额不足时新会话仍会入库，但不会发起自动回复；模拟训练不消耗余额。" : "如余额不足，请联系平台管理员充值或调整计费规则。"}
       >
         <div className="form-grid elevated-form settings-credential-grid">
           <label>单次会话金额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.sessionPrice || "0")} onChange={(event) => setForm({ ...form, sessionPrice: event.target.value })} /></label>
           <label>当前余额<input type="number" min="0" step="0.01" disabled={!platform || !canEdit} value={String(form.balance || "0")} onChange={(event) => setForm({ ...form, balance: event.target.value })} /></label>
-          <label>结算币种<input value={String(form.balanceCurrency || "CNY")} disabled={!platform || !canEdit} onChange={(event) => setForm({ ...form, balanceCurrency: event.target.value.toUpperCase() })} /></label>
+          <label>结算币种<input value="默认币种（CNY）" disabled readOnly /></label>
         </div>
         {!platform && <p className="field-help">商户端只展示余额，不开放金额、余额或模型配置修改。</p>}
       </SettingsSection>
@@ -297,6 +297,6 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         <TelegramHandoffCard form={form} setupTelegram={setupTelegram} refreshTelegramStatus={async () => { setError(""); setMessage("正在刷新TG状态..."); await reloadConfig(); setMessage("TG状态已刷新。"); notify("success", "TG 状态已刷新"); }} />
       </SettingsSection>
     </SettingsWorkspace>
-    <ConfigVersionHistory rows={configVersions} loading={versionsLoading} canRestore={canEdit} onRestore={restoreConfigVersion} />
+    <ConfigVersionHistory rows={configVersions} loading={versionsLoading} canRestore={canEdit} platform={platform} onRestore={restoreConfigVersion} />
   </section>;
 }

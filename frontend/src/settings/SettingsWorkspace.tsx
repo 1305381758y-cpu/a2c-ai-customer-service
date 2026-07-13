@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 import { Bot, Globe2, Link2, MessageSquare, Settings2, Sparkles, Users } from "lucide-react";
 
-export type SettingsSectionId = "runtime" | "a2c" | "ai" | "market" | "accounts" | "handoff";
+export type SettingsSectionId = "billing" | "runtime" | "a2c" | "ai" | "market" | "accounts" | "handoff";
 
 const SETTINGS_NAVIGATION = [
   { id: "runtime", label: "运行模式", icon: Settings2 },
@@ -14,7 +14,7 @@ const SETTINGS_NAVIGATION = [
 
 const SettingsReadOnlyContext = createContext(false);
 
-export function SettingsWorkspace({ children, readOnly = false }: { children: React.ReactNode; readOnly?: boolean }) {
+export function SettingsWorkspace({ children, readOnly = false, showAi = true }: { children: React.ReactNode; readOnly?: boolean; showAi?: boolean }) {
   const [active, setActive] = useState<SettingsSectionId>("runtime");
   const openSection = (id: SettingsSectionId) => {
     setActive(id);
@@ -24,7 +24,7 @@ export function SettingsWorkspace({ children, readOnly = false }: { children: Re
   return <SettingsReadOnlyContext.Provider value={readOnly}><div className="settings-workspace">
     <nav className="settings-navigation" aria-label="设置分组">
       <div className="settings-navigation-title"><Bot size={18}/><span>配置中心</span></div>
-      {SETTINGS_NAVIGATION.map(({ id, label, icon: Icon }) => <button key={id} className={active === id ? "active" : ""} onClick={() => openSection(id)}><Icon size={16}/><span>{label}</span></button>)}
+      {SETTINGS_NAVIGATION.filter(({ id }) => showAi || id !== "ai").map(({ id, label, icon: Icon }) => <button key={id} className={active === id ? "active" : ""} onClick={() => openSection(id)}><Icon size={16}/><span>{label}</span></button>)}
     </nav>
     <div className="settings-content">{children}</div>
   </div></SettingsReadOnlyContext.Provider>;

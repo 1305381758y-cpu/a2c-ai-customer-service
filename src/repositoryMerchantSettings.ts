@@ -53,6 +53,7 @@ export class MerchantSettingsRepository {
         if (key === "trainingSimulationEnabled") return booleanPatchValue(value, false);
         if (key === "strictScriptFlowEnabled") return booleanPatchValue(value, false);
         if (key === "sessionPrice" || key === "balance") return Math.max(0, Number(value) || 0);
+        if (key === "balanceCurrency") return "CNY";
         if (key === "aiProvider") return value === "gemini" || value === "deepseek" ? value : "minimax";
         return value as string;
       }), merchantId);
