@@ -28,12 +28,12 @@ function registerAdminA2CAccountRoutes(app: FastifyInstance, deps: MerchantA2CAc
   app.get<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts", { preHandler: deps.adminOnly }, async (request) =>
     listMerchantA2CAccounts(deps.repos, request.params.id)
   );
-  app.post<{ Params: { id: string } }>("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: deps.adminOnly }, async (request, reply) =>
-    sendResult(reply, await syncMerchantA2CAccountsFromRemote(deps.repos, deps.config, request.params.id, deps.maskConfig))
+  app.post("/api/admin/merchants/:id/a2c/accounts/sync", { preHandler: deps.adminOnly }, async (_request, reply) =>
+    reply.code(403).send({ error: "A2C配置请在商户端操作" })
   );
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id", { preHandler: deps.adminOnly }, async (request, reply) => {
-    return sendResult(reply, patchMerchantA2CAccount(deps.repos, request.params.id, request.body ?? {}, { maskConfig: deps.maskConfig }));
-  });
+  app.patch("/api/admin/a2c/accounts/:id", { preHandler: deps.adminOnly }, async (_request, reply) =>
+    reply.code(403).send({ error: "A2C配置请在商户端操作" })
+  );
 }
 
 function registerMerchantOwnA2CAccountRoutes(app: FastifyInstance, deps: MerchantA2CAccountRoutesDeps): void {

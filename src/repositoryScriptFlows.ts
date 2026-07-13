@@ -257,6 +257,20 @@ export class ScriptFlowRepository {
       .map((row) => mapScriptFlowVersion(row as Record<string, unknown>));
   }
 
+  getVersionRuntime(flowId: number, version: number, merchantId?: string): ScriptFlowRuntime | undefined {
+    const flow = this.get(flowId, merchantId);
+    if (!flow) return undefined;
+    const where = merchantId ? "WHERE flow_id = ? AND merchant_id = ? AND version = ?" : "WHERE flow_id = ? AND version = ?";
+    const row = this.db.sqlite.prepare(`SELECT snapshot_json FROM script_flow_versions ${where} ORDER BY id DESC LIMIT 1`).get(flowId, ...(merchantId ? [merchantId, version] : [version])) as { snapshot_json: string } | undefined;
+    if (!row) return undefined;
+    const snapshot = parseJsonObject(row.snapshot_json);
+    const steps = Array.isArray(snapshot.steps) ? snapshot.steps as ScriptFlowStepRecord[] : [];
+    return {
+      flow: { ...flow.flow, version },
+      steps
+    };
+  }
+
   restoreVersion(flowId: number, versionId: number, merchantId?: string, userName = ""): ScriptFlowRuntime | undefined {
     const flow = this.get(flowId, merchantId);
     if (!flow) return undefined;

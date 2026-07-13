@@ -107,4 +107,27 @@ describe("merchant settings service", () => {
     expect(repos.deleteCustomerBalanceTransaction(patched!.id, merchant.id)).toBe(true);
     expect(repos.getCustomer(merchant.id, "customer-1")?.balance).toBe(0);
   });
+
+  it("binds a conversation to the active script-flow version and keeps that version after a new flow is enabled", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("话本版本绑定商户");
+    const country = repos.ensurePrimaryCountry(merchant.id);
+    const first = createBuiltInStrictScriptFlow(repos, merchant.id, { name: "第一版", countryId: country.id }, "运营");
+    if (!first.ok) throw new Error(first.error);
+    expect(enableScriptFlow(repos, String(first.value.flow.id), merchant.id, "运营")).toMatchObject({ ok: true });
+
+    const conversation = repos.getOrCreateConversation("customer-1", "a2c-1", "", merchant.id, country.id, false);
+    conversation.flowStep = "interest_screening";
+    repos.updateConversation(conversation);
+    const bound = repos.getConversationScriptState(conversation.id, merchant.id);
+    expect(bound).toMatchObject({ flowId: first.value.flow.id, flowVersion: first.value.flow.version, currentFlowStep: "interest_screening" });
+
+    const second = createBuiltInStrictScriptFlow(repos, merchant.id, { name: "第二版", countryId: country.id }, "运营");
+    if (!second.ok) throw new Error(second.error);
+    expect(enableScriptFlow(repos, String(second.value.flow.id), merchant.id, "运营")).toMatchObject({ ok: true });
+
+    const nextState = repos.getConversationScriptState(conversation.id, merchant.id);
+    expect(nextState).toMatchObject({ flowId: first.value.flow.id, flowVersion: first.value.flow.version });
+    expect(repos.getScriptFlow(nextState!.flowId!, merchant.id)?.flow.name).toBe("第一版");
+  });
 });

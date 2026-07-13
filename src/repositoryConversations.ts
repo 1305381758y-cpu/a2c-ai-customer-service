@@ -28,6 +28,7 @@ import type {
   Conversation,
   ConversationExportRecord,
   ConversationMessageRecord,
+  ConversationScriptStateRecord,
   CustomerMemoryRecord,
   MessageInput,
   UnreadSummaryRecord
@@ -100,6 +101,48 @@ export class ConversationRepository {
         conversation.handoffNotified,
         conversation.id
       );
+    this.syncScriptState(conversation);
+  }
+
+  getScriptState(conversationId: string, merchantId?: string): ConversationScriptStateRecord | undefined {
+    const where = merchantId ? "WHERE conversation_id = ? AND merchant_id = ?" : "WHERE conversation_id = ?";
+    const row = this.db.sqlite.prepare(`SELECT * FROM conversation_script_state ${where}`).get(conversationId, ...(merchantId ? [merchantId] : [])) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    let collected: Record<string, unknown> = {};
+    try { collected = JSON.parse(String(row.collected_json || "{}")) as Record<string, unknown>; } catch { collected = {}; }
+    return {
+      id: Number(row.id),
+      merchantId: String(row.merchant_id || ""),
+      conversationId: String(row.conversation_id || conversationId),
+      flowId: row.flow_id == null ? undefined : Number(row.flow_id),
+      flowVersion: Number(row.flow_version || 1),
+      currentStepId: row.current_step_id == null ? undefined : Number(row.current_step_id),
+      currentFlowStep: String(row.current_flow_step || ""),
+      collected,
+      updatedAt: String(row.updated_at || "")
+    };
+  }
+
+  private syncScriptState(conversation: Conversation): void {
+    const active = this.db.sqlite.prepare(`
+      SELECT sf.id, sf.version
+      FROM script_flows sf
+      WHERE sf.merchant_id = ? AND sf.country_id = ? AND sf.active = 1 AND sf.status = 'active'
+      ORDER BY sf.updated_at DESC, sf.id DESC LIMIT 1
+    `).get(conversation.merchantId, conversation.countryId) as { id: number; version: number } | undefined;
+    if (!active) return;
+    const existing = this.getScriptState(conversation.id, conversation.merchantId);
+    const flowId = existing?.flowId || active.id;
+    const flowVersion = existing?.flowId ? existing.flowVersion : Number(active.version || 1);
+    const step = this.db.sqlite.prepare("SELECT id FROM script_flow_steps WHERE flow_id = ? AND flow_step = ? ORDER BY id LIMIT 1").get(flowId, conversation.flowStep) as { id: number } | undefined;
+    this.db.sqlite.prepare(`
+      INSERT INTO conversation_script_state (merchant_id, conversation_id, flow_id, flow_version, current_step_id, current_flow_step, collected_json, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, '{}', CURRENT_TIMESTAMP)
+      ON CONFLICT(conversation_id) DO UPDATE SET
+        current_step_id = excluded.current_step_id,
+        current_flow_step = excluded.current_flow_step,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(conversation.merchantId, conversation.id, flowId, flowVersion, step?.id ?? null, conversation.flowStep);
   }
 
   insertMessage(input: MessageInput): { inserted: boolean; id?: number } {

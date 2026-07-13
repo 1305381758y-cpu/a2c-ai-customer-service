@@ -58,7 +58,12 @@ export async function analyzeInboundTurn(input: {
     history: input.history
   });
 
-  const scriptFlow = input.repos.getActiveScriptFlow(input.merchant.id, input.country.id);
+  const boundScriptState = (input.repos as Repositories & {
+    getConversationScriptState?: Repositories["getConversationScriptState"];
+  }).getConversationScriptState?.(input.conversation.id, input.merchant.id);
+  const scriptFlow = boundScriptState?.flowId
+    ? input.repos.getScriptFlowVersion(boundScriptState.flowId, boundScriptState.flowVersion, input.merchant.id) || input.repos.getScriptFlow(boundScriptState.flowId, input.merchant.id)
+    : input.repos.getActiveScriptFlow(input.merchant.id, input.country.id);
   const strictFlowEnabled = Boolean(scriptFlow) || isStrictFlowEnabled(input.merchant, input.country, input.merchantConfig);
   const effectiveStrictFlowStep = strictFlowEnabled
     ? resolveEffectiveStrictFlowStep(input.conversation, input.history)

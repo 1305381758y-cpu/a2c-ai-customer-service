@@ -8,6 +8,7 @@ import type { ClearLearningAndCustomerDataResult } from "./repositoryMaintenance
 
 import type {
   Conversation,
+  ConversationScriptStateRecord,
   MerchantRecord,
   MerchantConfigRecord,
   MerchantConfigVersionRecord,
@@ -44,6 +45,7 @@ import type {
 } from "./repositoryTypes.js";
 export type {
   Conversation,
+  ConversationScriptStateRecord,
   MerchantRecord,
   MerchantConfigRecord,
   MerchantConfigVersionRecord,
@@ -142,6 +144,10 @@ export class Repositories {
 
   updateConversation(conversation: Conversation): void {
     this.conversations.update(conversation);
+  }
+
+  getConversationScriptState(conversationId: string, merchantId?: string): ConversationScriptStateRecord | undefined {
+    return this.conversations.getScriptState(conversationId, merchantId);
   }
 
   listTeacherTgLinks(merchantId: string, countryId = ""): TeacherTgLinkRecord[] {
@@ -415,6 +421,10 @@ export class Repositories {
 
   getScriptFlow(id: number, merchantId?: string): ScriptFlowRuntime | undefined {
     return this.scriptFlows.get(id, merchantId);
+  }
+
+  getScriptFlowVersion(id: number, version: number, merchantId?: string): ScriptFlowRuntime | undefined {
+    return this.scriptFlows.getVersionRuntime(id, version, merchantId);
   }
 
   getActiveScriptFlow(merchantId: string, countryId?: string): ScriptFlowRuntime | undefined {

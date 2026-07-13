@@ -30,6 +30,18 @@ export interface Conversation {
   sessionChargedAt?: string;
 }
 
+export interface ConversationScriptStateRecord {
+  id: number;
+  merchantId: string;
+  conversationId: string;
+  flowId?: number;
+  flowVersion: number;
+  currentStepId?: number;
+  currentFlowStep: string;
+  collected: Record<string, unknown>;
+  updatedAt: string;
+}
+
 export interface TeacherTgLinkRecord {
   id: number;
   merchantId: string;

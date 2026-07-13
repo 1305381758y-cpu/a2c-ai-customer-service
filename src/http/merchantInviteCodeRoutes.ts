@@ -25,10 +25,10 @@ export function registerMerchantInviteCodeRoutes(app: FastifyInstance, deps: Mer
 
 function registerAdminInviteCodeRoutes(app: FastifyInstance, deps: MerchantInviteCodeRoutesDeps): void {
   app.get<{ Params: { id: string } }>("/api/admin/a2c/accounts/:id/invite-codes", { preHandler: deps.adminOnly }, async (request, reply) => sendResult(reply, listInviteCodes(deps.repos, request.params.id)));
-  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/a2c/accounts/:id/invite-codes", { preHandler: deps.adminOnly }, async (request, reply) => sendResult(reply, createInviteCode(deps.repos, request.params.id, request.body ?? {})));
-  app.post<{ Params: { id: string }; Body: { codes?: string; registerUrl?: string } }>("/api/admin/a2c/accounts/:id/invite-codes/import", { preHandler: deps.adminOnly }, async (request, reply) => sendResult(reply, importInviteCodes(deps.repos, request.params.id, request.body ?? {})));
-  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>("/api/admin/invite-codes/:id", { preHandler: deps.adminOnly }, async (request, reply) => sendResult(reply, patchInviteCode(deps.repos, request.params.id, request.body ?? {})));
-  app.delete<{ Params: { id: string } }>("/api/admin/invite-codes/:id", { preHandler: deps.adminOnly }, async (request, reply) => sendResult(reply, deleteInviteCode(deps.repos, request.params.id)));
+  app.post("/api/admin/a2c/accounts/:id/invite-codes", { preHandler: deps.adminOnly }, async (_request, reply) => reply.code(403).send({ error: "邀请码请在商户端管理" }));
+  app.post("/api/admin/a2c/accounts/:id/invite-codes/import", { preHandler: deps.adminOnly }, async (_request, reply) => reply.code(403).send({ error: "邀请码请在商户端管理" }));
+  app.patch("/api/admin/invite-codes/:id", { preHandler: deps.adminOnly }, async (_request, reply) => reply.code(403).send({ error: "邀请码请在商户端管理" }));
+  app.delete("/api/admin/invite-codes/:id", { preHandler: deps.adminOnly }, async (_request, reply) => reply.code(403).send({ error: "邀请码请在商户端管理" }));
 }
 
 function registerMerchantOwnInviteCodeRoutes(app: FastifyInstance, deps: MerchantInviteCodeRoutesDeps): void {
