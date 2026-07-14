@@ -69,7 +69,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
 
   const columns = trainingMaterialColumns(platform, simple);
 
-  return <div className={selected && detail ? "split work-split" : "single-column work-split"}>
+  return <div className={`training-materials-layout ${selected && detail ? "has-detail" : ""}`}>
     <section className="work-panel">
       <ResourceErrorNotice label="国家选项" error={countriesState.error} onRetry={countriesState.reload} />
       {simple && <div className="training-center-hero">
@@ -118,39 +118,58 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
       />
       <Pagination pager={pager} />
     </section>
-    {selected && detail && <section className="detail-panel">
-      <div>
-        <div className="section-heading-row"><h3>{detail.material.filename}</h3><button type="button" className="ghost icon-only panel-close-button" title="关闭详情" aria-label="关闭详情" onClick={() => { setSelected(null); setDetail(null); }}>×</button></div>
-        <p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p>
-        <div className="toolbar">
-          <ConfirmActionButton
-            className="danger"
-            busyText="删除中..."
-            title={simple ? "确认彻底删除学习资料？" : "确认彻底删除素材？"}
-            detail={simple ? "删除后系统不会再参考这份学习资料，此操作不可恢复。" : "删除后该素材及其生成的样本和知识会一起删除，后续回复不会再参考它们。"}
-            confirmText={simple ? "彻底删除资料" : "彻底删除素材"}
-            onConfirm={async () => {
-              await api(`${base}/${detail.material.id}`, { method: "DELETE" });
-              setSelected(null);
-              setDetail(null);
-              await reload();
-              notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除");
-            }}
-          >
-            {simple ? "彻底删除资料" : "彻底删除素材"}
-          </ConfirmActionButton>
+    {selected && detail && <>
+      <button type="button" className="training-material-detail-backdrop" aria-label="关闭资料详情" onClick={() => { setSelected(null); setDetail(null); }} />
+      <aside className="detail-panel training-material-detail" aria-label="学习资料详情">
+        <div className="training-material-detail-inner">
+          <div className="section-heading-row">
+            <div className="training-material-detail-title">
+              <span className="eyebrow">学习资料详情</span>
+              <h3 title={detail.material.filename}>{detail.material.filename}</h3>
+            </div>
+            <button type="button" className="ghost icon-only panel-close-button" title="关闭详情" aria-label="关闭详情" onClick={() => { setSelected(null); setDetail(null); }}>×</button>
+          </div>
+          <div className="training-material-detail-meta">
+            <span>{countryLabel(detail.material.countryName)}</span>
+            <span>{label(detail.material.sourceType)}</span>
+            <span>{simple ? `已学习 ${detail.material.itemCount} 条` : `生成 ${detail.material.itemCount} 条`}</span>
+          </div>
+          <div className="training-material-detail-actions">
+            <ConfirmActionButton
+              className="danger"
+              busyText="删除中..."
+              title={simple ? "确认彻底删除学习资料？" : "确认彻底删除素材？"}
+              detail={simple ? "删除后系统不会再参考这份学习资料，此操作不可恢复。" : "删除后该素材及其生成的样本和知识会一起删除，后续回复不会再参考它们。"}
+              confirmText={simple ? "彻底删除资料" : "彻底删除素材"}
+              onConfirm={async () => {
+                await api(`${base}/${detail.material.id}`, { method: "DELETE" });
+                setSelected(null);
+                setDetail(null);
+                await reload();
+                notify("success", simple ? "学习资料已彻底删除" : "素材已彻底删除");
+              }}
+            >
+              {simple ? "彻底删除资料" : "彻底删除素材"}
+            </ConfirmActionButton>
+          </div>
+          {detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}
+          <details className="training-detail-section" open>
+            <summary>学习内容 <span>{detail.items.length} 条</span></summary>
+            <div className="messages material-items training-detail-scroll">
+              {detail.items.map((item) => <article key={item.id}>
+                <strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong>
+                <span>{item.title}</span>
+                <small>{label(item.intent || item.stage)}</small>
+                <p>{item.content}</p>
+              </article>)}
+            </div>
+          </details>
+          {detail.material.rawText && <details className="training-detail-section">
+            <summary>原始文件内容 <span>仅供查看</span></summary>
+            <pre className="training-raw-text">{detail.material.rawText}</pre>
+          </details>}
         </div>
-        {detail.material.warnings?.length ? <div className="warning">{detail.material.warnings.join("；")}</div> : null}
-        <div className="messages material-items">
-          {detail.items.map((item) => <article key={item.id}>
-            <strong>{simple ? "学习内容" : item.kind === "sample" ? "样本" : "知识"} · {languageName(item.language)}</strong>
-            <span>{item.title}</span>
-            <small>{label(item.intent || item.stage)}</small>
-            <p>{item.content}</p>
-          </article>)}
-        </div>
-        <pre>{detail.material.rawText || ""}</pre>
-      </div>
-    </section>}
+      </aside>
+    </>}
   </div>;
 }
