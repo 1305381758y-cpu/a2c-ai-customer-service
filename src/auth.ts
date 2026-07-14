@@ -35,11 +35,15 @@ export function createSessionToken(user: SessionUser, secret: string): string {
 
 export function readSessionToken(token: string | undefined, secret: string): SessionUser | undefined {
   if (!token) return undefined;
-  const [payload, sig] = token.split(".");
-  if (!payload || !sig || sign(payload, secret) !== sig) return undefined;
-  const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionUser & { exp: number };
-  if (!data.exp || Date.now() > data.exp) return undefined;
-  return { id: data.id, merchantId: data.merchantId, email: data.email, name: data.name, role: data.role };
+  try {
+    const [payload, sig] = token.split(".");
+    if (!payload || !sig || sign(payload, secret) !== sig) return undefined;
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionUser & { exp: number };
+    if (!data.exp || Date.now() > data.exp) return undefined;
+    return { id: data.id, merchantId: data.merchantId, email: data.email, name: data.name, role: data.role };
+  } catch {
+    return undefined;
+  }
 }
 
 export function getCookie(request: FastifyRequest, name: string): string | undefined {
@@ -68,6 +72,9 @@ export function requireUser(config: AppConfig, repos: Repositories, roles?: User
     if (!user || user.status !== "active") return reply.code(401).send({ error: "unauthorized" });
     const fresh = toSessionUser(user);
     (request as FastifyRequest & { user: SessionUser }).user = fresh;
+    // Refresh the sliding session after every authenticated request so active operators
+    // do not get signed out while working in a long-running admin session.
+    setSessionCookie(reply, createSessionToken(fresh, config.SESSION_SECRET));
     if (roles && !roles.includes(fresh.role)) return reply.code(403).send({ error: "forbidden" });
   };
 }

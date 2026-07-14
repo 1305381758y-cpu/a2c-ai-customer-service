@@ -34,6 +34,29 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("renews the session after authenticated writes without invalidating the existing cookie", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "admin@test.local", password: "Admin123456" } });
+    const cookie = String(login.headers["set-cookie"]);
+    const created = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie }, payload: { name: "会话稳定性测试" } });
+    expect(created.statusCode).toBe(200);
+    expect(created.headers["set-cookie"]).toBeTruthy();
+    const merchantId = created.json().id as string;
+    const patched = await app.inject({ method: "PATCH", url: `/api/admin/merchants/${merchantId}`, headers: { cookie }, payload: { name: "会话稳定性测试已保存" } });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.headers["set-cookie"]).toBeTruthy();
+    const session = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+    expect(session.statusCode).toBe(200);
+    expect(session.json().user.email).toBe("admin@test.local");
+    await app.close();
+  });
+
   it("keeps training writes admin-only while merchant operators can read", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",
