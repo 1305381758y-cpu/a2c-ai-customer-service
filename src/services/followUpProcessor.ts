@@ -7,6 +7,10 @@ import { appConfigForConversation } from "./runtimeConfig.js";
 
 export type FollowUpProcessingResult = ConversationFollowUpResult;
 
+// Follow-ups share the web instance with the admin portal. Keep each cron run
+// small so a slow upstream send cannot make the portal look unavailable.
+const MAX_FOLLOW_UPS_PER_RUN = 3;
+
 export interface FollowUpContentInput {
   flowStep: string;
   language: string;
@@ -23,6 +27,8 @@ export const strictFlowFollowUpContentBuilder: FollowUpContentBuilder = {
 };
 
 export class FollowUpProcessor {
+  private processing = false;
+
   constructor(
     private readonly repos: Repositories,
     private readonly config: AppConfig,
@@ -31,7 +37,10 @@ export class FollowUpProcessor {
   ) {}
 
   async processDueFollowUps(limit = 50): Promise<FollowUpProcessingResult> {
-    const candidates = this.repos.listDueFollowUpCandidates(limit);
+    if (this.processing) return { scanned: 0, sent: 0, skipped: 0, failed: 0 };
+    this.processing = true;
+    try {
+      const candidates = this.repos.listDueFollowUpCandidates(Math.min(Math.max(limit, 1), MAX_FOLLOW_UPS_PER_RUN));
     let sent = 0;
     let skipped = 0;
     let failed = 0;
@@ -70,6 +79,9 @@ export class FollowUpProcessor {
       this.repos.recordFollowUp({ merchantId: conversation.merchantId, conversationId: conversation.id, flowStep, sent: true });
       sent += 1;
     }
-    return { scanned: candidates.length, sent, skipped, failed };
+      return { scanned: candidates.length, sent, skipped, failed };
+    } finally {
+      this.processing = false;
+    }
   }
 }

@@ -184,6 +184,41 @@ describe("follow-up candidates", () => {
     }));
   });
 
+  it("does not overlap cron runs while an upstream follow-up is still sending", async () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("跟进防重叠商户");
+    repos.patchMerchantConfig(merchant.id, { smartReplyEnabled: true });
+    const conversation = repos.getOrCreateConversation("followup-lock-customer", "followup-lock-account", "", merchant.id);
+    conversation.language = "zh";
+    conversation.flowStep = "wait_registration";
+    repos.updateConversation(conversation);
+    repos.insertMessage({
+      conversationId: conversation.id,
+      direction: "outbound",
+      externalId: "followup-lock-seed",
+      content: "您先按页面操作。",
+      msgType: "text",
+      language: "zh",
+      intent: "unknown",
+      rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
+    });
+    db.sqlite.prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?").run("followup-lock-seed");
+
+    let release!: () => void;
+    const sender = {
+      send: vi.fn(() => new Promise<{ sendResult: { externalId: string; a2cSendStatus: "sent"; a2cSendError: string }; inserted: boolean; messageId: number }>((resolve) => {
+        release = () => resolve({ sendResult: { externalId: "followup-lock-message", a2cSendStatus: "sent", a2cSendError: "" }, inserted: true, messageId: 102 });
+      }))
+    };
+    const processor = new FollowUpProcessor(repos, loadConfig({ DATABASE_URL: ":memory:" }), sender);
+    const firstRun = processor.processDueFollowUps();
+    await vi.waitFor(() => expect(sender.send).toHaveBeenCalledTimes(1));
+    await expect(processor.processDueFollowUps()).resolves.toEqual({ scanned: 0, sent: 0, skipped: 0, failed: 0 });
+    release();
+    await expect(firstRun).resolves.toEqual({ scanned: 1, sent: 1, skipped: 0, failed: 0 });
+  });
+
   it("keeps the default A2C follow-up sender behind an adapter seam", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const target = String(url);

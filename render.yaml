@@ -66,6 +66,6 @@ services:
       - key: FOLLOW_UP_BASE_URL
         value: https://a2c-ai-customer-service.onrender.com
       - key: FOLLOW_UP_LIMIT
-        value: "50"
+        value: "3"
       - key: INTERNAL_API_KEY
         sync: false
