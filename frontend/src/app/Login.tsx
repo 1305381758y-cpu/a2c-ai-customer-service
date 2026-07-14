@@ -20,7 +20,7 @@ export function Login({ onLogin, portalMode = "shared" }: { onLogin: (user: User
         await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
         throw new Error(`当前账号不能进入${portalModeLabel(portalMode)}，请使用对应入口登录。`);
       }
-      window.localStorage.setItem("a2c_authenticated", "1");
+      window.localStorage.setItem(`a2c_authenticated_${portalMode}`, "1");
       onLogin(result.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");

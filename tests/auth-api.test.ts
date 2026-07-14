@@ -57,6 +57,47 @@ describe("auth api", () => {
     await app.close();
   });
 
+  it("keeps admin and merchant sessions isolated on the same host", async () => {
+    const app = buildApp(loadConfig({
+      DATABASE_URL: ":memory:",
+      INTERNAL_API_KEY: "test-key",
+      SESSION_SECRET: "test-secret",
+      DEFAULT_ADMIN_EMAIL: "admin@test.local",
+      DEFAULT_ADMIN_PASSWORD: "Admin123456"
+    }));
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: { "x-portal-mode": "admin" },
+      payload: { email: "admin@test.local", password: "Admin123456" }
+    });
+    const adminCookie = String(adminLogin.headers["set-cookie"]);
+    expect(adminCookie).toContain("a2c_session_admin=");
+    const merchant = await app.inject({ method: "POST", url: "/api/admin/merchants", headers: { cookie: adminCookie, "x-portal-mode": "admin" }, payload: { name: "入口隔离测试" } });
+    const merchantId = merchant.json().id as string;
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      headers: { cookie: adminCookie, "x-portal-mode": "admin" },
+      payload: { merchantId, email: "isolated-merchant@test.local", name: "商户账号", password: "Merchant123456", role: "merchant_admin" }
+    });
+    const merchantLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: { "x-portal-mode": "merchant" },
+      payload: { email: "isolated-merchant@test.local", password: "Merchant123456" }
+    });
+    const merchantCookie = String(merchantLogin.headers["set-cookie"]);
+    expect(merchantCookie).toContain("a2c_session_merchant=");
+    const adminSession = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie: adminCookie, "x-portal-mode": "admin" } });
+    const merchantSession = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie: merchantCookie, "x-portal-mode": "merchant" } });
+    expect(adminSession.statusCode).toBe(200);
+    expect(adminSession.json().user.role).toBe("platform_admin");
+    expect(merchantSession.statusCode).toBe(200);
+    expect(merchantSession.json().user.role).toBe("merchant_admin");
+    await app.close();
+  });
+
   it("keeps training writes admin-only while merchant operators can read", async () => {
     const app = buildApp(loadConfig({
       DATABASE_URL: ":memory:",

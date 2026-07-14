@@ -4,7 +4,9 @@ import type { Filters } from "../types.js";
 import { translateSystemMessage } from "../ui/formatters.js";
 
 export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers = { ...(options.body === undefined ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const portalMode = path === "/admin" || path.startsWith("/admin/") ? "admin" : path === "/merchant" || path.startsWith("/merchant/") ? "merchant" : "shared";
+  const headers = { "X-Portal-Mode": portalMode, ...(options.body === undefined ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
   const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
   if (!response.ok) {
     const error = new Error(translateSystemMessage((await response.json().catch(() => ({}))).error || response.statusText));

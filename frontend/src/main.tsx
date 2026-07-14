@@ -17,11 +17,12 @@ import "./styles/final-overrides.css";
 
 function App() {
   const portalMode: PortalMode = portalModeForPath(window.location.pathname);
-  const sessionHintKey = "a2c_authenticated";
+  const sessionHintKey = `a2c_authenticated_${portalMode}`;
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState("");
-  const [view, setView] = useState(() => window.location.hash.replace("#", "") || window.localStorage.getItem("a2c_view") || "dashboard");
+  const viewStorageKey = `a2c_view_${portalMode}`;
+  const [view, setView] = useState(() => window.location.hash.replace("#", "") || window.localStorage.getItem(viewStorageKey) || "dashboard");
 
   const loadSession = (attempt = 0) => {
     setLoading(true);
@@ -63,7 +64,7 @@ function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    window.localStorage.setItem("a2c_view", view);
+    window.localStorage.setItem(viewStorageKey, view);
     if (window.location.hash.replace("#", "") !== view) window.history.replaceState(null, "", `#${view}`);
   }, [user, view]);
 

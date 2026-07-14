@@ -13,6 +13,17 @@ export interface SessionUser {
   role: UserRole;
 }
 
+export type PortalMode = "admin" | "merchant" | "shared";
+
+function portalModeFromRequest(request: FastifyRequest): PortalMode {
+  const mode = request.headers["x-portal-mode"];
+  return mode === "admin" || mode === "merchant" ? mode : "shared";
+}
+
+export function sessionCookieName(mode: PortalMode): string {
+  return mode === "shared" ? "a2c_session" : `a2c_session_${mode}`;
+}
+
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
@@ -56,17 +67,18 @@ export function getCookie(request: FastifyRequest, name: string): string | undef
   return undefined;
 }
 
-export function setSessionCookie(reply: FastifyReply, token: string): void {
-  reply.header("Set-Cookie", `a2c_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`);
+export function setSessionCookie(reply: FastifyReply, token: string, mode: PortalMode = "shared"): void {
+  reply.header("Set-Cookie", `${sessionCookieName(mode)}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`);
 }
 
-export function clearSessionCookie(reply: FastifyReply): void {
-  reply.header("Set-Cookie", "a2c_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+export function clearSessionCookie(reply: FastifyReply, mode: PortalMode = "shared"): void {
+  reply.header("Set-Cookie", `${sessionCookieName(mode)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
 }
 
 export function requireUser(config: AppConfig, repos: Repositories, roles?: UserRole[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    const session = readSessionToken(getCookie(request, "a2c_session"), config.SESSION_SECRET);
+    const mode = portalModeFromRequest(request);
+    const session = readSessionToken(getCookie(request, sessionCookieName(mode)) ?? (mode === "shared" ? undefined : getCookie(request, "a2c_session")), config.SESSION_SECRET);
     if (!session) return reply.code(401).send({ error: "unauthorized" });
     const user = repos.getUserById(session.id);
     if (!user || user.status !== "active") return reply.code(401).send({ error: "unauthorized" });
@@ -74,9 +86,13 @@ export function requireUser(config: AppConfig, repos: Repositories, roles?: User
     (request as FastifyRequest & { user: SessionUser }).user = fresh;
     // Refresh the sliding session after every authenticated request so active operators
     // do not get signed out while working in a long-running admin session.
-    setSessionCookie(reply, createSessionToken(fresh, config.SESSION_SECRET));
+    setSessionCookie(reply, createSessionToken(fresh, config.SESSION_SECRET), mode);
     if (roles && !roles.includes(fresh.role)) return reply.code(403).send({ error: "forbidden" });
   };
+}
+
+export function requestPortalMode(request: FastifyRequest): PortalMode {
+  return portalModeFromRequest(request);
 }
 
 export function requestUser(request: FastifyRequest): SessionUser {
