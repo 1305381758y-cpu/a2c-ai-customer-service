@@ -5,8 +5,8 @@ import { api } from "./api.js";
 import { canAccessPortal, portalModeLabel, type PortalMode } from "./portalMode.js";
 
 export function Login({ onLogin, portalMode = "shared" }: { onLogin: (user: User) => void; portalMode?: PortalMode }) {
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("Admin@2026A2c!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const login = async () => {
@@ -33,7 +33,6 @@ export function Login({ onLogin, portalMode = "shared" }: { onLogin: (user: User
       <label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void login(); }} /></label>
       {error && <div className="error" role="alert">{error}</div>}
       <button className="primary wide" onClick={() => void login()}>登录</button>
-      <small>首次登录默认账号由系统环境配置提供。</small>
     </section>
   </main>;
 }
