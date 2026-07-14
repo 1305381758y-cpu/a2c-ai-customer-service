@@ -104,13 +104,16 @@ export function buildRuleContextualIntent(
     return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "wait_registration_ack", reason: "acknowledged registration instructions" });
   }
 
-  if (input.inferredIntent && input.inferredIntent !== "unknown") {
-    return base(mapInternalToContextual(input.inferredIntent), { source: "rule", reason: "internal intent" });
-  }
+  // High-confidence customer concerns must win over a loose AI label such as
+  // positive_confirmation. A question like "will I need to recharge?" is not
+  // an approval to continue the flow.
   if (input.analysis.intent === "trust_concern" || asksTrustConcern(text)) return base("trust_concern", { reason: "trust concern" });
   if (asksInvestmentConcern(text)) return base("investment_concern", { reason: "investment concern" });
   if (asksPaymentConcern(text)) return base("payment_concern", { reason: "payment concern" });
   if (asksEarningConcern(text)) return base("earning_concern", { reason: "earning concern" });
+  if (input.inferredIntent && input.inferredIntent !== "unknown") {
+    return base(mapInternalToContextual(input.inferredIntent), { source: "rule", reason: "internal intent" });
+  }
   if (asksTelegramExplanation(text)) return base("ask_tg_register", { reason: "telegram question" });
   if (asksForOperationHelp(text)) return base("workflow_question", { reason: "operation help" });
   if (asksAboutJob(text)) return base("job_question", { reason: "job question" });

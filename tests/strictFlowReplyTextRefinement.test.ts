@@ -290,7 +290,7 @@ describe("strict flow reply text refinement", () => {
     expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
   });
 
-  it("keeps the configured node response when the customer asks a question", async () => {
+  it("naturalizes only the controlled answer when the customer asks a question inside an active script", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
         text: "Entiendo su duda. La ganancia se calcula por tareas reales y reglas de la página; si quiere seguimos con el registro paso a paso.",
@@ -314,8 +314,8 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
-    expect(result.reply).toBe("Las ganancias exactas siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?");
-    expect(result.naturalized).toMatchObject({ used: false, error: "启用话本后保留节点标准话术" });
+    expect(ai.naturalizeStrictFlowText).toHaveBeenCalledOnce();
+    expect(result.reply).toBe("Entiendo su duda. La ganancia se calcula por tareas reales y reglas de la página; si quiere seguimos con el registro paso a paso.");
+    expect(result.naturalized).toMatchObject({ used: true });
   });
 });

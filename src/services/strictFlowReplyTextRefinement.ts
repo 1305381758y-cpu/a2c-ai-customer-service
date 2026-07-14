@@ -65,11 +65,47 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
-  // An enabled merchant script is an approved customer-facing script. Keep
-  // its wording and order intact; only the language guard may translate it to
-  // the customer's configured language. Do not naturalize, paraphrase, or
-  // rotate repeated wording inside a configured script.
+  // An enabled merchant script owns ordinary node wording. A customer
+  // question inside that node is different: keep the configured flow goal,
+  // but allow the controlled answer prefix to be expressed naturally so the
+  // same concern is not answered with the same sentence every time.
   if (input.scriptFlow?.flow.active) {
+    if (input.strictReply.controlledQuestionType && input.strictReply.controlledQuestionType !== "none" && !input.strictReply.needsInviteCode) {
+      const naturalized = await naturalizeStrictReply(input.ai, input.runtimeConfig, {
+        customerText: input.customerText,
+        draftReply: input.strictReply.reply,
+        language: input.strictReply.language,
+        flowStep: input.strictReply.nextFlowStep,
+        questionType: input.strictReply.controlledQuestionType,
+        history: input.history,
+        allowLinkOrInvite: input.strictReply.needsInviteCode,
+        agentProfile: input.agentProfile,
+        forceNaturalize: true,
+        avoidReplies: recentOutboundReplies(input.history)
+      });
+      const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
+      const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
+      const distinctReply = duplicate
+        ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language)
+        : safeNaturalizedReply.reply;
+      const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+        reply: distinctReply,
+        targetLanguage: input.strictReply.language,
+        flowStep: input.strictReply.nextFlowStep,
+        allowLinkOrInvite: input.strictReply.needsInviteCode
+      });
+      return {
+        reply: languageGuard.reply,
+        naturalized: safeNaturalizedReply.rejected ? {
+          reply: input.strictReply.reply,
+          used: false,
+          error: "口语化改写越过流程边界，已回退"
+        } : naturalized,
+        languageGuard,
+        duplicateAvoided: duplicate,
+        variantApplied: duplicate && distinctReply !== safeNaturalizedReply.reply
+      };
+    }
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,
       targetLanguage: input.strictReply.language,

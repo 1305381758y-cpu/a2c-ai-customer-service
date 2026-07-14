@@ -67,6 +67,25 @@ describe("contextual intent inference", () => {
     expect(ai.classifyContextualIntent).not.toHaveBeenCalled();
   });
 
+  it("keeps payment questions ahead of an incorrect positive AI label", async () => {
+    const ai = aiTasksMock();
+
+    const result = await inferStrictFlowContextualIntent({
+      ai,
+      runtimeConfig,
+      conversation: conversation({ flowStep: "registration_intent" }),
+      analysis: { ...analyzeMessage("请问下一步是否就是要我充值了？", "zh"), intent: "unknown" },
+      customerText: "请问下一步是否就是要我充值了？",
+      strictFlowEnabled: true,
+      history: [],
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe("payment_concern");
+    expect(result.source).toBe("rule");
+    expect(ai.classifyContextualIntent).not.toHaveBeenCalled();
+  });
+
   it("asks AI for contextual classification when strict flow text is unclear", async () => {
     const ai = aiTasksMock();
 
