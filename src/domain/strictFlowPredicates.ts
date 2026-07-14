@@ -76,7 +76,8 @@ export function saysContextualNo(text: string): boolean {
 
 export function saysNotAvailable(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return /^(我没有|没有|沒有|没|沒|没空|沒有空|没时间|沒時間|没有时间|暂时没空|现在不行|no|not now|no time)$/i.test(normalized);
+  if (/^(我没有|没有|沒有|没|沒|没空|沒有空|没时间|沒時間|没有时间|暂时没空|现在不行|no|not now|no time)$/i.test(normalized)) return true;
+  return /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再|give me a few minutes|wait a few minutes|wait for me|in a few minutes|later|daqui a pouco|me dê alguns minutos|me de alguns minutos|espere alguns minutos|en unos minutos|dame unos minutos|espere un momento)/i.test(normalized);
 }
 
 export function saysNotRegistered(text: string): boolean {

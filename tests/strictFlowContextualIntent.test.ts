@@ -88,6 +88,19 @@ describe("strictFlowContextualIntent", () => {
     expect(result.reason).toContain("still registering");
   });
 
+  it("does not treat a request for a few minutes as registration approval", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent"),
+      analysis: analyzeMessage("要等我几分钟", "zh"),
+      customerText: "要等我几分钟",
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe("not_available");
+    expect(result.shouldPause).toBe(true);
+    expect(result.nextAction).toBe("pause politely");
+  });
+
   it("keeps incomplete phone numbers in the registration step", () => {
     const result = buildRuleContextualIntent({
       conversation: conversation("wait_registration"),
