@@ -18,17 +18,26 @@ export async function importSamples(request: FastifyRequest, reply: FastifyReply
 
 export async function importMaterial(request: FastifyRequest, reply: FastifyReply, deps: { config: AppConfig; repos: Repositories }, merchantId: string) {
   let uploadError = "";
-  const file = await request.file().catch((error) => {
+  let file: { buffer: Buffer; filename: string; mimetype: string } | undefined;
+  let countryId = "";
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "field") {
+        if (part.fieldname === "countryId") countryId = String(part.value || "");
+        continue;
+      }
+      if (!file && part.fieldname === "file") {
+        file = { buffer: await part.toBuffer(), filename: part.filename, mimetype: part.mimetype };
+      } else {
+        await part.toBuffer();
+      }
+    }
+  } catch (error) {
     uploadError = error instanceof Error ? error.message : "文件上传失败";
-    return undefined;
-  });
+  }
   if (uploadError) return reply.code(413).send({ error: "文件过大或上传失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
   if (!file) return reply.code(400).send({ error: "file is required" });
-  const fields = (file as unknown as { fields?: Record<string, { value?: string }> }).fields || {};
-  const countryId = fields.countryId?.value || "";
-  const buffer = await file.toBuffer().catch(() => null);
-  if (!buffer) return reply.code(413).send({ error: "文件过大或读取失败", message: "当前单个文件最大支持 100MB，请压缩或拆分后重试。" });
-  return sendImportResult(reply, await importTrainingMaterialFromBuffer(deps.repos, deps.config, merchantId, { buffer, filename: file.filename, mimeType: file.mimetype, countryId }));
+  return sendImportResult(reply, await importTrainingMaterialFromBuffer(deps.repos, deps.config, merchantId, { buffer: file.buffer, filename: file.filename, mimeType: file.mimetype, countryId }));
 }
 
 function sendImportResult<T>(reply: FastifyReply, result: TrainingImportResult<T>) {

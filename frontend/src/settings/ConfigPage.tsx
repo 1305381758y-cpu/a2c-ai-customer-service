@@ -82,7 +82,12 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     setError("");
     const body = new FormData();
     body.append("file", tutorialImageFile);
-    const response = await fetch(configTutorialImageEndpoint(platform, merchantId), { method: "POST", body });
+    const response = await fetch(configTutorialImageEndpoint(platform, merchantId), {
+      method: "POST",
+      body,
+      credentials: "same-origin",
+      headers: { "X-Portal-Mode": platform ? "admin" : "merchant" }
+    });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(translateSystemMessage(payload.message || payload.error || "注册教程图片上传失败"));

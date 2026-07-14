@@ -64,9 +64,14 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
             onClick={async () => {
               if (!file) return;
               const body = new FormData();
-              body.append("file", file);
               body.append("countryId", filters.countryId || countries[0]?.id || "");
-              const response = await fetch("/api/merchant/training-materials/import", { method: "POST", body });
+              body.append("file", file);
+              const response = await fetch("/api/merchant/training-materials/import", {
+                method: "POST",
+                body,
+                credentials: "same-origin",
+                headers: { "X-Portal-Mode": "merchant" }
+              });
               if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
               const result = await response.json() as { imported: number; samples: number; knowledge: number; warnings?: string[] };
               notify("success", "训练文件已导入", `样本 ${result.samples} 条，知识 ${result.knowledge} 条${result.warnings?.length ? `；${result.warnings.join("；")}` : ""}`);

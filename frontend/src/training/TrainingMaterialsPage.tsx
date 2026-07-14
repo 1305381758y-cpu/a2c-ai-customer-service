@@ -53,9 +53,14 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
 
   const uploadFile = async (upload: File) => {
     const body = new FormData();
-    body.append("file", upload);
     body.append("countryId", trainingSelectedCountryId(filters, countries));
-    const response = await fetch(trainingImportEndpoint(platform), { method: "POST", body });
+    body.append("file", upload);
+    const response = await fetch(trainingImportEndpoint(platform), {
+      method: "POST",
+      body,
+      credentials: "same-origin",
+      headers: { "X-Portal-Mode": platform ? "admin" : "merchant" }
+    });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "上传失败");
     const result = await response.json() as TrainingImportResult;
     setMessage(trainingImportMessage(result, simple));

@@ -57,7 +57,12 @@ export function ScriptFlowsPage({ platform = false, canEdit = true }: { platform
     if (flowName.trim()) params.set("name", flowName.trim());
     if (countryId) params.set("countryId", countryId);
     if (platform && filters.merchantId.trim()) params.set("merchantId", filters.merchantId.trim());
-    const response = await fetch(`${base}/import${params.toString() ? `?${params}` : ""}`, { method: "POST", body });
+    const response = await fetch(`${base}/import${params.toString() ? `?${params}` : ""}`, {
+      method: "POST",
+      body,
+      credentials: "same-origin",
+      headers: { "X-Portal-Mode": platform ? "admin" : "merchant" }
+    });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || "上传失败");
     const result = await response.json() as { flow: ScriptFlow; imported: number };
     notify("success", "话本流程已导入", `已生成 ${result.imported} 个流程节点。当前为草稿，请检查后再启用。`);
