@@ -27,9 +27,9 @@ export async function importTrainingMaterialFromBuffer(
   repos: Repositories,
   config: AppConfig,
   merchantId: string,
-  input: { buffer: Buffer; filename: string; mimeType?: string }
+  input: { buffer: Buffer; filename: string; mimeType?: string; countryId?: string }
 ): Promise<TrainingImportResult<{ material: TrainingMaterialRecord; imported: number; samples: number; knowledge: number; warnings: string[] }>> {
-  const countryId = repos.defaultCountryId(merchantId);
+  const countryId = repos.validCountryId(merchantId, input.countryId || "") || repos.defaultCountryId(merchantId);
   try {
     const merchantConfig = repos.getMerchantConfig(merchantId);
     const parsed = await parseTrainingMaterial({

@@ -67,6 +67,23 @@ describe("training import service", () => {
     expect(repos.listKnowledgeItems({ merchantId: merchant.id, countryId }).map((row) => row.content).join("\n")).toContain("@username");
   });
 
+  it("stores uploaded material under the selected valid country", async () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("多国家素材商户");
+    repos.createMerchantCountry(merchant.id, { name: "巴西" });
+    const selectedCountry = repos.createMerchantCountry(merchant.id, { name: "玻利维亚" });
+
+    const result = await importTrainingMaterialFromBuffer(repos, loadConfig({ DATABASE_URL: ":memory:" }), merchant.id, {
+      buffer: Buffer.from("注册链接必须保持为 https://merchant.example/register"),
+      filename: "selected-country.txt",
+      mimeType: "text/plain",
+      countryId: selectedCountry.id
+    });
+
+    expect(result).toMatchObject({ ok: true, value: { material: { countryId: selectedCountry.id } } });
+    expect(repos.listTrainingMaterials({ merchantId: merchant.id, countryId: selectedCountry.id })).toHaveLength(1);
+  });
+
   it("returns a structured error when the uploaded sample file cannot be parsed", async () => {
     const repos = new Repositories(openDb(":memory:"));
     const merchant = repos.createMerchant("非法样本商户");
