@@ -209,7 +209,7 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: false, error: "接管提示保留固定话术" });
   });
 
-  it("naturalizes active merchant script-flow wording without replacing its business content", async () => {
+  it("keeps active merchant script-flow wording unchanged", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
         text: "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento. ¿Tiene tiempo para continuar con el registro ahora?",
@@ -233,9 +233,9 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(ai.naturalizeStrictFlowText).toHaveBeenCalledOnce();
-    expect(result.reply).toContain("este trabajo en línea ayuda a comerciantes");
-    expect(result.naturalized).toMatchObject({ used: true });
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe("Soy Laura, asesora de bienvenida de Shopee. Primero le explico el proceso exacto del cliente y luego seguimos con el registro.");
+    expect(result.naturalized).toMatchObject({ used: false, error: "启用话本后保留节点标准话术" });
   });
 
   it("keeps custom registration packages unchanged", async () => {
@@ -266,15 +266,13 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).toBe(configured);
     expect(result.naturalized).toMatchObject({
       used: false,
-      error: "注册链接、邀请码和步骤保留话本原文"
+      error: "启用话本后保留节点标准话术"
     });
   });
 
-  it("changes a repeated custom-flow reply instead of sending the same tail again", async () => {
+  it("does not rotate repeated wording inside an active script", async () => {
     const repeated = "De acuerdo, siga primero los pasos de la página. Después del registro, envíeme el teléfono usado.";
-    const ai = {
-      naturalizeStrictFlowText: vi.fn(async () => ({ text: repeated, used: true, error: "" }))
-    };
+    const ai = { naturalizeStrictFlowText: vi.fn() };
 
     const result = await refineStrictFlowReplyText({
       ai: ai as never,
@@ -286,12 +284,13 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(result.reply).not.toBe(repeated);
-    expect(result.duplicateAvoided).toBe(true);
-    expect(result.variantApplied).toBe(true);
+    expect(result.reply).toBe(repeated);
+    expect(result.duplicateAvoided).toBe(false);
+    expect(result.variantApplied).toBe(false);
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
   });
 
-  it("still lets active script-flow replies answer customer questions inside the current node", async () => {
+  it("keeps the configured node response when the customer asks a question", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
         text: "Entiendo su duda. La ganancia se calcula por tareas reales y reglas de la página; si quiere seguimos con el registro paso a paso.",
@@ -315,13 +314,8 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(ai.naturalizeStrictFlowText).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
-      customerText: "¿De verdad se gana tanto?",
-      draftReply: "Las ganancias exactas siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?",
-      questionType: "earning",
-      flowStep: "registration_intent"
-    }));
-    expect(result.reply).toContain("Entiendo su duda");
-    expect(result.naturalized).toMatchObject({ used: true });
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe("Las ganancias exactas siguen las reglas de la página. ¿Tiene tiempo para continuar el registro?");
+    expect(result.naturalized).toMatchObject({ used: false, error: "启用话本后保留节点标准话术" });
   });
 });

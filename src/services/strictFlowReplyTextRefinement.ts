@@ -65,6 +65,30 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
+  // An enabled merchant script is an approved customer-facing script. Keep
+  // its wording and order intact; only the language guard may translate it to
+  // the customer's configured language. Do not naturalize, paraphrase, or
+  // rotate repeated wording inside a configured script.
+  if (input.scriptFlow?.flow.active) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: input.strictReply.needsInviteCode
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "启用话本后保留节点标准话术"
+      },
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
+    };
+  }
+
   // A registration package is operational content, not conversational copy.
   // Keep the merchant's configured link, invite code, and step order intact;
   // rewriting this block can silently remove required registration steps.
@@ -97,7 +121,7 @@ export async function refineStrictFlowReplyText(input: {
     history: input.history,
     allowLinkOrInvite: input.strictReply.needsInviteCode,
     agentProfile: input.agentProfile,
-    forceNaturalize: Boolean(input.scriptFlow?.flow.active),
+    forceNaturalize: false,
     avoidReplies: recentOutboundReplies(input.history)
   });
 
