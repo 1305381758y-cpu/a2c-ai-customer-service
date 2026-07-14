@@ -14,7 +14,9 @@ function testConfig() {
     DEFAULT_ADMIN_PASSWORD: "Admin123456",
     GOOGLE_AI_API_KEY: "",
     A2C_APP_ID: "",
-    A2C_APP_SECRET: ""
+    A2C_APP_SECRET: "",
+    TEST_SNAPSHOT_DATABASE_URL: ":memory:",
+    TEST_SIMULATION_DATABASE_URL: ":memory:"
   });
 }
 
@@ -43,6 +45,17 @@ async function enableBuiltInStrictFlow(app: ReturnType<typeof buildApp>, cookie:
     headers: { cookie }
   });
   expect(enabled.statusCode).toBe(200);
+}
+
+async function createTrainingSnapshot(app: ReturnType<typeof buildApp>, cookie: string): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/merchant/training-snapshots",
+    headers: { cookie },
+    payload: {}
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json().snapshot.snapshotId as string;
 }
 
 function multipartUploadPayload(filename: string, contentType: string, content: string | Buffer) {
@@ -147,12 +160,14 @@ describe("portal api", () => {
       }
     });
     expect(patchConfig.statusCode).toBe(200);
+    const snapshotId = await createTrainingSnapshot(app, merchantCookie);
 
     const response = await app.inject({
       method: "POST",
       url: "/api/merchant/training-simulator/messages",
       headers: { cookie: merchantCookie },
       payload: {
+        snapshotId,
         customerPhone: "sim-customer-001",
         a2cAccountPhone: "18507251675",
         nickname: "模拟客户",
@@ -223,11 +238,12 @@ describe("portal api", () => {
       headers: { cookie: cookieA },
       payload: { trainingSimulationEnabled: true, strictScriptFlowEnabled: true, smartReplyEnabled: true }
     });
+    const snapshotId = await createTrainingSnapshot(app, cookieA);
     const first = await app.inject({
       method: "POST",
       url: "/api/merchant/training-simulator/messages",
       headers: { cookie: cookieA },
-      payload: { customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "你好" }
+      payload: { snapshotId, customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "你好" }
     });
     expect(first.statusCode).toBe(200);
     const conversation = first.json().conversation as { id: string };
@@ -235,17 +251,17 @@ describe("portal api", () => {
       method: "POST",
       url: "/api/merchant/training-simulator/messages",
       headers: { cookie: cookieA },
-      payload: { customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "这个安全吗" }
+      payload: { snapshotId, customerPhone: "review-customer-001", a2cAccountPhone: "18507251675", content: "这个安全吗" }
     });
 
-    const review = await app.inject({ method: "POST", url: `/api/merchant/conversations/${conversation.id}/review`, headers: { cookie: cookieA } });
+    const review = await app.inject({ method: "POST", url: `/api/merchant/conversations/${conversation.id}/review?${new URLSearchParams({ snapshotId })}`, headers: { cookie: cookieA } });
     expect(review.statusCode).toBe(200);
     expect(review.json().review.score).toBeGreaterThanOrEqual(0);
     expect(review.json().items.length).toBeGreaterThan(0);
     const candidate = review.json().items.find((item: { itemType: string; status: string }) => item.itemType === "sample" && item.status === "candidate") ?? review.json().items[0];
     const applied = await app.inject({
       method: "POST",
-      url: `/api/merchant/conversations/${conversation.id}/review/apply`,
+      url: `/api/merchant/conversations/${conversation.id}/review/apply?${new URLSearchParams({ snapshotId })}`,
       headers: { cookie: cookieA },
       payload: { itemId: candidate.id }
     });
@@ -253,7 +269,7 @@ describe("portal api", () => {
     expect(applied.json().rows[0].status).toBe("applied");
     const samplesA = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: cookieA } });
     const samplesB = await app.inject({ method: "GET", url: "/api/merchant/training-samples", headers: { cookie: cookieB } });
-    expect(samplesA.json().rows.length).toBeGreaterThan(0);
+    expect(samplesA.json().rows.length).toBe(0);
     expect(samplesB.json().rows.length).toBe(0);
     await app.close();
   });

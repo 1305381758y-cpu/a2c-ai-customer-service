@@ -3,6 +3,8 @@ import { z } from "zod";
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().default("./data/app.db"),
+  TEST_SNAPSHOT_DATABASE_URL: z.string().default("./data/test-snapshots.db"),
+  TEST_SIMULATION_DATABASE_URL: z.string().default("./data/test-simulations.db"),
   INTERNAL_API_KEY: z.string().default("change-me"),
   A2C_BASE_URL: z.string().default("https://openapi.a2c.chat/api/openapi"),
   A2C_APP_ID: z.string().optional().default(""),

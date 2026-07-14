@@ -460,6 +460,28 @@ tbody tr:hover td {
 .simulator-panel textarea {
   resize: vertical;
 }
+.simulator-snapshot-bar {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted, #f7f9fc);
+}
+.simulator-snapshot-bar > .toolbar {
+  flex-wrap: wrap;
+}
+.simulator-snapshot-bar select {
+  min-width: 240px;
+}
+.snapshot-detail {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .simulator-chat {
   min-width: 0;
   display: grid;

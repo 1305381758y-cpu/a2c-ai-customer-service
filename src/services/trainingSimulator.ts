@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { ConversationEngine } from "./conversationEngine.js";
 import type { Repositories } from "../repositories.js";
+import type { TestSnapshotRepository } from "./testSnapshotRepository.js";
 
 export type TrainingSimulatorMessageInput = {
+  snapshotId?: string;
   customerPhone?: string;
   a2cAccountPhone?: string;
   nickname?: string;
@@ -22,10 +24,16 @@ export async function runMerchantTrainingSimulation(
   conversationEngine: ConversationEngine,
   merchantId: string,
   input: TrainingSimulatorMessageInput,
-  options: { now?: number; randomSuffix?: string } = {}
+  options: { now?: number; randomSuffix?: string } = {},
+  snapshots?: TestSnapshotRepository,
+  runtimeMerchantId = merchantId,
+  productionRepos = repos
 ) {
-  const config = repos.getMerchantConfig(merchantId);
-  const accounts = repos.listMerchantA2CAccounts({ merchantId, enabled: true });
+  const snapshot = snapshots?.get(input.snapshotId || "");
+  if (snapshots && (!snapshot || snapshot.merchantId !== merchantId)) return { ok: false as const, statusCode: 400 as const, error: "请先创建当前商户的线上测试快照" };
+  if (snapshot && (!snapshot.validation.valid || snapshot.nodeCount !== 11)) return { ok: false as const, statusCode: 400 as const, error: "线上正式流程快照不完整，禁止执行完整回归。" };
+  const config = repos.getMerchantConfig(runtimeMerchantId);
+  const accounts = repos.listMerchantA2CAccounts({ merchantId: runtimeMerchantId, enabled: true });
   const configuredAccount = config.a2cAccountPhone.split(",").map((item) => item.trim()).find(Boolean);
   const a2cAccountPhone = input.a2cAccountPhone || accounts[0]?.apiPhone || configuredAccount || "simulation-a2c";
   const nowMs = options.now ?? Date.now();
@@ -39,7 +47,7 @@ export async function runMerchantTrainingSimulation(
   const suffix = options.randomSuffix || randomUUID().slice(0, 8);
   const messageId = `sim_in:${merchantId}:${customerPhone}:${nowMs}:${suffix}`;
   const result = await conversationEngine.simulateInboundMessage({
-    merchantId,
+    merchantId: runtimeMerchantId,
     payload: {
       id: `sim:${messageId}`,
       timestamp: nowSeconds,
@@ -63,6 +71,12 @@ export async function runMerchantTrainingSimulation(
     ok: true as const,
     value: {
       ...result,
+      ...(snapshot && snapshots ? { testSnapshot: {
+        snapshotId: snapshot.snapshotId,
+        configHash: snapshot.configHash,
+        nodeCount: snapshot.nodeCount,
+        productionConfigChanged: !snapshots.compareProduction(productionRepos, snapshot)
+      } } : {}),
       conversation,
       rows: result.conversationId ? repos.listConversationMessages(result.conversationId, 80) : []
     }

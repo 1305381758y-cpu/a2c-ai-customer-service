@@ -22,8 +22,10 @@ import { registerAdminMerchantRoutes } from "./http/adminMerchantRoutes.js";
 import { registerInternalMaintenanceRoutes } from "./http/internalMaintenanceRoutes.js";
 import { registerAiCallStatsRoutes } from "./http/aiCallStatsRoutes.js";
 import { registerOperationAuditRoutes } from "./http/operationAuditRoutes.js";
+import { TestSnapshotRepository } from "./services/testSnapshotRepository.js";
+import { TestSimulationStore } from "./services/testSimulationStore.js";
 
-export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine }): void {
+export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; repos: Repositories; conversationEngine: ConversationEngine; testSnapshots: TestSnapshotRepository; testSimulationStore: TestSimulationStore }): void {
   const adminOnly = requireUser(deps.config, deps.repos, ["platform_admin"]);
   const merchantRoles = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin", "merchant_operator"]);
   const merchantAdmins = requireUser(deps.config, deps.repos, ["platform_admin", "merchant_admin"]);
@@ -42,11 +44,11 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerAdminScriptFlowRoutes(app, { repos: deps.repos, adminOnly });
   registerAdminConversationRoutes(app, { config: deps.config, repos: deps.repos, adminOnly });
   registerMerchantTrainingRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
-  registerMerchantTrainingSimulatorRoutes(app, { repos: deps.repos, conversationEngine: deps.conversationEngine, merchantRoles });
+  registerMerchantTrainingSimulatorRoutes(app, { repos: deps.repos, conversationEngine: deps.conversationEngine, merchantRoles, adminOnly, testSnapshots: deps.testSnapshots, testSimulationStore: deps.testSimulationStore });
   registerMerchantCustomerRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantIntentLearningRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
-  registerMerchantConversationRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
+  registerMerchantConversationRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins, testSnapshots: deps.testSnapshots, testSimulationStore: deps.testSimulationStore });
   registerAiCallStatsRoutes(app, { repos: deps.repos, adminOnly });
 
   registerInternalMaintenanceRoutes(app, { config: deps.config, repos: deps.repos });

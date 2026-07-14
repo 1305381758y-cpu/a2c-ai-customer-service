@@ -24,7 +24,12 @@ export type AgentProfileVersion = { id: number; merchantId: string; version: num
 export type ConversationReviewItem = { id: number; reviewId: number; itemType: "sample" | "knowledge"; title: string; content: string; status: "candidate" | "applied" | "ignored"; appliedTargetType: string; appliedTargetId: string };
 export type ConversationReview = { id: number; score: number; goalCompleted: boolean; summary: string; mainConcerns: string[]; mistakes: string[]; goodReplies: string[]; suggestedSamples: Array<Record<string, unknown>>; suggestedKnowledge: Array<Record<string, unknown>>; improvementActions: string[]; status: string; updatedAt: string };
 export type ConversationReviewResponse = { review: ConversationReview | null; items: ConversationReviewItem[] };
-export type SimulatorResponse = { status: string; conversation?: Conversation; rows: ChatMessage[] };
+export type SimulatorResponse = {
+  status: string;
+  conversation?: Conversation;
+  rows: ChatMessage[];
+  testSnapshot?: { snapshotId: string; configHash: string; nodeCount: number; productionConfigChanged: boolean };
+};
 export type ConfigCheck = { key: string; label: string; ok: boolean; status: "ok" | "missing" | "error" | "waiting"; detail: string };
 export type MerchantConfigVersion = { id: number; merchantId: string; version: number; changedKeys: string[]; note: string; createdBy: string; createdAt: string };
 export type OperationLog = { id: number; merchantId: string; actorUserId: string; actorName: string; actorRole: string; action: string; resourceType: string; targetId: string; route: string; method: string; status: "success" | "error"; httpStatus: number; createdAt: string };

@@ -21,12 +21,16 @@ import { listConversationExportRows, sendConversationExport, type ConversationEx
 import { registerMerchantOutboundMessageRoutes } from "./merchantOutboundMessageRoutes.js";
 import { sendResult } from "./routeResponses.js";
 import { scopedMerchantId } from "./routeHelpers.js";
+import { TestSnapshotRepository } from "../services/testSnapshotRepository.js";
+import { TestSimulationStore } from "../services/testSimulationStore.js";
 
 type MerchantConversationRoutesDeps = {
   config: AppConfig;
   repos: Repositories;
   merchantRoles: ReturnType<typeof requireUser>;
   merchantAdmins: ReturnType<typeof requireUser>;
+  testSnapshots: TestSnapshotRepository;
+  testSimulationStore: TestSimulationStore;
 };
 
 export function registerMerchantConversationRoutes(app: FastifyInstance, deps: MerchantConversationRoutesDeps): void {
@@ -73,20 +77,31 @@ export function registerMerchantConversationRoutes(app: FastifyInstance, deps: M
     return sendResult(reply, patchMerchantConversationMemory(deps.repos, scopedMerchantId(request), request.params.id, request.body ?? {}));
   });
 
-  app.get<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantRoles }, async (request, reply) => {
-    return sendResult(reply, getMerchantConversationReview(deps.repos, scopedMerchantId(request), request.params.id));
+  app.get<{ Params: { id: string }; Querystring: { snapshotId?: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantRoles }, async (request, reply) => {
+    const workspace = simulationWorkspace(deps, scopedMerchantId(request), request.query.snapshotId);
+    return sendResult(reply, getMerchantConversationReview(workspace?.repos || deps.repos, workspace?.merchantId || scopedMerchantId(request), request.params.id));
   });
 
-  app.post<{ Params: { id: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    return sendResult(reply, await generateMerchantConversationReview(deps.repos, deps.config, scopedMerchantId(request), request.params.id));
+  app.post<{ Params: { id: string }; Querystring: { snapshotId?: string } }>("/api/merchant/conversations/:id/review", { preHandler: deps.merchantAdmins }, async (request, reply) => {
+    const workspace = simulationWorkspace(deps, scopedMerchantId(request), request.query.snapshotId);
+    return sendResult(reply, await generateMerchantConversationReview(workspace?.repos || deps.repos, deps.config, workspace?.merchantId || scopedMerchantId(request), request.params.id));
   });
 
-  app.post<{ Params: { id: string }; Body: { itemId?: number; itemIds?: number[] } }>("/api/merchant/conversations/:id/review/apply", { preHandler: deps.merchantAdmins }, async (request, reply) => {
-    return sendResult(reply, applyMerchantConversationReviewItems(deps.repos, scopedMerchantId(request), request.params.id, request.body ?? {}));
+  app.post<{ Params: { id: string }; Querystring: { snapshotId?: string }; Body: { itemId?: number; itemIds?: number[] } }>("/api/merchant/conversations/:id/review/apply", { preHandler: deps.merchantAdmins }, async (request, reply) => {
+    const workspace = simulationWorkspace(deps, scopedMerchantId(request), request.query.snapshotId);
+    return sendResult(reply, applyMerchantConversationReviewItems(workspace?.repos || deps.repos, workspace?.merchantId || scopedMerchantId(request), request.params.id, request.body ?? {}));
   });
 
   app.patch<{ Params: { conversationId: string }; Body: { handoffStatus?: "pending" | "processing" | "done" } }>("/api/merchant/handoffs/:conversationId", { preHandler: deps.merchantRoles }, async (request, reply) => {
     return sendResult(reply, await updateMerchantHandoffStatus(deps.repos, deps.config, scopedMerchantId(request), request.params.conversationId, request.body?.handoffStatus, (error) => app.log.warn({ err: error }, "conversation review generation failed")));
   });
 
+}
+
+function simulationWorkspace(deps: MerchantConversationRoutesDeps, merchantId: string, snapshotId?: string): { repos: Repositories; merchantId: string } | undefined {
+  if (!snapshotId) return undefined;
+  const snapshot = deps.testSnapshots.get(snapshotId);
+  if (!snapshot || snapshot.merchantId !== merchantId || !snapshot.validation.valid) return undefined;
+  const workspace = deps.testSimulationStore.getWorkspace(snapshot);
+  return { repos: workspace.repos, merchantId: workspace.merchantId };
 }

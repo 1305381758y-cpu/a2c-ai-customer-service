@@ -11,6 +11,8 @@ import { ConversationEngine } from "./services/conversationEngine.js";
 import { createConversationApplication } from "./services/conversationApplication.js";
 import { hashPassword } from "./auth.js";
 import { setAiCallRecorder } from "./clients/aiProviderRuntime.js";
+import { TestSnapshotRepository } from "./services/testSnapshotRepository.js";
+import { TestSimulationStore } from "./services/testSimulationStore.js";
 
 const UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 
@@ -24,6 +26,8 @@ export function buildApp(config: AppConfig) {
     passwordHash: hashPassword(config.DEFAULT_ADMIN_PASSWORD)
   });
   const conversationEngine = new ConversationEngine(createConversationApplication(repos, config));
+  const testSnapshots = new TestSnapshotRepository(config.TEST_SNAPSHOT_DATABASE_URL);
+  const testSimulationStore = new TestSimulationStore(config.TEST_SIMULATION_DATABASE_URL, config);
 
   app.register(multipart, {
     limits: {
@@ -48,7 +52,7 @@ export function buildApp(config: AppConfig) {
     prefix: "/uploads/",
     decorateReply: false
   });
-  registerRoutes(app, { config, repos, conversationEngine });
+  registerRoutes(app, { config, repos, conversationEngine, testSnapshots, testSimulationStore });
 
   return app;
 }
