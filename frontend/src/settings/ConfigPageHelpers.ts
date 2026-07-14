@@ -73,7 +73,7 @@ export function configA2CAccountPatchEndpoint(platform: boolean, accountId: numb
 }
 
 export function configSaveSuccessMessage(saved: Record<string, string | boolean>) {
-  if (!saved.a2cAppId || !saved.a2cAppSecret) return "配置已保存。填写 A2C App ID 和密钥后，可手动点击“同步A2C客服账号”。";
+  if (!saved.a2cAppId || !saved.a2cAppSecret || !saved.a2cWebhookVerifyToken) return "配置已保存。保存配置不会自动同步账号，请填写 A2C App ID 和密钥，并补充 Webhook 验证 Token 后，再手动同步客服账号。";
   return "配置已保存。为避免 A2C 认证频繁，保存配置不会自动同步账号；需要刷新客服账号时请手动点击“同步A2C客服账号”。";
 }
 

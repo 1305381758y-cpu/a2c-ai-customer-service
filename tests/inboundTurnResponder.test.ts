@@ -24,6 +24,7 @@ function merchantConfig(overrides: Partial<MerchantConfigRecord> = {}): Merchant
     a2cAppId: "",
     a2cAppSecret: "",
     a2cAccountPhone: "",
+    a2cWebhookVerifyToken: "",
     openaiApiKey: "",
     openaiModel: "",
     aiProvider: "gemini",

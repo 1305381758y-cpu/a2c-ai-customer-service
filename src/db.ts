@@ -45,6 +45,7 @@ export function migrate(db: DatabaseSync): void {
       a2c_app_id TEXT DEFAULT '',
       a2c_app_secret TEXT DEFAULT '',
       a2c_account_phone TEXT DEFAULT '',
+      a2c_webhook_verify_token TEXT DEFAULT '',
       openai_api_key TEXT DEFAULT '',
       openai_model TEXT DEFAULT 'gpt-5-mini',
       ai_provider TEXT DEFAULT 'minimax',
@@ -652,6 +653,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "intent_learning_events", "description", "TEXT DEFAULT ''");
   ensureColumn(db, "intent_learning_events", "examples_json", "TEXT DEFAULT '[]'");
   ensureColumn(db, "merchant_agent_profiles", "enabled", "INTEGER DEFAULT 1");
+  ensureColumn(db, "merchant_configs", "a2c_webhook_verify_token", "TEXT DEFAULT ''");
   ensureColumn(db, "conversation_reviews", "status", "TEXT DEFAULT 'generated'");
   ensureColumn(db, "conversation_review_items", "applied_target_type", "TEXT DEFAULT ''");
   ensureColumn(db, "conversation_review_items", "applied_target_id", "INTEGER");

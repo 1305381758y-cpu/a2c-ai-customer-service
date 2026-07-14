@@ -20,6 +20,10 @@ export function patchMaskedMerchantConfig(
   userName = "系统"
 ): MerchantConfigPatchResult {
   const cleaned = cleanConfigPatch(patch);
+  const verifyTokenPatch = patch.a2cWebhookVerifyToken;
+  if (Object.hasOwn(patch, "a2cWebhookVerifyToken") && !(typeof verifyTokenPatch === "string" && verifyTokenPatch.includes("••••")) && !hasUnmaskedValue(cleaned.a2cWebhookVerifyToken)) {
+    return { ok: false, statusCode: 400, error: "Webhook 验证 Token 必填，请填写与 A2C 后台一致的 Token。" };
+  }
   if (isEnablingStrictScriptFlow(cleaned)) {
     const activeFlows = repos.listScriptFlows({ merchantId, status: "active" }).filter((flow) => flow.active);
     const activeFlow = activeFlows[0] ? repos.getScriptFlow(activeFlows[0].id, merchantId) : undefined;
@@ -35,6 +39,10 @@ export function patchMaskedMerchantConfig(
   const changedKeys = Object.keys(cleaned);
   if (changedKeys.length) repos.recordMerchantConfigVersion(merchantId, changedKeys, userName);
   return { ok: true, value: maskConfig(saved) };
+}
+
+function hasUnmaskedValue(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function patchMerchantVisibleConfig(repos: Repositories, merchantId: string, patch: Record<string, unknown>, userName = "系统"): MerchantConfigPatchResult {
@@ -97,6 +105,7 @@ export function maskConfig(config: MerchantConfigRecord): Record<string, unknown
   return {
     ...safeConfig,
     a2cAppSecret: maskSecret(config.a2cAppSecret),
+    a2cWebhookVerifyToken: maskSecret(config.a2cWebhookVerifyToken),
     openaiApiKey: maskSecret(config.openaiApiKey),
     minimaxApiKey: maskSecret(config.minimaxApiKey),
     deepseekApiKey: maskSecret(config.deepseekApiKey),

@@ -4,7 +4,7 @@ import { configFieldsForGroup } from "../frontend/src/settings/ConfigCredentialF
 
 describe("settings credential groups", () => {
   it("keeps A2C, Telegram and fallback fields in separate groups", () => {
-    expect(configFieldsForGroup("a2c")).toEqual(["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone"]);
+    expect(configFieldsForGroup("a2c")).toEqual(["a2cBaseUrl", "a2cAppId", "a2cAppSecret", "a2cAccountPhone", "a2cWebhookVerifyToken"]);
     expect(configFieldsForGroup("telegram")).toEqual(["telegramBotToken"]);
     expect(configFieldsForGroup("fallback")).toEqual(["platformRegisterUrl", "tgRegisterGuideUrl"]);
   });

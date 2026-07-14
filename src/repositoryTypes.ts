@@ -68,6 +68,7 @@ export interface MerchantConfigRecord {
   a2cAppId: string;
   a2cAppSecret: string;
   a2cAccountPhone: string;
+  a2cWebhookVerifyToken: string;
   openaiApiKey: string;
   openaiModel: string;
   aiProvider: "minimax" | "gemini" | "deepseek";

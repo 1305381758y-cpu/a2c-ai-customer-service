@@ -14,6 +14,7 @@ const merchantConfig: MerchantConfigRecord = {
   a2cAppId: "",
   a2cAppSecret: "",
   a2cAccountPhone: "",
+  a2cWebhookVerifyToken: "",
   openaiApiKey: "",
   openaiModel: "",
   aiProvider: "gemini",

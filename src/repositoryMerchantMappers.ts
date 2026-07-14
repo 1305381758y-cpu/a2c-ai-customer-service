@@ -20,6 +20,7 @@ export function mapMerchantConfig(row: Record<string, unknown>): MerchantConfigR
     a2cAppId: String(row.a2c_app_id ?? ""),
     a2cAppSecret: String(row.a2c_app_secret ?? ""),
     a2cAccountPhone: String(row.a2c_account_phone ?? ""),
+    a2cWebhookVerifyToken: String(row.a2c_webhook_verify_token ?? ""),
     openaiApiKey: String(row.openai_api_key ?? ""),
     openaiModel: String(row.openai_model ?? "gpt-5-mini"),
     aiProvider: row.ai_provider === "gemini" || row.ai_provider === "deepseek" ? row.ai_provider : "minimax",

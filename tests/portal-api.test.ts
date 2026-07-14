@@ -73,6 +73,41 @@ function csvUploadPayload(csv: string) {
 }
 
 describe("portal api", () => {
+  it("validates A2C webhook callbacks with the configured verification token", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: { name: "Webhook验证商户" }
+    });
+    const merchantId = String(created.json().id);
+    await app.inject({
+      method: "PATCH",
+      url: `/api/admin/merchants/${merchantId}/config`,
+      headers: { cookie: adminCookie },
+      payload: { a2cWebhookVerifyToken: "verify-token-123" }
+    });
+
+    const verified = await app.inject({
+      method: "GET",
+      url: `/webhooks/a2c/${merchantId}`,
+      headers: { "x-verify-token": "verify-token-123" }
+    });
+    expect(verified.statusCode).toBe(200);
+    expect(verified.json()).toEqual({ code: 0, message: "success", data: { verifyToken: "verify-token-123" } });
+
+    const rejected = await app.inject({
+      method: "GET",
+      url: `/webhooks/a2c/${merchantId}`,
+      headers: { "x-verify-token": "wrong-token" }
+    });
+    expect(rejected.statusCode).toBe(401);
+    expect(rejected.json().code).toBe(1);
+    await app.close();
+  });
+
   it("runs merchant training simulator through webhook logic without sending to A2C", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");
@@ -1058,6 +1093,7 @@ describe("portal api", () => {
     });
     expect(conversations.json().rows).toHaveLength(1);
     const conversationId = conversations.json().rows[0].id as string;
+
 
     const memory = await app.inject({
       method: "GET",

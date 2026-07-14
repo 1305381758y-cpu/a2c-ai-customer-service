@@ -20,6 +20,7 @@ export class MerchantSettingsRepository {
       a2cAppId: "a2c_app_id",
       a2cAppSecret: "a2c_app_secret",
       a2cAccountPhone: "a2c_account_phone",
+      a2cWebhookVerifyToken: "a2c_webhook_verify_token",
       openaiApiKey: "openai_api_key",
       openaiModel: "openai_model",
       aiProvider: "ai_provider",

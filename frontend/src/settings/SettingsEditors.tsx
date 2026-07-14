@@ -40,7 +40,7 @@ export function ConfigSwitchCards({ form, saveConfigFlag }: { form: ConfigForm; 
 export function WebhookCopyCard({ a2cWebhookUrl, onCopied }: { a2cWebhookUrl: string; onCopied: () => void }) {
   return <div className="memory highlighted">
     <h3>A2C Webhook地址</h3>
-    <p>把这个地址填写到该商户的 A2C Webhook 配置里。</p>
+    <p>把这个地址填写到该商户的 A2C Webhook 配置里，并使用上方填写的验证 Token。A2C 会先用 GET 验证地址，验证成功后再推送客户消息。</p>
     <div className="copy-row">
       <label>{label("a2cWebhookUrl")}<input readOnly value={a2cWebhookUrl} onFocus={(e) => e.currentTarget.select()} /></label>
       <AsyncButton onClick={async () => { await navigator.clipboard.writeText(a2cWebhookUrl); onCopied(); notify("success", "已复制 Webhook 地址"); }} busyText="复制中..."><Copy size={16}/>复制</AsyncButton>

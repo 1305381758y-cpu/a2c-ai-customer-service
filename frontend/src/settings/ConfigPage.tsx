@@ -201,7 +201,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
   };
   const selectedProvider = String(form.aiProvider || "minimax");
   const providerKey = selectedProvider === "deepseek" ? form.deepseekApiKey : selectedProvider === "gemini" ? form.googleAiApiKey : form.minimaxApiKey;
-  const a2cConfigured = Boolean(form.a2cAppId && form.a2cAppSecret);
+  const a2cConfigured = Boolean(form.a2cAppId && form.a2cAppSecret && form.a2cWebhookVerifyToken);
   const aiConfigured = Boolean(providerKey);
   const telegramBound = form.telegramHandoffChatStatus === "bound";
   const restoreConfigVersion = async (version: MerchantConfigVersion) => {
@@ -246,8 +246,8 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
       {!platform && <SettingsSection
         id="a2c"
         title="A2C 接入"
-        description="维护 A2C 密钥、接收账号和当前商户专属 Webhook 地址。"
-        status={a2cConfigured ? "密钥已填写" : "待配置"}
+        description="维护 A2C 密钥、接收账号、验证 Token 和当前商户专属 Webhook 地址。保存后可在 A2C 后台完成回调验证。"
+        status={a2cConfigured ? "接入信息已填写" : "待配置验证 Token"}
         statusTone={a2cConfigured ? "ok" : "warning"}
         impact="影响客户消息接收、自动回复发送和客服账号同步。修改后请先保存，再执行真实配置检测。"
       >

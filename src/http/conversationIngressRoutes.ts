@@ -21,6 +21,17 @@ export function registerConversationIngressRoutes(app: FastifyInstance, deps: Co
     return reply.code(200).send(result);
   });
 
+  app.get<{ Params: { merchantId: string } }>("/webhooks/a2c/:merchantId", async (request, reply) => {
+    const merchant = deps.repos.getMerchant(request.params.merchantId);
+    if (!merchant || merchant.status !== "active") return reply.code(404).send({ code: 1, message: "merchant not found" });
+    const configuredToken = deps.repos.getMerchantConfig(merchant.id).a2cWebhookVerifyToken;
+    const receivedToken = String(request.headers["x-verify-token"] || "");
+    if (!configuredToken || receivedToken !== configuredToken) {
+      return reply.code(401).send({ code: 1, message: "verify token invalid", data: { verifyToken: receivedToken } });
+    }
+    return reply.type("application/json").send({ code: 0, message: "success", data: { verifyToken: receivedToken } });
+  });
+
   app.post<{ Params: { merchantId: string } }>("/webhooks/a2c/:merchantId", async (request, reply) => {
     const merchant = deps.repos.getMerchant(request.params.merchantId);
     if (!merchant || merchant.status !== "active") return reply.code(404).send({ error: "merchant not found" });
