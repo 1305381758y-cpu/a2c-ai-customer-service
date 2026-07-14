@@ -137,4 +137,12 @@ describe("strict flow wait-registration step", () => {
     expect(result.reply).toContain("Telegram");
     expect(result.reply).not.toContain("请将您注册时使用的电话号码");
   });
+
+  it("acknowledges that registration is still in progress without requesting the phone", () => {
+    const result = reply("我正在注册，不要催我");
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("不着急");
+    expect(result.reply).not.toContain("请将您注册时使用的电话号码");
+  });
 });

@@ -76,6 +76,18 @@ describe("strictFlowContextualIntent", () => {
     expect(acknowledgement.shouldPause).toBe(false);
   });
 
+  it("recognizes registration in progress and does not ask for the phone early", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("wait_registration"),
+      analysis: analyzeMessage("我正在注册，不要催我", "zh"),
+      customerText: "我正在注册，不要催我"
+    });
+
+    expect(result.intent).toBe("acknowledgement");
+    expect(result.nextAction).toBe("wait for registration to finish without asking for phone");
+    expect(result.reason).toContain("still registering");
+  });
+
   it("keeps incomplete phone numbers in the registration step", () => {
     const result = buildRuleContextualIntent({
       conversation: conversation("wait_registration"),

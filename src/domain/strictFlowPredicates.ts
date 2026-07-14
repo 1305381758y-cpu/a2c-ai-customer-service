@@ -85,6 +85,10 @@ export function saysNotRegistered(text: string): boolean {
   return /(还没.*(注册|完成)|還沒.*(註冊|完成)|没有.*(注册|完成)|沒有.*(註冊|完成)|没.*注册成功|沒有.*註冊成功|not.*registered|not.*finished|not.*completed|haven'?t.*registered|todav[ií]a\s+no.*registr|a[uú]n\s+no.*registr|no\s+he\s+(logrado|podido)?\s*registr|no\s+me\s+he\s+registr|no\s+pude\s+(registr|complet)|no\s+he\s+(terminado|finalizado|completado)|no\s+termin[eé]|no\s+finalic[eé]|não\s+(consegui|terminei|finalizei).*cadastro|nao\s+(consegui|terminei|finalizei).*cadastro)/i.test(text);
 }
 
+export function isRegistrationInProgress(text: string): boolean {
+  return /(正在注册|正在开户|还在注册|還在註冊|我在注册|我在註冊|正在操作|还没弄完|還沒弄完|不要催|别催|別催|先别催|先別催|estoy registrando|estoy haciendo el registro|todavía estoy registrando|todavia estoy registrando|no me apresure|no me apure|ainda estou cadastrando|ainda estou fazendo o cadastro|estou me cadastrando|não me apresse|nao me apresse|i am registering|i'?m registering|still registering|do not rush me|don't rush me)/i.test(text.trim());
+}
+
 export function saysTelegramInstalled(text: string): boolean {
   return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|installed|downloaded|instalei|baixei)/i.test(text.trim());
 }

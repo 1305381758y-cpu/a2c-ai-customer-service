@@ -14,6 +14,7 @@ import {
   asksVerificationCodeProblem,
   asksWhetherCanReadImage,
   isInboundImageOrScreenshot,
+  isRegistrationInProgress,
   isReadyToStartRegistration,
   isRegistrationDoneConfirmation,
   reportsLinkLoadFailure,
@@ -100,6 +101,9 @@ export function buildWaitRegistrationReply(input: StrictFlowInput, context: Wait
   }
   if (isReadyToStartRegistration(text)) {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", registrationStartInstruction(input, language), true);
+  }
+  if (isRegistrationInProgress(text)) {
+    return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "registration_in_progress_ack", language));
   }
   if (contextualLabel === "acknowledgement") {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "wait_registration_ack", language));

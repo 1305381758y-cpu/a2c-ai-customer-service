@@ -17,6 +17,7 @@ import {
   hasIncompleteRegistrationPhone,
   isAcknowledgement,
   isContextualShortReply,
+  isRegistrationInProgress,
   isExplicitRefusal,
   isPositive,
   lastAssistantContent,
@@ -87,6 +88,14 @@ export function buildRuleContextualIntent(
   }
   if (step === "wait_registration" && saysNotRegistered(text)) {
     return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "help registration", reason: "not registered yet" });
+  }
+  if (step === "wait_registration" && isRegistrationInProgress(text)) {
+    return base("acknowledgement", {
+      answeredPreviousQuestion: true,
+      shouldPause: false,
+      nextAction: "wait for registration to finish without asking for phone",
+      reason: "customer is still registering or asks not to be rushed"
+    });
   }
   if (step === "wait_registration" && asksToAnswerPreviousQuestion(text)) {
     return base("complaint", { nextAction: "answer previous registration question", reason: "asked to answer previous question" });
