@@ -32,25 +32,15 @@ const simulatorMessageSchema = z.object({
 
 export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, deps: MerchantTrainingSimulatorRoutesDeps): void {
   app.post<{ Body: z.infer<typeof simulatorMessageSchema> }>("/api/merchant/training-simulator/messages", { preHandler: deps.merchantRoles }, async (request, reply) => {
-    const merchantId = scopedMerchantId(request);
     const parsed = simulatorMessageSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ ok: false, error: "模拟消息参数不完整" });
-    const body = parsed.data;
-    const snapshotId = body.snapshotId;
-    const snapshot = deps.testSnapshots.get(snapshotId);
-    if (!snapshot || snapshot.merchantId !== merchantId) return reply.code(404).send({ ok: false, error: "测试快照不存在或不属于当前商户" });
-    if (!snapshot.validation.valid) return reply.code(400).send({ ok: false, error: "线上正式流程快照不完整，禁止执行完整回归。", snapshot });
-    const workspace = deps.testSimulationStore.getWorkspace(snapshot);
-    return sendResult(reply, await runMerchantTrainingSimulation(
-      workspace?.repos || deps.repos,
-      workspace?.engine || deps.conversationEngine,
-      merchantId,
-      body,
-      {},
-      deps.testSnapshots,
-      workspace?.merchantId,
-      deps.repos
-    ));
+    return sendResult(reply, await runSnapshotSimulation(deps, scopedMerchantId(request), parsed.data));
+  });
+
+  app.post<{ Params: { merchantId: string }; Body: z.infer<typeof simulatorMessageSchema> }>("/api/admin/merchants/:merchantId/training-simulator/messages", { preHandler: deps.adminOnly }, async (request, reply) => {
+    const parsed = simulatorMessageSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ ok: false, error: "模拟消息参数不完整" });
+    return sendResult(reply, await runSnapshotSimulation(deps, request.params.merchantId, parsed.data));
   });
 
   app.post("/api/merchant/training-snapshots", { preHandler: deps.merchantRoles }, async (request, reply) => {
@@ -87,4 +77,12 @@ export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, de
     if (!snapshot || snapshot.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ ok: false, error: "测试快照不存在" });
     return { ok: true, snapshot };
   });
+}
+
+async function runSnapshotSimulation(deps: MerchantTrainingSimulatorRoutesDeps, merchantId: string, body: z.infer<typeof simulatorMessageSchema>) {
+  const snapshot = deps.testSnapshots.get(body.snapshotId);
+  if (!snapshot || snapshot.merchantId !== merchantId) return { ok: false as const, statusCode: 404 as const, error: "测试快照不存在或不属于当前商户" };
+  if (!snapshot.validation.valid) return { ok: false as const, statusCode: 400 as const, error: "线上正式流程快照不完整，禁止执行完整回归。" };
+  const workspace = deps.testSimulationStore.getWorkspace(snapshot);
+  return runMerchantTrainingSimulation(workspace.repos, workspace.engine, merchantId, body, {}, deps.testSnapshots, workspace.merchantId, deps.repos);
 }
