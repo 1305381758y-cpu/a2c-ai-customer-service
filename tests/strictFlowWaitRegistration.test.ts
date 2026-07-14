@@ -145,4 +145,11 @@ describe("strict flow wait-registration step", () => {
     expect(result.reply).toContain("不着急");
     expect(result.reply).not.toContain("请将您注册时使用的电话号码");
   });
+
+  it("asks for the phone after a clear registration completion message", () => {
+    const result = reply("注册好了");
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.reply).toContain("请将您注册的手机号码");
+  });
 });

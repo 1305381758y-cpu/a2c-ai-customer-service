@@ -17,6 +17,7 @@ import {
   hasIncompleteRegistrationPhone,
   isAcknowledgement,
   isContextualShortReply,
+  isRegistrationDoneConfirmation,
   isRegistrationInProgress,
   isExplicitRefusal,
   isPositive,
@@ -88,6 +89,14 @@ export function buildRuleContextualIntent(
   }
   if (step === "wait_registration" && saysNotRegistered(text)) {
     return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "help registration", reason: "not registered yet" });
+  }
+  if (step === "wait_registration" && isRegistrationDoneConfirmation(text)) {
+    return base("platform_register_done", {
+      answeredPreviousQuestion: true,
+      shouldPause: false,
+      nextAction: "ask for registered phone",
+      reason: "customer explicitly confirmed platform registration"
+    });
   }
   if (step === "wait_registration" && isRegistrationInProgress(text)) {
     return base("acknowledgement", {

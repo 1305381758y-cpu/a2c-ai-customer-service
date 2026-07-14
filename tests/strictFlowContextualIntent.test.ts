@@ -101,6 +101,18 @@ describe("strictFlowContextualIntent", () => {
     expect(result.nextAction).toBe("pause politely");
   });
 
+  it("prioritizes explicit registration completion over an AI help label", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("wait_registration"),
+      analysis: analyzeMessage("注册好了", "zh"),
+      customerText: "注册好了",
+      inferredIntent: "need_help"
+    });
+
+    expect(result.intent).toBe("platform_register_done");
+    expect(result.nextAction).toBe("ask for registered phone");
+  });
+
   it("keeps incomplete phone numbers in the registration step", () => {
     const result = buildRuleContextualIntent({
       conversation: conversation("wait_registration"),

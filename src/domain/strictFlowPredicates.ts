@@ -87,7 +87,7 @@ export function saysNotRegistered(text: string): boolean {
 }
 
 export function isRegistrationInProgress(text: string): boolean {
-  return /(正在注册|正在开户|还在注册|還在註冊|我在注册|我在註冊|正在操作|还没弄完|還沒弄完|不要催|别催|別催|先别催|先別催|estoy registrando|estoy haciendo el registro|todavía estoy registrando|todavia estoy registrando|no me apresure|no me apure|ainda estou cadastrando|ainda estou fazendo o cadastro|estou me cadastrando|não me apresse|nao me apresse|i am registering|i'?m registering|still registering|do not rush me|don't rush me)/i.test(text.trim());
+  return /(正在注册|正在开户|还在注册|還在註冊|我在注册|我在註冊|现在去注册|现在去开户|現在去註冊|正在操作|还没弄完|還沒弄完|不要催|别催|別催|先别催|先別催|estoy registrando|estoy haciendo el registro|voy a registrarme|vou me registrar|todavía estoy registrando|todavia estoy registrando|no me apresure|no me apure|ainda estou cadastrando|ainda estou fazendo o cadastro|estou me cadastrando|não me apresse|nao me apresse|i am registering|i'?m registering|i am going to register|still registering|do not rush me|don't rush me)/i.test(text.trim());
 }
 
 export function saysTelegramInstalled(text: string): boolean {

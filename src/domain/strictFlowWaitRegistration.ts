@@ -44,6 +44,11 @@ export function buildWaitRegistrationReply(input: StrictFlowInput, context: Wait
   if (contextualLabel === "incomplete_phone") {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
   }
+  if (contextualLabel === "platform_register_done" || isRegistrationDoneConfirmation(text)) {
+    if (!(input.analysis.phone || input.conversation.extractedPhone)) {
+      return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_registered_phone", language));
+    }
+  }
   if (asksWhetherCanReadImage(text)) {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "image_recognition_ack", language));
   }
