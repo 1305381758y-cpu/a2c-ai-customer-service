@@ -10,6 +10,11 @@ export function normalizeText(value: string) {
   return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }
 
+export function formatAmount(value: unknown): string {
+  const amount = Number(value ?? 0);
+  return (Number.isFinite(amount) ? amount : 0).toFixed(2);
+}
+
 export function displayValue(column: string, value: unknown, row?: Record<string, unknown>) {
   if (typeof value === "boolean") return value ? "是" : "否";
   if (value === null || value === undefined || value === "") return "";

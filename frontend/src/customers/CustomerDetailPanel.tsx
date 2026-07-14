@@ -3,7 +3,7 @@ import React from "react";
 import { api, loadRows, withQuery } from "../app/api.js";
 import type { Conversation, Customer, CustomerBalanceTransaction } from "../types.js";
 import { AsyncButton, ClosePanelButton, ConfirmActionButton } from "../ui/components.js";
-import { countryLabel, formatConversationDate, label, languageName } from "../ui/formatters.js";
+import { countryLabel, formatAmount, formatConversationDate, label, languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
 
@@ -80,7 +80,7 @@ export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, o
           <AsyncButton busyText="保存中..." onClick={saveAgent}>保存客户模型配置</AsyncButton>
         </section>
         <section className="detail-subsection">
-          <div className="section-heading-row"><div><h4>客户余额与充值记录</h4><p>当前余额：{balance.toFixed(2)} {customer.balanceCurrency === "CNY" ? "默认币种" : customer.balanceCurrency}</p></div></div>
+          <div className="section-heading-row"><div><h4>客户余额与充值记录</h4><p>当前余额：{formatAmount(balance)} {customer.balanceCurrency === "CNY" ? "默认币种" : customer.balanceCurrency}</p></div></div>
           <div className="form-grid"><label>金额<input type="number" step="0.01" value={amount} placeholder="正数充值，负数扣减" onChange={(event) => setAmount(event.target.value)} /></label><label>备注<input value={note} onChange={(event) => setNote(event.target.value)} /></label></div>
           <AsyncButton busyText="提交中..." onClick={addBalance}>新增余额记录</AsyncButton>
           <div className="table-scroll compact"><table><thead><tr><th>金额</th><th>备注</th><th>操作人</th><th>时间</th><th>操作</th></tr></thead><tbody>{transactions.map((row) => <TransactionRow key={row.id} row={row} merchantQuery={merchantQuery} onChanged={reloadTransactions} />)}{!transactions.length && <tr><td colSpan={5}>暂无余额记录</td></tr>}</tbody></table></div>
@@ -105,5 +105,5 @@ function TransactionRow({ row, merchantQuery, onChanged }: { row: CustomerBalanc
   const [note, setNote] = React.useState(row.note);
   const save = async () => { await api(`/api/admin/customer-balance-transactions/${row.id}${merchantQuery}`, { method: "PATCH", body: JSON.stringify({ amount: Number(amount), note }) }); setEditing(false); await onChanged(); };
   const remove = async () => { await api(`/api/admin/customer-balance-transactions/${row.id}${merchantQuery}`, { method: "DELETE" }); await onChanged(); };
-  return <tr><td>{editing ? <input value={amount} onChange={(event) => setAmount(event.target.value)} /> : row.amount.toFixed(2)}</td><td>{editing ? <input value={note} onChange={(event) => setNote(event.target.value)} /> : row.note || "-"}</td><td>{row.createdBy || "系统"}</td><td>{row.createdAt}</td><td>{editing ? <><button onClick={() => void save()}>保存</button><button className="ghost" onClick={() => setEditing(false)}>取消</button></> : <><button onClick={() => setEditing(true)}>编辑</button><ConfirmActionButton className="danger ghost" busyText="删除中..." title="确认删除余额记录？" detail="删除后客户余额会按剩余记录重新计算。" confirmText="删除" onConfirm={remove}>删除</ConfirmActionButton></>}</td></tr>;
+  return <tr><td>{editing ? <input value={amount} onChange={(event) => setAmount(event.target.value)} /> : formatAmount(row.amount)}</td><td>{editing ? <input value={note} onChange={(event) => setNote(event.target.value)} /> : row.note || "-"}</td><td>{row.createdBy || "系统"}</td><td>{row.createdAt}</td><td>{editing ? <><button onClick={() => void save()}>保存</button><button className="ghost" onClick={() => setEditing(false)}>取消</button></> : <><button onClick={() => setEditing(true)}>编辑</button><ConfirmActionButton className="danger ghost" busyText="删除中..." title="确认删除余额记录？" detail="删除后客户余额会按剩余记录重新计算。" confirmText="删除" onConfirm={remove}>删除</ConfirmActionButton></>}</td></tr>;
 }
