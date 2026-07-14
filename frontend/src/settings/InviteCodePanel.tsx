@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 
 import { api, loadRows } from "../app/api.js";
 import type { A2CAccount, InviteCode, MerchantCountry } from "../types.js";
-import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton, ConfirmActionButton } from "../ui/components.js";
 import { countryLabel, displayValue, formatDateTime, label } from "../ui/formatters.js";
 import { Pagination, type PagerState } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
@@ -63,6 +63,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
   const [codesError, setCodesError] = useState("");
   const [draft, setDraft] = useState({ codes: "", registerUrl: "" });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editorClosed, setEditorClosed] = useState(false);
   const endpoints = inviteCodeEndpoints(platform, account.id);
   const reload = async () => {
     setCodesError("");
@@ -80,8 +81,8 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
       setSelectedId(null);
       return;
     }
-    if (!selectedId || !codes.some((item) => item.id === selectedId)) setSelectedId(codes[0].id);
-  }, [codes, selectedId]);
+    if (!editorClosed && (!selectedId || !codes.some((item) => item.id === selectedId))) setSelectedId(codes[0].id);
+  }, [codes, selectedId, editorClosed]);
   const stats = inviteCodeStatusCounts(codes);
   return <article className="account-panel">
     <div className="account-panel-head">
@@ -104,7 +105,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
           <div className="invite-list">
             <div className="invite-list-head"><span>邀请码</span><span>状态</span><span>客户</span></div>
             {codesError && <div className="empty-state compact error-state"><strong>邀请码池加载失败</strong><span>{codesError}</span><button className="ghost" onClick={() => void reload()}>重新加载</button></div>}
-            {!codesError && codes.map((code) => <button key={code.id} className={selectedCode?.id === code.id ? "active" : ""} onClick={() => setSelectedId(code.id)}>
+            {!codesError && codes.map((code) => <button key={code.id} className={selectedCode?.id === code.id ? "active" : ""} onClick={() => { setEditorClosed(false); setSelectedId(code.id); }}>
               <strong>{code.code}</strong>
               {displayValue("status", code.status)}
               <small>{code.assignedCustomerKey || "未绑定"}</small>
@@ -112,7 +113,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
             {!codesError && !codes.length && <div className="empty-state compact">暂无邀请码，先在上方批量导入。</div>}
           </div>
           <div className="invite-detail">
-            {selectedCode ? <InviteCodeEditor code={selectedCode} endpoint={endpoints.codeBase} reload={reload} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
+            {selectedCode && !editorClosed ? <InviteCodeEditor code={selectedCode} endpoint={endpoints.codeBase} reload={reload} onClose={() => { setSelectedId(null); setEditorClosed(true); }} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
           </div>
         </div>
       </div>
@@ -120,11 +121,11 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
   </article>;
 }
 
-function InviteCodeEditor({ code, endpoint, reload }: { code: InviteCode; endpoint: string; reload: () => Promise<void> }) {
+function InviteCodeEditor({ code, endpoint, reload, onClose }: { code: InviteCode; endpoint: string; reload: () => Promise<void>; onClose: () => void }) {
   const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
   useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status }), [code.id, code.code, code.registerUrl, code.status]);
   return <div className="invite-editor">
-    <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt, code.countryName || code.countryId)}` : ""}</small></div>
+    <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><div className="toolbar"><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt, code.countryName || code.countryId)}` : ""}</small><ClosePanelButton onClose={onClose} /></div></div>
     <div className="invite-editor-grid">
       <label>邀请码<input aria-label="邀请码" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} /></label>
       <label>状态<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select></label>

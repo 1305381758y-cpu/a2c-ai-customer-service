@@ -101,6 +101,7 @@ export function KnowledgePage({ platform }: { platform: boolean }) {
         <section className="detail-panel">
           <Editor
             title="知识库编辑"
+            onClose={() => setSelected(null)}
             value={selected as any}
             fields={["countryId", "type", "title", "content", "language", "priority", "enabled"]}
             selects={{ type: ["faq", "script", "rule", "forbidden"], enabled: ["true", "false"] }}

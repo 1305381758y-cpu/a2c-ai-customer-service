@@ -133,6 +133,6 @@ export function ScriptFlowsPage({ platform = false, canEdit = true }: { platform
   return <div className="script-flow-page work-split">
     <ResourceErrorNotice label="国家筛选选项" error={countriesState.error} onRetry={countriesState.reload} />
     <ScriptFlowListPanel platform={platform} canEdit={canEdit} countries={countries} filters={filters} setFilters={setFilters} reload={reload} flowName={flowName} setFlowName={setFlowName} file={file} setFile={setFile} upload={upload} createBuiltIn={createBuiltIn} rows={rows} selectedId={selected?.id} rowsLoading={rowsLoading} rowsError={rowsError} loadDetail={loadDetail} />
-    <ScriptFlowDetailPanel detail={detail} canEdit={canEdit} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationIssues={validationIssues} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} />
+    <ScriptFlowDetailPanel detail={detail} canEdit={canEdit} base={base} stepBase={stepBase} countries={countries} selectedStep={selectedStep} setSelectedStep={setSelectedStep} enableError={enableError} validationIssues={validationIssues} enableFlow={enableFlow} deleteFlow={deleteFlow} addStep={addStep} refreshDetail={refreshDetail} onClose={() => { setSelected(null); setDetail(null); setSelectedStep(null); }} />
   </div>;
 }

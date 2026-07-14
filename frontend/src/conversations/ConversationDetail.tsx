@@ -2,14 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { api, loadRows, withQuery } from "../app/api.js";
 import type { ChatMessage, Conversation, ConversationReviewResponse, CustomerMemory, Knowledge, Sample, ScriptFlowDetail } from "../types.js";
-import { AsyncButton } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton } from "../ui/components.js";
 import { localizeSystemText } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { ConversationChatColumn } from "./ConversationChatColumn.js";
 import { conversationDetailEndpoints, detailFlowStep, lastOutboundPayload, resetSentDraft, textSuggestionDraft } from "./ConversationDetailHelpers.js";
 import { buildBusinessQuickReplies, currentFlowStep, loadActiveScriptFlow, TrainingLoopPanel } from "./ConversationTrainingPanel.js";
 
-export function ConversationDetail({ platform = false, canApplyTraining = false, canDelete = true, conversation, refresh, onDeleted }: { platform?: boolean; canApplyTraining?: boolean; canDelete?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void }) {
+export function ConversationDetail({ platform = false, canApplyTraining = false, canDelete = true, conversation, refresh, onDeleted, onClose }: { platform?: boolean; canApplyTraining?: boolean; canDelete?: boolean; conversation: Conversation; refresh: () => void; onDeleted?: () => Promise<void> | void; onClose?: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memory, setMemory] = useState<CustomerMemory | null>(null);
   const [review, setReview] = useState<ConversationReviewResponse>({ review: null, items: [] });
@@ -149,6 +149,7 @@ export function ConversationDetail({ platform = false, canApplyTraining = false,
     }
   }}>{children}</AsyncButton>;
   return <div className={`conversation-detail wechat-detail ${assistantCollapsed ? "assistant-collapsed" : ""}`}>
+    {onClose && <div className="detail-close-row"><ClosePanelButton onClose={onClose} /></div>}
     <ConversationChatColumn
       platform={platform}
       canDelete={canDelete}

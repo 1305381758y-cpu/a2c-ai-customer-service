@@ -2,18 +2,20 @@ import React, { useState } from "react";
 
 import { api } from "../app/api.js";
 import type { A2CAccount, Conversation } from "../types.js";
-import { AsyncButton } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton } from "../ui/components.js";
 import { countryLabel } from "../ui/formatters.js";
 import { ConversationComposer } from "./ConversationComposer.js";
 
 export function ProactiveConversationDetail({
   account,
   target,
-  onCreated
+  onCreated,
+  onClose
 }: {
   account: A2CAccount;
   target: { customerPhone: string; nickname: string };
   onCreated: (conversation: Conversation) => Promise<void>;
+  onClose?: () => void;
 }) {
   const [send, setSend] = useState({ type: "text", content: "", url: "", caption: "", fileName: "" });
   const [statusMessage, setStatusMessage] = useState("");
@@ -22,6 +24,7 @@ export function ProactiveConversationDetail({
     <div className="chat-header">
       <div><h3>{target.customerPhone}</h3><p>通过客服账号 {account.verifiedName || account.apiPhone} 主动发送</p></div>
       <span className="status-pill neutral">{countryLabel(account.countryName)}</span>
+      {onClose && <ClosePanelButton onClose={onClose} />}
     </div>
     {error && <div className="error" role="alert">{error}</div>}
     {statusMessage && <div className="notice" role="status">{statusMessage}</div>}

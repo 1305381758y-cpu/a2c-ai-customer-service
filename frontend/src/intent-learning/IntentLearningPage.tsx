@@ -96,7 +96,7 @@ export function IntentLearningPage({ platform = false, timeMode }: { platform?: 
             <h3>{selected.displayName || selected.suggestedIntent}</h3>
             <p>{countryLabel(selected.countryId)} · 出现 {selected.occurrenceCount} 次 · 最近 {formatDateTime(selected.lastSeenAt, selected.countryId)}</p>
           </div>
-          <span className={`status-pill ${statusTone(selected.status)}`}>{label(selected.status)}</span>
+          <div className="toolbar"><span className={`status-pill ${statusTone(selected.status)}`}>{label(selected.status)}</span><button type="button" className="ghost icon-only panel-close-button" title="关闭详情" aria-label="关闭详情" onClick={() => setSelected(null)}>×</button></div>
         </div>
         <div className="learning-summary">
           <strong>客户原话</strong>

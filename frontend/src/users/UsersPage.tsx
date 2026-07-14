@@ -57,6 +57,7 @@ export function UsersPage() {
     <section className="detail-panel">
       {selected ? <Editor
         title="用户设置"
+        onClose={() => setSelected(null)}
         value={{ name: selected.name, status: selected.status, role: selected.role, merchantId: selected.merchantId || "", password: "" }}
         fields={["name", "status", "role", "merchantId", "password"]}
         selects={{ status: ["active", "disabled"], role: ["platform_admin", "merchant_admin", "merchant_operator"] }}

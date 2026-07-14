@@ -39,6 +39,34 @@ main {
   margin: 0;
 }
 
+.panel-close-button {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 6px;
+}
+
+.detail-close-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  justify-content: flex-end;
+  min-height: 42px;
+  padding: 4px 10px;
+}
+
+.nested-detail-view {
+  min-width: 0;
+}
+
+.nested-detail-view > .section-heading-row {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 4px 0 8px;
+}
+
 /* Script flow readability: keep node cards readable even when selected/enabled. */
 .script-step-list {
   max-height: min(720px, calc(100vh - 320px));

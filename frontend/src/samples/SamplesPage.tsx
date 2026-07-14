@@ -94,6 +94,7 @@ export function SamplesPage({ platform = false }: { platform?: boolean }) {
     {selected && <section className="detail-panel">
       <Editor
         title="样本编辑"
+        onClose={() => setSelected(null)}
         value={selected as any}
         fields={["countryId", "customerMessage", "standardReply", "intent", "stage", "language", "keywords", "priority", "enabled"]}
         selects={{ enabled: ["true", "false"] }}

@@ -115,7 +115,7 @@ export function TrainingMaterialsPage({ platform = false, simple = false }: { pl
     </section>
     {selected && detail && <section className="detail-panel">
       <div>
-        <h3>{detail.material.filename}</h3>
+        <div className="section-heading-row"><h3>{detail.material.filename}</h3><button type="button" className="ghost icon-only panel-close-button" title="关闭详情" aria-label="关闭详情" onClick={() => { setSelected(null); setDetail(null); }}>×</button></div>
         <p>{countryLabel(detail.material.countryName)} · {label(detail.material.sourceType)} · {simple ? `已学习 ${detail.material.itemCount} 条内容` : `生成 ${detail.material.itemCount} 条 · 样本 ${detail.material.sampleCount} · 知识 ${detail.material.knowledgeCount}`}</p>
         <div className="toolbar">
           <ConfirmActionButton

@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 
 import { api } from "../app/api.js";
 import type { MerchantCountry, ScriptFlow, ScriptFlowStep, ScriptFlowVersion } from "../types.js";
-import { AsyncButton, ConfirmActionButton, Editor } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton, ConfirmActionButton, Editor } from "../ui/components.js";
 import { countryLabel, formatDateTime, label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { ScriptFlowStepEditor } from "./ScriptFlowStepEditor.js";
@@ -28,7 +28,8 @@ export function ScriptFlowDetailPanel({
   enableFlow,
   deleteFlow,
   addStep,
-  refreshDetail
+  refreshDetail,
+  onClose
 }: {
   detail: ScriptFlowDetail | null;
   canEdit: boolean;
@@ -36,13 +37,14 @@ export function ScriptFlowDetailPanel({
   stepBase: string;
   countries: MerchantCountry[];
   selectedStep: ScriptFlowStep | null;
-  setSelectedStep: (step: ScriptFlowStep) => void;
+  setSelectedStep: (step: ScriptFlowStep | null) => void;
   enableError: string;
   validationIssues: ScriptFlowValidationIssue[];
   enableFlow: () => Promise<void>;
   deleteFlow: () => Promise<void>;
   addStep: () => Promise<void>;
   refreshDetail: () => Promise<void>;
+  onClose?: () => void;
 }) {
   const enabledSteps = detail?.steps.filter((step) => step.enabled).length ?? 0;
   const registrationSteps = detail?.steps.filter((step) => step.enabled && (step.sendLink || step.sendInvite)).length ?? 0;
@@ -59,7 +61,8 @@ export function ScriptFlowDetailPanel({
           <h3>{detail.flow.name}</h3>
           <p>{countryLabel(detail.flow.countryName)} · 版本 {detail.flow.version} · {detail.flow.active ? "当前启用" : label(detail.flow.status)}</p>
         </div>
-        {canEdit && <div className="toolbar">
+        <div className="toolbar">
+        {canEdit && <>
           <ConfirmActionButton
             disabled={!ready}
             busyText="启用中..."
@@ -80,7 +83,9 @@ export function ScriptFlowDetailPanel({
           >
             删除流程
           </ConfirmActionButton>
-        </div>}
+        </>}
+        {onClose && <ClosePanelButton onClose={onClose} />}
+        </div>
       </div>
       {enableError && <div className="warning action-warning" role="alert"><strong>启用失败</strong><span>{enableError}</span></div>}
       <div className={`script-readiness ${ready ? "ready" : "blocked"}`} role="status">
@@ -109,7 +114,7 @@ export function ScriptFlowDetailPanel({
           {!detail.steps.length && <div className="empty-state">还没有流程节点，请新增或重新导入话本文件。</div>}
         </div>
         <div className="script-step-editor">
-          {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} canEdit={canEdit} onSaved={refreshDetail} /> : <div className="empty-state">选择左侧节点后查看话术和跳转规则。</div>}
+          {selectedStep ? <ScriptFlowStepEditor step={selectedStep} endpoint={stepBase} canEdit={canEdit} onSaved={refreshDetail} onClose={() => setSelectedStep(null)} /> : <div className="empty-state">选择左侧节点后查看话术和跳转规则。</div>}
         </div>
       </div>
       <details className="version-panel">

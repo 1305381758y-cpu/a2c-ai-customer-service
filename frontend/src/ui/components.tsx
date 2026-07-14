@@ -106,10 +106,14 @@ export function ConfirmActionButton({ children, title, detail, confirmText = "�
   </>;
 }
 
-export function Editor({ title, value, fields, selects, onSave, onDelete, deleteTitle = "确认删除？", deleteDetail = "删除后不可恢复，请确认该操作不会影响正在使用的数据。", deleteConfirmText = "删除" }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void>; onDelete?: () => Promise<void>; deleteTitle?: string; deleteDetail?: string; deleteConfirmText?: string }) {
+export function ClosePanelButton({ onClose, label: buttonLabel = "关闭详情" }: { onClose: () => void; label?: string }) {
+  return <button type="button" className="ghost icon-only panel-close-button" title={buttonLabel} aria-label={buttonLabel} onClick={onClose}><X size={16}/></button>;
+}
+
+export function Editor({ title, value, fields, selects, onSave, onDelete, onClose, deleteTitle = "确认删除？", deleteDetail = "删除后不可恢复，请确认该操作不会影响正在使用的数据。", deleteConfirmText = "删除" }: { title: string; value: Record<string, any>; fields: string[]; selects?: Record<string, string[]>; onSave: (patch: Record<string, any>) => Promise<void>; onDelete?: () => Promise<void>; onClose?: () => void; deleteTitle?: string; deleteDetail?: string; deleteConfirmText?: string }) {
   const [draft, setDraft] = useState<Record<string, any>>(value);
   useEffect(() => setDraft(value), [value]);
-  return <div><h3>{title}</h3><div className="form-grid">{fields.map((field) => <label key={field}>{label(field)}{selects?.[field] ? <select value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{optionLabel(field, option)}</option>)}</select> : <input value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />}</label>)}</div><div className="toolbar"><AsyncButton busyText="保存中..." onClick={() => onSave(draft)}>保存</AsyncButton>{onDelete && <ConfirmActionButton className="danger" busyText="删除中..." title={deleteTitle} detail={deleteDetail} confirmText={deleteConfirmText} onConfirm={onDelete}>删除</ConfirmActionButton>}</div></div>;
+  return <div><div className="section-heading-row"><h3>{title}</h3>{onClose && <ClosePanelButton onClose={onClose} />}</div><div className="form-grid">{fields.map((field) => <label key={field}>{label(field)}{selects?.[field] ? <select value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}>{selects[field].map((option) => <option key={option} value={option}>{optionLabel(field, option)}</option>)}</select> : <input value={String(draft[field] ?? "")} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} />}</label>)}</div><div className="toolbar"><AsyncButton busyText="保存中..." onClick={() => onSave(draft)}>保存</AsyncButton>{onDelete && <ConfirmActionButton className="danger" busyText="删除中..." title={deleteTitle} detail={deleteDetail} confirmText={deleteConfirmText} onConfirm={onDelete}>删除</ConfirmActionButton>}</div></div>;
 }
 
 export function CountryPresetDatalist() {

@@ -2,7 +2,7 @@ import React from "react";
 
 import { api, loadRows, withQuery } from "../app/api.js";
 import type { Conversation, Customer, CustomerBalanceTransaction } from "../types.js";
-import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton, ConfirmActionButton } from "../ui/components.js";
 import { countryLabel, formatConversationDate, label, languageName } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
 import { CustomerConversationHistory } from "./CustomerConversationHistory.js";
@@ -12,10 +12,11 @@ type CustomerDetailPanelProps = {
   customer: Customer;
   canDelete: boolean;
   onDelete: () => Promise<void>;
+  onClose: () => void;
   renderConversation: (conversation: Conversation, reloadHistory: () => Promise<void>) => React.ReactNode;
 };
 
-export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, renderConversation }: CustomerDetailPanelProps) {
+export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, onClose, renderConversation }: CustomerDetailPanelProps) {
   const [provider, setProvider] = React.useState(customer.aiProvider || "");
   const [model, setModel] = React.useState(customer.aiModel || "");
   const [transactions, setTransactions] = React.useState<CustomerBalanceTransaction[]>([]);
@@ -48,6 +49,7 @@ export function CustomerDetailPanel({ platform, customer, canDelete, onDelete, r
           <h3>{customer.customerKey}</h3>
           <p>{countryLabel(customer.countryName)} · {customer.nickname || "无昵称"} · {label(customer.status)} · {languageName(customer.language)}</p>
         </div>
+        <ClosePanelButton onClose={onClose} />
         {canDelete && <ConfirmActionButton
           className="danger"
           busyText="删除中..."

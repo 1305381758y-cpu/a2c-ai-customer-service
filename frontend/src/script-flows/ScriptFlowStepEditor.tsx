@@ -3,7 +3,7 @@ import { Copy, Link2, MessageSquareText, Route, ShieldAlert } from "lucide-react
 
 import { api } from "../app/api.js";
 import type { ScriptFlowStep } from "../types.js";
-import { AsyncButton, ConfirmActionButton } from "../ui/components.js";
+import { AsyncButton, ClosePanelButton, ConfirmActionButton } from "../ui/components.js";
 import { coercePatch } from "../ui/form.js";
 import { label } from "../ui/formatters.js";
 import { notify } from "../ui/toast.js";
@@ -22,7 +22,7 @@ const STRICT_STEP_OPTIONS = [
   "ended"
 ];
 
-export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved }: { step: ScriptFlowStep; endpoint: string; canEdit?: boolean; onSaved: () => Promise<void> }) {
+export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved, onClose }: { step: ScriptFlowStep; endpoint: string; canEdit?: boolean; onSaved: () => Promise<void>; onClose?: () => void }) {
   const [draft, setDraft] = useState<ScriptFlowStep>(step);
   useEffect(() => setDraft(step), [step]);
   const set = (key: keyof ScriptFlowStep, value: string | boolean | number) => setDraft({ ...draft, [key]: value } as ScriptFlowStep);
@@ -43,6 +43,7 @@ export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved }
   };
   return <fieldset className="script-node-form" disabled={!canEdit}>
     <section className="script-editor-group">
+      {onClose && <div className="section-heading-row"><strong>当前节点编辑</strong><ClosePanelButton onClose={onClose} /></div>}
       <div className="script-editor-group-title"><Route size={17}/><div><strong>节点与推进</strong><span>定义这个节点在流程中的位置和下一步。</span></div></div>
       <div className="form-grid compact-fields">
         <label>流程编号<input value={draft.flowCode} onChange={(e) => set("flowCode", e.target.value)} /></label>

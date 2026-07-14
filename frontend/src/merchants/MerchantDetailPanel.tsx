@@ -72,7 +72,7 @@ export function MerchantDetailPanel({
         }}><Plus size={16}/>新增账号</AsyncButton>
       </div>
       <Table rows={users} columns={["email", "name", "role", "status"]} onRow={onUserChange} selectedKey={selectedUser?.id} rowKey={(row) => row.id} />
-      {selectedUser && <Editor title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: selectedUser.status || "active", merchantId: merchant.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
+      {selectedUser && <Editor onClose={() => onUserChange(null)} title="账号设置" value={{ name: selectedUser.name, role: selectedUser.role, status: selectedUser.status || "active", merchantId: merchant.id, password: "" }} fields={["name", "role", "status", "password"]} selects={{ role: ["merchant_admin", "merchant_operator"], status: ["active", "disabled"] }} deleteTitle="确认删除后台账号？" deleteDetail={`删除账号 ${selectedUser.email} 后，该用户将不能再登录后台。商户数据不会删除。`} deleteConfirmText="删除账号" onSave={async (patch) => {
         if (!patch.password) delete patch.password;
         const saved = await api<MerchantUser>(`/api/admin/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify({ ...patch, merchantId: merchant.id }) });
         onUserChange(saved);

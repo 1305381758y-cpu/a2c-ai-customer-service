@@ -112,7 +112,7 @@ export function CustomersPage({ platform = false, canDelete = true, timeMode, re
         <Pagination pager={pager} />
       </section>
       {selected && (
-        <CustomerDetailPanel platform={platform} customer={selected} canDelete={canDelete} onDelete={deleteSelected} renderConversation={renderConversation} />
+        <CustomerDetailPanel platform={platform} customer={selected} canDelete={canDelete} onClose={() => setSelected(null)} onDelete={deleteSelected} renderConversation={renderConversation} />
       )}
     </div>
   );

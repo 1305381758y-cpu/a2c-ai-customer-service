@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import type { Conversation, Customer } from "../types.js";
 import { Pagination, useClientPagination } from "../ui/Pagination.js";
+import { ClosePanelButton } from "../ui/components.js";
 
 type CustomerConversationHistoryProps = {
   platform: boolean;
@@ -32,6 +33,7 @@ export function CustomerConversationHistory({
   const rowsUrl = withQuery(base, filters);
   const [rows, setRows] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
+  const [historyClosed, setHistoryClosed] = useState(false);
   const pager = useClientPagination(rows, 10);
 
   const reload = async () => {
@@ -40,6 +42,7 @@ export function CustomerConversationHistory({
   };
 
   useEffect(() => {
+    setHistoryClosed(false);
     setSelected(null);
   }, [customer.customerKey, customer.merchantId]);
 
@@ -58,9 +61,9 @@ export function CustomerConversationHistory({
   }, [rowsUrl, loadRows]);
 
   useEffect(() => {
-    if (!selected && rows.length) setSelected(rows[0]);
+    if (!historyClosed && !selected && rows.length) setSelected(rows[0]);
     if (selected && !rows.some((row) => row.id === selected.id)) setSelected(rows[0] || null);
-  }, [rows, selected]);
+  }, [rows, selected, historyClosed]);
 
   return <div className="customer-conversation-history">
     <div className="section-title-row">
@@ -69,7 +72,7 @@ export function CustomerConversationHistory({
     </div>
     <div className="customer-conversation-grid">
       <div className="customer-conversation-list">
-        {pager.rows.map((row) => <button key={row.id} type="button" className={`customer-conversation-item ${selected?.id === row.id ? "active" : ""}`} onClick={() => setSelected(row)}>
+        {pager.rows.map((row) => <button key={row.id} type="button" className={`customer-conversation-item ${selected?.id === row.id ? "active" : ""}`} onClick={() => { setHistoryClosed(false); setSelected(row); }}>
           <span className="customer-conversation-item-main">
             <strong>{row.a2cAccountPhone || "未识别客服账号"}</strong>
             <small>{row.updatedAt ? helpers.formatConversationDate(row.updatedAt, row.countryCode || row.countryName || row.countryId) : "未知时间"}</small>
@@ -84,7 +87,7 @@ export function CustomerConversationHistory({
         {!pager.rows.length && <div className="empty-state compact">该客户暂无会话记录</div>}
         <Pagination pager={pager} />
       </div>
-      {selected ? renderConversation(selected, reload) : <div className="empty-state">选择一条会话查看完整聊天记录</div>}
+      {selected ? <div className="nested-detail-view"><div className="section-heading-row"><strong>会话详情</strong><ClosePanelButton onClose={() => { setSelected(null); setHistoryClosed(true); }} /></div>{renderConversation(selected, reload)}</div> : <div className="empty-state">选择一条会话查看完整聊天记录</div>}
     </div>
   </div>;
 }

@@ -75,6 +75,7 @@ export function PlatformConversations({ handoffs = false }: { handoffs?: boolean
       <ConversationDetail
         platform
         conversation={selected}
+        onClose={() => setSelected(null)}
         refresh={async () => {
           const result = await api<{ rows: Conversation[]; total: number }>(rowsUrl);
           setRows(result.rows);
