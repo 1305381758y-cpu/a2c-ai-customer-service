@@ -333,6 +333,36 @@ main {
   content: "-";
 }
 
+/* Keep extracted training text readable even when global card styles are applied. */
+.training-material-detail,
+.training-material-detail .training-material-detail-inner,
+.training-material-detail .training-detail-section,
+.training-material-detail .training-detail-section summary,
+.training-material-detail .training-detail-scroll,
+.training-material-detail .material-items article,
+.training-material-detail .material-items article strong,
+.training-material-detail .material-items article > span,
+.training-material-detail .material-items article small,
+.training-material-detail .material-items article p {
+  color: var(--text) !important;
+}
+
+.training-material-detail .training-material-detail-title .eyebrow,
+.training-material-detail .training-material-detail-meta span,
+.training-material-detail .training-detail-section summary span {
+  color: var(--muted-strong) !important;
+}
+
+.training-material-detail .material-items article {
+  background: #fff !important;
+  border-color: var(--line-soft) !important;
+}
+
+.training-material-detail .training-raw-text {
+  color: var(--muted-strong) !important;
+  background: #fff !important;
+}
+
 .training-detail-scroll {
   max-height: 360px;
   margin: 0;
