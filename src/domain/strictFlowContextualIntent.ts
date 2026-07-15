@@ -41,6 +41,7 @@ export function buildRuleContextualIntent(
   const step = normalizeFlowStep(input.conversation.flowStep);
   const text = input.customerText.trim();
   const previousAssistantMessage = lastAssistantContent(history);
+  const previousCustomerMessage = [...history].reverse().find((message) => message.direction === "inbound")?.content ?? "";
   const base = (intent: ContextualIntentLabel, overrides: Partial<StrictContextualIntent> = {}): StrictContextualIntent => ({
     intent,
     source: "rule",
@@ -114,6 +115,12 @@ export function buildRuleContextualIntent(
   }
   if (step === "registration_intent" && saysNotAvailable(text)) {
     return base("not_available", { answeredPreviousQuestion: true, nextAction: "pause politely", reason: "not available now" });
+  }
+  // A short acknowledgement immediately after a temporary unavailability
+  // response means "understood", not "I am available now". Keep the flow
+  // paused until the customer explicitly says they are ready.
+  if (step === "registration_intent" && isAcknowledgement(text) && saysNotAvailable(previousCustomerMessage)) {
+    return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: true, nextAction: "wait until customer says ready", reason: "acknowledgement after temporary unavailability" });
   }
   if ((step === "telegram_download" || step === "collect_telegram") && isAcknowledgement(text)) {
     return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "wait for telegram username", reason: "acknowledged current telegram step" });

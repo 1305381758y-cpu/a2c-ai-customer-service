@@ -130,4 +130,43 @@ describe("strict flow registration steps", () => {
     expect(result.reply).toMatch(/页面|人工|确认为准|规则/);
     expect(result.reply).not.toContain("邀请码");
   });
+
+  it("does not send the registration link when ok only acknowledges a temporary pause", () => {
+    const conv = conversation("registration_intent");
+    const text = "ok";
+    const analysis = analyzeMessage(text, "pt-BR");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: conv,
+      analysis,
+      customerText: text
+    }, [
+      { direction: "outbound", content: "Tudo bem, não vou incomodar você agora." },
+      { direction: "inbound", content: "暂时没有时间，要等到晚上九点" }
+    ]);
+
+    const result = buildRegistrationStepReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config,
+      strictFlowEnabled: true,
+      contextualIntent
+    }, {
+      language: "pt-BR",
+      step: "registration_intent",
+      text,
+      contextualLabel: contextualIntent.intent,
+      positive: true,
+      asksLink: false,
+      inferredIntent: "unknown"
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.reply).toMatch(/21h|9 PM|晚上九点/);
+    expect(result.reply).not.toContain("INV-001");
+  });
 });

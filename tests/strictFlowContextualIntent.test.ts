@@ -101,6 +101,21 @@ describe("strictFlowContextualIntent", () => {
     expect(result.nextAction).toBe("pause politely");
   });
 
+  it("keeps a short acknowledgement paused after the customer gives a later time", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent"),
+      analysis: analyzeMessage("ok", "pt-BR"),
+      customerText: "ok"
+    }, [
+      { direction: "outbound", content: "Tudo bem, não vou incomodar você agora." },
+      { direction: "inbound", content: "暂时没有时间，要等到晚上九点" }
+    ]);
+
+    expect(result.intent).toBe("acknowledgement");
+    expect(result.shouldPause).toBe(true);
+    expect(result.nextAction).toBe("wait until customer says ready");
+  });
+
   it("prioritizes explicit registration completion over an AI help label", () => {
     const result = buildRuleContextualIntent({
       conversation: conversation("wait_registration"),

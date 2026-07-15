@@ -68,6 +68,9 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
 function buildRegistrationIntentReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, positive, asksLink, inferredIntent } = context;
 
+  if (contextualLabel === "acknowledgement" && input.contextualIntent?.shouldPause) {
+    return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language));
+  }
   if (contextualLabel === "not_available" || contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
   }
