@@ -2,17 +2,22 @@ import type { AppConfig } from "../config.js";
 import type { Conversation, ConversationMessageRecord } from "../repositories.js";
 import { type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 import {
+  asksCustomerCorrection,
   asksForInviteOrLink,
+  asksGenericQuestionPermission,
   asksNextStep,
   asksSensitiveInfo,
+  cancelsPendingCustomerQuestion,
   isAcknowledgement,
   isContextualPositive,
+  isExplicitRefusal,
   isHesitant,
   isPositive,
   isRepeatGreeting,
   saysNotAvailable
 } from "./strictFlowPredicates.js";
 import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
+import { controlledQuestionAnswer } from "./strictFlowQuestionAnswer.js";
 import { buildStrictFlowResponse, normalizeReplyLanguage } from "./strictFlowResponseBuilder.js";
 import { flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { strictFlowNeedsInviteCode } from "./strictFlowInvitePolicy.js";
@@ -70,6 +75,9 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
     return buildStrictFlowResponse(input, language, "collect_telegram", "need_phone_or_tg", flowScriptLine(input, "ask_registered_phone", language));
   }
 
+  const customerQuestionControl = buildStrictFlowQuestionControlReply(input);
+  if (customerQuestionControl) return customerQuestionControl;
+
   if (step === "interest_screening" || step === "project_intro" || step === "registration_intent" || step === "send_register_link") {
     return buildRegistrationStepReply(input, {
       language,
@@ -107,4 +115,99 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   }
 
   return buildStrictFlowResponse(input, language, "ended", "ready_for_handoff", strictFlowVerificationLine(language));
+}
+
+export function buildStrictFlowQuestionControlReply(input: StrictFlowInput): StrictFlowReply | null {
+  if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country))) return null;
+  const step = normalizeFlowStep(input.conversation.flowStep);
+  const text = input.customerText.trim();
+  const language = normalizeReplyLanguage(input.analysis.language, input.conversation.language, input.country.defaultLanguage);
+  if (input.conversation.awaitingCustomerQuestion &&
+    (cancelsPendingCustomerQuestion(text) || isExplicitRefusal(text) || Boolean(input.analysis.phone) || Boolean(input.analysis.telegram))) {
+    input.conversation.awaitingCustomerQuestion = false;
+  }
+  const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
+  return buildCustomerQuestionControlReply(input, step, text, language, contextualIntent);
+}
+
+function buildCustomerQuestionControlReply(
+  input: StrictFlowInput,
+  step: StrictFlowStep | "",
+  text: string,
+  language: string,
+  contextualIntent: StrictContextualIntent
+): StrictFlowReply | null {
+  if (!step || step === "human_handoff" || step === "ended") return null;
+  if (input.analysis.phone || input.analysis.telegram || isExplicitRefusal(text) || cancelsPendingCustomerQuestion(text)) return null;
+
+  if (asksCustomerCorrection(text)) {
+    return withAwaitingCustomerQuestion(
+      buildStrictFlowResponse(
+        input,
+        language,
+        step,
+        input.conversation.stage,
+        flowScriptLine(input, "customer_correction_ack", language)
+      ),
+      true
+    );
+  }
+
+  if (asksGenericQuestionPermission(text)) {
+    const line = step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram"
+      ? "ask_question_prompt_tg"
+      : "ask_question_prompt";
+    return withAwaitingCustomerQuestion(
+      buildStrictFlowResponse(input, language, step, input.conversation.stage, flowScriptLine(input, line, language)),
+      true
+    );
+  }
+
+  if (!input.conversation.awaitingCustomerQuestion) return null;
+  const answer = controlledQuestionAnswer(
+    input,
+    step,
+    text,
+    language,
+    (key, lineLanguage) => flowScriptLine(input, key, lineLanguage),
+    input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent
+  );
+  const answerTypes = new Set<ControlledQuestionType>([
+    "trust",
+    "payment",
+    "investment",
+    "earning",
+    "telegram",
+    "phone_reason",
+    "registration_field",
+    "link_open",
+    "next_step",
+    "platform",
+    "identity",
+    "sensitive",
+    "help",
+    "job",
+    "unknown"
+  ]);
+  if (answer && (contextualIntent.isQuestion || answerTypes.has(answer.type))) {
+    return withAwaitingCustomerQuestion(
+      buildStrictFlowResponse(input, language, step, input.conversation.stage, answer.content),
+      true
+    );
+  }
+
+  return withAwaitingCustomerQuestion(
+    buildStrictFlowResponse(input, language, step, input.conversation.stage, flowScriptLine(input, "question_wait_ack", language)),
+    true
+  );
+}
+
+function withAwaitingCustomerQuestion(reply: StrictFlowReply, awaiting: boolean): StrictFlowReply {
+  return {
+    ...reply,
+    needsInviteCode: false,
+    tutorialImageRequested: false,
+    replyParts: undefined,
+    awaitingCustomerQuestion: awaiting
+  };
 }

@@ -23,6 +23,7 @@ export interface Conversation {
   handoffStatus: "pending" | "processing" | "done";
   handoffNotified: number;
   unreadCount: number;
+  awaitingCustomerQuestion?: boolean;
   pinnedAt?: string;
   updatedAt?: string;
   billingStatus?: "free" | "charged" | "insufficient";

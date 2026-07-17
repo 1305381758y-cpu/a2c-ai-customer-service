@@ -212,7 +212,15 @@ export function reportsLinkLoadFailure(text: string): boolean {
 }
 
 export function asksGenericQuestionPermission(text: string): boolean {
-  return /(我有(个|個)?问题.*(可以|能|帮|幫).*?(解答|回答|问|問)|我还有(一个|個|个)?问题|还有(一个|個|个)?问题|可以.*(问|問).*问题|能.*(问|問).*问题|我想问.*问题|i have.*question|another question|can i ask|posso perguntar|tenho uma pergunta)/i.test(text);
+  return /(?:我有(?:个|個)?问题.*(?:可以|能|帮|幫).*?(?:解答|回答|问|問)|我还有(?:一个|個|个)?问题|还有(?:一个|個|个)?问题|可以.*(?:问|問).*问题|能.*(?:问|問).*问题|我(?:想|要|准备|準備).*?(?:问|問).*(?:问题|問題)|(?:先让|先讓).{0,12}(?:我)?(?:问|問)|(?:让我|讓我).{0,8}(?:先)?(?:问|問)|i have.*question|another question|can i ask|let me ask|i want to ask|posso perguntar|tenho uma pergunta|quero perguntar|déjame preguntar|dejame preguntar|puedo preguntar|tengo una pregunta|quiero preguntar)/i.test(text);
+}
+
+export function asksCustomerCorrection(text: string): boolean {
+  return /((我说|我說|刚才说|剛才說).{0,20}(问|問).{0,12}(问题|問題)|你(?:能|听得|聽得|有没有|有沒有).{0,6}(听懂|聽懂|理解|明白)|你为什么不听|你為什麼不聽|先听我说|先聽我說|听我说完|聽我說完|我还没问|我還沒問|我没问完|我沒問完|did you understand|can you understand|listen to me|let me finish|i haven'?t asked|você entende|voce entende|me entende|escute o que eu digo|deixe-me terminar|ainda não perguntei|ainda nao perguntei|me entiende|puede entenderme|escúcheme|escucheme|déjeme terminar|dejeme terminar|todavía no pregunté|todavia no pregunte)/i.test(text);
+}
+
+export function cancelsPendingCustomerQuestion(text: string): boolean {
+  return /(不问了|不問了|没有问题了|沒有問題了|问题问完了|問題問完了|继续注册|繼續註冊|继续开户|繼續開戶|现在注册|現在註冊|发链接|發連結|发注册链接|發註冊連結|no more questions|continue registration|send (?:the )?(?:registration )?link|não tenho mais perguntas|nao tenho mais perguntas|continuar (?:o )?cadastro|envie (?:o )?link|no tengo más preguntas|no tengo mas preguntas|continuar (?:con )?el registro|envíe (?:el )?enlace|envie (?:el )?enlace)/i.test(text);
 }
 
 export function asksLookAtCurrentProblem(text: string): boolean {
@@ -252,7 +260,7 @@ export function looksLikeQuestion(text: string): boolean {
 }
 
 export function complainsAboutReply(text: string): boolean {
-  return /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|没回答|沒有回答|没有回答|答非所问|没说清楚|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|didn.?t answer|não respondeu|nao respondeu|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
+  return asksCustomerCorrection(text) || /(为什么会这样|為什麼會這樣|怎么还是|怎麼還是|没回答|沒有回答|没有回答|答非所问|没说清楚|太机械|机械|僵硬|重复|只会|一句话|听不懂|不是|不对|别一直|robotic|mechanical|repeat|same thing|wrong|didn.?t answer|não respondeu|nao respondeu|não entendi|nao entendi|mecânico|mecanico|repetindo)/i.test(text);
 }
 
 export function isExplicitRefusal(text: string): boolean {

@@ -2,8 +2,10 @@ import type { ConversationMessageRecord } from "../repositories.js";
 import { type ContextualIntentLabel } from "./analyzer.js";
 import {
   asksAboutJob,
+  asksCustomerCorrection,
   asksEarningConcern,
   asksForOperationHelp,
+  asksGenericQuestionPermission,
   asksInvestmentConcern,
   asksPaymentConcern,
   asksRegistrationFieldQuestion,
@@ -48,7 +50,7 @@ export function buildRuleContextualIntent(
     answeredPreviousQuestion: Boolean(previousAssistantMessage && isContextualShortReply(text)),
     isQuestion: looksLikeQuestion(text),
     isSubmission: intent === "phone_submission" || intent === "telegram_submission",
-    shouldPause: intent === "negative_refusal" || intent === "not_available",
+    shouldPause: Boolean(input.conversation.awaitingCustomerQuestion) || intent === "negative_refusal" || intent === "not_available",
     questionType: contextualQuestionType(intent),
     nextAction: "",
     reason: "",
@@ -72,6 +74,22 @@ export function buildRuleContextualIntent(
   }
   if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
   if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
+  if (asksCustomerCorrection(text)) {
+    return base("complaint", {
+      isQuestion: true,
+      shouldPause: true,
+      nextAction: "listen to the customer question before continuing",
+      reason: "customer corrects the assistant and is still waiting to ask"
+    });
+  }
+  if (asksGenericQuestionPermission(text)) {
+    return base("chat", {
+      isQuestion: true,
+      shouldPause: true,
+      nextAction: "wait for the customer to state the question",
+      reason: "customer asks to ask a question before continuing"
+    });
+  }
 
   if ((step === "telegram_confirm" || step === "telegram_download") && (saysContextualNo(text) || saysNoTelegram(text))) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });

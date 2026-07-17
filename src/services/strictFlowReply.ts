@@ -20,6 +20,8 @@ import { sendStrictFlowTextOutbound } from "./strictFlowTextOutbound.js";
 import { buildStrictFlowTurn } from "./strictFlowTurnBuilder.js";
 import { completeConversationGoal } from "./conversationGoalCompletion.js";
 import { asksHowToOpenLink, reportsLinkLoadFailure } from "../domain/strictFlowPredicates.js";
+import { strictFlowScriptLine } from "../domain/strictFlowScriptText.js";
+import type { StrictFlowReply } from "../domain/strictFlowTypes.js";
 
 export interface StrictFlowReplyResult {
   handled: boolean;
@@ -91,7 +93,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     strictFlowRuntime,
     linkLoadFailureCount: countLinkLoadFailures(history, customerText)
   });
-  const { strictReply, inviteCode } = flowTurn;
+  const inviteCode = flowTurn.inviteCode;
+  const strictReply = guardPendingCustomerQuestionReply(flowTurn.strictReply);
 
   if (!strictReply.enabled) {
     return { handled: false, status: "strict_flow_disabled", conversationId: conversation.id };
@@ -100,6 +103,9 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   conversation.language = strictReply.language;
   conversation.stage = strictReply.stage;
   conversation.flowStep = strictReply.nextFlowStep;
+  if (typeof strictReply.awaitingCustomerQuestion === "boolean") {
+    conversation.awaitingCustomerQuestion = strictReply.awaitingCustomerQuestion;
+  }
 
   const { outbound } = await sendStrictFlowTextOutbound({
     repos,
@@ -169,6 +175,25 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     handled: true,
     status: outbound.sendResult.a2cSendStatus === "sent" && outbound.inserted ? "strict_flow_replied" : "strict_flow_send_failed",
     conversationId: conversation.id
+  };
+}
+
+export function guardPendingCustomerQuestionReply(reply: StrictFlowReply): StrictFlowReply {
+  if (!reply.awaitingCustomerQuestion) return reply;
+  const leakedRegistrationPackage = /https?:\/\/|邀请码|邀請碼|注册步骤|註冊步驟|registration link|invitation code|register link|link de cadastro|código de convite|codigo de convite|enlace de registro|código de invitación/i.test(
+    [reply.reply, ...(reply.replyParts ?? [])].join("\n")
+  );
+  const telegramStep = reply.nextFlowStep === "telegram_confirm" ||
+    reply.nextFlowStep === "telegram_download" ||
+    reply.nextFlowStep === "collect_telegram";
+  return {
+    ...reply,
+    reply: leakedRegistrationPackage
+      ? strictFlowScriptLine(telegramStep ? "ask_question_prompt_tg" : "ask_question_prompt", reply.language)
+      : reply.reply,
+    replyParts: undefined,
+    needsInviteCode: false,
+    tutorialImageRequested: false
   };
 }
 

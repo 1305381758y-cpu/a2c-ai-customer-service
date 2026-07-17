@@ -96,7 +96,7 @@ export class ConversationRepository {
         UPDATE conversations
         SET country_id = ?, language = ?, stage = ?, flow_step = ?, extracted_phone = ?, extracted_telegram = ?, extracted_whatsapp = ?,
             assigned_teacher_tg_link_id = ?, assigned_teacher_tg_link_url = ?,
-            status = ?, handoff_status = ?, handoff_notified = ?, updated_at = CURRENT_TIMESTAMP
+            status = ?, handoff_status = ?, handoff_notified = ?, awaiting_customer_question = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `)
       .run(
@@ -112,6 +112,7 @@ export class ConversationRepository {
         conversation.status,
         conversation.handoffStatus,
         conversation.handoffNotified,
+        conversation.awaitingCustomerQuestion ? 1 : 0,
         conversation.id
       );
     this.syncScriptState(conversation);

@@ -48,6 +48,7 @@ export interface StrictFlowReply {
   contextualIntent?: StrictContextualIntent;
   tutorialImageRequested?: boolean;
   handoffReason?: string;
+  awaitingCustomerQuestion?: boolean;
 }
 
 export interface StrictContextualIntent {

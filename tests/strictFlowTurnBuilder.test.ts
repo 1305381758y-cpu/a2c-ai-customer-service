@@ -99,6 +99,60 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.needsInviteCode).toBe(false);
   });
 
+  it("does not reserve an invite code when acknowledgement text also asks to ask a question first", () => {
+    const context = setupConversation("registration_intent");
+    const customerText = "ok，在此之前我可以问你一个问题吗";
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent
+    });
+
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.inviteCode).toBeUndefined();
+    expect(result.strictReply.nextFlowStep).toBe("registration_intent");
+    expect(result.strictReply.awaitingCustomerQuestion).toBe(true);
+    expect(result.strictReply.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+  });
+
+  it("does not enable question control when strict flow is disabled", () => {
+    const context = setupConversation("registration_intent");
+    const customerText = "我可以先问一个问题吗";
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "chat"
+    });
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      strictFlowEnabled: false,
+      inferredIntent: "chat",
+      contextualIntent
+    });
+
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.inviteCode).toBeUndefined();
+    expect(result.strictReply.enabled).toBe(false);
+  });
+
   it("can delegate the state transition to an injected strict-flow runtime", () => {
     const context = setupConversation("registration_intent");
     const analysis = analyzeMessage("可以", "zh");

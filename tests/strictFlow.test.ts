@@ -1264,8 +1264,8 @@ describe("strict Aston Brazil flow", () => {
 
   it("answers generic questions and look-at-this prompts without resending the registration package", () => {
     const question = reply("我有个问题你可以帮我解答吗", { language: "zh", flowStep: "wait_registration" });
-    expect(question.reply).toContain("直接问");
-    expect(question.reply).toContain("当前开户注册");
+    expect(question.reply).toContain("直接说您的问题");
+    expect(question.reply).not.toMatch(/当前开户注册|继续.*注册|注册手机号/);
     expect(question.reply).not.toContain("开户链接");
     expect(question.reply).not.toContain("邀请码");
     expect(question.tutorialImageRequested).toBe(false);
@@ -1469,8 +1469,105 @@ describe("strict Aston Brazil flow", () => {
     });
 
     expect(result.nextFlowStep).toBe("registration_intent");
-    expect(result.reply).toContain("直接问");
+    expect(result.reply).toContain("直接说您的问题");
     expect(result.reply).not.toMatch(/有空|方便.*注册|继续.*注册/);
+  });
+
+  it("lets a question request override an acknowledgement and keeps waiting through customer corrections", () => {
+    const conv = conversation({
+      language: "zh",
+      flowStep: "registration_intent",
+      awaitingCustomerQuestion: false
+    });
+    const firstText = "ok，在此之前我可以问你一个问题吗";
+    const firstAnalysis = analyzeMessage(firstText, "zh");
+    const firstContext = buildRuleContextualIntent({
+      conversation: conv,
+      analysis: firstAnalysis,
+      customerText: firstText,
+      inferredIntent: "positive_confirmation"
+    });
+    const first = buildStrictFlowReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis: firstAnalysis,
+      customerText: firstText,
+      inviteCode,
+      config,
+      inferredIntent: "positive_confirmation",
+      contextualIntent: firstContext
+    });
+
+    expect(first.nextFlowStep).toBe("registration_intent");
+    expect(first.needsInviteCode).toBe(false);
+    expect(first.tutorialImageRequested).not.toBe(true);
+    expect(first.awaitingCustomerQuestion).toBe(true);
+    expect(first.reply).toContain("直接说您的问题");
+    expect(first.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+
+    conv.awaitingCustomerQuestion = true;
+    const correction = reply("我说，我要问你问题！", conv);
+    expect(correction.nextFlowStep).toBe("registration_intent");
+    expect(correction.awaitingCustomerQuestion).toBe(true);
+    expect(correction.reply).toMatch(/先.*问题|直接问|说完/);
+    expect(correction.reply).not.toMatch(/手机号|注册步骤|https?:\/\//);
+
+    const comprehension = reply("你能听懂吗？", conv);
+    expect(comprehension.nextFlowStep).toBe("registration_intent");
+    expect(comprehension.awaitingCustomerQuestion).toBe(true);
+    expect(comprehension.reply).toMatch(/听懂|问题/);
+    expect(comprehension.reply).not.toMatch(/手机号|注册步骤|https?:\/\//);
+  });
+
+  it("answers the pending concrete question without a registration push, then resumes only on an explicit request", () => {
+    const pending = conversation({
+      language: "zh",
+      flowStep: "registration_intent",
+      awaitingCustomerQuestion: true
+    });
+    const question = reply("你们是正规公司吗？", pending);
+
+    expect(question.nextFlowStep).toBe("registration_intent");
+    expect(question.awaitingCustomerQuestion).toBe(true);
+    expect(question.controlledQuestionType).toBe("trust");
+    expect(question.reply).toMatch(/风险|规则|核实|确认/);
+    expect(question.reply).not.toMatch(/有空|继续.*注册|开户链接|邀请码/);
+
+    const acknowledgement = reply("ok", pending);
+    expect(acknowledgement.nextFlowStep).toBe("registration_intent");
+    expect(acknowledgement.awaitingCustomerQuestion).toBe(true);
+    expect(acknowledgement.reply).toContain("还有疑问");
+    expect(acknowledgement.reply).not.toMatch(/开户链接|邀请码|注册步骤/);
+
+    const resume = reply("问题问完了，继续注册", pending);
+    expect(resume.nextFlowStep).toBe("wait_registration");
+    expect(resume.needsInviteCode).toBe(true);
+    expect(resume.reply).toContain("ABC123");
+  });
+
+  it.each([
+    "interest_screening",
+    "project_intro",
+    "registration_intent",
+    "send_register_link",
+    "wait_registration",
+    "telegram_confirm",
+    "telegram_download",
+    "collect_telegram"
+  ] as const)("pauses %s while the customer is preparing to ask a question", (flowStep) => {
+    const result = reply("在继续之前，我要先问一个问题", {
+      language: "zh",
+      flowStep,
+      extractedPhone: flowStep.startsWith("telegram") || flowStep === "collect_telegram" ? "987654321" : ""
+    });
+
+    expect(result.nextFlowStep).toBe(flowStep);
+    expect(result.awaitingCustomerQuestion).toBe(true);
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.tutorialImageRequested).not.toBe(true);
+    expect(result.reply).toContain("直接说您的问题");
+    expect(result.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤|注册手机号/);
   });
 
   it("answers distinct Telegram purpose and necessity questions without changing the node", () => {
@@ -1699,8 +1796,8 @@ describe("strict Aston Brazil flow", () => {
 
     const anotherQuestion = reply("我还有一个问题", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
     expect(anotherQuestion.nextFlowStep).toBe("collect_telegram");
-    expect(anotherQuestion.reply).toContain("直接问");
-    expect(anotherQuestion.reply).toContain("老师的 Telegram 链接");
+    expect(anotherQuestion.reply).toContain("直接说您的问题");
+    expect(anotherQuestion.reply).not.toContain("老师的 Telegram 链接");
     expect(anotherQuestion.reply).not.toContain("充值");
   });
 

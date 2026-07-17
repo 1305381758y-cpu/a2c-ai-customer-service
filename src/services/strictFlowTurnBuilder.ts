@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.js";
-import { strictFlowNeedsInviteCode, type StrictContextualIntent, type StrictFlowReply } from "../domain/strictFlow.js";
+import { buildStrictFlowQuestionControlReply, strictFlowNeedsInviteCode, type StrictContextualIntent, type StrictFlowReply } from "../domain/strictFlow.js";
 import { defaultStrictFlowRuntime, type StrictFlowRuntimeEngine } from "../domain/strictFlowRuntime.js";
 import type { InternalIntentLabel, MessageAnalysis } from "../domain/analyzer.js";
 import type {
@@ -32,6 +32,26 @@ export function buildStrictFlowTurn(input: {
   strictFlowRuntime?: StrictFlowRuntimeEngine;
   linkLoadFailureCount?: number;
 }): StrictFlowTurnBuildResult {
+  const questionControlReply = buildStrictFlowQuestionControlReply({
+    merchant: input.merchant,
+    country: input.country,
+    conversation: input.conversation,
+    analysis: input.analysis,
+    customerText: input.customerText,
+    config: input.runtimeConfig,
+    inferredIntent: input.inferredIntent,
+    contextualIntent: input.contextualIntent,
+    strictFlowEnabled: input.strictFlowEnabled,
+    scriptFlow: input.scriptFlow,
+    linkLoadFailureCount: input.linkLoadFailureCount
+  });
+  if (questionControlReply) {
+    return {
+      needsInviteCode: false,
+      inviteCode: undefined,
+      strictReply: questionControlReply
+    };
+  }
   const needsInviteCode = strictFlowNeedsInviteCode({
     merchant: input.merchant,
     country: input.country,

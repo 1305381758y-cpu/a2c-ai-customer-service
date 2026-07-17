@@ -6,7 +6,7 @@ import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
 import type { StrictFlowRuntimeContext, StrictFlowRuntimeEngine } from "../src/domain/strictFlowRuntime.js";
 import { Repositories } from "../src/repositories.js";
-import { generateAndRecordStrictFlowReply } from "../src/services/strictFlowReply.js";
+import { generateAndRecordStrictFlowReply, guardPendingCustomerQuestionReply } from "../src/services/strictFlowReply.js";
 
 function runtimeConfig(overrides: Record<string, string> = {}) {
   return loadConfig({
@@ -70,6 +70,73 @@ function setupConversation(flowStep = "registration_intent") {
 }
 
 describe("strict flow reply module", () => {
+  it("removes registration side effects from a pending-question reply before sending", () => {
+    const guarded = guardPendingCustomerQuestionReply({
+      enabled: true,
+      reply: "注册链接：https://register.example\n邀请码：INV-1\n注册步骤：打开链接",
+      replyParts: ["注册链接：https://register.example", "邀请码：INV-1"],
+      language: "zh",
+      nextFlowStep: "registration_intent",
+      stage: "need_platform_register",
+      needsInviteCode: true,
+      tutorialImageRequested: true,
+      awaitingCustomerQuestion: true
+    });
+
+    expect(guarded.reply).toContain("直接说您的问题");
+    expect(guarded.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+    expect(guarded.replyParts).toBeUndefined();
+    expect(guarded.needsInviteCode).toBe(false);
+    expect(guarded.tutorialImageRequested).toBe(false);
+  });
+
+  it("persists the pending-question state when a compound acknowledgement asks to speak first", async () => {
+    const context = setupConversation("registration_intent");
+    const customerText = "ok，在此之前我可以问你一个问题吗";
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
+
+    await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-question-1",
+        content: customerText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-question-1",
+      simulation: true,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    const stored = context.repos.getConversation(context.conversation.id);
+    expect(stored?.flowStep).toBe("registration_intent");
+    expect(stored?.awaitingCustomerQuestion).toBe(true);
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 10)
+      .find((message) => message.direction === "outbound");
+    expect(outbound?.content).toContain("直接说您的问题");
+    expect(outbound?.content).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+  });
+
   it("reserves the invite code, records strict-flow outbound state, and avoids real A2C in simulation", async () => {
     const context = setupConversation("registration_intent");
     const analysis = analyzeMessage("是的", "zh");

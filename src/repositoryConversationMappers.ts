@@ -29,6 +29,7 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     handoffStatus: String(row.handoff_status ?? "pending") as "pending" | "processing" | "done",
     handoffNotified: Number(row.handoff_notified ?? 0),
     unreadCount: Number(row.unread_count ?? 0),
+    awaitingCustomerQuestion: Boolean(Number(row.awaiting_customer_question ?? 0)),
     pinnedAt: String(row.pinned_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     billingStatus: String(row.billing_status ?? "free") as "free" | "charged" | "insufficient",
