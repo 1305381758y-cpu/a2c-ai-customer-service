@@ -35,6 +35,15 @@ export function flowScriptLine(input: StrictFlowInput, key: string, language: st
 }
 
 export function flowScriptLines(input: StrictFlowInput, key: string, language: string): string[] {
+  if (key === "project_intro") {
+    const introSteps = (input.scriptFlow?.steps ?? [])
+      .filter((step) => step.enabled && step.flowStep === "project_intro")
+      .sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id);
+    const configuredParts = introSteps.flatMap((step) => step.replyParts?.length ? step.replyParts : [step.standardReply])
+      .map((part) => applyScriptVariables(part, input, language, ""))
+      .filter(Boolean);
+    if (configuredParts.length) return configuredParts;
+  }
   const step = activeScriptStep(input, key);
   if (step?.replyParts?.length) {
     return step.replyParts.map((part) => applyScriptVariables(part, input, language, "")).filter(Boolean);

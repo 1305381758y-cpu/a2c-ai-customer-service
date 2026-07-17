@@ -3,6 +3,7 @@ import { loadConfig } from "../src/config.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
 import { defaultStrictFlowRuntime, nextStrictFlowTurn } from "../src/domain/strictFlowRuntime.js";
+import { flowScriptLines } from "../src/domain/strictFlowScriptRuntime.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
 const merchant: MerchantRecord = { id: "merchant-1", name: "严格流程商户", status: "active" };
@@ -93,6 +94,67 @@ function nextTurn(text: string, overrides: Partial<Conversation> = {}, withInvit
 }
 
 describe("strict flow runtime", () => {
+  it("keeps every configured project-intro part, including multiple intro nodes", () => {
+    const step = (id: number, sortOrder: number, standardReply: string, replyParts?: string[]) => ({
+      id,
+      flowId: 1,
+      merchantId: merchant.id,
+      countryId: country.id,
+      flowCode: String(sortOrder),
+      flowName: "项目介绍",
+      flowStep: "project_intro",
+      goal: "介绍项目",
+      triggerCondition: "客户有兴趣",
+      customerExpressions: "是的",
+      standardReply,
+      replyParts,
+      collectInfo: "",
+      sendLink: false,
+      sendInvite: false,
+      sendTutorialImage: false,
+      nextCondition: "介绍完成",
+      nextFlowCode: "4",
+      nextFlowStep: "registration_intent",
+      forbidden: "",
+      notes: "",
+      sortOrder,
+      enabled: true,
+      createdAt: "",
+      updatedAt: ""
+    });
+    const lines = flowScriptLines({
+      merchant,
+      country,
+      conversation: conversation(),
+      analysis: analyzeMessage("yes", "pt"),
+      customerText: "yes",
+      config,
+      scriptFlow: {
+        flow: {
+          id: 1,
+          merchantId: merchant.id,
+          countryId: country.id,
+          countryCode: country.code,
+          countryName: country.name,
+          name: "测试话本",
+          status: "active",
+          active: true,
+          version: 1,
+          sourceFilename: "",
+          stepCount: 2,
+          createdAt: "",
+          updatedAt: ""
+        },
+        steps: [
+          step(1, 1, "第一条", ["第一条", "第二条"]),
+          step(2, 2, "第三条")
+        ]
+      }
+    }, "project_intro", "pt");
+
+    expect(lines).toEqual(["第一条", "第二条", "第三条"]);
+  });
+
   it("advances an interested customer to the registration-intent step without sending a link", () => {
     const result = nextTurn("是的", { flowStep: "interest_screening" });
 

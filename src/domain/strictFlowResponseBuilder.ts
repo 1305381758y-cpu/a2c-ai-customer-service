@@ -43,7 +43,7 @@ function registrationIntentLine(input: StrictFlowInput, language: string): strin
   // confirmation node. When project introductions are split, that stale text
   // must not become a third introduction message. Use the localized
   // confirmation bridge until the node is edited or migrated.
-  const configuredIntroParts = activeScriptStep(input, "project_intro")?.replyParts ?? [];
+  const configuredIntroParts = flowScriptLines(input, "project_intro", language);
   if (configuredIntroParts.length > 1 && looksLikeProjectIntroduction(configured, language)) {
     return strictFlowScriptLine("bridge_registration_intent", language);
   }
