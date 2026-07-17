@@ -51,7 +51,6 @@ export function createA2CFollowUpSender(repos: Repositories): FollowUpSender {
             strictFlowStep: input.flowStep
           }
         },
-        operatorTranslation: false,
         memory: {
           intent: "unknown",
           content: input.content,

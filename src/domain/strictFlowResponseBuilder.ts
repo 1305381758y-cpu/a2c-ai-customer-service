@@ -30,11 +30,33 @@ export function buildInterestProgressReplyParts(input: StrictFlowInput, step: St
   const introParts = flowScriptLines(input, "project_intro", language);
   const prefix = controlledQuestionAnswer(input, step, text, language, line, intent);
   const parts = prefix && !prefix.pauseFlow ? [prefix.content, ...introParts] : introParts;
-  const confirmation = flowScriptLine(input, "registration_intent", language);
+  const confirmation = registrationIntentLine(input, language);
   // Older/customized project-intro nodes may already contain the availability
   // question. Do not append a second confirmation in that case.
   if (confirmation && !containsNextStepPrompt(introParts.join("\n"), "registration_intent")) parts.push(confirmation);
   return parts.filter((part, index) => part.trim() && parts.indexOf(part) === index);
+}
+
+function registrationIntentLine(input: StrictFlowInput, language: string): string {
+  const configured = flowScriptLine(input, "registration_intent", language);
+  // Some older built-in flows persisted the project introduction under the
+  // confirmation node. When project introductions are split, that stale text
+  // must not become a third introduction message. Use the localized
+  // confirmation bridge until the node is edited or migrated.
+  const configuredIntroParts = activeScriptStep(input, "project_intro")?.replyParts ?? [];
+  if (configuredIntroParts.length > 1 && looksLikeProjectIntroduction(configured, language)) {
+    return strictFlowScriptLine("bridge_registration_intent", language);
+  }
+  return configured || strictFlowScriptLine("bridge_registration_intent", language);
+}
+
+function looksLikeProjectIntroduction(content: string, language: string): boolean {
+  const text = content.trim().toLowerCase();
+  if (!text) return false;
+  if (language === "pt-BR") return /trabalho online|ajud[ae] comerciantes|comiss[aã]o depende|ganhos seguem/.test(text);
+  if (language === "es") return /trabajo en línea|ayuda a comerciantes|comisi[oó]n depende|ganancias siguen/.test(text);
+  if (language === "en") return /online (?:part-time )?work|helps merchants|commission depends|earnings follow/.test(text);
+  return /兼职|商家|佣金|收益|项目介绍|工作内容/.test(text);
 }
 
 export function buildStrictFlowResponse(
