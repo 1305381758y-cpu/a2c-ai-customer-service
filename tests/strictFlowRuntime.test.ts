@@ -4,7 +4,9 @@ import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
 import { defaultStrictFlowRuntime, nextStrictFlowTurn } from "../src/domain/strictFlowRuntime.js";
 import { flowScriptLines } from "../src/domain/strictFlowScriptRuntime.js";
+import { buildInterestProgressReplyParts } from "../src/domain/strictFlowResponseBuilder.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
+import type { StrictFlowInput } from "../src/domain/strictFlowTypes.js";
 
 const merchant: MerchantRecord = { id: "merchant-1", name: "严格流程商户", status: "active" };
 const country: MerchantCountryRecord = {
@@ -122,7 +124,7 @@ describe("strict flow runtime", () => {
       createdAt: "",
       updatedAt: ""
     });
-    const lines = flowScriptLines({
+    const input: StrictFlowInput = {
       merchant,
       country,
       conversation: conversation(),
@@ -150,9 +152,12 @@ describe("strict flow runtime", () => {
           step(2, 2, "第三条")
         ]
       }
-    }, "project_intro", "pt");
+    };
+    const lines = flowScriptLines(input, "project_intro", "pt");
 
     expect(lines).toEqual(["第一条", "第二条", "第三条"]);
+    expect(buildInterestProgressReplyParts(input, "interest_screening", "yes", "pt"))
+      .toEqual(["第一条", "第二条", "第三条", "Você tem tempo agora para continuar o cadastro da conta?"]);
   });
 
   it("advances an interested customer to the registration-intent step without sending a link", () => {

@@ -1,6 +1,7 @@
 export function strictFlowVerificationLine(language: string): string {
-  if (language === "en") return "We are verifying your information. Please wait a moment.";
-  if (language === "pt-BR") return "Estamos verificando suas informações. Aguarde um momento.";
+  const normalizedLanguage = language.trim().toLowerCase();
+  if (normalizedLanguage.startsWith("en")) return "We are verifying your information. Please wait a moment.";
+  if (normalizedLanguage.startsWith("pt")) return "Estamos verificando suas informações. Aguarde um momento.";
   return "我们正在核实，请稍后。";
 }
 
@@ -249,8 +250,9 @@ export function strictFlowScriptLine(key: string, language: string, fallback = "
     collect_telegram_retry: "Le enviaré el enlace de Telegram de la profesora. Siga sus instrucciones para continuar.",
     missing_invite: "El registro necesita código de invitación. Estoy confirmando su código exclusivo ahora. Espere un momento."
   };
-  if (language === "en") return en[key] ?? zh[key] ?? "";
-  if (language === "es") return es[key] ?? zh[key] ?? "";
-  if (language === "pt-BR") return pt[key] ?? zh[key] ?? "";
+  const normalizedLanguage = language.trim().toLowerCase();
+  if (normalizedLanguage.startsWith("en")) return en[key] ?? zh[key] ?? "";
+  if (normalizedLanguage.startsWith("es")) return es[key] ?? zh[key] ?? "";
+  if (normalizedLanguage.startsWith("pt")) return pt[key] ?? zh[key] ?? "";
   return zh[key] ?? "";
 }
