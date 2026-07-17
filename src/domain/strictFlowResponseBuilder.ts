@@ -27,7 +27,7 @@ export function buildInterestProgressReply(input: StrictFlowInput, step: StrictF
 
 export function buildInterestProgressReplyParts(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): string[] {
   const line = (key: string, lineLanguage: string) => flowScriptLine(input, key, lineLanguage);
-  const introParts = flowScriptLines(input, "project_intro", language);
+  const introParts = removeUneditedBuiltInIntro(input, flowScriptLines(input, "project_intro", language), language);
   const prefix = controlledQuestionAnswer(input, step, text, language, line, intent);
   const parts = prefix && !prefix.pauseFlow ? [prefix.content, ...introParts] : introParts;
   const confirmation = registrationIntentLine(input, language);
@@ -35,6 +35,35 @@ export function buildInterestProgressReplyParts(input: StrictFlowInput, step: St
   // question. Do not append a second confirmation in that case.
   if (confirmation && !containsNextStepPrompt(introParts.join("\n"), "registration_intent")) parts.push(confirmation);
   return parts.filter((part, index) => part.trim() && parts.indexOf(part) === index);
+}
+
+function removeUneditedBuiltInIntro(input: StrictFlowInput, parts: string[], language: string): string[] {
+  if (!input.scriptFlow?.flow.active || parts.length < 2) return parts;
+  const builtIn = strictFlowScriptLine("project_intro", language).trim();
+  const builtInTexts = [builtIn, legacyBuiltInIntro(language)];
+  const normalizedBuiltIns = builtInTexts.filter(Boolean).map(normalizeIntroText);
+  const hasCustomPart = parts.some((part) => !normalizedBuiltIns.includes(normalizeIntroText(part)));
+  return hasCustomPart
+    ? parts.filter((part) => !normalizedBuiltIns.includes(normalizeIntroText(part)))
+    : parts;
+}
+
+function normalizeIntroText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function legacyBuiltInIntro(language: string): string {
+  const normalized = language.trim().toLowerCase();
+  if (normalized.startsWith("pt")) {
+    return "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?";
+  }
+  if (normalized.startsWith("es")) {
+    return "Claro, le explico brevemente: este trabajo en línea ayuda a comerciantes a mejorar ventas y posicionamiento, y la comisión depende de las tareas. Las ganancias siguen las reglas de la página. ¿Tiene tiempo para continuar con el registro ahora?";
+  }
+  if (normalized.startsWith("en")) {
+    return "Okay, let me briefly explain: this online part-time job helps merchants improve product sales and rankings, and commission is calculated by tasks. Earnings are subject to platform rules. Do you have time to continue registration now?";
+  }
+  return "";
 }
 
 function registrationIntentLine(input: StrictFlowInput, language: string): string {

@@ -149,15 +149,15 @@ describe("strict flow runtime", () => {
         },
         steps: [
           step(1, 1, "第一条", ["第一条", "第二条"]),
-          step(2, 2, "第三条")
+          step(2, 2, "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?")
         ]
       }
     };
     const lines = flowScriptLines(input, "project_intro", "pt");
 
-    expect(lines).toEqual(["第一条", "第二条", "第三条"]);
+    expect(lines).toEqual(["第一条", "第二条", "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?"]);
     expect(buildInterestProgressReplyParts(input, "interest_screening", "yes", "pt"))
-      .toEqual(["第一条", "第二条", "第三条", "Você tem tempo agora para continuar o cadastro da conta?"]);
+      .toEqual(["第一条", "第二条", "Você tem tempo agora para continuar o cadastro da conta?"]);
   });
 
   it("advances an interested customer to the registration-intent step without sending a link", () => {
