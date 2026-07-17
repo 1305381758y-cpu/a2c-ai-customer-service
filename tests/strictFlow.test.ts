@@ -1566,6 +1566,21 @@ describe("strict Aston Brazil flow", () => {
     expect(naturalResume.reply).toContain("ABC123");
   });
 
+  it("lets a temporary pause request override a stale pending-question state", () => {
+    const result = reply("我现在暂时没空，可以等我一下吗", {
+      language: "zh",
+      flowStep: "registration_intent",
+      awaitingCustomerQuestion: true
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.flowHoldReason).toBe("temporary_pause");
+    expect(result.awaitingCustomerQuestion).not.toBe(true);
+    expect(result.controlledQuestionType).toBe("none");
+    expect(result.reply).toMatch(/先忙|有空|方便|继续/);
+    expect(result.reply).not.toMatch(/项目|工作|佣金|邀请码|现在有时间继续/);
+  });
+
   it.each([
     "interest_screening",
     "project_intro",

@@ -37,6 +37,26 @@ import {
 import { normalizeFlowStep } from "./strictFlowState.js";
 import type { StrictContextualIntent, StrictFlowInput } from "./strictFlowTypes.js";
 
+const FLOW_CONTROL_INTENTS = new Set<ContextualIntentLabel>([
+  "phone_submission",
+  "incomplete_phone",
+  "telegram_submission",
+  "positive_confirmation",
+  "acknowledgement",
+  "negative_refusal",
+  "not_available",
+  "not_registered",
+  "no_telegram",
+  "telegram_installed",
+  "platform_register_done",
+  "ask_platform_register",
+  "ask_link"
+]);
+
+export function isFlowControlContextualIntent(intent: ContextualIntentLabel): boolean {
+  return FLOW_CONTROL_INTENTS.has(intent);
+}
+
 export function buildRuleContextualIntent(
   input: Pick<StrictFlowInput, "conversation" | "analysis" | "customerText" | "inferredIntent">,
   history: Array<Pick<ConversationMessageRecord, "direction" | "content">> = []

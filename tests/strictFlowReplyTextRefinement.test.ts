@@ -239,6 +239,49 @@ describe("strict flow reply text refinement", () => {
     expect(result.naturalized).toMatchObject({ used: false, error: "启用话本后保留节点标准话术" });
   });
 
+  it("never lets naturalization overwrite a persisted temporary-pause reply", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas. Você tem tempo para continuar o cadastro agora?",
+        used: true,
+        error: ""
+      }))
+    };
+    const pauseReply = "Tudo bem, cuide do que precisa agora. Quando estiver disponível, me avise e continuamos.";
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: pauseReply,
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        flowHoldReason: "temporary_pause",
+        controlledQuestionType: "unknown",
+        controlledQuestionFallback: true,
+        contextualIntent: {
+          intent: "not_available",
+          source: "rule",
+          answeredPreviousQuestion: true,
+          isQuestion: true,
+          isSubmission: false,
+          shouldPause: true,
+          questionType: "none",
+          nextAction: "pause politely",
+          reason: "not available now"
+        }
+      }),
+      customerText: "我现在暂时没空，可以等我一下吗",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+    expect(result.reply).toBe(pauseReply);
+    expect(result.naturalized).toMatchObject({ used: false, error: "流程暂停或拒绝状态保留固定话术" });
+  });
+
   it("keeps custom registration packages unchanged", async () => {
     const configured = "好的，请按下面步骤注册。\n注册链接：https://example.test/register\n邀请码：BO-123\n注册步骤：\n1. 打开注册链接。\n2. 填写手机号。\n3. 设置用户名和密码。\n4. 输入邀请码。\n5. 提交注册。\n完成后告诉我。";
     const ai = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
+import { buildRuleContextualIntent } from "../src/domain/strictFlowContextualIntent.js";
 import { buildStrictFlowResponse, normalizeReplyLanguage } from "../src/domain/strictFlowResponseBuilder.js";
 import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
 
@@ -94,6 +95,33 @@ describe("strict flow response builder", () => {
     expect(result.reply).not.toContain("好的，我继续协助您");
     expect(result.reply).not.toContain("AI");
     expect(result.controlledQuestionType).toBe("none");
+  });
+
+  it("does not classify a temporary pause request as a controlled unknown question", () => {
+    const customerText = "我现在暂时没空，可以等我一下吗";
+    const currentConversation = conversation({ flowStep: "registration_intent" });
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: currentConversation,
+      analysis,
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+    const result = buildStrictFlowResponse({
+      merchant,
+      country,
+      conversation: currentConversation,
+      analysis,
+      customerText,
+      config,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      strictFlowEnabled: true
+    }, "zh", "registration_intent", "need_platform_register", "好的，您先忙，方便时告诉我，我们再继续。");
+
+    expect(contextualIntent.intent).toBe("not_available");
+    expect(result.controlledQuestionType).toBe("none");
+    expect(result.controlledQuestionFallback).toBe(false);
   });
 
   it("marks registration tutorial images only for registration help in the wait-registration step", () => {

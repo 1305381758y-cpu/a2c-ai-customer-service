@@ -8,6 +8,7 @@ import {
   asksNextStep,
   asksSensitiveInfo,
   cancelsPendingCustomerQuestion,
+  explicitlyResumesFlow,
   isAcknowledgement,
   isContextualPositive,
   isExplicitRefusal,
@@ -16,7 +17,7 @@ import {
   isRepeatGreeting,
   saysNotAvailable
 } from "./strictFlowPredicates.js";
-import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
+import { buildRuleContextualIntent, isFlowControlContextualIntent } from "./strictFlowContextualIntent.js";
 import { controlledQuestionAnswer } from "./strictFlowQuestionAnswer.js";
 import { buildStrictFlowResponse, normalizeReplyLanguage } from "./strictFlowResponseBuilder.js";
 import { flowScriptLine } from "./strictFlowScriptRuntime.js";
@@ -122,12 +123,22 @@ export function buildStrictFlowQuestionControlReply(input: StrictFlowInput): Str
   const step = normalizeFlowStep(input.conversation.flowStep);
   const text = input.customerText.trim();
   const language = normalizeReplyLanguage(input.analysis.language, input.conversation.language, input.country.defaultLanguage);
+  const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   if (input.conversation.awaitingCustomerQuestion &&
-    (cancelsPendingCustomerQuestion(text) || isExplicitRefusal(text) || Boolean(input.analysis.phone) || Boolean(input.analysis.telegram))) {
+    (cancelsPendingCustomerQuestion(text) ||
+      isExplicitRefusal(text) ||
+      explicitlyResumesFlow(text) ||
+      shouldBypassPendingQuestion(contextualIntent.intent) ||
+      Boolean(input.analysis.phone) ||
+      Boolean(input.analysis.telegram))) {
     input.conversation.awaitingCustomerQuestion = false;
   }
-  const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   return buildCustomerQuestionControlReply(input, step, text, language, contextualIntent);
+}
+
+function shouldBypassPendingQuestion(intent: StrictContextualIntent["intent"]): boolean {
+  if (!isFlowControlContextualIntent(intent)) return false;
+  return intent !== "acknowledgement" && intent !== "positive_confirmation";
 }
 
 function buildCustomerQuestionControlReply(

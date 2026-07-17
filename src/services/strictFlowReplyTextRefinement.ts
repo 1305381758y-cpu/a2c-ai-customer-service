@@ -47,6 +47,27 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
+  if (input.strictReply.flowHoldReason) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: false,
+      fallbackReply: input.strictReply.reply
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "流程暂停或拒绝状态保留固定话术"
+      },
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
+    };
+  }
+
   if (input.strictReply.fallback && input.strictReply.needsInviteCode) {
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,

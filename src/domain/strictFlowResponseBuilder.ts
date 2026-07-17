@@ -1,5 +1,5 @@
 import type { Conversation } from "../repositories.js";
-import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
+import { buildRuleContextualIntent, isFlowControlContextualIntent } from "./strictFlowContextualIntent.js";
 import { shouldSendRegistrationTutorialImage } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
@@ -91,7 +91,9 @@ export function buildStrictFlowResponse(
   const actionableContent = sanitizeCustomerVisibleStrictReply(ensureActionableStrictContent(content, nextFlowStep, language, strictFlowScriptLine));
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const debugIntent = input.inferredIntent && input.inferredIntent !== "unknown" ? input.inferredIntent : input.analysis.intent;
-  const controlled = controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, (key, lineLanguage) => flowScriptLine(input, key, lineLanguage), debugIntent);
+  const controlled = isFlowControlContextualIntent(contextualIntent.intent)
+    ? null
+    : controlledQuestionAnswer(input, normalizeFlowStep(input.conversation.flowStep), input.customerText, language, (key, lineLanguage) => flowScriptLine(input, key, lineLanguage), debugIntent);
   const currentStep = normalizeFlowStep(input.conversation.flowStep);
   const canSendRegistrationTutorialImage = Boolean(needsInviteCode && input.inviteCode);
   return {
