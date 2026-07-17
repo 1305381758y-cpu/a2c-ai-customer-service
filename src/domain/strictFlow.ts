@@ -63,7 +63,7 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const text = input.customerText.trim();
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
   const contextualLabel = contextualIntent.intent;
-  const positive = isContextualPositive(step, contextualLabel) || isPositive(text, input.analysis.intent, input.inferredIntent);
+  const positive = isContextualPositive(step, contextualLabel) || isPositive(text, input.analysis.intent, "unknown");
   const negativeTelegram = isNegativeTelegramAnswer(contextualLabel, text);
   const asksLink = asksForInviteOrLink(text, input.analysis.intent);
   const inferredIntent = input.inferredIntent ?? "unknown";

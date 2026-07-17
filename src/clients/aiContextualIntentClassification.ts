@@ -85,6 +85,8 @@ phone_submission, incomplete_phone, telegram_submission, positive_confirmation, 
 - 客户问“为什么/TG 是什么/怎么下载”属于 ask_tg_register 或 workflow_question，questionType=telegram。
 - 客户问费用、投资、本金、押金、诈骗、安全、收益时分别分类，不要归 unknown。
 - 客户明确说不想继续、别发了、不要了才是 negative_refusal。
+- 客户表达“现在忙、暂时没空、等一下、稍后继续、晚点操作、之后再联系”等延后含义时，分类为 not_available，shouldPause=true。
+- 即使同时包含“好的、ok、yes、sim、sí、可以”，只要后半句表达等待、忙碌或稍后处理，也必须优先分类为 not_available，不能分类为 positive_confirmation。
 `
     });
     return normalizeContextualIntentResult(parsed);

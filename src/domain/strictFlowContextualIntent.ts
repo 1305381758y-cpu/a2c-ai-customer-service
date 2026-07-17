@@ -1,5 +1,5 @@
 import type { ConversationMessageRecord } from "../repositories.js";
-import { type ContextualIntentLabel } from "./analyzer.js";
+import { isPositiveConfirmation, type ContextualIntentLabel } from "./analyzer.js";
 import {
   asksAboutJob,
   asksCustomerCorrection,
@@ -186,7 +186,8 @@ export function buildRuleContextualIntent(
   if (asksInvestmentConcern(text)) return base("investment_concern", { reason: "investment concern" });
   if (asksPaymentConcern(text)) return base("payment_concern", { reason: "payment concern" });
   if (asksEarningConcern(text)) return base("earning_concern", { reason: "earning concern" });
-  if (input.inferredIntent && input.inferredIntent !== "unknown") {
+  const coarsePositiveNeedsContext = input.inferredIntent === "positive_confirmation" && !isPositiveConfirmation(text);
+  if (input.inferredIntent && input.inferredIntent !== "unknown" && !coarsePositiveNeedsContext) {
     return base(mapInternalToContextual(input.inferredIntent), { source: "rule", reason: "internal intent" });
   }
   if (asksTelegramExplanation(text)) return base("ask_tg_register", { reason: "telegram question" });
@@ -194,8 +195,17 @@ export function buildRuleContextualIntent(
   if (asksAboutJob(text)) return base("job_question", { reason: "job question" });
   if (complainsAboutReply(text)) return base("complaint", { reason: "complaint" });
   if (asksSensitiveInfo(text)) return base("sensitive_request", { reason: "sensitive request" });
-  if (isPositive(text, input.analysis.intent, input.inferredIntent)) return base("positive_confirmation", { answeredPreviousQuestion: true, reason: "positive confirmation" });
+  if (isPositive(text, input.analysis.intent, coarsePositiveNeedsContext ? "unknown" : input.inferredIntent)) {
+    return base("positive_confirmation", { answeredPreviousQuestion: true, reason: "positive confirmation" });
+  }
   if (isExplicitRefusal(text)) return base("negative_refusal", { answeredPreviousQuestion: true, reason: "explicit refusal" });
   if (looksLikeQuestion(text)) return base("unknown_question", { reason: "unclassified question" });
+  if (coarsePositiveNeedsContext) {
+    return base("unknown", {
+      source: "none",
+      nextAction: "confirm ambiguous positive label with contextual classifier",
+      reason: "coarse positive intent is not an explicit confirmation"
+    });
+  }
   return base("unknown", { source: "none" });
 }

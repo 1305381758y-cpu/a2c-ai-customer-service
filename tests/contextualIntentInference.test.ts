@@ -106,6 +106,37 @@ describe("contextual intent inference", () => {
     expect(ai.classifyContextualIntent).toHaveBeenCalledOnce();
   });
 
+  it("lets contextual AI correct a coarse positive label on an ambiguous long reply", async () => {
+    const ai = aiTasksMock({
+      classifyContextualIntent: vi.fn(async () => ({
+        intent: "not_available" as const,
+        answeredPreviousQuestion: true,
+        isQuestion: false,
+        shouldPause: true,
+        questionType: "none" as const,
+        nextAction: "pause politely",
+        reason: "customer defers the action"
+      }))
+    });
+    const customerText = "眼下不便展开，容后再议";
+
+    const result = await inferStrictFlowContextualIntent({
+      ai,
+      runtimeConfig,
+      conversation: conversation({ flowStep: "registration_intent" }),
+      analysis: { ...analyzeMessage(customerText, "zh"), intent: "greeting" },
+      customerText,
+      strictFlowEnabled: true,
+      history: [],
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe("not_available");
+    expect(result.shouldPause).toBe(true);
+    expect(result.source).toBe("ai");
+    expect(ai.classifyContextualIntent).toHaveBeenCalledOnce();
+  });
+
   it("keeps internal intent classification behind the same service interface", async () => {
     const ai = aiTasksMock({ classifyIntent: vi.fn(async () => "positive_confirmation" as const) });
 

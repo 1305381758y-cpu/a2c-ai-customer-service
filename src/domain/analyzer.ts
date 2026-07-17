@@ -266,6 +266,7 @@ export function isPositiveConfirmation(text: string): boolean {
   const normalized = text
     .toLowerCase()
     .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .replace(/[啊呀呢哈啦哦嘛呗]+$/g, "")
     .trim();
   return /^(是|是的|对|對|对的|可以|可以的|好|好的|嗯|嗯嗯|行|行的|有|有的|要|想|没问题|沒問題|继续|yes|yep|yeah|ok|okay|sure|correct|right|sim|claro|pode|isso|sí|si|vale|dale)$/i.test(normalized);
 }

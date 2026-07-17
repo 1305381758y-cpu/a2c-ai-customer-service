@@ -71,6 +71,9 @@ describe("AI contextual intent classification task", () => {
       temperature: 0
     }));
     const firstCall = generateJson.mock.calls[0] as unknown as [unknown, string, unknown];
+    expect(firstCall[2] as Record<string, unknown>).toMatchObject({
+      systemInstruction: expect.stringContaining("即使同时包含")
+    });
     const payload = JSON.parse(firstCall[1]);
     expect(payload.recentHistory).toHaveLength(10);
     expect(payload.recentHistory[0].content).toBe("message-2");

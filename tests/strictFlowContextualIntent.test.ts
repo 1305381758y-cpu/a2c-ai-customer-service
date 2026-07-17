@@ -114,6 +114,40 @@ describe("strictFlowContextualIntent", () => {
     expect(result.nextAction).toBe("pause politely");
   });
 
+  it.each([
+    "我手头还有点事，晚一点再弄",
+    "先让我忙完这边再说",
+    "现在不太方便，回头联系你",
+    "给我一点时间，等会继续",
+    "ok，不过我得过会儿才能操作",
+    "我这会儿抽不开身",
+    "Agora não posso, falamos mais tarde",
+    "Estou ocupado, pode esperar um pouco?",
+    "Me dá um tempinho e depois continuamos",
+    "Sim, mas só consigo fazer isso mais tarde",
+    "No momento estou sem tempo",
+    "Ahora no puedo, seguimos más tarde",
+    "Estoy ocupado, espérame un momento",
+    "Dame un poco de tiempo y luego continuamos",
+    "Sí, pero lo haré después",
+    "I'm busy right now, give me a moment",
+    "yes, but I can only do it later",
+    "hold on, I'll come back in a bit",
+    "can we continue later?",
+    "ok 我先忙一下 later"
+  ])("recognizes semantic temporary pauses without requiring a fixed sentence: %s", (customerText) => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent"),
+      analysis: analyzeMessage(customerText, "pt-BR"),
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe("not_available");
+    expect(result.shouldPause).toBe(true);
+    expect(result.nextAction).toBe("pause politely");
+  });
+
   it("keeps a short acknowledgement paused after the customer gives a later time", () => {
     const result = buildRuleContextualIntent({
       conversation: conversation("registration_intent"),

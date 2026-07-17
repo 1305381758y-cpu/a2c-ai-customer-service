@@ -126,7 +126,7 @@ describe("inboundTurnAnalysis", () => {
     expect(detectContextualRegistrationPhone("abc 273773862", "wait_registration")).toBe("");
   });
 
-  it("centralizes strict-flow language, intent, and contextual AI fallback", async () => {
+  it("centralizes strict-flow language and recognizes colloquial explicit confirmation", async () => {
     const ai = aiMock({ classifyIntent: vi.fn(async () => "positive_confirmation" as const) });
     const conv = conversation({ flowStep: "interest_screening" });
 
@@ -147,10 +147,11 @@ describe("inboundTurnAnalysis", () => {
 
     expect(result.strictFlowEnabled).toBe(true);
     expect(result.effectiveStrictFlowStep).toBe("interest_screening");
-    expect(result.inferredIntent).toBe("positive_confirmation");
+    expect(result.inferredIntent).toBe("unknown");
     expect(result.analysis.intent).toBe("greeting");
     expect(result.contextualIntent.intent).toBe("positive_confirmation");
     expect(result.intentLearningCandidate?.suggestedIntent).toBe("positive_confirmation");
+    expect(ai.classifyIntent).not.toHaveBeenCalled();
   });
 
   it("keeps incomplete registration phone detection inside the same analysis module", async () => {

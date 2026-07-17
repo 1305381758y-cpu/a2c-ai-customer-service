@@ -1117,8 +1117,8 @@ describe("strict Aston Brazil flow", () => {
       config,
       inferredIntent: "positive_confirmation"
     });
-    expect(positive.nextFlowStep).toBe("registration_intent");
-    expect(positive.reply).toContain("briefly introduce");
+    expect(positive.nextFlowStep).toBe("interest_screening");
+    expect(positive.reply).toContain("would you like to learn");
 
     const linkConversation = conversation({ language: "zh", flowStep: "wait_registration" });
     expect(strictFlowNeedsInviteCode({

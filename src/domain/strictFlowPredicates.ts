@@ -77,8 +77,27 @@ export function saysContextualNo(text: string): boolean {
 export function saysNotAvailable(text: string): boolean {
   const normalized = normalizeShortReply(text);
   if (/^(我没有|没有|沒有|没|沒|没空|沒有空|没时间|沒時間|没有时间|暂时没空|现在不行|no|not now|no time)$/i.test(normalized)) return true;
-  return /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|(?:需要|要|得)?(?:等待|等).{0,8}(?:[零一二两三四五六七八九十百\d]+|几|幾)?(?:分钟|分鐘|分鈡|小时|小時)|等到.{0,12}(晚上|下午|明天|今天晚些时候|[0-9]{1,2}\s*[点时])|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再|give me a few minutes|wait a few minutes|wait for me|in a few minutes|later|daqui a pouco|me dê alguns minutos|me de alguns minutos|espere alguns minutos|en unos minutos|dame unos minutos|espere un momento)/i.test(normalized);
+  return TEMPORARY_PAUSE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
+
+const TEMPORARY_PAUSE_PATTERNS = [
+  /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|(?:需要|要|得)?(?:等待|等).{0,8}(?:[零一二两三四五六七八九十百\d]+|几|幾)?(?:分钟|分鐘|分鈡|小时|小時)|等到.{0,12}(晚上|下午|明天|今天晚些时候|[0-9]{1,2}\s*[点时])|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再)/i,
+  /(?:暂时|暫時|现在|現在|目前|这会儿|這會兒|这会|這會|此刻).{0,10}(?:没空|沒空|没有空|沒有空|没时间|沒時間|没有时间|沒有時間|不方便|不行|不能|忙|抽不开身|抽不開身|安排不开|安排不開|走不开|走不開)/i,
+  /(?:有点忙|有點忙|正在忙|在忙|先忙|忙一下|手头有事|手頭有事|抽不开身|抽不開身|安排不开|安排不開|走不开|走不開)/i,
+  /(?:先|等).{0,8}(?:忙完|处理完|處理完|弄完|办完|辦完).{0,10}(?:再|以后|以後|然后|然後)/i,
+  /(?:给我|給我|让我|讓我).{0,8}(?:一点时间|一點時間|时间|時間|一会儿|一會兒|一会|一會|一下|片刻)/i,
+  /(?:等会|等會|待会|待會|一会儿|一會兒|一会|一會|过会|過會|稍后|稍後|晚点|晚點|晚一点|晚一點|回头|回頭|之后|之後|以后|以後|改天).{0,12}(?:再|继续|繼續|弄|做|操作|注册|註冊|联系|聯繫|找你|说|說)/i,
+  /(?:要|得|只能).{0,10}(?:过会|過會|晚点|晚點|稍后|稍後|之后|之後|以后|以後).{0,12}(?:操作|做|弄|注册|註冊|继续|繼續)/i,
+  /(?:give me|need).{0,10}(?:a |some )?(?:moment|minute|time)|wait (?:a little|a moment|a few minutes|for me)|hold on|in a few minutes/i,
+  /(?:right now|at the moment).{0,16}(?:busy|can'?t|cannot|not free|not available|no time)|(?:busy|not free|not available|no time).{0,12}(?:right now|at the moment)?/i,
+  /(?:later|in a bit|afterwards).{0,16}(?:continue|do it|register|come back|message)|(?:can only|only can).{0,16}(?:do it|register|continue).{0,12}later|can we continue later|i(?:'ll| will) come back in a bit/i,
+  /(?:agora|no momento|neste momento).{0,16}(?:não posso|nao posso|sem tempo|ocupad|indispon[ií]vel)|(?:estou|tô|to).{0,10}(?:ocupad|sem tempo|indispon[ií]vel)/i,
+  /(?:pode )?(?:esperar|aguardar).{0,12}(?:um pouco|momento|minut)|me (?:dê|de|dá|da).{0,10}(?:tempo|tempinho|minut|momento)/i,
+  /(?:mais tarde|depois|daqui a pouco).{0,16}(?:continu|faço|faco|fazer|falo|falamos|cadastro)|s[oó] consigo.{0,16}(?:mais tarde|depois)|falamos mais tarde/i,
+  /(?:ahora|en este momento|por ahora).{0,16}(?:no puedo|no tengo tiempo|ocupad|no estoy disponible)|estoy.{0,10}(?:ocupad|sin tiempo)/i,
+  /(?:espérame|esperame|espere|espera).{0,12}(?:momento|poco|minut)|dame.{0,10}(?:tiempo|minut|momento)/i,
+  /(?:más tarde|mas tarde|luego|después|despues).{0,16}(?:continu|haré|hare|hago|registro|habl)|(?:lo haré|lo hare|podr[eé]).{0,12}(?:más tarde|mas tarde|luego|después|despues)/i
+] as const;
 
 export function saysNotRegistered(text: string): boolean {
   const normalized = normalizeShortReply(text);
