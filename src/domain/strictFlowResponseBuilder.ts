@@ -53,9 +53,10 @@ function registrationIntentLine(input: StrictFlowInput, language: string): strin
 function looksLikeProjectIntroduction(content: string, language: string): boolean {
   const text = content.trim().toLowerCase();
   if (!text) return false;
-  if (language === "pt-BR") return /trabalho online|ajud[ae] comerciantes|comiss[aã]o depende|ganhos seguem/.test(text);
-  if (language === "es") return /trabajo en línea|ayuda a comerciantes|comisi[oó]n depende|ganancias siguen/.test(text);
-  if (language === "en") return /online (?:part-time )?work|helps merchants|commission depends|earnings follow/.test(text);
+  const normalizedLanguage = language.trim().toLowerCase();
+  if (normalizedLanguage.startsWith("pt")) return /trabalho online|ajud[ae] comerciantes|comiss[aã]o depende|ganhos seguem/.test(text);
+  if (normalizedLanguage.startsWith("es")) return /trabajo en línea|ayuda a comerciantes|comisi[oó]n depende|ganancias siguen/.test(text);
+  if (normalizedLanguage.startsWith("en")) return /online (?:part-time )?work|helps merchants|commission depends|earnings follow/.test(text);
   return /兼职|商家|佣金|收益|项目介绍|工作内容/.test(text);
 }
 
