@@ -173,7 +173,7 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.reply).not.toContain("正在确认");
   });
 
-  it("keeps a complete enabled script flow in its own nodes after registration confirmation", () => {
+  it("uses the completion-aware phone prompt after registration confirmation", () => {
     const context = setupConversation("wait_registration");
     const flow = createBuiltInStrictScriptFlow(context.repos, context.merchant.id, {
       countryId: context.country.id,
@@ -205,7 +205,9 @@ describe("strict flow turn builder", () => {
     });
 
     expect(result.strictReply.nextFlowStep).toBe("wait_registration");
-    expect(result.strictReply.reply).toContain("注册好后把手机号发给我");
+    expect(result.strictReply.reply).toContain("注册的手机号码");
+    expect(result.strictReply.reply).not.toContain("注册好后");
+    expect(result.strictReply.reply).not.toContain("是否已完成注册");
     expect(result.strictReply.reply).not.toContain("开户链接");
     expect(result.strictReply.reply).not.toContain("邀请码");
   });

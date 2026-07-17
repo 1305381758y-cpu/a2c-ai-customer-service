@@ -86,7 +86,7 @@ export async function refineStrictFlowReplyText(input: {
       const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
       const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
       const distinctReply = duplicate
-        ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language)
+        ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language, input.history)
         : safeNaturalizedReply.reply;
       const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
         reply: distinctReply,
@@ -112,16 +112,20 @@ export async function refineStrictFlowReplyText(input: {
       flowStep: input.strictReply.nextFlowStep,
       allowLinkOrInvite: input.strictReply.needsInviteCode
     });
+    const duplicate = !input.strictReply.needsInviteCode && isNearDuplicateOfRecentReply(languageGuard.reply, input.history);
+    const distinctReply = duplicate
+      ? makeDistinctReply(languageGuard.reply, input.strictReply.language, input.history)
+      : languageGuard.reply;
     return {
-      reply: languageGuard.reply,
+      reply: distinctReply,
       naturalized: {
         reply: input.strictReply.reply,
         used: false,
         error: "启用话本后保留节点标准话术"
       },
-      languageGuard,
-      duplicateAvoided: false,
-      variantApplied: false
+      languageGuard: { ...languageGuard, reply: distinctReply },
+      duplicateAvoided: duplicate,
+      variantApplied: duplicate && distinctReply !== languageGuard.reply
     };
   }
 
@@ -164,7 +168,7 @@ export async function refineStrictFlowReplyText(input: {
   const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
   const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
   const distinctReply = duplicate
-    ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language)
+    ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language, input.history)
     : safeNaturalizedReply.reply;
   const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
     reply: distinctReply,
@@ -226,30 +230,61 @@ function normalizeReply(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-function makeDistinctReply(reply: string, language: string): string {
+function makeDistinctReply(
+  reply: string,
+  language: string,
+  history: Array<{ direction: string; content: string }>
+): string {
+  const candidates: string[] = [];
   if (language === "es") {
-    return reply
+    candidates.push(reply
       .replace(/^de acuerdo[,.]?/i, "Perfecto,")
       .replace(/por favor/gi, "cuando pueda")
       .replace(/envíeme/gi, "mándeme")
-      .replace(/dígame/gi, "cuénteme");
-  }
-  if (language === "pt-BR") {
-    return reply
+      .replace(/dígame/gi, "cuénteme"));
+    candidates.push(reply
+      .replace(/^(de acuerdo|perfecto|vale)[,.]?\s*/i, "Entendido, ")
+      .replace(/por favor/gi, "cuando pueda")
+      .replace(/envíeme/gi, "puede enviarme")
+      .replace(/mándeme/gi, "puede enviarme"));
+  } else if (language === "pt-BR") {
+    candidates.push(reply
       .replace(/^certo[,.]?/i, "Perfeito,")
       .replace(/por favor/gi, "quando puder")
-      .replace(/envie/gi, "me mande");
-  }
-  if (language === "en") {
-    return reply
+      .replace(/\benvie\b/gi, "me mande"));
+    candidates.push(reply
+      .replace(/^(certo|perfeito|ok)[,.]?\s*/i, "Entendi, ")
+      .replace(/por favor/gi, "quando puder")
+      .replace(/\benvie\b/gi, "pode me mandar")
+      .replace(/\bme mande\b/gi, "pode me mandar"));
+  } else if (language === "en") {
+    candidates.push(reply
       .replace(/^okay[,.]?/i, "Alright,")
       .replace(/^ok[,.]?/i, "Got it,")
-      .replace(/please/gi, "when you can");
+      .replace(/please/gi, "when you can"));
+    candidates.push(reply
+      .replace(/^(okay|alright|got it)[,.]?\s*/i, "Understood, ")
+      .replace(/please/gi, "when you can"));
+  } else {
+    candidates.push(reply
+      .replace(/^好的[，,]?/, "没问题，")
+      .replace(/请告知我/, "完成后告诉我")
+      .replace(/请将/, "记得把"));
+    candidates.push(reply
+      .replace(/^好的[，,]?/, "明白了，")
+      .replace(/请告知我/, "完成后和我说一声")
+      .replace(/请将/, "麻烦把")
+      .replace(/请把/, "把"));
   }
-  const changed = reply
-    .replace(/^好的[，,]?/, "没问题，")
-    .replace(/^好的[，,]?/, "明白了，")
-    .replace(/请告知我/, "完成后告诉我")
-    .replace(/请将/, "记得把");
-  return changed === reply ? `${reply}\n我这边等您继续。` : changed;
+  return candidates.find((candidate) => candidate !== reply && !isExactRecentReply(candidate, history))
+    ?? candidates.find((candidate) => candidate !== reply)
+    ?? reply;
+}
+
+function isExactRecentReply(
+  reply: string,
+  history: Array<{ direction: string; content: string }>
+): boolean {
+  const normalized = normalizeReply(reply);
+  return recentOutboundReplies(history).some((previous) => normalizeReply(previous) === normalized);
 }

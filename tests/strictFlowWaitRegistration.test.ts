@@ -151,5 +151,6 @@ describe("strict flow wait-registration step", () => {
 
     expect(result.nextFlowStep).toBe("wait_registration");
     expect(result.reply).toContain("请将您注册的手机号码");
+    expect(result.reply).not.toContain("是否已完成注册");
   });
 });

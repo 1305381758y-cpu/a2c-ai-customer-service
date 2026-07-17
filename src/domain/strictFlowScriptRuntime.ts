@@ -20,6 +20,12 @@ const BUSINESS_SCRIPT_KEYS = new Set([
 ]);
 
 export function flowScriptLine(input: StrictFlowInput, key: string, language: string): string {
+  // "Registration completed" is a sub-state of wait_registration, not a
+  // request to replay the whole wait node. Use the dedicated phone prompt so
+  // the reply acknowledges completion instead of asking whether it happened.
+  if (key === "ask_registered_phone") {
+    return strictFlowScriptLine(key, language);
+  }
   const step = activeScriptStep(input, key);
   if (step?.standardReply) {
     return applyScriptVariables(step.standardReply, input, language, "");

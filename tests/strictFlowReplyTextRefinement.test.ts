@@ -270,7 +270,7 @@ describe("strict flow reply text refinement", () => {
     });
   });
 
-  it("does not rotate repeated wording inside an active script", async () => {
+  it("rotates repeated wording inside an active script without model rewriting", async () => {
     const repeated = "De acuerdo, siga primero los pasos de la página. Después del registro, envíeme el teléfono usado.";
     const ai = { naturalizeStrictFlowText: vi.fn() };
 
@@ -284,9 +284,10 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(result.reply).toBe(repeated);
-    expect(result.duplicateAvoided).toBe(false);
-    expect(result.variantApplied).toBe(false);
+    expect(result.reply).not.toBe(repeated);
+    expect(result.reply).toContain("teléfono usado");
+    expect(result.duplicateAvoided).toBe(true);
+    expect(result.variantApplied).toBe(true);
     expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
   });
 
