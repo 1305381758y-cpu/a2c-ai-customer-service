@@ -44,20 +44,10 @@ function registrationIntentLine(input: StrictFlowInput, language: string): strin
   // must not become a third introduction message. Use the localized
   // confirmation bridge until the node is edited or migrated.
   const configuredIntroParts = flowScriptLines(input, "project_intro", language);
-  if (configuredIntroParts.length > 1 && looksLikeProjectIntroduction(configured, language)) {
+  if (configuredIntroParts.length > 1) {
     return strictFlowScriptLine("bridge_registration_intent", language);
   }
   return configured || strictFlowScriptLine("bridge_registration_intent", language);
-}
-
-function looksLikeProjectIntroduction(content: string, language: string): boolean {
-  const text = content.trim().toLowerCase();
-  if (!text) return false;
-  const normalizedLanguage = language.trim().toLowerCase();
-  if (normalizedLanguage.startsWith("pt")) return /trabalho online|ajud[ae] comerciantes|comiss[aã]o depende|ganhos seguem/.test(text);
-  if (normalizedLanguage.startsWith("es")) return /trabajo en línea|ayuda a comerciantes|comisi[oó]n depende|ganancias siguen/.test(text);
-  if (normalizedLanguage.startsWith("en")) return /online (?:part-time )?work|helps merchants|commission depends|earnings follow/.test(text);
-  return /兼职|商家|佣金|收益|项目介绍|工作内容/.test(text);
 }
 
 export function buildStrictFlowResponse(
