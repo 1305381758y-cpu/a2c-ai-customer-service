@@ -35,7 +35,9 @@ export async function runMerchantTrainingSimulation(
   const config = repos.getMerchantConfig(runtimeMerchantId);
   const accounts = repos.listMerchantA2CAccounts({ merchantId: runtimeMerchantId, enabled: true });
   const configuredAccount = config.a2cAccountPhone.split(",").map((item) => item.trim()).find(Boolean);
-  const a2cAccountPhone = input.a2cAccountPhone || accounts[0]?.apiPhone || configuredAccount || "simulation-a2c";
+  const a2cAccountPhone = snapshot
+    ? "simulation-a2c"
+    : input.a2cAccountPhone || accounts[0]?.apiPhone || configuredAccount || "simulation-a2c";
   const nowMs = options.now ?? Date.now();
   const customerPhone = input.customerPhone || `sim-customer-${nowMs}`;
   const msgType = input.msgType || (input.url ? "image" : "text");

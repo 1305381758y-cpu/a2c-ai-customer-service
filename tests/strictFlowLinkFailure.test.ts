@@ -28,8 +28,22 @@ describe("strict flow registration link failure detection", () => {
     const messages = [
       "链接还是打不开",
       "页面加载空白",
+      "加载后是空白的",
       "没有报错，就是无法加载内容",
       "白屏，什么都没有"
+    ];
+
+    for (const message of messages) {
+      expect(reportsLinkLoadFailure(message) || asksHowToOpenLink(message), message).toBe(true);
+    }
+  });
+
+  it("recognizes Portuguese loading and blank-page variants as the same blocker", () => {
+    const messages = [
+      "continua sem carregar",
+      "fica em branco e não abre",
+      "a página continua em branco",
+      "o link ainda não carrega"
     ];
 
     for (const message of messages) {

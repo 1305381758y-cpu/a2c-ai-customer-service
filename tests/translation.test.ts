@@ -76,4 +76,23 @@ describe("operator translation", () => {
       status: "translated"
     });
   });
+
+  it("unwraps provider JSON envelopes instead of showing JSON to customers", async () => {
+    const ai = {
+      translateText: vi.fn(async () => JSON.stringify({
+        translatedText: "Olá, posso ajudar você.",
+        language: "pt-BR"
+      }))
+    };
+
+    const result = await translateForCustomer(
+      loadConfig({ DEEPSEEK_API_KEY: "test-key", AI_PROVIDER: "deepseek" }),
+      "您好，我可以帮助您。",
+      "pt-BR",
+      ai
+    );
+
+    expect(result.translatedText).toBe("Olá, posso ajudar você.");
+    expect(result.translatedText).not.toContain("translatedText");
+  });
 });

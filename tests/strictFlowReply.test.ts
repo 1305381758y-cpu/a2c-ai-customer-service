@@ -137,6 +137,88 @@ describe("strict flow reply module", () => {
     expect(outbound?.content).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
   });
 
+  it("persists a temporary pause so a later bare acknowledgement cannot send registration resources", async () => {
+    const context = setupConversation("registration_intent");
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
+    const firstText = "暂时没空";
+    const firstAnalysis = analyzeMessage(firstText, "zh");
+    const firstIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis: firstAnalysis,
+      customerText: firstText
+    });
+
+    await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis: firstAnalysis,
+      customerText: firstText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-pause-1",
+        content: firstText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-pause-1",
+      simulation: true,
+      strictFlowEnabled: true,
+      inferredIntent: "unknown",
+      contextualIntent: firstIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    const paused = context.repos.getConversation(context.conversation.id)!;
+    expect(paused.flowHoldReason).toBe("temporary_pause");
+    const acknowledgementText = "ok";
+    const acknowledgementAnalysis = analyzeMessage(acknowledgementText, "zh");
+    const acknowledgementIntent = buildRuleContextualIntent({
+      conversation: paused,
+      analysis: acknowledgementAnalysis,
+      customerText: acknowledgementText
+    });
+
+    await generateAndRecordStrictFlowReply({
+      ...context,
+      conversation: paused,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis: acknowledgementAnalysis,
+      customerText: acknowledgementText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-pause-2",
+        content: acknowledgementText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010001
+      },
+      payloadId: "payload-pause-2",
+      simulation: true,
+      strictFlowEnabled: true,
+      inferredIntent: "unknown",
+      contextualIntent: acknowledgementIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    const stillPaused = context.repos.getConversation(context.conversation.id)!;
+    expect(stillPaused.flowStep).toBe("registration_intent");
+    expect(stillPaused.flowHoldReason).toBe("temporary_pause");
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 20)
+      .filter((message) => message.direction === "outbound")
+      .at(-1);
+    expect(outbound?.content).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+  });
+
   it("reserves the invite code, records strict-flow outbound state, and avoids real A2C in simulation", async () => {
     const context = setupConversation("registration_intent");
     const analysis = analyzeMessage("是的", "zh");

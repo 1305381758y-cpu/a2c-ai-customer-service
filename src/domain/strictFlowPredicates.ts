@@ -77,7 +77,7 @@ export function saysContextualNo(text: string): boolean {
 export function saysNotAvailable(text: string): boolean {
   const normalized = normalizeShortReply(text);
   if (/^(我没有|没有|沒有|没|沒|没空|沒有空|没时间|沒時間|没有时间|暂时没空|现在不行|no|not now|no time)$/i.test(normalized)) return true;
-  return /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|等到.{0,12}(晚上|下午|明天|今天晚些时候|[0-9]{1,2}\s*[点时])|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再|give me a few minutes|wait a few minutes|wait for me|in a few minutes|later|daqui a pouco|me dê alguns minutos|me de alguns minutos|espere alguns minutos|en unos minutos|dame unos minutos|espere un momento)/i.test(normalized);
+  return /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|(?:需要|要|得)?(?:等待|等).{0,8}(?:[零一二两三四五六七八九十百\d]+|几|幾)?(?:分钟|分鐘|分鈡|小时|小時)|等到.{0,12}(晚上|下午|明天|今天晚些时候|[0-9]{1,2}\s*[点时])|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再|give me a few minutes|wait a few minutes|wait for me|in a few minutes|later|daqui a pouco|me dê alguns minutos|me de alguns minutos|espere alguns minutos|en unos minutos|dame unos minutos|espere un momento)/i.test(normalized);
 }
 
 export function saysNotRegistered(text: string): boolean {
@@ -91,7 +91,7 @@ export function isRegistrationInProgress(text: string): boolean {
 }
 
 export function saysTelegramInstalled(text: string): boolean {
-  return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|installed|downloaded|instalei|baixei)/i.test(text.trim());
+  return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|我有\s*(?:telegram|tg)|installed|downloaded|i (?:already )?have telegram|i have tg|instalei|baixei|j[aá]\s+tenho\s+(?:telegram|tg)|tenho\s+(?:o\s+)?telegram|ya\s+tengo\s+(?:telegram|tg))/i.test(text.trim());
 }
 
 export function asksTelegramUsernameHelp(text: string): boolean {
@@ -201,18 +201,18 @@ export function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
   if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar|no puedo abrirlo|no puedo cargarlo|todav[ií]a no se puede cargar|todav[ií]a no puedo abrirlo|todav[ií]a no carga|sigue sin cargar|sigue sin abrir|no carga|no abre)$/i.test(normalized)) return true;
-  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|no termina de cargar|no hay nada|en blanco|(enlace|link).*no.*(abre|abrir|acceder|carga|cargar)|no me deja.*(entrar|acceder).*(enlace|link))/i.test(text);
+  return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre|(?:continua|ainda|segue).{0,20}sem carregar|(?:fica|continua).{0,20}em branco|(?:link|p[aá]gina).{0,20}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|no termina de cargar|no hay nada|en blanco|(enlace|link).*no.*(abre|abrir|acceder|carga|cargar)|no me deja.*(entrar|acceder).*(enlace|link))/i.test(text);
 }
 
 export function reportsLinkLoadFailure(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
   if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar|no puedo abrirlo|no puedo cargarlo|todav[ií]a no se puede cargar|todav[ií]a no puedo abrirlo|todav[ií]a no carga|sigue sin cargar|sigue sin abrir|no carga|no abre)$/i.test(normalized)) return true;
-  return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|白屏|没内容|沒有內容)|加载空白|載入空白|白屏|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load|blank page|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|he probado otros m[eé]todos.{0,60}(sin poder|no puedo|no se puede).{0,20}(abrir|acceder|cargar|entrar)|no termina de cargar|no carga[,，]? no hay nada|no hay nada|en blanco|(enlace|link).*no.*(carga|cargar|abre|abrir|acceder)|p[aá]gina.*no.*(carga|cargar|abre)|no carga.*(p[aá]gina|enlace|link))/i.test(text);
+  return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|白屏|没内容|沒有內容)|加载.{0,8}空白|載入.{0,8}空白|白屏|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load|blank page|(?:continua|ainda|segue).{0,20}sem carregar|(?:fica|continua).{0,20}em branco|(?:link|p[aá]gina).{0,20}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|he probado otros m[eé]todos.{0,60}(sin poder|no puedo|no se puede).{0,20}(abrir|acceder|cargar|entrar)|no termina de cargar|no carga[,，]? no hay nada|no hay nada|en blanco|(enlace|link).*no.*(carga|cargar|abre|abrir|acceder)|p[aá]gina.*no.*(carga|cargar|abre)|no carga.*(p[aá]gina|enlace|link))/i.test(text);
 }
 
 export function asksGenericQuestionPermission(text: string): boolean {
-  return /(?:我有(?:个|個)?问题.*(?:可以|能|帮|幫).*?(?:解答|回答|问|問)|我还有(?:一个|個|个)?问题|还有(?:一个|個|个)?问题|可以.*(?:问|問).*问题|能.*(?:问|問).*问题|我(?:想|要|准备|準備).*?(?:问|問).*(?:问题|問題)|(?:先让|先讓).{0,12}(?:我)?(?:问|問)|(?:让我|讓我).{0,8}(?:先)?(?:问|問)|i have.*question|another question|can i ask|let me ask|i want to ask|posso perguntar|tenho uma pergunta|quero perguntar|déjame preguntar|dejame preguntar|puedo preguntar|tengo una pregunta|quiero preguntar)/i.test(text);
+  return /(?:我有(?:个|個)?问题.*(?:可以|能|帮|幫).*?(?:解答|回答|问|問)|我还有(?:一个|個|个)?问题|还有(?:一个|個|个)?问题|可以.*(?:问|問).*问题|能.*(?:问|問).*问题|我(?:想|要|准备|準備).*?(?:问|問).*(?:问题|問題)|(?:先让|先讓).{0,12}(?:我)?(?:问|問)|(?:让我|讓我).{0,8}(?:先)?(?:问|問)|i have.*question|another question|can i ask|let me ask|i want to ask|posso (?:fazer )?(?:uma )?pergunta|posso perguntar|tenho uma pergunta|quero perguntar|déjame preguntar|dejame preguntar|puedo preguntar|tengo una pregunta|quiero preguntar)/i.test(text);
 }
 
 export function asksCustomerCorrection(text: string): boolean {
@@ -220,7 +220,12 @@ export function asksCustomerCorrection(text: string): boolean {
 }
 
 export function cancelsPendingCustomerQuestion(text: string): boolean {
-  return /(不问了|不問了|没有问题了|沒有問題了|问题问完了|問題問完了|继续注册|繼續註冊|继续开户|繼續開戶|现在注册|現在註冊|发链接|發連結|发注册链接|發註冊連結|no more questions|continue registration|send (?:the )?(?:registration )?link|não tenho mais perguntas|nao tenho mais perguntas|continuar (?:o )?cadastro|envie (?:o )?link|no tengo más preguntas|no tengo mas preguntas|continuar (?:con )?el registro|envíe (?:el )?enlace|envie (?:el )?enlace)/i.test(text);
+  return /(不问了|不問了|没问题了|沒問題了|没有问题了|沒有問題了|问题问完了|問題問完了|(?:我们|我們|咱们|咱們|那就|好的|可以).{0,4}(?:继续|繼續)|继续吧|繼續吧|继续操作|繼續操作|继续注册|繼續註冊|继续开户|繼續開戶|现在注册|現在註冊|可以开始|可以開始|发链接|發連結|发注册链接|發註冊連結|no more questions|let'?s continue|continue registration|ready to continue|send (?:the )?(?:registration )?link|não tenho mais perguntas|nao tenho mais perguntas|vamos continuar|podemos continuar|continuar (?:o )?cadastro|envie (?:o )?link|no tengo más preguntas|no tengo mas preguntas|vamos a continuar|podemos continuar|continuar (?:con )?el registro|envíe (?:el )?enlace|envie (?:el )?enlace)/i.test(text);
+}
+
+export function explicitlyResumesFlow(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|i(?:'m| am) (?:ready|available)|ready to (?:start|continue|register)|continue registration|send (?:the )?(?:registration )?link|agora (?:tenho tempo|estou dispon[ií]vel)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|ahora (?:tengo tiempo|estoy disponible)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
 }
 
 export function asksLookAtCurrentProblem(text: string): boolean {

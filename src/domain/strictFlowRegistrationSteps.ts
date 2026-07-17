@@ -9,6 +9,7 @@ import {
   asksToChat,
   complainsAboutReply,
   isExplicitRefusal,
+  explicitlyResumesFlow,
   isReadyToStartRegistration,
   isRegistrationDoneConfirmation
 } from "./strictFlowPredicates.js";
@@ -76,16 +77,35 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
 function buildRegistrationIntentReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, positive, asksLink, inferredIntent } = context;
 
-  if (contextualLabel === "acknowledgement" && input.contextualIntent?.shouldPause) {
-    return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language));
+  if (input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && (contextualLabel === "acknowledgement" || positive)) {
+    const key = input.conversation.flowHoldReason === "temporary_pause" ? "temporary_pause_ack" : "refusal_ack";
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, key, language)),
+      input.conversation.flowHoldReason
+    );
   }
-  if (contextualLabel === "not_available" || contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
-    return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
+  if (contextualLabel === "acknowledgement" && input.contextualIntent?.shouldPause) {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language)),
+      "temporary_pause"
+    );
+  }
+  if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text) || /^(我没有|我沒有|没有|沒有|没|沒)$/i.test(text.trim())) {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "refusal_ack", language)),
+      "rejected"
+    );
+  }
+  if (contextualLabel === "not_available") {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language)),
+      "temporary_pause"
+    );
   }
   if (asksForMoreJobInfo(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
   }
-  if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text) || input.analysis.phone || input.conversation.extractedPhone) {
+  if (contextualLabel === "platform_register_done" || inferredIntent === "platform_register_done" || input.analysis.intent === "platform_register_done" || isRegistrationDoneConfirmation(text)) {
     if (!(input.analysis.phone || input.conversation.extractedPhone)) {
       return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "ask_registered_phone", language));
     }
@@ -98,16 +118,20 @@ function buildRegistrationIntentReply(input: StrictFlowInput, context: Registrat
   }
   if (asksForRegistrationSteps(text) || asksLink || isReadyToStartRegistration(text)) {
     const nextStep = nextRegistrationStep(input);
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
+    return withFlowHold(buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true), "");
   }
   if (asksAboutJob(text) || asksAboutPlatform(text) || complainsAboutReply(text) || asksToChat(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
   }
   if (positive || asksLink || inferredIntent === "ask_link" || inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
     const nextStep = nextRegistrationStep(input);
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true);
+    return withFlowHold(buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true), "");
   }
   return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));
+}
+
+function withFlowHold(reply: StrictFlowReply, flowHoldReason: NonNullable<StrictFlowReply["flowHoldReason"]>): StrictFlowReply {
+  return { ...reply, flowHoldReason };
 }
 
 function nextRegistrationStep(input: StrictFlowInput): StrictFlowStep {

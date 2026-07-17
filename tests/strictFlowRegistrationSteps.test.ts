@@ -72,8 +72,12 @@ function conversation(flowStep: Conversation["flowStep"], overrides: Partial<Con
   };
 }
 
-function reply(text: string, flowStep: "interest_screening" | "project_intro" | "registration_intent" | "send_register_link") {
-  const conv = conversation(flowStep);
+function reply(
+  text: string,
+  flowStep: "interest_screening" | "project_intro" | "registration_intent" | "send_register_link",
+  overrides: Partial<Conversation> = {}
+) {
+  const conv = conversation(flowStep, overrides);
   const analysis = analyzeMessage(text, conv.language);
   const contextualIntent = buildRuleContextualIntent({
     conversation: conv,
@@ -168,5 +172,76 @@ describe("strict flow registration steps", () => {
     expect(result.needsInviteCode).toBe(false);
     expect(result.reply).toMatch(/21h|9 PM|晚上九点/);
     expect(result.reply).not.toContain("INV-001");
+  });
+
+  it("does not treat a phone number sent before registration as completed registration", () => {
+    const conv = conversation("registration_intent");
+    const text = "我的手机号是 918273718271";
+    const analysis = analyzeMessage(text, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: conv,
+      analysis,
+      customerText: text
+    });
+
+    const result = buildRegistrationStepReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config,
+      strictFlowEnabled: true,
+      contextualIntent
+    }, {
+      language: "zh",
+      step: "registration_intent",
+      text,
+      contextualLabel: contextualIntent.intent,
+      positive: false,
+      asksLink: false,
+      inferredIntent: "unknown"
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).not.toContain("Telegram");
+    expect(result.needsInviteCode).toBe(false);
+  });
+
+  it("persists temporary pauses until the customer explicitly resumes", () => {
+    const paused = reply("暂时没空", "registration_intent");
+    expect(paused.flowHoldReason).toBe("temporary_pause");
+    expect(paused.nextFlowStep).toBe("registration_intent");
+
+    const acknowledgement = reply("ok", "registration_intent", { flowHoldReason: "temporary_pause" });
+    expect(acknowledgement.flowHoldReason).toBe("temporary_pause");
+    expect(acknowledgement.nextFlowStep).toBe("registration_intent");
+    expect(acknowledgement.needsInviteCode).toBe(false);
+
+    const resumed = reply("我现在有空，可以继续注册", "registration_intent", { flowHoldReason: "temporary_pause" });
+    expect(resumed.flowHoldReason).toBe("");
+    expect(resumed.nextFlowStep).toBe("wait_registration");
+    expect(resumed.needsInviteCode).toBe(true);
+  });
+
+  it("treats a requested wait duration as a temporary pause instead of consent", () => {
+    const paused = reply("暂时没有，需要等待十分钟", "registration_intent");
+
+    expect(paused.flowHoldReason).toBe("temporary_pause");
+    expect(paused.nextFlowStep).toBe("registration_intent");
+    expect(paused.needsInviteCode).toBe(false);
+    expect(paused.reply).not.toMatch(/https?:\/\//);
+    expect(paused.reply).not.toMatch(/邀请码\s*[:：]/);
+  });
+
+  it("does not turn a bare acknowledgement into consent after a refusal", () => {
+    const refused = reply("我不想做了", "registration_intent");
+    expect(refused.flowHoldReason).toBe("rejected");
+
+    const acknowledgement = reply("好的", "registration_intent", { flowHoldReason: "rejected" });
+    expect(acknowledgement.flowHoldReason).toBe("rejected");
+    expect(acknowledgement.nextFlowStep).toBe("registration_intent");
+    expect(acknowledgement.needsInviteCode).toBe(false);
   });
 });

@@ -95,4 +95,46 @@ describe("training simulator service", () => {
     });
     expect(conversationEngine.simulateInboundMessage).not.toHaveBeenCalled();
   });
+
+  it("forces the mock A2C account when a production snapshot is bound", async () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("快照隔离商户");
+    repos.patchMerchantConfig(merchant.id, { a2cAccountPhone: "real-configured-a2c" });
+    const conversationEngine = {
+      simulateInboundMessage: vi.fn(async () => ({ status: "strict_flow_simulated" }))
+    };
+    const snapshots = {
+      get: () => ({
+        snapshotId: "snapshot-1",
+        merchantId: merchant.id,
+        nodeCount: 11,
+        validation: { valid: true },
+        configHash: "hash-1"
+      }),
+      compareProduction: () => true
+    };
+
+    const result = await runMerchantTrainingSimulation(
+      repos,
+      conversationEngine as never,
+      merchant.id,
+      {
+        snapshotId: "snapshot-1",
+        customerPhone: "snapshot-customer",
+        a2cAccountPhone: "real-request-a2c",
+        content: "你好"
+      },
+      { now: 1783068000000, randomSuffix: "snapshot" },
+      snapshots as never
+    );
+
+    expect(result.ok).toBe(true);
+    expect(conversationEngine.simulateInboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          data: expect.objectContaining({ to: "simulation-a2c" })
+        })
+      })
+    );
+  });
 });

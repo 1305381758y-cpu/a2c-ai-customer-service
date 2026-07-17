@@ -61,7 +61,7 @@ describe("strictFlowContextualIntent", () => {
       customerText: "装好了"
     });
     expect(installed.intent).toBe("telegram_installed");
-    expect(installed.nextAction).toBe("collect telegram username");
+    expect(installed.nextAction).toBe("send teacher Telegram link");
   });
 
   it("keeps registration acknowledgement distinct from registration completion", () => {
@@ -93,6 +93,19 @@ describe("strictFlowContextualIntent", () => {
       conversation: conversation("registration_intent"),
       analysis: analyzeMessage("要等我几分钟", "zh"),
       customerText: "要等我几分钟",
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe("not_available");
+    expect(result.shouldPause).toBe(true);
+    expect(result.nextAction).toBe("pause politely");
+  });
+
+  it("recognizes a temporary unavailability followed by a concrete wait duration", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent"),
+      analysis: analyzeMessage("暂时没有，需要等待十分钟", "zh"),
+      customerText: "暂时没有，需要等待十分钟",
       inferredIntent: "positive_confirmation"
     });
 

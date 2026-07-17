@@ -24,6 +24,7 @@ export interface Conversation {
   handoffNotified: number;
   unreadCount: number;
   awaitingCustomerQuestion?: boolean;
+  flowHoldReason?: "" | "temporary_pause" | "rejected";
   pinnedAt?: string;
   updatedAt?: string;
   billingStatus?: "free" | "charged" | "insufficient";

@@ -1473,6 +1473,19 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toMatch(/有空|方便.*注册|继续.*注册/);
   });
 
+  it("recognizes natural Portuguese requests to ask a question before continuing", () => {
+    const result = reply("Ok, posso fazer uma pergunta antes?", {
+      language: "pt-BR",
+      flowStep: "registration_intent"
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.awaitingCustomerQuestion).toBe(true);
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.reply).toMatch(/pergunta|diga/i);
+    expect(result.reply).not.toMatch(/https?:\/\/|código de convite|cadastro agora/i);
+  });
+
   it("lets a question request override an acknowledgement and keeps waiting through customer corrections", () => {
     const conv = conversation({
       language: "zh",
@@ -1547,6 +1560,10 @@ describe("strict Aston Brazil flow", () => {
     expect(resume.nextFlowStep).toBe("wait_registration");
     expect(resume.needsInviteCode).toBe(true);
     expect(resume.reply).toContain("ABC123");
+
+    const naturalResume = reply("好的，没问题了，我们继续吧", pending);
+    expect(naturalResume.nextFlowStep).toBe("wait_registration");
+    expect(naturalResume.reply).toContain("ABC123");
   });
 
   it.each([

@@ -127,6 +127,41 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
   });
 
+  it("assigns and sends the teacher link when the customer naturally confirms Telegram is available", () => {
+    const context = setupConversation("telegram_confirm");
+    context.conversation.extractedPhone = "5511999999999";
+    context.repos.updateConversation(context.conversation);
+    context.repos.createTeacherTgLink(context.merchant.id, context.country.id, {
+      label: "导师一",
+      url: "https://t.me/teacher_one",
+      priority: 1,
+      rotationCount: 1,
+      status: "active"
+    });
+    const customerText = "sim, já tenho Telegram";
+    const analysis = analyzeMessage(customerText, "pt-BR");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "unknown"
+    });
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      strictFlowEnabled: true,
+      inferredIntent: "unknown",
+      contextualIntent
+    });
+
+    expect(result.strictReply.nextFlowStep).toBe("human_handoff");
+    expect(result.strictReply.reply).toContain("https://t.me/teacher_one");
+    expect(context.repos.getConversation(context.conversation.id)?.assignedTeacherTgLinkUrl).toBe("https://t.me/teacher_one");
+  });
+
   it("does not enable question control when strict flow is disabled", () => {
     const context = setupConversation("registration_intent");
     const customerText = "我可以先问一个问题吗";

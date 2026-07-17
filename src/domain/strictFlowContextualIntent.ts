@@ -22,6 +22,7 @@ import {
   isRegistrationDoneConfirmation,
   isRegistrationInProgress,
   isExplicitRefusal,
+  explicitlyResumesFlow,
   isPositive,
   lastAssistantContent,
   looksLikeQuestion,
@@ -103,8 +104,8 @@ export function buildRuleContextualIntent(
   if ((step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") && asksTelegramUsernameHelp(text)) {
     return base("telegram_username_help", { answeredPreviousQuestion: Boolean(previousAssistantMessage), nextAction: "guide telegram username setup", reason: "telegram username help" });
   }
-  if (step === "telegram_download" && saysTelegramInstalled(text)) {
-    return base("telegram_installed", { answeredPreviousQuestion: true, nextAction: "collect telegram username", reason: "telegram installed" });
+  if ((step === "telegram_confirm" || step === "telegram_download") && saysTelegramInstalled(text)) {
+    return base("telegram_installed", { answeredPreviousQuestion: true, nextAction: "send teacher Telegram link", reason: "Telegram is installed or already available" });
   }
   if (step === "wait_registration" && saysNotRegistered(text)) {
     return base("not_registered", { answeredPreviousQuestion: true, shouldPause: false, nextAction: "help registration", reason: "not registered yet" });
@@ -131,8 +132,19 @@ export function buildRuleContextualIntent(
   if ((step === "wait_registration" || step === "send_register_link") && asksRegistrationFieldQuestion(text)) {
     return base("registration_field_question", { nextAction: "answer registration field question", reason: "registration field question" });
   }
+  if (step === "registration_intent" && isExplicitRefusal(text)) {
+    return base("negative_refusal", { answeredPreviousQuestion: true, nextAction: "pause after refusal", reason: "explicit refusal" });
+  }
   if (step === "registration_intent" && saysNotAvailable(text)) {
     return base("not_available", { answeredPreviousQuestion: true, nextAction: "pause politely", reason: "not available now" });
+  }
+  if (step === "registration_intent" && input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && isAcknowledgement(text)) {
+    return base("acknowledgement", {
+      answeredPreviousQuestion: true,
+      shouldPause: true,
+      nextAction: "keep the persisted flow hold",
+      reason: `conversation remains ${input.conversation.flowHoldReason}`
+    });
   }
   // A short acknowledgement immediately after a temporary unavailability
   // response means "understood", not "I am available now". Keep the flow

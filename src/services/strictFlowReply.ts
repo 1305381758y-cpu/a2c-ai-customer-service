@@ -106,6 +106,9 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   if (typeof strictReply.awaitingCustomerQuestion === "boolean") {
     conversation.awaitingCustomerQuestion = strictReply.awaitingCustomerQuestion;
   }
+  if (strictReply.flowHoldReason !== undefined) {
+    conversation.flowHoldReason = strictReply.flowHoldReason;
+  }
 
   const { outbound } = await sendStrictFlowTextOutbound({
     repos,

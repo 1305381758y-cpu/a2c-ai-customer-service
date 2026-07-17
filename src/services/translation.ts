@@ -58,7 +58,7 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
   }
 
   try {
-    const translatedText = (await ai.translateText(config, { targetLanguage: language, text: originalText, systemPrompt })).trim() || originalText;
+    const translatedText = normalizeTranslatedText(await ai.translateText(config, { targetLanguage: language, text: originalText, systemPrompt })) || originalText;
     const sameAsOriginal = normalizeForCompare(translatedText) === normalizeForCompare(originalText);
     return {
       originalText,
@@ -76,6 +76,24 @@ async function translateText(config: AppConfig, text: string, targetLanguage: st
       error: error instanceof Error ? error.message : "翻译失败"
     };
   }
+}
+
+function normalizeTranslatedText(value: string): string {
+  const trimmed = value.trim();
+  const jsonText = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  if (!jsonText.startsWith("{")) return trimmed;
+  try {
+    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+    for (const key of ["translatedText", "translation", "translated_text", "text", "content"]) {
+      if (typeof parsed[key] === "string" && parsed[key].trim()) return parsed[key].trim();
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 function normalizeForCompare(value: string): string {

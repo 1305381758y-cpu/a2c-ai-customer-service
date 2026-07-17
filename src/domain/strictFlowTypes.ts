@@ -50,6 +50,7 @@ export interface StrictFlowReply {
   tutorialImageRequested?: boolean;
   handoffReason?: string;
   awaitingCustomerQuestion?: boolean;
+  flowHoldReason?: "" | "temporary_pause" | "rejected";
 }
 
 export interface StrictContextualIntent {

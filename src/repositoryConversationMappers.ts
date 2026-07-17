@@ -30,12 +30,17 @@ export function mapConversation(row: Record<string, unknown>): Conversation {
     handoffNotified: Number(row.handoff_notified ?? 0),
     unreadCount: Number(row.unread_count ?? 0),
     awaitingCustomerQuestion: Boolean(Number(row.awaiting_customer_question ?? 0)),
+    flowHoldReason: normalizeFlowHoldReason(row.flow_hold_reason),
     pinnedAt: String(row.pinned_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     billingStatus: String(row.billing_status ?? "free") as "free" | "charged" | "insufficient",
     sessionChargeAmount: Number(row.session_charge_amount ?? 0),
     sessionChargedAt: String(row.session_charged_at ?? "")
   };
+}
+
+function normalizeFlowHoldReason(value: unknown): Conversation["flowHoldReason"] {
+  return value === "temporary_pause" || value === "rejected" ? value : "";
 }
 
 export function mapConversationMessage(row: Record<string, unknown>): ConversationMessageRecord {

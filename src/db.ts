@@ -147,6 +147,7 @@ export function migrate(db: DatabaseSync): void {
       handoff_notified INTEGER DEFAULT 0,
       unread_count INTEGER DEFAULT 0,
       awaiting_customer_question INTEGER DEFAULT 0,
+      flow_hold_reason TEXT DEFAULT '',
       pinned_at TEXT DEFAULT '',
       billing_status TEXT DEFAULT 'free',
       session_charge_amount REAL DEFAULT 0,
@@ -584,6 +585,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "assigned_teacher_tg_link_url", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "unread_count", "INTEGER DEFAULT 0");
   ensureColumn(db, "conversations", "awaiting_customer_question", "INTEGER DEFAULT 0");
+  ensureColumn(db, "conversations", "flow_hold_reason", "TEXT DEFAULT ''");
   ensureColumn(db, "conversations", "pinned_at", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "merchant_a2c_accounts", "country_id", "TEXT DEFAULT ''");

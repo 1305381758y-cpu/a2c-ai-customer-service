@@ -79,7 +79,14 @@ export class TestSimulationStore {
     }
     repos.enableScriptFlow(flow.flow.id, merchantId, "测试快照");
     const account = repos.syncMerchantA2CAccounts(merchantId, [{ apiPhone: "simulation-a2c", verifiedName: "模拟客服" }])[0];
-    repos.createInviteCodeForA2CAccount(account.id, { code: "SIMULATED-INVITE", registerUrl: snapshot.merchantConfig.platformRegisterUrl, status: "available", countryId: country.id }, merchantId);
+    for (let index = 1; index <= 100; index += 1) {
+      repos.createInviteCodeForA2CAccount(account.id, {
+        code: `SIMULATED-INVITE-${String(index).padStart(3, "0")}`,
+        registerUrl: snapshot.merchantConfig.platformRegisterUrl,
+        status: "available",
+        countryId: country.id
+      }, merchantId);
+    }
     for (const link of snapshot.teacherTgLinks) {
       repos.createTeacherTgLink(merchantId, country.id, { label: link.label, url: link.url, priority: link.priority, rotationCount: link.rotationCount, status: link.status });
     }
