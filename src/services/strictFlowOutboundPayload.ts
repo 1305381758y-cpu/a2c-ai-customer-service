@@ -31,6 +31,7 @@ export function buildStrictFlowOutboundRawPayload(input: StrictFlowOutboundPaylo
     strictFlow: true,
     strictFlowEnabled,
     strictFlowStep: strictReply.nextFlowStep,
+    replyPurpose: strictReply.replyPurpose || "",
     handoffReason: strictReply.handoffReason || "",
     scriptFlowId: scriptFlow?.flow.id ?? null,
     scriptFlowName: scriptFlow?.flow.name ?? "",

@@ -149,7 +149,8 @@ function buildCustomerQuestionControlReply(
         input.conversation.stage,
         flowScriptLine(input, "customer_correction_ack", language)
       ),
-      true
+      true,
+      "await_customer_question"
     );
   }
 
@@ -159,7 +160,8 @@ function buildCustomerQuestionControlReply(
       : "ask_question_prompt";
     return withAwaitingCustomerQuestion(
       buildStrictFlowResponse(input, language, step, input.conversation.stage, flowScriptLine(input, line, language)),
-      true
+      true,
+      "await_customer_question"
     );
   }
 
@@ -192,22 +194,29 @@ function buildCustomerQuestionControlReply(
   if (answer && (contextualIntent.isQuestion || answerTypes.has(answer.type))) {
     return withAwaitingCustomerQuestion(
       buildStrictFlowResponse(input, language, step, input.conversation.stage, answer.content),
-      true
+      true,
+      "answer_customer_question"
     );
   }
 
   return withAwaitingCustomerQuestion(
     buildStrictFlowResponse(input, language, step, input.conversation.stage, flowScriptLine(input, "question_wait_ack", language)),
-    true
+    true,
+    "await_customer_question"
   );
 }
 
-function withAwaitingCustomerQuestion(reply: StrictFlowReply, awaiting: boolean): StrictFlowReply {
+function withAwaitingCustomerQuestion(
+  reply: StrictFlowReply,
+  awaiting: boolean,
+  replyPurpose: StrictFlowReply["replyPurpose"]
+): StrictFlowReply {
   return {
     ...reply,
     needsInviteCode: false,
     tutorialImageRequested: false,
     replyParts: undefined,
-    awaitingCustomerQuestion: awaiting
+    awaitingCustomerQuestion: awaiting,
+    replyPurpose
   };
 }

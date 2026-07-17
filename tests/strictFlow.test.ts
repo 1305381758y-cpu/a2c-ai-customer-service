@@ -1503,6 +1503,7 @@ describe("strict Aston Brazil flow", () => {
     expect(first.needsInviteCode).toBe(false);
     expect(first.tutorialImageRequested).not.toBe(true);
     expect(first.awaitingCustomerQuestion).toBe(true);
+    expect(first.replyPurpose).toBe("await_customer_question");
     expect(first.reply).toContain("直接说您的问题");
     expect(first.reply).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
 
@@ -1510,6 +1511,7 @@ describe("strict Aston Brazil flow", () => {
     const correction = reply("我说，我要问你问题！", conv);
     expect(correction.nextFlowStep).toBe("registration_intent");
     expect(correction.awaitingCustomerQuestion).toBe(true);
+    expect(correction.replyPurpose).toBe("await_customer_question");
     expect(correction.reply).toMatch(/先.*问题|直接问|说完/);
     expect(correction.reply).not.toMatch(/手机号|注册步骤|https?:\/\//);
 
@@ -1530,6 +1532,7 @@ describe("strict Aston Brazil flow", () => {
 
     expect(question.nextFlowStep).toBe("registration_intent");
     expect(question.awaitingCustomerQuestion).toBe(true);
+    expect(question.replyPurpose).toBe("answer_customer_question");
     expect(question.controlledQuestionType).toBe("trust");
     expect(question.reply).toMatch(/风险|规则|核实|确认/);
     expect(question.reply).not.toMatch(/有空|继续.*注册|开户链接|邀请码/);

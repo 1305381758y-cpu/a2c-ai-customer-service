@@ -38,6 +38,7 @@ export interface StrictFlowReply {
   enabled: boolean;
   reply: string;
   replyParts?: string[];
+  replyPurpose?: "await_customer_question" | "answer_customer_question";
   language: string;
   nextFlowStep: StrictFlowStep;
   stage: Conversation["stage"];

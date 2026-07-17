@@ -26,6 +26,27 @@ export async function refineStrictFlowReplyText(input: {
   agentProfile: MerchantAgentProfileRecord;
   scriptFlow?: ScriptFlowRuntime;
 }): Promise<StrictFlowReplyTextRefinementResult> {
+  if (input.strictReply.replyPurpose === "await_customer_question") {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.nextFlowStep,
+      allowLinkOrInvite: false,
+      fallbackReply: input.strictReply.reply
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "等待客户提出问题时保留受控话术"
+      },
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
+    };
+  }
+
   if (input.strictReply.fallback && input.strictReply.needsInviteCode) {
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,
@@ -89,10 +110,18 @@ export async function refineStrictFlowReplyText(input: {
         reply: safeNaturalizedReply.reply,
         targetLanguage: input.strictReply.language,
         flowStep: input.strictReply.nextFlowStep,
-        allowLinkOrInvite: input.strictReply.needsInviteCode
+        allowLinkOrInvite: input.strictReply.needsInviteCode,
+        fallbackReply: input.strictReply.replyPurpose === "answer_customer_question"
+          ? input.strictReply.reply
+          : undefined
       });
+      const boundarySafeReply = enforceCustomerQuestionBoundary(
+        languageGuard.reply,
+        input.strictReply.reply,
+        input.strictReply.replyPurpose
+      );
       const styled = applyControlledQuestionStyle({
-        reply: languageGuard.reply,
+        reply: boundarySafeReply,
         language: input.strictReply.language,
         questionType: input.strictReply.controlledQuestionType,
         customerText: input.customerText,
@@ -178,11 +207,19 @@ export async function refineStrictFlowReplyText(input: {
     reply: safeNaturalizedReply.reply,
     targetLanguage: input.strictReply.language,
     flowStep: input.strictReply.nextFlowStep,
-    allowLinkOrInvite: input.strictReply.needsInviteCode
+    allowLinkOrInvite: input.strictReply.needsInviteCode,
+    fallbackReply: input.strictReply.replyPurpose === "answer_customer_question"
+      ? input.strictReply.reply
+      : undefined
   });
+  const boundarySafeReply = enforceCustomerQuestionBoundary(
+    guarded.reply,
+    input.strictReply.reply,
+    input.strictReply.replyPurpose
+  );
   const styled = input.strictReply.controlledQuestionType && input.strictReply.controlledQuestionType !== "none"
     ? applyControlledQuestionStyle({
-      reply: guarded.reply,
+      reply: boundarySafeReply,
       language: input.strictReply.language,
       questionType: input.strictReply.controlledQuestionType,
       customerText: input.customerText,
@@ -212,6 +249,21 @@ function sanitizeStrictNaturalizedReply(reply: string, fallback: string): { repl
     return { reply: fallback, rejected: true };
   }
   return { reply, rejected: false };
+}
+
+function enforceCustomerQuestionBoundary(
+  reply: string,
+  fallback: string,
+  replyPurpose: StrictFlowReply["replyPurpose"]
+): string {
+  if (replyPurpose !== "answer_customer_question") return reply;
+  return containsFlowProgressionPrompt(reply) && !containsFlowProgressionPrompt(fallback)
+    ? fallback
+    : reply;
+}
+
+function containsFlowProgressionPrompt(text: string): boolean {
+  return /(?:有空|方便).{0,20}(?:注册|开户)|(?:继续|开始).{0,20}(?:注册|开户)|(?:完成注册|注册完成).{0,20}(?:手机号|电话)|(?:注册链接|开户链接|邀请码|注册步骤)|(?:tem tempo|est[aá] livre|podemos continuar|vamos continuar).{0,40}(?:cadastro|registro)|continuar (?:o )?cadastro agora|(?:tiene tiempo|est[aá] libre|podemos continuar).{0,40}(?:registro|registrarse)|continue (?:with )?(?:the )?registration|registration link|invitation code/i.test(text);
 }
 
 function asksForUnsupportedManualRegistration(text: string): boolean {

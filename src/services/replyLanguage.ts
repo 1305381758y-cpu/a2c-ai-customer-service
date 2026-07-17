@@ -93,6 +93,7 @@ export async function ensureReplyCustomerLanguage(
     targetLanguage: string;
     flowStep: string;
     allowLinkOrInvite: boolean;
+    fallbackReply?: string;
   }
 ): Promise<LanguageGuardResult> {
   const targetLanguage = normalizeCustomerLanguage(input.targetLanguage);
@@ -113,7 +114,8 @@ export async function ensureReplyCustomerLanguage(
     lastError = translated.error || lastError;
   }
 
-  const fallback = strictLanguageFallback(input.flowStep, targetLanguage, originalReply, input.allowLinkOrInvite);
+  const fallback = input.fallbackReply?.trim() ||
+    strictLanguageFallback(input.flowStep, targetLanguage, originalReply, input.allowLinkOrInvite);
   return {
     reply: fallback,
     targetLanguage,
