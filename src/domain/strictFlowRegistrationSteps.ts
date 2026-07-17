@@ -7,6 +7,7 @@ import {
   asksForOperationHelp,
   asksForRegistrationSteps,
   asksToChat,
+  asksPauseTimingClarification,
   complainsAboutReply,
   isExplicitRefusal,
   explicitlyResumesFlow,
@@ -77,6 +78,12 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
 function buildRegistrationIntentReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, positive, asksLink, inferredIntent } = context;
 
+  if (input.conversation.flowHoldReason === "temporary_pause" && !explicitlyResumesFlow(text) && asksPauseTimingClarification(text)) {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_time_clarification_ack", language)),
+      "temporary_pause"
+    );
+  }
   if (input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && (contextualLabel === "acknowledgement" || positive)) {
     const key = input.conversation.flowHoldReason === "temporary_pause" ? "temporary_pause_ack" : "refusal_ack";
     return withFlowHold(

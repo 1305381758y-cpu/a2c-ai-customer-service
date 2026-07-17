@@ -217,6 +217,48 @@ describe("strict flow reply module", () => {
       .filter((message) => message.direction === "outbound")
       .at(-1);
     expect(outbound?.content).not.toMatch(/https?:\/\/|邀请码|注册步骤/);
+
+    const resumedText = "有空";
+    const resumedAnalysis = analyzeMessage(resumedText, "zh");
+    const resumedIntent = buildRuleContextualIntent({
+      conversation: stillPaused,
+      analysis: resumedAnalysis,
+      customerText: resumedText
+    });
+
+    await generateAndRecordStrictFlowReply({
+      ...context,
+      conversation: stillPaused,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis: resumedAnalysis,
+      customerText: resumedText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-pause-3",
+        content: resumedText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010002
+      },
+      payloadId: "payload-pause-3",
+      simulation: true,
+      strictFlowEnabled: true,
+      inferredIntent: "unknown",
+      contextualIntent: resumedIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    const resumed = context.repos.getConversation(context.conversation.id)!;
+    expect(resumed.flowStep).toBe("wait_registration");
+    expect(resumed.flowHoldReason).toBe("");
+    const resumedOutbound = context.repos.listConversationMessages(context.conversation.id, 30)
+      .filter((message) => message.direction === "outbound")
+      .at(-1);
+    expect(resumedOutbound?.content).toMatch(/https?:\/\/|邀请码|注册步骤/);
   });
 
   it("reserves the invite code, records strict-flow outbound state, and avoids real A2C in simulation", async () => {

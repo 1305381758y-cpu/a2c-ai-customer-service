@@ -170,7 +170,8 @@ describe("strict flow registration steps", () => {
 
     expect(result.nextFlowStep).toBe("registration_intent");
     expect(result.needsInviteCode).toBe(false);
-    expect(result.reply).toMatch(/21h|9 PM|晚上九点/);
+    expect(result.reply).toMatch(/方便时|when you are free|quando estiver disponível|cuando esté disponible/i);
+    expect(result.reply).not.toMatch(/21h|9 PM|晚上九点/);
     expect(result.reply).not.toContain("INV-001");
   });
 
@@ -233,6 +234,26 @@ describe("strict flow registration steps", () => {
     expect(paused.needsInviteCode).toBe(false);
     expect(paused.reply).not.toMatch(/https?:\/\//);
     expect(paused.reply).not.toMatch(/邀请码\s*[:：]/);
+    expect(paused.reply).not.toMatch(/21h|9 PM|晚上九点/);
+  });
+
+  it("keeps a timing clarification paused and resumes on a bare availability reply", () => {
+    const clarification = reply("晚上九点？", "registration_intent", { flowHoldReason: "temporary_pause" });
+
+    expect(clarification.flowHoldReason).toBe("temporary_pause");
+    expect(clarification.nextFlowStep).toBe("registration_intent");
+    expect(clarification.needsInviteCode).toBe(false);
+    expect(clarification.reply).toMatch(/没有固定|方便时/);
+    expect(clarification.reply).not.toMatch(/21h|9 PM|晚上九点/);
+    expect(clarification.reply).not.toMatch(/兼职在线工作|提升产品销量|https?:\/\//);
+
+    const resumed = reply("有空", "registration_intent", { flowHoldReason: "temporary_pause" });
+
+    expect(resumed.flowHoldReason).toBe("");
+    expect(resumed.nextFlowStep).toBe("wait_registration");
+    expect(resumed.needsInviteCode).toBe(true);
+    expect(resumed.reply).toContain("https://register.example/?code=INV-001");
+    expect(resumed.reply).toContain("邀请码：INV-001");
   });
 
   it("does not turn a bare acknowledgement into consent after a refusal", () => {
