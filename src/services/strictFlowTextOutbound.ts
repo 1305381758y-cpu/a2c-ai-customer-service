@@ -41,23 +41,15 @@ export async function sendStrictFlowTextOutbound(input: {
   country: MerchantCountryRecord;
   inviteCode?: A2CInviteCodeRecord;
 }): Promise<StrictFlowTextOutboundResult> {
-  const refinedReply = await refineStrictFlowReplyText({
-    ai: input.ai,
-    runtimeConfig: input.runtimeConfig,
-    strictReply: input.strictReply,
-    customerText: input.customerText,
-    history: input.history,
-    agentProfile: input.agentProfile,
-    scriptFlow: input.scriptFlow
-  });
-  input.strictReply.reply = refinedReply.reply;
   const configuredParts = input.strictReply.replyParts?.length ? input.strictReply.replyParts : [];
-  const parts = configuredParts.length
-    ? await Promise.all(configuredParts.map(async (content) => {
-      // Guard each configured message independently. A single refinement of
-      // the joined reply cannot prevent one segment from falling back to the
-      // wrong language before it is sent.
-      const partRefined = await refineStrictFlowReplyText({
+  const partRefinements: StrictFlowReplyTextRefinementResult[] = [];
+  if (configuredParts.length) {
+    // Translate/refine configured segments once and in order. Running an
+    // additional joined refinement plus Promise.all caused four concurrent
+    // provider calls for a three-part script, so later parts could hit a
+    // provider limit and silently turn into a generic language fallback.
+    for (const content of configuredParts) {
+      partRefinements.push(await refineStrictFlowReplyText({
         ai: input.ai,
         runtimeConfig: input.runtimeConfig,
         strictReply: { ...input.strictReply, reply: content, replyParts: undefined },
@@ -65,12 +57,25 @@ export async function sendStrictFlowTextOutbound(input: {
         history: input.history,
         agentProfile: input.agentProfile,
         scriptFlow: input.scriptFlow
-      });
-      return partRefined.reply;
-    }))
-    : [refinedReply.reply];
+      }));
+    }
+  } else {
+    partRefinements.push(await refineStrictFlowReplyText({
+      ai: input.ai,
+      runtimeConfig: input.runtimeConfig,
+      strictReply: input.strictReply,
+      customerText: input.customerText,
+      history: input.history,
+      agentProfile: input.agentProfile,
+      scriptFlow: input.scriptFlow
+    }));
+  }
+  const parts = partRefinements.map((item) => item.reply);
+  const refinedReply = combinePartRefinements(partRefinements, parts);
+  input.strictReply.reply = refinedReply.reply;
   const outbounds: OutboundConversationRecordResult[] = [];
   for (const [index, content] of parts.entries()) {
+    const partRefinement = partRefinements[index] ?? refinedReply;
     const outbound = await recordOutboundConversationMessage({
       repos: input.repos,
       runtimeConfig: input.runtimeConfig,
@@ -99,8 +104,8 @@ export async function sendStrictFlowTextOutbound(input: {
           strictFlowEnabled: input.strictFlowEnabled,
           agentProfile: input.agentProfile,
           learnedIntent: input.learnedIntent,
-          naturalized: refinedReply.naturalized,
-          languageGuard: refinedReply.languageGuard,
+          naturalized: partRefinement.naturalized,
+          languageGuard: partRefinement.languageGuard,
           country: input.country,
           scriptFlow: input.scriptFlow,
           inviteCode: input.inviteCode,
@@ -122,5 +127,36 @@ export async function sendStrictFlowTextOutbound(input: {
     outbound: outbounds.at(-1)!,
     outbounds,
     refinedReply
+  };
+}
+
+function combinePartRefinements(
+  refinements: StrictFlowReplyTextRefinementResult[],
+  parts: string[]
+): StrictFlowReplyTextRefinementResult {
+  if (refinements.length === 1) return refinements[0];
+  const joined = parts.join("\n\n");
+  const errors = refinements.map((item) => item.naturalized.error).filter(Boolean).join("；");
+  const guardErrors = refinements.map((item) => item.languageGuard.error).filter(Boolean).join("；");
+  const fallbackUsed = refinements.some((item) => item.languageGuard.fallbackUsed);
+  const translated = refinements.some((item) => item.languageGuard.status === "translated");
+  const skipped = refinements.every((item) => item.languageGuard.status === "skipped");
+  return {
+    reply: joined,
+    naturalized: {
+      reply: joined,
+      used: refinements.some((item) => item.naturalized.used),
+      error: errors || undefined
+    },
+    languageGuard: {
+      reply: joined,
+      targetLanguage: refinements[0]?.languageGuard.targetLanguage || "unknown",
+      status: fallbackUsed ? "fallback" : translated ? "translated" : skipped ? "skipped" : "matched",
+      attempts: refinements.reduce((total, item) => total + item.languageGuard.attempts, 0),
+      fallbackUsed,
+      error: guardErrors || undefined
+    },
+    duplicateAvoided: refinements.some((item) => item.duplicateAvoided),
+    variantApplied: refinements.some((item) => item.variantApplied)
   };
 }
