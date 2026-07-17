@@ -254,7 +254,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";
   if (/(链接|link|url|入口|网址|endereço|acesso)/i.test(text)) return "ask_link";
   if (/(优惠|活动|奖励|promotion|bonus|reward|promo|promoção|promocao|bônus|bonus|recompensa)/i.test(text)) return "ask_promotion";
-  if (/(安全|真的假的|可信|靠谱吗|骗人|骗子|诈骗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
+  if (/(安全|真的假的|真实|真實|正规公司|正規公司|正规|正規|可信|靠谱吗|骗人|骗子|诈骗|scam|safe|trust|real|percaya|seguro|confiável|confiavel|golpe|verdade)/i.test(text)) return "trust_concern";
   if (/(不会|帮我|怎么|如何|help|how|cannot|can't|tak tahu|tidak tahu|bantuan|ajuda|como faço|não consigo|nao consigo)/i.test(text)) return "need_help";
   if (isInitialConsultation(text)) return "greeting";
   if (isPositiveConfirmation(text)) return "greeting";
@@ -311,7 +311,7 @@ function isInitialConsultation(text: string): boolean {
 
 function inferStage(intent: IntentLabel, hasPhone: boolean, hasTelegram: boolean): ConversationStage {
   if (hasPhone && hasTelegram) return "ready_for_handoff";
-  if (intent === "platform_register_done" || intent === "ask_tg_register" || hasPhone || hasTelegram) {
+  if (intent === "platform_register_done" || intent === "ask_tg_register" || intent === "no_telegram" || hasPhone || hasTelegram) {
     return "need_phone_or_tg";
   }
   return "need_platform_register";

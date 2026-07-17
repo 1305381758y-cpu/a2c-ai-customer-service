@@ -1411,7 +1411,7 @@ describe("strict Aston Brazil flow", () => {
     expect(beforePhone.nextFlowStep).toBe("wait_registration");
 
     const afterPhone = reply("Telegram是什么，怎么下载", { language: "zh", flowStep: "collect_telegram", extractedPhone: "654387654" });
-    expect(afterPhone.reply).toContain("Telegram 是个聊天工具");
+    expect(afterPhone.reply).toContain("任务指导");
     expect(afterPhone.reply).toContain("应用商店");
     expect(afterPhone.reply).not.toMatch(/微信|WeChat/i);
     expect(afterPhone.reply).not.toContain("先完成平台注册");
@@ -1449,9 +1449,10 @@ describe("strict Aston Brazil flow", () => {
     expect(installed.contextualIntent?.intent).toBe("telegram_installed");
 
     const tgQuestion = reply("为什么要使用Telegram呢", { language: "zh", flowStep: "collect_telegram", extractedPhone: "9876789" });
-    expect(tgQuestion.nextFlowStep).toBe("telegram_download");
+    expect(tgQuestion.nextFlowStep).toBe("collect_telegram");
     expect(tgQuestion.reply).toContain("Telegram");
-    expect(tgQuestion.reply).toContain("老师");
+    expect(tgQuestion.reply).toContain("导师");
+    expect(tgQuestion.reply).toContain("任务指导");
     expect(tgQuestion.reply).not.toContain("https://t.me/teacher");
     expect(tgQuestion.reply).not.toMatch(/微信|WeChat/i);
 
@@ -1459,6 +1460,62 @@ describe("strict Aston Brazil flow", () => {
     expect(acknowledgement.nextFlowStep).toBe("collect_telegram");
     expect(acknowledgement.reply).toContain("老师");
     expect(acknowledgement.contextualIntent?.intent).toBe("acknowledgement");
+  });
+
+  it("waits for the actual question instead of pushing registration", () => {
+    const result = reply("我可以问你一个问题吗", {
+      language: "zh",
+      flowStep: "registration_intent"
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.reply).toContain("直接问");
+    expect(result.reply).not.toMatch(/有空|方便.*注册|继续.*注册/);
+  });
+
+  it("answers distinct Telegram purpose and necessity questions without changing the node", () => {
+    const purpose = reply("为什么要使用这个软件呢", {
+      language: "zh",
+      flowStep: "telegram_download",
+      extractedPhone: "9876789"
+    });
+    expect(purpose.nextFlowStep).toBe("telegram_download");
+    expect(purpose.reply).toContain("导师");
+    expect(purpose.reply).toContain("任务指导");
+    expect(purpose.reply).not.toContain("下载后告诉我");
+
+    const optional = reply("我可以不使用这个软件吗", {
+      language: "zh",
+      flowStep: "telegram_download",
+      extractedPhone: "9876789"
+    });
+    expect(optional.nextFlowStep).toBe("telegram_download");
+    expect(optional.reply).toContain("需要使用 Telegram");
+    expect(optional.reply).toContain("不会要求");
+    expect(optional.reply).not.toMatch(/^当然可以/);
+
+    const required = reply("为什么这个软件是必须的呢", {
+      language: "zh",
+      flowStep: "telegram_download",
+      extractedPhone: "9876789"
+    });
+    expect(required.nextFlowStep).toBe("telegram_download");
+    expect(required.reply).toContain("后续指导");
+    expect(required.reply).toContain("Telegram");
+    expect(required.reply).not.toBe(purpose.reply);
+    expect(required.reply).not.toBe(optional.reply);
+  });
+
+  it("classifies a missing app from the Telegram download context", () => {
+    const result = reply("我没有这个应用", {
+      language: "zh",
+      flowStep: "telegram_download",
+      extractedPhone: "9876789"
+    });
+
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.contextualIntent?.intent).toBe("no_telegram");
+    expect(result.reply).toContain("应用商店");
   });
 
   it("sends the teacher Telegram link when Spanish customer confirms Telegram is available", () => {

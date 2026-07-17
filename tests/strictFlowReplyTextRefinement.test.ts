@@ -91,7 +91,8 @@ describe("strict flow reply text refinement", () => {
       questionType: "help",
       allowLinkOrInvite: false
     }));
-    expect(result.reply).toBe("可以，我一步步带您处理注册。");
+    expect(result.reply).toContain("一步步带您处理注册");
+    expect(result.reply).toMatch(/^可以，我来帮您处理。/);
     expect(result.naturalized).toMatchObject({ used: true });
     expect(result.languageGuard).toMatchObject({ status: "matched", targetLanguage: "zh" });
   });
@@ -173,7 +174,7 @@ describe("strict flow reply text refinement", () => {
       scriptFlow: scriptFlow()
     });
 
-    expect(result.reply).toBe("Entiendo, la página del enlace no carga; pruebe cambiar de navegador o red. Si sigue igual, reviso el enlace.");
+    expect(result.reply).toContain("la página del enlace no carga");
     expect(result.reply).not.toMatch(/registramos por aquí|nombre.*Telegram/i);
   });
 
@@ -316,7 +317,73 @@ describe("strict flow reply text refinement", () => {
     });
 
     expect(ai.naturalizeStrictFlowText).toHaveBeenCalledOnce();
-    expect(result.reply).toBe("Entiendo su duda. La ganancia se calcula por tareas reales y reglas de la página; si quiere seguimos con el registro paso a paso.");
+    expect(result.reply).toContain("La ganancia se calcula por tareas reales");
+    expect(result.reply).toMatch(/^La cifra de ganancias merece una explicación clara\./);
     expect(result.naturalized).toMatchObject({ used: true });
+  });
+
+  it("uses intent-specific acknowledgement levels for repeated trust questions", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "Entendo sua preocupação. As regras e a verificação seguem a página e a confirmação posterior.",
+        used: true,
+        error: ""
+      }))
+    };
+    const outbound = (content: string) => ({ direction: "outbound", content, intent: "unknown", createdAt: "" });
+    const inbound = (content: string) => ({ direction: "inbound", content, intent: "trust_concern", createdAt: "" });
+
+    const first = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "As regras e a verificação seguem a página e a confirmação posterior.",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        controlledQuestionType: "trust"
+      }),
+      customerText: "Esse trabalho é real?",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+    const second = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "As regras e a verificação seguem a página e a confirmação posterior.",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        controlledQuestionType: "trust"
+      }),
+      customerText: "Posso ser enganado?",
+      history: [inbound("Esse trabalho é real?"), outbound(first.reply)],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+    const third = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "As regras e a verificação seguem a página e a confirmação posterior.",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        controlledQuestionType: "trust"
+      }),
+      customerText: "Vocês vão me enganar?",
+      history: [
+        inbound("Esse trabalho é real?"),
+        outbound(first.reply),
+        inbound("Posso ser enganado?"),
+        outbound(second.reply)
+      ],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(first.reply).toMatch(/^Essa é uma dúvida importante\./);
+    expect(second.reply).toMatch(/^Entendi, você quer confirmar se existe algum risco\./);
+    expect(third.reply).not.toMatch(/^(Entendo|Entendi|Compreendo|Claro)/i);
+    expect(new Set([first.reply, second.reply, third.reply]).size).toBe(3);
   });
 });

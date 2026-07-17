@@ -40,6 +40,11 @@ describe("message analyzer", () => {
     expect(analyzeMessage("こんにちは").intent).toBe("greeting");
   });
 
+  it("treats questions about whether the work is real as trust concerns", () => {
+    expect(analyzeMessage("这份工作真实吗", "pt-BR").intent).toBe("trust_concern");
+    expect(analyzeMessage("你们是正规公司吗", "pt-BR").intent).toBe("trust_concern");
+  });
+
   it("classifies natural first-contact consultation messages", () => {
     expect(analyzeMessage("你好，我想找一份工作").intent).toBe("greeting");
     expect(analyzeMessage("我想了解这份工作").intent).toBe("greeting");

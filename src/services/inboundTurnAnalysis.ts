@@ -125,6 +125,13 @@ export async function analyzeInboundTurn(input: {
       reason: `matched promoted intent #${learnedIntent.event.id}`
     };
   }
+  if (contextualIntent.intent === "no_telegram") {
+    analysis = {
+      ...analysis,
+      intent: "no_telegram",
+      stage: "need_tg_register"
+    };
+  }
 
   return {
     analysis,

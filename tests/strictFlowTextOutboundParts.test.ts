@@ -108,4 +108,71 @@ describe("strict flow multipart outbound", () => {
     expect(refinementProbe.calls).toBe(1);
     expect(refinementProbe.maxActive).toBe(1);
   });
+
+  it("paces real multipart messages without delaying simulations", async () => {
+    refinementProbe.active = 0;
+    refinementProbe.calls = 0;
+    refinementProbe.maxActive = 0;
+    refinementProbe.removeMarkers = false;
+
+    const config = loadConfig({
+      DATABASE_URL: ":memory:",
+      A2C_BASE_URL: "https://a2c.test",
+      A2C_APP_ID: "app",
+      A2C_APP_SECRET: "secret"
+    });
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("分段发送节流商户");
+    const country = repos.createMerchantCountry(merchant.id, {
+      name: "巴西",
+      defaultLanguage: "pt-BR",
+      requirePlatformAccount: true,
+      requirePhone: true,
+      requireTelegram: true
+    });
+    repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "agent-paced", verifiedName: "客服号" }]);
+    const conversation = repos.getOrCreateConversation("customer-paced", "agent-paced", "客户", merchant.id, country.id);
+    const waits: number[] = [];
+    const sendMessage = vi.fn(async () => `sent-${sendMessage.mock.calls.length}`);
+
+    const result = await sendStrictFlowTextOutbound({
+      repos,
+      ai: {} as never,
+      runtimeConfig: config,
+      a2c: { sendMessage } as unknown as A2CClient,
+      conversation,
+      strictReply: {
+        enabled: true,
+        reply: "介绍一\n\n介绍二\n\n介绍三",
+        replyParts: ["介绍一", "介绍二", "介绍三"],
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        stage: "need_platform_register",
+        needsInviteCode: false
+      },
+      customerText: "yes",
+      history: [],
+      agentProfile: repos.getMerchantAgentProfile(merchant.id),
+      data: {
+        messageId: "paced-inbound",
+        content: "yes",
+        from: "customer-paced",
+        to: "agent-paced",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "paced-payload",
+      simulation: false,
+      strictFlowEnabled: true,
+      learnedIntent: null,
+      country,
+      waitBetweenParts: async (ms) => {
+        waits.push(ms);
+      }
+    });
+
+    expect(result.outbounds).toHaveLength(3);
+    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(waits).toEqual([1500, 1500]);
+  });
 });

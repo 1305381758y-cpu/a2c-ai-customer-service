@@ -3,6 +3,7 @@ import type { StrictFlowReply } from "../domain/strictFlow.js";
 import type { MerchantAgentProfileRecord, ScriptFlowRuntime } from "../repositories.js";
 import type { AiTasks } from "./aiTasks.js";
 import { ensureReplyCustomerLanguage, naturalizeStrictReply, type LanguageGuardResult } from "./replyLanguage.js";
+import { applyControlledQuestionStyle } from "./strictFlowControlledQuestionStyle.js";
 
 export interface StrictFlowReplyTextRefinementResult {
   reply: string;
@@ -84,26 +85,33 @@ export async function refineStrictFlowReplyText(input: {
         avoidReplies: recentOutboundReplies(input.history)
       });
       const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
-      const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
-      const distinctReply = duplicate
-        ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language, input.history)
-        : safeNaturalizedReply.reply;
       const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-        reply: distinctReply,
+        reply: safeNaturalizedReply.reply,
         targetLanguage: input.strictReply.language,
         flowStep: input.strictReply.nextFlowStep,
         allowLinkOrInvite: input.strictReply.needsInviteCode
       });
-      return {
+      const styled = applyControlledQuestionStyle({
         reply: languageGuard.reply,
+        language: input.strictReply.language,
+        questionType: input.strictReply.controlledQuestionType,
+        customerText: input.customerText,
+        history: input.history
+      });
+      const duplicate = isNearDuplicateOfRecentReply(styled.reply, input.history);
+      const distinctReply = duplicate
+        ? makeDistinctReply(styled.reply, input.strictReply.language, input.history)
+        : styled.reply;
+      return {
+        reply: distinctReply,
         naturalized: safeNaturalizedReply.rejected ? {
           reply: input.strictReply.reply,
           used: false,
           error: "口语化改写越过流程边界，已回退"
         } : naturalized,
-        languageGuard,
-        duplicateAvoided: duplicate,
-        variantApplied: duplicate && distinctReply !== safeNaturalizedReply.reply
+        languageGuard: { ...languageGuard, reply: distinctReply },
+        duplicateAvoided: duplicate || styled.occurrence > 1,
+        variantApplied: styled.openerChanged || (duplicate && distinctReply !== styled.reply)
       };
     }
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
@@ -166,27 +174,36 @@ export async function refineStrictFlowReplyText(input: {
   });
 
   const safeNaturalizedReply = sanitizeStrictNaturalizedReply(naturalized.reply, input.strictReply.reply);
-  const duplicate = isNearDuplicateOfRecentReply(safeNaturalizedReply.reply, input.history);
-  const distinctReply = duplicate
-    ? makeDistinctReply(safeNaturalizedReply.reply, input.strictReply.language, input.history)
-    : safeNaturalizedReply.reply;
-  const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
-    reply: distinctReply,
+  const guarded = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+    reply: safeNaturalizedReply.reply,
     targetLanguage: input.strictReply.language,
     flowStep: input.strictReply.nextFlowStep,
     allowLinkOrInvite: input.strictReply.needsInviteCode
   });
+  const styled = input.strictReply.controlledQuestionType && input.strictReply.controlledQuestionType !== "none"
+    ? applyControlledQuestionStyle({
+      reply: guarded.reply,
+      language: input.strictReply.language,
+      questionType: input.strictReply.controlledQuestionType,
+      customerText: input.customerText,
+      history: input.history
+    })
+    : { reply: guarded.reply, occurrence: 1, openerChanged: false };
+  const duplicate = isNearDuplicateOfRecentReply(styled.reply, input.history);
+  const distinctReply = duplicate
+    ? makeDistinctReply(styled.reply, input.strictReply.language, input.history)
+    : styled.reply;
 
   return {
-    reply: languageGuard.reply,
+    reply: distinctReply,
     naturalized: safeNaturalizedReply.rejected ? {
       reply: input.strictReply.reply,
       used: false,
       error: "口语化改写越过流程边界，已回退"
     } : naturalized,
-    languageGuard,
-    duplicateAvoided: duplicate,
-    variantApplied: duplicate && distinctReply !== safeNaturalizedReply.reply
+    languageGuard: { ...guarded, reply: distinctReply },
+    duplicateAvoided: duplicate || styled.occurrence > 1,
+    variantApplied: styled.openerChanged || (duplicate && distinctReply !== styled.reply)
   };
 }
 

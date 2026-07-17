@@ -3,6 +3,7 @@ import {
   asksAboutPlatform,
   asksEarningConcern,
   asksForOperationHelp,
+  asksGenericQuestionPermission,
   asksHowToOpenLink,
   asksInvestmentConcern,
   asksNextStep,
@@ -11,6 +12,8 @@ import {
   asksSensitiveInfo,
   asksServiceIdentity,
   asksTelegramExplanation,
+  asksWhetherTelegramOptional,
+  asksWhyTelegramRequired,
   asksToAnswerPreviousQuestion,
   asksToChat,
   asksTrustConcern,
@@ -46,6 +49,12 @@ export function controlledQuestionAnswer(
   if (!step) return null;
   const normalized = text.trim();
   if (!normalized) return null;
+  if (asksGenericQuestionPermission(normalized)) {
+    const key = step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram"
+      ? "ask_question_prompt_tg"
+      : "ask_question_prompt";
+    return { content: line(key, language), pauseFlow: true, type: "chat" };
+  }
   if (input.contextualIntent?.intent === "not_registered") {
     return { content: line("not_registered_ack", language), type: "help" };
   }
@@ -98,7 +107,13 @@ export function controlledQuestionAnswer(
     return { content: line("payment_concern_ack", language), type: "payment" };
   }
   if (intent === "telegram_explain" || asksTelegramExplanation(normalized)) {
-    const key = input.conversation.extractedPhone || input.analysis.phone ? "telegram_explain_after_phone_ack" : "telegram_explain_ack";
+    const key = asksWhyTelegramRequired(normalized)
+      ? "telegram_required_ack"
+      : asksWhetherTelegramOptional(normalized)
+        ? "telegram_optional_ack"
+        : input.conversation.extractedPhone || input.analysis.phone
+          ? "telegram_purpose_after_phone_ack"
+          : "telegram_explain_ack";
     return { content: line(key, language), type: "telegram" };
   }
   if (asksEarningConcern(normalized)) {

@@ -143,7 +143,7 @@ export function asksToChat(text: string): boolean {
 }
 
 export function asksTrustConcern(text: string): boolean {
-  return /(安全|真的假的|可信|靠谱吗|可靠|骗人|骗子|騙子|欺骗|欺騙|诈骗|詐騙|违法|非法|走私|safe|trust|real|scam|fraud|illegal|contraband|seguro|confiável|confiavel|golpe|verdade|ilegal|contrabando|estafa|fraude)/i.test(text);
+  return /(安全|真的假的|真实|真實|正规公司|正規公司|正规|正規|可信|靠谱吗|可靠|骗人|骗子|騙子|欺骗|欺騙|诈骗|詐騙|违法|非法|走私|safe|trust|real|scam|fraud|illegal|contraband|seguro|confiável|confiavel|golpe|verdade|ilegal|contrabando|estafa|fraude)/i.test(text);
 }
 
 export function asksEarningConcern(text: string): boolean {
@@ -159,7 +159,25 @@ export function asksInvestmentConcern(text: string): boolean {
 }
 
 export function asksTelegramExplanation(text: string): boolean {
-  return /(telegram.*是什么|telegram.*是什麼|tg.*是什么|tg.*是什麼|什么是.*telegram|什麼是.*telegram|什么是.*tg|什麼是.*tg|telegram.*干嘛|telegram.*幹嘛|tg.*干嘛|tg.*幹嘛|为什么.*telegram|為什麼.*telegram|为什么.*tg|為什麼.*tg|what is telegram|what.*telegram.*for|why.*telegram|o que.*telegram|para que.*telegram|por que.*telegram)/i.test(text);
+  return asksWhetherTelegramOptional(text) ||
+    asksWhyTelegramRequired(text) ||
+    /(telegram.*是什么|telegram.*是什麼|tg.*是什么|tg.*是什麼|什么是.*telegram|什麼是.*telegram|什么是.*tg|什麼是.*tg|telegram.*干嘛|telegram.*幹嘛|tg.*干嘛|tg.*幹嘛|为什么.*telegram|為什麼.*telegram|为什么.*tg|為什麼.*tg|(这个|這個).*(软件|軟件|应用|應用).*(是什么|是什麼|干嘛|幹嘛|用途|为什么|為什麼)|(为什么|為什麼|什么是|什麼是).*(这个|這個).*(软件|軟件|应用|應用)|what is telegram|what.*telegram.*for|why.*telegram|o que.*telegram|para que.*telegram|por que.*telegram)/i.test(text);
+}
+
+export function asksWhetherTelegramOptional(text: string): boolean {
+  return /(?:可以|能|可不可以|能不能).{0,8}不.{0,4}(?:用|使用|下载|下載)/i.test(text) ||
+    /不.{0,4}(?:用|使用).{0,12}(?:telegram|tg|这个软件|這個軟件|这个应用|這個應用).{0,8}(?:可以|行|吗|嗎)/i.test(text) ||
+    /(?:一定要|必须|必須).{0,4}(?:用|使用|下载|下載).{0,8}(?:telegram|tg|这个软件|這個軟件|这个应用|這個應用)?/i.test(text) ||
+    /do i have to use telegram|can i continue without telegram|is telegram optional|posso continuar sem telegram|preciso usar telegram|puedo continuar sin telegram|tengo que usar telegram/i.test(text);
+}
+
+export function asksWhyTelegramRequired(text: string): boolean {
+  return /(?:为什么|為什麼).{0,12}(?:必须|必須|一定).{0,8}(?:telegram|tg|这个软件|這個軟件|这个应用|這個應用|使用)/i.test(text) ||
+    /(?:为什么|為什麼).{0,8}(?:telegram|tg).{0,8}(?:必须|必須|一定)/i.test(text) ||
+    /(?:为什么|為什麼).{0,12}(?:这个|這個)?(?:软件|軟件|应用|應用).{0,8}(?:必须|必須|一定)/i.test(text) ||
+    /why.*telegram.*(?:required|mandatory)|why.*(?:must|have to).*telegram/i.test(text) ||
+    /por que.*telegram.*(?:obrigat[oó]rio|necess[aá]rio)|por que.*(?:preciso|tenho que).*telegram/i.test(text) ||
+    /por qu[eé].*telegram.*(?:obligatorio|necesario)|por qu[eé].*(?:tengo que|debo).*telegram/i.test(text);
 }
 
 export function asksServiceIdentity(text: string): boolean {

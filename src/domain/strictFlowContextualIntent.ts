@@ -73,7 +73,7 @@ export function buildRuleContextualIntent(
   if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
   if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
 
-  if (step === "telegram_confirm" && (saysContextualNo(text) || saysNoTelegram(text))) {
+  if ((step === "telegram_confirm" || step === "telegram_download") && (saysContextualNo(text) || saysNoTelegram(text))) {
     return base("no_telegram", { answeredPreviousQuestion: true, nextAction: "guide telegram download", reason: "short no after telegram question" });
   }
   if (step === "collect_telegram" && saysTelegramUsernameMissing(text)) {

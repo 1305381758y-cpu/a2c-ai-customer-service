@@ -3,6 +3,7 @@ export const INTENT_LABELS = [
   "ask_platform_register",
   "platform_register_done",
   "ask_tg_register",
+  "no_telegram",
   "provide_phone",
   "provide_telegram",
   "provide_phone_and_telegram",

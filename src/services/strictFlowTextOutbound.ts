@@ -40,6 +40,7 @@ export async function sendStrictFlowTextOutbound(input: {
   learnedIntent: LearnedIntentDebugInfo | null;
   country: MerchantCountryRecord;
   inviteCode?: A2CInviteCodeRecord;
+  waitBetweenParts?: (ms: number) => Promise<void>;
 }): Promise<StrictFlowTextOutboundResult> {
   const configuredParts = input.strictReply.replyParts?.length ? input.strictReply.replyParts : [];
   const partRefinements = configuredParts.length
@@ -103,7 +104,9 @@ export async function sendStrictFlowTextOutbound(input: {
       }
     });
     outbounds.push(outbound);
-    if (index < parts.length - 1) await new Promise((resolve) => setTimeout(resolve, 120));
+    if (index < parts.length - 1 && !input.simulation) {
+      await (input.waitBetweenParts ?? delay)(1500);
+    }
   }
 
   return {

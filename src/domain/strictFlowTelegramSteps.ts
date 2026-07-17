@@ -5,6 +5,8 @@ import {
   asksInvestmentConcern,
   asksPaymentConcern,
   asksTelegramExplanation,
+  asksWhetherTelegramOptional,
+  asksWhyTelegramRequired,
   asksTrustConcern,
   looksLikeQuestion
 } from "./strictFlowPredicates.js";
@@ -89,21 +91,24 @@ function isRepeatedNodeQuestion(context: TelegramStepReplyContext): boolean {
 }
 
 function buildTelegramQuestionReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
-  // Reuse each node's normal question handling so the answer still moves the
-  // customer toward the next action, while never entering the tutor-link
-  // branch. The collect step intentionally becomes the download step here.
-  if (context.step === "telegram_confirm") {
-    const { language, text } = context;
-    return buildStrictFlowResponse(
-      input,
-      language,
-      "telegram_confirm",
-      "need_tg_register",
-      naturalizeStrictReply(input, "telegram_confirm", text, language, flowScriptLine(input, "telegram_confirm_question", language), "telegram_confirm", "ask_tg_register")
-    );
-  }
-  if (context.step === "telegram_download") return buildTelegramDownloadReply(input, context);
-  return buildCollectTelegramReply(input, context);
+  const key = asksWhyTelegramRequired(context.text)
+    ? "telegram_required_ack"
+    : asksWhetherTelegramOptional(context.text)
+      ? "telegram_optional_ack"
+      : "telegram_purpose_after_phone_ack";
+  const answer = flowScriptLine(input, key, context.language);
+  const asksDownloadHelp = /(怎么|怎麼|如何).*(下载|下載|安装|安裝)|how.*(?:download|install)|como.*(?:baixar|instalar|descargar)|c[oó]mo.*(?:descargar|instalar)/i.test(context.text);
+  const content = asksDownloadHelp
+    ? joinReplyParts(answer, flowScriptLine(input, "telegram_download", context.language), context.language)
+    : answer;
+  const nextStep = asksDownloadHelp ? "telegram_download" : context.step;
+  return buildStrictFlowResponse(
+    input,
+    context.language,
+    nextStep,
+    "need_tg_register",
+    content
+  );
 }
 
 function buildTelegramConfirmReply(input: StrictFlowInput, context: TelegramStepReplyContext): StrictFlowReply {
