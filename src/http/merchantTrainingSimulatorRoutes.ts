@@ -83,6 +83,6 @@ async function runSnapshotSimulation(deps: MerchantTrainingSimulatorRoutesDeps, 
   const snapshot = deps.testSnapshots.get(body.snapshotId);
   if (!snapshot || snapshot.merchantId !== merchantId) return { ok: false as const, statusCode: 404 as const, error: "测试快照不存在或不属于当前商户" };
   if (!snapshot.validation.valid) return { ok: false as const, statusCode: 400 as const, error: "线上正式流程快照不完整，禁止执行完整回归。" };
-  const workspace = deps.testSimulationStore.getWorkspace(snapshot);
+  const workspace = deps.testSimulationStore.getWorkspace(snapshot, deps.repos);
   return runMerchantTrainingSimulation(workspace.repos, workspace.engine, merchantId, body, {}, deps.testSnapshots, workspace.merchantId, deps.repos);
 }

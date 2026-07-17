@@ -6,6 +6,7 @@ import { openDb, type Db } from "../db.js";
 import { Repositories } from "../repositories.js";
 import { ConversationEngine } from "./conversationEngine.js";
 import { createConversationApplication } from "./conversationApplication.js";
+import { appConfigForMerchant } from "./runtimeConfig.js";
 import type { TestSnapshotData } from "./testSnapshotTypes.js";
 
 type Workspace = { repos: Repositories; engine: ConversationEngine; merchantId: string };
@@ -19,13 +20,16 @@ export class TestSimulationStore {
     this.db.sqlite.exec(`CREATE TABLE IF NOT EXISTS test_simulation_workspaces (snapshot_id TEXT PRIMARY KEY, merchant_id TEXT NOT NULL, country_id TEXT NOT NULL, flow_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`);
   }
 
-  getWorkspace(snapshot: TestSnapshotData): Workspace {
+  getWorkspace(snapshot: TestSnapshotData, productionRepos?: Repositories): Workspace {
     const existing = this.workspaces.get(snapshot.snapshotId);
     if (existing) return existing;
+    const runtimeConfig = productionRepos
+      ? appConfigForMerchant(this.config, productionRepos.getMerchantConfig(snapshot.merchantId))
+      : this.config;
     const row = this.db.sqlite.prepare("SELECT merchant_id, country_id, flow_id FROM test_simulation_workspaces WHERE snapshot_id = ?").get(snapshot.snapshotId) as { merchant_id: string; country_id: string; flow_id: number } | undefined;
     if (row) {
       const repos = new Repositories(this.db);
-      const workspace = { repos, engine: new ConversationEngine(createConversationApplication(repos, this.config)), merchantId: row.merchant_id };
+      const workspace = { repos, engine: new ConversationEngine(createConversationApplication(repos, runtimeConfig)), merchantId: row.merchant_id };
       this.workspaces.set(snapshot.snapshotId, workspace);
       return workspace;
     }
@@ -80,7 +84,10 @@ export class TestSimulationStore {
       repos.createTeacherTgLink(merchantId, country.id, { label: link.label, url: link.url, priority: link.priority, rotationCount: link.rotationCount, status: link.status });
     }
     this.db.sqlite.prepare("INSERT INTO test_simulation_workspaces(snapshot_id, merchant_id, country_id, flow_id) VALUES (?, ?, ?, ?)").run(snapshot.snapshotId, merchantId, country.id, flow.flow.id);
-    const workspace = { repos, engine: new ConversationEngine(createConversationApplication(repos, this.config)), merchantId };
+    // Reuse the production merchant's AI provider in memory so simulation
+    // exercises the real translation path without persisting API keys in the
+    // snapshot or the isolated test database.
+    const workspace = { repos, engine: new ConversationEngine(createConversationApplication(repos, runtimeConfig)), merchantId };
     this.workspaces.set(snapshot.snapshotId, workspace);
     return workspace;
   }

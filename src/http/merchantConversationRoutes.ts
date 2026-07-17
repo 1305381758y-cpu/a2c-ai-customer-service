@@ -102,6 +102,6 @@ function simulationWorkspace(deps: MerchantConversationRoutesDeps, merchantId: s
   if (!snapshotId) return undefined;
   const snapshot = deps.testSnapshots.get(snapshotId);
   if (!snapshot || snapshot.merchantId !== merchantId || !snapshot.validation.valid) return undefined;
-  const workspace = deps.testSimulationStore.getWorkspace(snapshot);
+  const workspace = deps.testSimulationStore.getWorkspace(snapshot, deps.repos);
   return { repos: workspace.repos, merchantId: workspace.merchantId };
 }

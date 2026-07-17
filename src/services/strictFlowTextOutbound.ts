@@ -42,25 +42,9 @@ export async function sendStrictFlowTextOutbound(input: {
   inviteCode?: A2CInviteCodeRecord;
 }): Promise<StrictFlowTextOutboundResult> {
   const configuredParts = input.strictReply.replyParts?.length ? input.strictReply.replyParts : [];
-  const partRefinements: StrictFlowReplyTextRefinementResult[] = [];
-  if (configuredParts.length) {
-    // Translate/refine configured segments once and in order. Running an
-    // additional joined refinement plus Promise.all caused four concurrent
-    // provider calls for a three-part script, so later parts could hit a
-    // provider limit and silently turn into a generic language fallback.
-    for (const content of configuredParts) {
-      partRefinements.push(await refineStrictFlowReplyText({
-        ai: input.ai,
-        runtimeConfig: input.runtimeConfig,
-        strictReply: { ...input.strictReply, reply: content, replyParts: undefined },
-        customerText: input.customerText,
-        history: input.history,
-        agentProfile: input.agentProfile,
-        scriptFlow: input.scriptFlow
-      }));
-    }
-  } else {
-    partRefinements.push(await refineStrictFlowReplyText({
+  const partRefinements = configuredParts.length
+    ? await refineConfiguredParts(input, configuredParts)
+    : [await refineStrictFlowReplyText({
       ai: input.ai,
       runtimeConfig: input.runtimeConfig,
       strictReply: input.strictReply,
@@ -68,8 +52,7 @@ export async function sendStrictFlowTextOutbound(input: {
       history: input.history,
       agentProfile: input.agentProfile,
       scriptFlow: input.scriptFlow
-    }));
-  }
+    })];
   const parts = partRefinements.map((item) => item.reply);
   const refinedReply = combinePartRefinements(partRefinements, parts);
   input.strictReply.reply = refinedReply.reply;
@@ -130,6 +113,61 @@ export async function sendStrictFlowTextOutbound(input: {
   };
 }
 
+async function refineConfiguredParts(
+  input: Parameters<typeof sendStrictFlowTextOutbound>[0],
+  configuredParts: string[]
+): Promise<StrictFlowReplyTextRefinementResult[]> {
+  const taggedReply = configuredParts
+    .map((content, index) => `[[A2C_SCRIPT_PART_${index + 1}]]\n${content}`)
+    .join("\n\n");
+  const batched = await refineStrictFlowReplyText({
+    ai: input.ai,
+    runtimeConfig: input.runtimeConfig,
+    strictReply: { ...input.strictReply, reply: taggedReply, replyParts: undefined },
+    customerText: input.customerText,
+    history: input.history,
+    agentProfile: input.agentProfile,
+    scriptFlow: input.scriptFlow
+  });
+  const parsedParts = parseTaggedParts(batched.reply, configuredParts.length);
+  if (parsedParts) {
+    return parsedParts.map((reply) => ({
+      ...batched,
+      reply,
+      naturalized: { ...batched.naturalized, reply },
+      languageGuard: { ...batched.languageGuard, reply }
+    }));
+  }
+
+  // A provider can occasionally alter the part markers. Retry the original
+  // segments one at a time with a small gap so a transient rate limit cannot
+  // replace only the last configured segment with a generic flow fallback.
+  const refinements: StrictFlowReplyTextRefinementResult[] = [];
+  for (const [index, content] of configuredParts.entries()) {
+    if (index > 0) await delay(350);
+    refinements.push(await refineStrictFlowReplyText({
+      ai: input.ai,
+      runtimeConfig: input.runtimeConfig,
+      strictReply: { ...input.strictReply, reply: content, replyParts: undefined },
+      customerText: input.customerText,
+      history: input.history,
+      agentProfile: input.agentProfile,
+      scriptFlow: input.scriptFlow
+    }));
+  }
+  return refinements;
+}
+
+function parseTaggedParts(reply: string, expectedCount: number): string[] | null {
+  const matches = [...reply.matchAll(/\[\[A2C_SCRIPT_PART_(\d+)\]\]\s*([\s\S]*?)(?=\[\[A2C_SCRIPT_PART_\d+\]\]|$)/gi)];
+  if (matches.length !== expectedCount) return null;
+  const ordered = matches
+    .map((match) => ({ index: Number(match[1]), content: match[2].trim() }))
+    .sort((left, right) => left.index - right.index);
+  if (ordered.some((part, index) => part.index !== index + 1 || !part.content)) return null;
+  return ordered.map((part) => part.content);
+}
+
 function combinePartRefinements(
   refinements: StrictFlowReplyTextRefinementResult[],
   parts: string[]
@@ -159,4 +197,8 @@ function combinePartRefinements(
     duplicateAvoided: refinements.some((item) => item.duplicateAvoided),
     variantApplied: refinements.some((item) => item.variantApplied)
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -8,7 +8,8 @@ import { Repositories } from "../src/repositories.js";
 const refinementProbe = vi.hoisted(() => ({
   active: 0,
   calls: 0,
-  maxActive: 0
+  maxActive: 0,
+  removeMarkers: false
 }));
 
 vi.mock("../src/services/strictFlowReplyTextRefinement.js", () => ({
@@ -18,11 +19,14 @@ vi.mock("../src/services/strictFlowReplyTextRefinement.js", () => ({
     refinementProbe.maxActive = Math.max(refinementProbe.maxActive, refinementProbe.active);
     await new Promise((resolve) => setTimeout(resolve, 10));
     refinementProbe.active -= 1;
+    const reply = refinementProbe.removeMarkers
+      ? input.strictReply.reply.replace(/\[\[A2C_SCRIPT_PART_\d+\]\]\s*/g, "")
+      : input.strictReply.reply;
     return {
-      reply: input.strictReply.reply,
-      naturalized: { reply: input.strictReply.reply, used: false },
+      reply,
+      naturalized: { reply, used: false },
       languageGuard: {
-        reply: input.strictReply.reply,
+        reply,
         targetLanguage: input.strictReply.language,
         status: "matched",
         attempts: 0,
@@ -41,6 +45,7 @@ describe("strict flow multipart outbound", () => {
     refinementProbe.active = 0;
     refinementProbe.calls = 0;
     refinementProbe.maxActive = 0;
+    refinementProbe.removeMarkers = false;
 
     const config = loadConfig({
       DATABASE_URL: ":memory:",
@@ -96,7 +101,11 @@ describe("strict flow multipart outbound", () => {
     });
 
     expect(result.outbounds).toHaveLength(3);
-    expect(refinementProbe.calls).toBe(3);
+    const outboundMessages = repos
+      .listConversationMessages(conversation.id, 20)
+      .filter((item) => item.direction === "outbound");
+    expect(outboundMessages.map((item) => item.content)).toEqual(replyParts);
+    expect(refinementProbe.calls).toBe(1);
     expect(refinementProbe.maxActive).toBe(1);
   });
 });
