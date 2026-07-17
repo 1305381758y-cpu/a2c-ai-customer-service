@@ -299,7 +299,7 @@ function spanishStrictFallback(flowStep: string): string {
 function chineseStrictFallback(flowStep: string): string {
   const map: Record<string, string> = {
     interest_screening: "您好，您是想了解一份兼职在线工作吗？",
-    registration_intent: "好的，我简单介绍一下：这份兼职主要是帮商家提升产品销量和排名，佣金按任务和平台规则核算。您现在方便继续开户注册吗？",
+    registration_intent: "好的，我简单介绍一下：这份兼职主要是帮商家提升产品销量和排名，佣金按任务和平台规则核算。您现在有空闲时间继续开户注册吗？",
     wait_registration: "好的，您先按页面操作，注册好后把手机号发我；卡在哪一步也可以直接告诉我。",
     telegram_confirm: "恭喜，注册已完成。请保存好用户名和密码。下一步需要 Telegram，您有 Telegram 应用吗？",
     telegram_download: "没关系，您可以在 Play Store 或 App Store 搜索 Telegram 下载并注册。完成后告诉我，我会把老师的 Telegram 链接发给您。",

@@ -645,6 +645,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "script_flow_steps", "next_flow_step", "TEXT DEFAULT ''");
   ensureColumn(db, "script_flow_steps", "enabled", "INTEGER DEFAULT 1");
   ensureColumn(db, "script_flow_steps", "send_tutorial_image", "INTEGER DEFAULT 0");
+  ensureColumn(db, "script_flow_steps", "reply_parts_json", "TEXT DEFAULT '[]'");
   ensureColumn(db, "conversation_followups", "error", "TEXT DEFAULT ''");
   ensureColumn(db, "intent_learning_events", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "intent_learning_events", "conversation_id", "TEXT DEFAULT ''");

@@ -117,6 +117,7 @@ export function ScriptFlowsPage({ platform = false, canEdit = true }: { platform
         flowName: "新流程节点",
         flowStep: "interest_screening",
         standardReply: "请在这里填写客服标准话术。",
+        replyParts: [],
         sortOrder: order,
         enabled: true
       })

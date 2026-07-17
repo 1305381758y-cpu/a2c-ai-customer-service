@@ -108,6 +108,19 @@ main {
   border-left-color: var(--brand);
 }
 
+.script-message-parts-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.script-message-parts-editor > label:first-child {
+  max-width: 260px;
+}
+
+.script-message-parts-editor small {
+  color: var(--muted-text, #64748b);
+}
+
 .script-step-card.disabled {
   background: #fbfcfe !important;
   opacity: .82;

@@ -3,7 +3,7 @@ import { buildRuleContextualIntent } from "./strictFlowContextualIntent.js";
 import { shouldSendRegistrationTutorialImage } from "./strictFlowPredicates.js";
 import { controlledQuestionAnswer, flowBridgeLine } from "./strictFlowQuestionAnswer.js";
 import { containsNextStepPrompt, ensureActionableStrictContent, joinReplyParts, sanitizeCustomerVisibleStrictReply } from "./strictFlowReplyText.js";
-import { activeScriptStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
+import { activeScriptStep, flowScriptLine, flowScriptLines } from "./strictFlowScriptRuntime.js";
 import { strictFlowScriptLine } from "./strictFlowScriptText.js";
 import { normalizeFlowStep } from "./strictFlowState.js";
 import type { StrictFlowInput, StrictFlowReply, StrictFlowStep } from "./strictFlowTypes.js";
@@ -23,6 +23,18 @@ export function buildInterestProgressReply(input: StrictFlowInput, step: StrictF
   const prefix = controlledQuestionAnswer(input, step, text, language, (key, lineLanguage) => flowScriptLine(input, key, lineLanguage), intent);
   if (!prefix || prefix.pauseFlow) return intro;
   return joinReplyParts(prefix.content, intro, language);
+}
+
+export function buildInterestProgressReplyParts(input: StrictFlowInput, step: StrictFlowStep | "", text: string, language: string, intent = ""): string[] {
+  const line = (key: string, lineLanguage: string) => flowScriptLine(input, key, lineLanguage);
+  const introParts = flowScriptLines(input, "project_intro", language);
+  const prefix = controlledQuestionAnswer(input, step, text, language, line, intent);
+  const parts = prefix && !prefix.pauseFlow ? [prefix.content, ...introParts] : introParts;
+  const confirmation = flowScriptLine(input, "registration_intent", language);
+  // Older/customized project-intro nodes may already contain the availability
+  // question. Do not append a second confirmation in that case.
+  if (confirmation && !containsNextStepPrompt(introParts.join("\n"), "registration_intent")) parts.push(confirmation);
+  return parts.filter((part, index) => part.trim() && parts.indexOf(part) === index);
 }
 
 export function buildStrictFlowResponse(

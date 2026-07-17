@@ -37,6 +37,7 @@ export interface StrictFlowInput {
 export interface StrictFlowReply {
   enabled: boolean;
   reply: string;
+  replyParts?: string[];
   language: string;
   nextFlowStep: StrictFlowStep;
   stage: Conversation["stage"];

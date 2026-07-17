@@ -12,7 +12,7 @@ import {
   isReadyToStartRegistration,
   isRegistrationDoneConfirmation
 } from "./strictFlowPredicates.js";
-import { buildInterestProgressReply, buildStrictFlowResponse, naturalizeStrictReply } from "./strictFlowResponseBuilder.js";
+import { buildInterestProgressReply, buildInterestProgressReplyParts, buildStrictFlowResponse, naturalizeStrictReply } from "./strictFlowResponseBuilder.js";
 import { configuredNextFlowStep, flowScriptLine } from "./strictFlowScriptRuntime.js";
 import { registerInstruction } from "./strictFlowRegistration.js";
 import { stageForFlowStep } from "./strictFlowState.js";
@@ -50,14 +50,22 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
     const nextStep = configuredStep === "project_intro"
       ? configuredNextFlowStep(input, "project_intro", "registration_intent")
       : configuredStep;
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+    const reply = buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+    const parts = buildInterestProgressReplyParts(input, step, text, language, input.analysis.intent);
+    reply.replyParts = parts;
+    reply.reply = parts.join("\n\n");
+    return reply;
   }
   if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
     const configuredStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
     const nextStep = configuredStep === "project_intro"
       ? configuredNextFlowStep(input, "project_intro", "registration_intent")
       : configuredStep;
-    return buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+    const reply = buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), buildInterestProgressReply(input, step, text, language, input.analysis.intent));
+    const parts = buildInterestProgressReplyParts(input, step, text, language, input.analysis.intent);
+    reply.replyParts = parts;
+    reply.reply = parts.join("\n\n");
+    return reply;
   }
   if (asksLink) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, step, text, language, flowScriptLine(input, "registration_intent", language), "registration_intent", input.analysis.intent));

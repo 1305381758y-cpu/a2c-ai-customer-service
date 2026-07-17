@@ -11,7 +11,7 @@ export function joinReplyParts(prefix: string, goal: string, language: string): 
 
 export function containsNextStepPrompt(content: string, nextStep: StrictFlowStep): boolean {
   if (nextStep === "registration_intent") {
-    return /(有空|空闲时间|空閒時間|有时间|是否.*继续|free time|time now|available|tempo livre|tempo agora|continuar o cadastro)/i.test(content);
+    return /(有空|空闲时间|空閒時間|有时间|是否.*继续|free time|time now|available|tempo livre|tempo agora|continuar o cadastro|siguiente paso.*(registro|apertura)|continuar.*registro)/i.test(content);
   }
   if (nextStep === "wait_registration") {
     return /(https?:\/\/|邀请码[:：]|invitation code[:：]|código de convite[:：]|codigo de convite[:：]|注册手机号|注册的手机号码|registered phone|phone number you registered|telefone usado no cadastro|número de telefone usado no cadastro)/i.test(content);

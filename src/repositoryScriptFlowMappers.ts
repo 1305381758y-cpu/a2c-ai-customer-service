@@ -34,6 +34,7 @@ export function mapScriptFlowStep(row: Record<string, unknown>): ScriptFlowStepR
     triggerCondition: String(row.trigger_condition ?? ""),
     customerExpressions: String(row.customer_expressions ?? ""),
     standardReply: String(row.standard_reply ?? ""),
+    replyParts: parseReplyParts(row.reply_parts_json),
     collectInfo: String(row.collect_info ?? ""),
     sendLink: Boolean(Number(row.send_link ?? 0)),
     sendInvite: Boolean(Number(row.send_invite ?? 0)),
@@ -48,6 +49,16 @@ export function mapScriptFlowStep(row: Record<string, unknown>): ScriptFlowStepR
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? "")
   };
+}
+
+function parseReplyParts(value: unknown): string[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function mapScriptFlowVersion(row: Record<string, unknown>): ScriptFlowVersionRecord {

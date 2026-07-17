@@ -20,6 +20,8 @@ export interface StrictFlowOutboundPayloadInput {
   country: MerchantCountryRecord;
   scriptFlow?: ScriptFlowRuntime;
   inviteCode?: A2CInviteCodeRecord;
+  replyPartIndex?: number;
+  replyPartCount?: number;
 }
 
 export function buildStrictFlowOutboundRawPayload(input: StrictFlowOutboundPayloadInput): Record<string, unknown> {
@@ -57,6 +59,8 @@ export function buildStrictFlowOutboundRawPayload(input: StrictFlowOutboundPaylo
     aiFallback: Boolean(strictReply.fallback),
     inviteCodeRequired: Boolean(country.requirePlatformAccount),
     inviteCodeMissing: Boolean(strictReply.needsInviteCode && !inviteCode),
+    replyPartIndex: input.replyPartIndex ?? 0,
+    replyPartCount: input.replyPartCount ?? 1,
     assignedInviteCode: inviteCode ? {
       id: inviteCode.id,
       code: inviteCode.code,

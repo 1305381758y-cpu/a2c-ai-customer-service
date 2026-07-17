@@ -1392,7 +1392,7 @@ describe("strict Aston Brazil flow", () => {
   it("answers investment and complaint questions before returning to the current step", () => {
     const investment = reply("这份工作需要投资么", { language: "zh", flowStep: "registration_intent" });
     expect(investment.reply).toContain("不用先给我这边投钱或交押金");
-    expect(investment.reply).toContain("有空继续开户注册");
+    expect(investment.reply).toContain("有空闲时间继续开户注册");
     expect(investment.reply).not.toContain("我先简单介绍一下");
     expect(investment.nextFlowStep).toBe("registration_intent");
 

@@ -82,5 +82,11 @@ export function normalizeScriptFlowStepValue(key: string, value: unknown): strin
   if (key === "sendLink" || key === "sendInvite" || key === "sendTutorialImage" || key === "enabled") return booleanPatchValue(value, true);
   if (key === "sortOrder") return Number(value || 0);
   if (key === "flowStep" || key === "nextFlowStep") return normalizeScriptFlowStep(String(value || ""));
+  if (key === "replyParts") return JSON.stringify(normalizeReplyParts(value));
   return String(value ?? "");
+}
+
+export function normalizeReplyParts(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? "").trim()).filter(Boolean).slice(0, 5);
 }

@@ -1,7 +1,7 @@
 import type { Db } from "./db.js";
 import { parseJsonObject } from "./repositoryJson.js";
 import { mapScriptFlow, mapScriptFlowStep, mapScriptFlowVersion } from "./repositoryScriptFlowMappers.js";
-import { normalizeScriptFlowStep, normalizeScriptFlowStepValue } from "./repositoryScriptFlowSteps.js";
+import { normalizeReplyParts, normalizeScriptFlowStep, normalizeScriptFlowStepValue } from "./repositoryScriptFlowSteps.js";
 import { normalizeScriptFlowStatus } from "./repositoryStatuses.js";
 import { booleanPatchValue } from "./repositoryPatchValues.js";
 import type { ScriptFlowRecord, ScriptFlowRuntime, ScriptFlowStepRecord, ScriptFlowVersionRecord } from "./repositoryTypes.js";
@@ -192,6 +192,7 @@ export class ScriptFlowRepository {
       triggerCondition: "trigger_condition",
       customerExpressions: "customer_expressions",
       standardReply: "standard_reply",
+      replyParts: "reply_parts_json",
       collectInfo: "collect_info",
       sendLink: "send_link",
       sendInvite: "send_invite",
@@ -297,13 +298,14 @@ export class ScriptFlowRepository {
     const flowStep = normalizeScriptFlowStep(String(input.flowStep ?? input.flow_step ?? input["流程步骤"] ?? flowCode));
     const standardReply = String(input.standardReply ?? input.standard_reply ?? input["客服标准话术"] ?? input.content ?? "").trim();
     if (!standardReply) throw new Error(`流程 ${flowCode} 缺少客服标准话术`);
+    const replyParts = normalizeReplyParts(input.replyParts ?? input.reply_parts ?? input["分条话术"]);
     this.db.sqlite
       .prepare(`
         INSERT INTO script_flow_steps
           (flow_id, merchant_id, country_id, flow_code, flow_name, flow_step, goal, trigger_condition, customer_expressions,
-           standard_reply, collect_info, send_link, send_invite, send_tutorial_image, next_condition, next_flow_code, next_flow_step,
+           standard_reply, reply_parts_json, collect_info, send_link, send_invite, send_tutorial_image, next_condition, next_flow_code, next_flow_step,
            forbidden, notes, sort_order, enabled)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         flowId,
@@ -316,6 +318,7 @@ export class ScriptFlowRepository {
         String(input.triggerCondition ?? input.trigger_condition ?? input["触发条件"] ?? "").trim(),
         String(input.customerExpressions ?? input.customer_expressions ?? input["客户常见表达"] ?? "").trim(),
         standardReply,
+        JSON.stringify(replyParts),
         String(input.collectInfo ?? input.collect_info ?? input["需要收集的信息"] ?? "").trim(),
         booleanPatchValue(input.sendLink ?? input.send_link ?? input["是否发链接"], false),
         booleanPatchValue(input.sendInvite ?? input.send_invite ?? input["是否发邀请码"], false),

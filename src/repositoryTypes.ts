@@ -309,6 +309,7 @@ export interface ScriptFlowStepRecord {
   triggerCondition: string;
   customerExpressions: string;
   standardReply: string;
+  replyParts?: string[];
   collectInfo: string;
   sendLink: boolean;
   sendInvite: boolean;

@@ -2434,15 +2434,15 @@ describe("portal api", () => {
         expect(webhook.json().status).toBe("strict_flow_replied");
       }
 
-      expect(sentMessages).toHaveLength(3);
+      expect(sentMessages).toHaveLength(4);
       expect(String(sentMessages[0].content)).toContain("兼职在线工作");
       expect(String(sentMessages[0].content)).not.toContain("register.example");
       expect(String(sentMessages[1].content)).toContain("简单介绍");
       expect(String(sentMessages[1].content)).toContain("页面规则");
-      expect(String(sentMessages[1].content)).toContain("空闲时间");
-      expect(String(sentMessages[1].content)).not.toContain("register.example");
-      expect(String(sentMessages[2].content)).toContain("https://register.example/?code=ASTON-SHORT-1");
-      expect(String(sentMessages[2].content)).toContain("ASTON-SHORT-1");
+      expect(String(sentMessages[2].content)).toContain("空闲时间");
+      expect(String(sentMessages[2].content)).not.toContain("register.example");
+      expect(String(sentMessages[3].content)).toContain("https://register.example/?code=ASTON-SHORT-1");
+      expect(String(sentMessages[3].content)).toContain("ASTON-SHORT-1");
       for (const message of sentMessages) {
         expect(String(message.content)).not.toBe("好的，我继续协助您。");
         expect(String(message.content)).not.toMatch(/AI|机器人|自动客服/i);
@@ -2538,8 +2538,8 @@ describe("portal api", () => {
         expect(webhook.json().status).toBe("strict_flow_replied");
       }
 
-      expect(sentMessages).toHaveLength(3);
-      const registrationPackage = String(sentMessages[2].content);
+      expect(sentMessages).toHaveLength(4);
+      const registrationPackage = String(sentMessages[3].content);
       expect(registrationPackage).toContain("正在确认");
       expect(registrationPackage).not.toContain("开户链接：https://www.google.com");
       expect(registrationPackage).not.toContain("邀请码：6");
@@ -2624,14 +2624,14 @@ describe("portal api", () => {
         expect(webhook.statusCode).toBe(200);
       }
 
-      expect(sentMessages).toHaveLength(5);
-      expect(String(sentMessages[3].content)).toContain("注册步骤");
-      expect(String(sentMessages[3].content)).toContain("TUTORIAL-1");
-      expect(sentMessages[4]).toMatchObject({
+      expect(sentMessages).toHaveLength(6);
+      expect(String(sentMessages[4].content)).toContain("注册步骤");
+      expect(String(sentMessages[4].content)).toContain("TUTORIAL-1");
+      expect(sentMessages[5]).toMatchObject({
         type: 2,
         url: "https://cdn.example/register-tutorial.jpg"
       });
-      expect(String(sentMessages[4].caption)).toContain("注册教程图片");
+      expect(String(sentMessages[5].caption)).toContain("注册教程图片");
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       const conversationId = conversations.json().rows[0].id as string;
       const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
@@ -3020,17 +3020,17 @@ describe("portal api", () => {
         expect(webhook.json().status).toBe("strict_flow_replied");
       }
 
-      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages).toHaveLength(3);
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       const conversationId = conversations.json().rows[0].id as string;
       expect(conversations.json().rows[0].flowStep).toBe("registration_intent");
       const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
       const outbounds = messages.json().rows.filter((row: { direction: string }) => row.direction === "outbound");
-      expect(outbounds).toHaveLength(2);
+      expect(outbounds).toHaveLength(3);
       expect(outbounds[1].content).toContain("页面规则");
-      expect(outbounds[1].content).toContain("空闲时间");
-      expect(outbounds[1].content).not.toContain("好的，我继续协助您");
-      expect(outbounds[1].rawPayload).toMatchObject({
+      expect(outbounds[2].content).toContain("空闲时间");
+      expect(outbounds[2].content).not.toContain("好的，我继续协助您");
+      expect(outbounds[2].rawPayload).toMatchObject({
         replyMode: "strict_flow",
         strictFlow: true,
         strictFlowEnabled: true,
@@ -3113,17 +3113,17 @@ describe("portal api", () => {
         expect(webhook.json().status).toBe("strict_flow_replied");
       }
 
-      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages).toHaveLength(3);
       const secondReply = String(sentMessages[1].content);
       expect(secondReply).toContain("online part-time job");
-      expect(secondReply).toContain("registration");
+      expect(String(sentMessages[2].content)).toContain("registration");
       expect(secondReply).not.toMatch(/[\u3400-\u9fff]/);
 
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       const conversationId = conversations.json().rows[0].id as string;
       const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
       const outbounds = messages.json().rows.filter((row: { direction: string }) => row.direction === "outbound");
-      expect(outbounds[1].rawPayload).toMatchObject({
+      expect(outbounds[2].rawPayload).toMatchObject({
         strictFlow: true,
         strictFlowStep: "registration_intent",
         languageGuardTarget: "en",

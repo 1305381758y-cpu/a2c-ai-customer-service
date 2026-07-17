@@ -26,6 +26,19 @@ export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved, 
   const [draft, setDraft] = useState<ScriptFlowStep>(step);
   useEffect(() => setDraft(step), [step]);
   const set = (key: keyof ScriptFlowStep, value: string | boolean | number) => setDraft({ ...draft, [key]: value } as ScriptFlowStep);
+  const isProjectIntro = draft.flowStep === "project_intro";
+  const replyParts = draft.replyParts?.length ? draft.replyParts : [draft.standardReply];
+  const setReplyPart = (index: number, value: string) => {
+    const next = [...replyParts];
+    next[index] = value;
+    setDraft({ ...draft, replyParts: next, standardReply: next.join("\n\n") });
+  };
+  const setReplyPartCount = (value: number) => {
+    const next = [...replyParts];
+    while (next.length < value) next.push("");
+    next.length = value;
+    setDraft({ ...draft, replyParts: next, standardReply: next.join("\n\n") });
+  };
   const save = async () => {
     await api(`${endpoint}/${step.id}`, { method: "PATCH", body: JSON.stringify(coercePatch(draft as unknown as Record<string, any>)) });
     notify("success", "流程节点已保存");
@@ -64,7 +77,11 @@ export function ScriptFlowStepEditor({ step, endpoint, canEdit = true, onSaved, 
       <div className="form-grid">
         <label>触发条件<textarea value={draft.triggerCondition} onChange={(e) => set("triggerCondition", e.target.value)} /></label>
         <label>客户常见表达<textarea value={draft.customerExpressions} onChange={(e) => set("customerExpressions", e.target.value)} /></label>
-        <label className="wide-field">客服标准话术<textarea className="script-standard-reply" value={draft.standardReply} onChange={(e) => set("standardReply", e.target.value)} /></label>
+        {isProjectIntro ? <div className="wide-field script-message-parts-editor">
+          <label>项目介绍发送条数<select value={String(replyParts.length)} onChange={(e) => setReplyPartCount(Number(e.target.value))}>{[1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} 条消息</option>)}</select></label>
+          <small>系统会按顺序逐条发送项目介绍，全部发送完后，再发送“确认意向”话术。</small>
+          {replyParts.map((part, index) => <label key={index}>第 {index + 1} 条项目介绍<textarea className="script-standard-reply" value={part} onChange={(e) => setReplyPart(index, e.target.value)} placeholder={`填写第 ${index + 1} 条项目介绍内容`} /></label>)}
+        </div> : <label className="wide-field">客服标准话术<textarea className="script-standard-reply" value={draft.standardReply} onChange={(e) => set("standardReply", e.target.value)} /></label>}
       </div>
     </section>
     <section className="script-editor-group">
