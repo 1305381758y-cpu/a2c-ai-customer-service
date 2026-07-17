@@ -56,18 +56,6 @@ export class TestSimulationStore {
       balance: 0
     });
     repos.patchMerchantAgentProfile(merchantId, { ...snapshot.agentProfile });
-    // Preserve production workflow identity inside the isolated database. A
-    // fresh SQLite database would otherwise allocate id=1/version=1, making
-    // a test appear to use the snapshot while actually running another flow.
-    const targetFlowId = Number(snapshot.productionWorkflowId);
-    if (Number.isInteger(targetFlowId) && targetFlowId > 1) {
-      for (let id = 1; id < targetFlowId; id += 1) {
-        this.db.sqlite.prepare(`
-          INSERT INTO script_flows (id, merchant_id, country_id, name, status, active, version, source_filename)
-          VALUES (?, ?, ?, ?, 'draft', 0, 1, 'snapshot-identity-seed')
-        `).run(id, merchantId, country.id, `快照身份占位 ${id}`);
-      }
-    }
     let flow = repos.createScriptFlow(merchantId, {
       name: snapshot.scriptFlow.flow.name,
       countryId: country.id,
@@ -78,9 +66,9 @@ export class TestSimulationStore {
         flowId: undefined
       }))
     });
-    if (Number.isInteger(targetFlowId) && flow.flow.id !== targetFlowId) {
-      throw new Error(`snapshot_binding_failed: expected flowId=${targetFlowId}, actual flowId=${flow.flow.id}`);
-    }
+    // The production flow identity is recorded by the immutable snapshot.
+    // The isolated database uses its own local primary keys so multiple
+    // snapshots of the same production flow cannot collide with each other.
     if (Number.isInteger(snapshot.productionWorkflowVersion) && snapshot.productionWorkflowVersion > 0) {
       this.db.sqlite.prepare("UPDATE script_flows SET version = ? WHERE id = ? AND merchant_id = ?").run(snapshot.productionWorkflowVersion, flow.flow.id, merchantId);
       flow = repos.getScriptFlow(flow.flow.id, merchantId)!;

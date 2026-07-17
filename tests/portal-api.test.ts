@@ -182,6 +182,21 @@ describe("portal api", () => {
     expect(outbound?.content).toMatch(/兼职|online|trabalho/i);
     expect(outbound?.rawPayload?.a2cSendStatus).toBe("simulated");
     expect(outbound?.rawPayload?.simulation).toBe(true);
+
+    const secondSnapshotId = await createTrainingSnapshot(app, merchantCookie);
+    expect(secondSnapshotId).not.toBe(snapshotId);
+    const secondSnapshotResponse = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-simulator/messages",
+      headers: { cookie: merchantCookie },
+      payload: {
+        snapshotId: secondSnapshotId,
+        customerPhone: "sim-customer-002",
+        content: "你好"
+      }
+    });
+    expect(secondSnapshotResponse.statusCode).toBe(200);
+    expect(secondSnapshotResponse.json().testSnapshot.snapshotId).toBe(secondSnapshotId);
     await app.close();
   });
 
