@@ -245,7 +245,7 @@ export function cancelsPendingCustomerQuestion(text: string): boolean {
 export function explicitlyResumesFlow(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(有空|有空了|我有空|方便|方便了|我方便了|现在可以|現在可以|可以继续了|可以繼續了)$/i.test(normalized)) return true;
-  return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|i(?:'m| am) (?:ready|available)|ready to (?:start|continue|register)|continue registration|send (?:the )?(?:registration )?link|agora (?:tenho tempo|estou dispon[ií]vel)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|ahora (?:tengo tiempo|estoy disponible)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
+  return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|(?:忙完|处理完|處理完|弄完|办完|辦完)了?.{0,8}(?:可以|能|继续|繼續|开始|開始)|(?:好了|行了|可以了).{0,8}(?:有空|方便|继续|繼續|开始|開始)|i(?:'m| am) (?:ready|available|free)|i can continue now|ready to (?:start|continue|register)|let'?s continue|i(?:'m| am) back|continue registration|send (?:the )?(?:registration )?link|(?:agora|j[aá]).{0,16}(?:tenho tempo|estou livre|estou dispon[ií]vel|posso continuar|podemos continuar)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|(?:ahora|ya).{0,16}(?:tengo tiempo|estoy libre|estoy disponible|puedo continuar|podemos continuar)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
 }
 
 export function asksPauseTimingClarification(text: string): boolean {

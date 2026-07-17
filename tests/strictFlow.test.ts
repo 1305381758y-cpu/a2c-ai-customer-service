@@ -1581,6 +1581,21 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toMatch(/项目|工作|佣金|邀请码|现在有时间继续/);
   });
 
+  it("resumes from a temporary pause without mistaking colloquial availability for registration completion", () => {
+    const result = reply("好了，我现在有空了", {
+      language: "zh",
+      flowStep: "registration_intent",
+      flowHoldReason: "temporary_pause"
+    });
+
+    expect(result.flowHoldReason).toBe("");
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.needsInviteCode).toBe(true);
+    expect(result.reply).toContain("https://register.example/?code=ABC123");
+    expect(result.reply).toContain("ABC123");
+    expect(result.reply).not.toMatch(/注册时使用的手机号|注册手机号/);
+  });
+
   it.each([
     "interest_screening",
     "project_intro",

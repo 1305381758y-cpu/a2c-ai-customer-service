@@ -109,6 +109,10 @@ function buildRegistrationIntentReply(input: StrictFlowInput, context: Registrat
       "temporary_pause"
     );
   }
+  if (input.conversation.flowHoldReason === "temporary_pause" && explicitlyResumesFlow(text)) {
+    const nextStep = nextRegistrationStep(input);
+    return withFlowHold(buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true), "");
+  }
   if (asksForMoreJobInfo(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));
   }

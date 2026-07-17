@@ -248,7 +248,7 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (hasPhone) return "provide_phone";
   if (isGreeting(lower)) return "greeting";
   if (/(人工|真人|客服|human|agent|operator|manual|atendente|humano|suporte)/i.test(text)) return "human_request";
-  if (/(完成|好了|注册好了|註冊好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)/i.test(text)) return "platform_register_done";
+  if (isPlatformRegistrationDoneMessage(text)) return "platform_register_done";
   if (isPlatformQuestion(text)) return "ask_platform_register";
   if (/(注册|开户|sign up|signup|register|daftar|สมัคร|cadastro|cadastrar|registrar|abrir conta)/i.test(text)) return "ask_platform_register";
   if (/(telegram|tg|电报|飞机|เทเลแกรม)/i.test(text)) return "ask_tg_register";
@@ -260,6 +260,19 @@ function detectIntent(text: string, hasPhone: boolean, hasTelegram: boolean): In
   if (isPositiveConfirmation(text)) return "greeting";
   if (lower.length <= 2 || /(.)\1{6,}/.test(lower)) return "irrelevant_or_spam";
   return "unknown";
+}
+
+function isPlatformRegistrationDoneMessage(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[。.!?！？,，;；:：]+$/g, "")
+    .trim();
+  const completion = /(完成|好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)/i;
+  if (/^(好了|完成了|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)$/i.test(normalized)) {
+    return true;
+  }
+  const registrationContext = /(注册|註冊|开户|開戶|register|registration|sign(?:ed)?\s*up|cadastro|cadastr|registrar|registro)/i;
+  return registrationContext.test(normalized) && completion.test(normalized);
 }
 
 export function isPositiveConfirmation(text: string): boolean {

@@ -163,4 +163,8 @@ describe("message analyzer", () => {
       expect(result.intent, text).toBe("platform_register_done");
     }
   });
+
+  it("does not treat a longer availability statement as completed registration", () => {
+    expect(analyzeMessage("好了，我现在有空了").intent).not.toBe("platform_register_done");
+  });
 });

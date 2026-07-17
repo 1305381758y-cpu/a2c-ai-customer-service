@@ -226,6 +226,40 @@ describe("strict flow registration steps", () => {
     expect(resumed.needsInviteCode).toBe(true);
   });
 
+  it("treats colloquial availability after a pause as resuming registration, not completed registration", () => {
+    const resumed = reply("好了，我现在有空了", "registration_intent", {
+      flowHoldReason: "temporary_pause"
+    });
+
+    expect(resumed.flowHoldReason).toBe("");
+    expect(resumed.nextFlowStep).toBe("wait_registration");
+    expect(resumed.needsInviteCode).toBe(true);
+    expect(resumed.reply).toContain("https://register.example/?code=INV-001");
+    expect(resumed.reply).toContain("邀请码：INV-001");
+    expect(resumed.reply).not.toMatch(/注册时使用的手机号|注册手机号/);
+  });
+
+  it.each([
+    "我忙完了，现在可以继续",
+    "事情处理完了，我们继续吧",
+    "好了，现在方便了",
+    "I'm free now, let's continue",
+    "I'm back, ready to continue",
+    "Agora posso continuar",
+    "Já estou livre, podemos continuar",
+    "Ahora puedo continuar",
+    "Ya estoy libre, podemos continuar"
+  ])("resumes a temporary pause from semantic availability wording: %s", (customerText) => {
+    const resumed = reply(customerText, "registration_intent", {
+      flowHoldReason: "temporary_pause"
+    });
+
+    expect(resumed.flowHoldReason).toBe("");
+    expect(resumed.nextFlowStep).toBe("wait_registration");
+    expect(resumed.needsInviteCode).toBe(true);
+    expect(resumed.reply).toContain("邀请码：INV-001");
+  });
+
   it("treats a requested wait duration as a temporary pause instead of consent", () => {
     const paused = reply("暂时没有，需要等待十分钟", "registration_intent");
 
