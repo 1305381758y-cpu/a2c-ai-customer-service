@@ -22,6 +22,7 @@ import {
   isRegistrationDoneConfirmation,
   isRegistrationInProgress,
   isExplicitRefusal,
+  isAffirmativeJobSeekingStatement,
   explicitlyResumesFlow,
   isPositive,
   lastAssistantContent,
@@ -109,6 +110,15 @@ export function buildRuleContextualIntent(
       shouldPause: true,
       nextAction: "wait for the customer to state the question",
       reason: "customer asks to ask a question before continuing"
+    });
+  }
+  if (isAffirmativeJobSeekingStatement(text)) {
+    return base("positive_confirmation", {
+      answeredPreviousQuestion: true,
+      isQuestion: false,
+      shouldPause: false,
+      nextAction: "continue to the configured project introduction",
+      reason: "affirmative job-seeking statement"
     });
   }
 

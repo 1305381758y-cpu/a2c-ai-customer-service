@@ -418,6 +418,69 @@ describe("strict flow reply module", () => {
     });
   });
 
+  it("does not advance the flow when any configured reply part fails to send", async () => {
+    const context = setupConversation("interest_screening");
+    const customerText = "Sim, estou procurando um emprego de meio período.";
+    const analysis = analyzeMessage(customerText, "pt-BR");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+    const strictFlowRuntime: StrictFlowRuntimeEngine = {
+      nextTurn: () => ({
+        enabled: true,
+        reply: "第一段介绍\n\n第二段说明",
+        replyParts: ["第一段介绍", "第二段说明"],
+        replyFlowStep: "project_intro",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        stage: "need_platform_register",
+        needsInviteCode: false
+      })
+    };
+    let sendCount = 0;
+    const a2c = {
+      sendMessage: vi.fn(async () => {
+        sendCount += 1;
+        if (sendCount === 2) throw new Error("simulated transport failure");
+        return `real-message-${sendCount}`;
+      })
+    } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-partial-send",
+        content: customerText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-partial-send",
+      simulation: false,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      strictFlowRuntime,
+      learnedIntent: null,
+      history: []
+    });
+
+    expect(result.status).toBe("strict_flow_send_failed");
+    expect(a2c.sendMessage).toHaveBeenCalledTimes(2);
+    expect(context.repos.getConversation(context.conversation.id)?.flowStep).toBe("interest_screening");
+  });
+
   it("marks the conversation as handoff after sending the teacher Telegram link", async () => {
     const context = setupConversation("telegram_confirm");
     context.conversation.stage = "need_tg_register";

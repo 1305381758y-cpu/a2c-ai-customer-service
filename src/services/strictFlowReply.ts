@@ -101,16 +101,8 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
   }
 
   conversation.language = strictReply.language;
-  conversation.stage = strictReply.stage;
-  conversation.flowStep = strictReply.nextFlowStep;
-  if (typeof strictReply.awaitingCustomerQuestion === "boolean") {
-    conversation.awaitingCustomerQuestion = strictReply.awaitingCustomerQuestion;
-  }
-  if (strictReply.flowHoldReason !== undefined) {
-    conversation.flowHoldReason = strictReply.flowHoldReason;
-  }
 
-  const { outbound } = await sendStrictFlowTextOutbound({
+  const { outbound, outbounds } = await sendStrictFlowTextOutbound({
     repos,
     ai,
     runtimeConfig,
@@ -129,6 +121,29 @@ export async function generateAndRecordStrictFlowReply(input: GenerateStrictFlow
     country,
     inviteCode
   });
+
+  const allPartsDelivered = outbounds.length > 0 && outbounds.every((item) => {
+    const status = item.sendResult.a2cSendStatus;
+    return status === "sent" || status === "simulated";
+  });
+  if (!allPartsDelivered) {
+    repos.updateConversation(conversation);
+    repos.upsertCustomerFromConversation(conversation);
+    return {
+      handled: true,
+      status: "strict_flow_send_failed",
+      conversationId: conversation.id
+    };
+  }
+
+  conversation.stage = strictReply.stage;
+  conversation.flowStep = strictReply.nextFlowStep;
+  if (typeof strictReply.awaitingCustomerQuestion === "boolean") {
+    conversation.awaitingCustomerQuestion = strictReply.awaitingCustomerQuestion;
+  }
+  if (strictReply.flowHoldReason !== undefined) {
+    conversation.flowHoldReason = strictReply.flowHoldReason;
+  }
 
   if (strictReply.tutorialImageRequested) {
     await sendRegistrationTutorialImage({

@@ -124,6 +124,22 @@ describe("strict flow response builder", () => {
     expect(result.controlledQuestionFallback).toBe(false);
   });
 
+  it("treats an affirmative job-seeking statement as confirmation rather than a job question", () => {
+    const customerText = "Sim, estou procurando um emprego de meio período.";
+    const currentConversation = conversation({ flowStep: "interest_screening", language: "pt-BR" });
+    const analysis = analyzeMessage(customerText, "pt-BR");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: currentConversation,
+      analysis,
+      customerText,
+      inferredIntent: "job_question"
+    });
+
+    expect(contextualIntent.intent).toBe("positive_confirmation");
+    expect(contextualIntent.isQuestion).toBe(false);
+    expect(contextualIntent.reason).toBe("affirmative job-seeking statement");
+  });
+
   it("marks registration tutorial images only for registration help in the wait-registration step", () => {
     const analysis = analyzeMessage("我不会注册呀", "zh");
     const result = buildStrictFlowResponse({

@@ -20,6 +20,7 @@ import {
   asksWhyPhone,
   complainsAboutReply,
   isExplicitRefusal,
+  isAffirmativeJobSeekingStatement,
   isHesitant,
   isRepeatGreeting,
   looksLikeQuestion,
@@ -49,6 +50,7 @@ export function controlledQuestionAnswer(
   if (!step) return null;
   const normalized = text.trim();
   if (!normalized) return null;
+  if (isAffirmativeJobSeekingStatement(normalized)) return null;
   if (asksGenericQuestionPermission(normalized)) {
     const key = step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram"
       ? "ask_question_prompt_tg"

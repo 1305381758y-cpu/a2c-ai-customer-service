@@ -108,6 +108,26 @@ export async function refineStrictFlowReplyText(input: {
     };
   }
 
+  if (input.strictReply.preserveConfiguredText) {
+    const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
+      reply: input.strictReply.reply,
+      targetLanguage: input.strictReply.language,
+      flowStep: input.strictReply.replyFlowStep || input.strictReply.nextFlowStep,
+      allowLinkOrInvite: input.strictReply.needsInviteCode
+    });
+    return {
+      reply: languageGuard.reply,
+      naturalized: {
+        reply: input.strictReply.reply,
+        used: false,
+        error: "商户配置的分段话术仅执行语言转换"
+      },
+      languageGuard,
+      duplicateAvoided: false,
+      variantApplied: false
+    };
+  }
+
   // An enabled merchant script owns ordinary node wording. A customer
   // question inside that node is different: keep the configured flow goal,
   // but allow the controlled answer prefix to be expressed naturally so the

@@ -56,6 +56,7 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
     const parts = buildInterestProgressReplyParts(input, step, text, language, input.analysis.intent);
     reply.replyParts = parts;
     reply.reply = parts.join("\n\n");
+    reply.replyFlowStep = "project_intro";
     return reply;
   }
   if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {
@@ -67,6 +68,7 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
     const parts = buildInterestProgressReplyParts(input, step, text, language, input.analysis.intent);
     reply.replyParts = parts;
     reply.reply = parts.join("\n\n");
+    reply.replyFlowStep = "project_intro";
     return reply;
   }
   if (asksLink) {

@@ -54,12 +54,14 @@ export async function sendStrictFlowTextOutbound(input: {
       agentProfile: input.agentProfile,
       scriptFlow: input.scriptFlow
     })];
-  const parts = partRefinements.map((item) => item.reply);
-  const refinedReply = combinePartRefinements(partRefinements, parts);
+  const preparedParts = removeSameTurnDuplicates(partRefinements);
+  const parts = preparedParts.map((item) => item.reply);
+  const activeRefinements = preparedParts.map((item) => item.refinement);
+  const refinedReply = combinePartRefinements(activeRefinements, parts);
   input.strictReply.reply = refinedReply.reply;
   const outbounds: OutboundConversationRecordResult[] = [];
   for (const [index, content] of parts.entries()) {
-    const partRefinement = partRefinements[index] ?? refinedReply;
+    const partRefinement = activeRefinements[index] ?? refinedReply;
     const outbound = await recordOutboundConversationMessage({
       repos: input.repos,
       runtimeConfig: input.runtimeConfig,
@@ -126,7 +128,14 @@ async function refineConfiguredParts(
   const batched = await refineStrictFlowReplyText({
     ai: input.ai,
     runtimeConfig: input.runtimeConfig,
-    strictReply: { ...input.strictReply, reply: taggedReply, replyParts: undefined },
+    strictReply: {
+      ...input.strictReply,
+      reply: taggedReply,
+      replyParts: undefined,
+      controlledQuestionType: "none",
+      controlledQuestionFallback: false,
+      preserveConfiguredText: true
+    },
     customerText: input.customerText,
     history: input.history,
     agentProfile: input.agentProfile,
@@ -151,7 +160,14 @@ async function refineConfiguredParts(
     refinements.push(await refineStrictFlowReplyText({
       ai: input.ai,
       runtimeConfig: input.runtimeConfig,
-      strictReply: { ...input.strictReply, reply: content, replyParts: undefined },
+      strictReply: {
+        ...input.strictReply,
+        reply: content,
+        replyParts: undefined,
+        controlledQuestionType: "none",
+        controlledQuestionFallback: false,
+        preserveConfiguredText: true
+      },
       customerText: input.customerText,
       history: input.history,
       agentProfile: input.agentProfile,
@@ -159,6 +175,71 @@ async function refineConfiguredParts(
     }));
   }
   return refinements;
+}
+
+function removeSameTurnDuplicates(
+  refinements: StrictFlowReplyTextRefinementResult[]
+): Array<{ reply: string; refinement: StrictFlowReplyTextRefinementResult }> {
+  const results: Array<{ reply: string; refinement: StrictFlowReplyTextRefinementResult }> = [];
+  const seenReplies = new Set<string>();
+  const seenOpenings = new Set<string>();
+
+  for (const refinement of refinements) {
+    let reply = refinement.reply.trim();
+    if (!reply) continue;
+    const opening = firstSentence(reply);
+    const normalizedOpening = normalizeComparableText(opening);
+    if (opening && normalizedOpening && seenOpenings.has(normalizedOpening)) {
+      const remainder = reply.slice(opening.length).replace(/^[\s\n,，;；:：.!?。！？-]+/, "").trim();
+      if (remainder) reply = remainder;
+    }
+
+    const normalizedReply = normalizeComparableText(reply);
+    if (!normalizedReply || seenReplies.has(normalizedReply)) continue;
+    if (results.some((item) => similarity(normalizeComparableText(item.reply), normalizedReply) >= 0.94)) continue;
+
+    seenReplies.add(normalizedReply);
+    if (normalizedOpening) seenOpenings.add(normalizedOpening);
+    results.push({
+      reply,
+      refinement: reply === refinement.reply ? refinement : {
+        ...refinement,
+        reply,
+        naturalized: { ...refinement.naturalized, reply },
+        languageGuard: { ...refinement.languageGuard, reply },
+        duplicateAvoided: true
+      }
+    });
+  }
+
+  return results;
+}
+
+function firstSentence(value: string): string {
+  const match = value.match(/^.*?(?:[。！？.!?](?=\s|$)|\n|$)/s);
+  return match?.[0]?.trim() ?? "";
+}
+
+function normalizeComparableText(value: string): string {
+  return value.toLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "").trim();
+}
+
+function similarity(left: string, right: string): number {
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  const leftPairs = bigrams(left);
+  const rightPairs = bigrams(right);
+  if (!leftPairs.size || !rightPairs.size) return 0;
+  let intersection = 0;
+  for (const pair of leftPairs) if (rightPairs.has(pair)) intersection += 1;
+  return (2 * intersection) / (leftPairs.size + rightPairs.size);
+}
+
+function bigrams(value: string): Set<string> {
+  if (value.length < 2) return new Set([value]);
+  const result = new Set<string>();
+  for (let index = 0; index < value.length - 1; index += 1) result.add(value.slice(index, index + 2));
+  return result;
 }
 
 function parseTaggedParts(reply: string, expectedCount: number): string[] | null {

@@ -3130,7 +3130,8 @@ describe("portal api", () => {
         replyMode: "strict_flow",
         strictFlow: true,
         strictFlowEnabled: true,
-        strictFlowStep: "registration_intent"
+        strictFlowStep: "project_intro",
+        nextStrictFlowStep: "registration_intent"
       });
     } finally {
       await app.close();
@@ -3221,7 +3222,8 @@ describe("portal api", () => {
       const outbounds = messages.json().rows.filter((row: { direction: string }) => row.direction === "outbound");
       expect(outbounds[2].rawPayload).toMatchObject({
         strictFlow: true,
-        strictFlowStep: "registration_intent",
+        strictFlowStep: "project_intro",
+        nextStrictFlowStep: "registration_intent",
         languageGuardTarget: "en",
         languageGuardStatus: "fallback",
         languageGuardFallbackUsed: true

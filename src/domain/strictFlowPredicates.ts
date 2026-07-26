@@ -331,6 +331,14 @@ export function asksAboutJob(text: string): boolean {
   return /(了解.*工作|这份工作|這份工作|介绍.*工作|找工作|兼职|线上工作|在线工作|工作内容|赚钱|賺錢|挣钱|掙錢|赚佣金|賺佣金|佣金收入|怎么赚钱|如何赚钱|job|work|part[-\s]?time|online work|extra income|emprego|trabalho|renda extra|vaga)/i.test(text);
 }
 
+export function isAffirmativeJobSeekingStatement(text: string): boolean {
+  const normalized = text.trim().replace(/[。.!！]+$/g, "");
+  if (!normalized || looksLikeQuestion(normalized)) return false;
+  const startsWithConfirmation = /^(?:是的?|对|好的?|可以|行|愿意|sim|claro|yes|yeah|yep|s[ií])(?:\b|[\s,，;；:：])/i.test(normalized);
+  if (!startsWithConfirmation) return false;
+  return /(?:正在|在).{0,12}(?:找|寻找).{0,12}(?:工作|兼职)|(?:estou|t[oô]).{0,24}(?:procurando|buscando).{0,32}(?:emprego|trabalho|vaga)|(?:estoy).{0,24}(?:buscando|busco).{0,32}(?:trabajo|empleo)|(?:i\s+am|i['’]?m).{0,24}(?:looking|searching).{0,24}(?:job|work)|(?:quero|quiero|want).{0,24}(?:emprego|trabalho|trabajo|job|work)/i.test(normalized);
+}
+
 export function isRepeatGreeting(text: string): boolean {
   return /^(你好|您好|在吗|在不在|嗨|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
 }

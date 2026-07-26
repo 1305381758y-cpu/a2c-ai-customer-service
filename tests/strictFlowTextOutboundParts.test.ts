@@ -9,19 +9,25 @@ const refinementProbe = vi.hoisted(() => ({
   active: 0,
   calls: 0,
   maxActive: 0,
-  removeMarkers: false
+  removeMarkers: false,
+  repeatOpening: false,
+  controlledQuestionTypes: [] as string[]
 }));
 
 vi.mock("../src/services/strictFlowReplyTextRefinement.js", () => ({
   refineStrictFlowReplyText: vi.fn(async (input: { strictReply: StrictFlowReply }) => {
     refinementProbe.calls += 1;
+    refinementProbe.controlledQuestionTypes.push(input.strictReply.controlledQuestionType || "none");
     refinementProbe.active += 1;
     refinementProbe.maxActive = Math.max(refinementProbe.maxActive, refinementProbe.active);
     await new Promise((resolve) => setTimeout(resolve, 10));
     refinementProbe.active -= 1;
-    const reply = refinementProbe.removeMarkers
+    let reply = refinementProbe.removeMarkers
       ? input.strictReply.reply.replace(/\[\[A2C_SCRIPT_PART_\d+\]\]\s*/g, "")
       : input.strictReply.reply;
+    if (refinementProbe.repeatOpening) {
+      reply = reply.replace(/(\[\[A2C_SCRIPT_PART_\d+\]\]\s*)/g, "$1Posso explicar o trabalho com clareza. ");
+    }
     return {
       reply,
       naturalized: { reply, used: false },
@@ -46,6 +52,8 @@ describe("strict flow multipart outbound", () => {
     refinementProbe.calls = 0;
     refinementProbe.maxActive = 0;
     refinementProbe.removeMarkers = false;
+    refinementProbe.repeatOpening = false;
+    refinementProbe.controlledQuestionTypes = [];
 
     const config = loadConfig({
       DATABASE_URL: ":memory:",
@@ -107,6 +115,7 @@ describe("strict flow multipart outbound", () => {
     expect(outboundMessages.map((item) => item.content)).toEqual(replyParts);
     expect(refinementProbe.calls).toBe(1);
     expect(refinementProbe.maxActive).toBe(1);
+    expect(refinementProbe.controlledQuestionTypes).toEqual(["none"]);
   });
 
   it("paces real multipart messages without delaying simulations", async () => {
@@ -114,6 +123,8 @@ describe("strict flow multipart outbound", () => {
     refinementProbe.calls = 0;
     refinementProbe.maxActive = 0;
     refinementProbe.removeMarkers = false;
+    refinementProbe.repeatOpening = false;
+    refinementProbe.controlledQuestionTypes = [];
 
     const config = loadConfig({
       DATABASE_URL: ":memory:",
@@ -174,5 +185,78 @@ describe("strict flow multipart outbound", () => {
     expect(result.outbounds).toHaveLength(3);
     expect(sendMessage).toHaveBeenCalledTimes(3);
     expect(waits).toEqual([1500, 1500]);
+  });
+
+  it("keeps a question acknowledgement at most once across configured parts", async () => {
+    refinementProbe.active = 0;
+    refinementProbe.calls = 0;
+    refinementProbe.maxActive = 0;
+    refinementProbe.removeMarkers = false;
+    refinementProbe.repeatOpening = true;
+    refinementProbe.controlledQuestionTypes = [];
+
+    const config = loadConfig({
+      DATABASE_URL: ":memory:",
+      A2C_BASE_URL: "https://a2c.test",
+      A2C_APP_ID: "app",
+      A2C_APP_SECRET: "secret"
+    });
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("同轮去重商户");
+    const country = repos.createMerchantCountry(merchant.id, {
+      name: "巴西",
+      defaultLanguage: "pt-BR",
+      requirePlatformAccount: true,
+      requirePhone: true,
+      requireTelegram: true
+    });
+    repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "agent-dedupe", verifiedName: "客服号" }]);
+    const conversation = repos.getOrCreateConversation("customer-dedupe", "agent-dedupe", "客户", merchant.id, country.id);
+
+    await sendStrictFlowTextOutbound({
+      repos,
+      ai: {} as never,
+      runtimeConfig: config,
+      a2c: { sendMessage: vi.fn() } as unknown as A2CClient,
+      conversation,
+      strictReply: {
+        enabled: true,
+        reply: "介绍一\n\n介绍二\n\n介绍三",
+        replyParts: ["介绍一", "介绍二", "介绍三"],
+        replyFlowStep: "project_intro",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        stage: "need_platform_register",
+        needsInviteCode: false,
+        controlledQuestionType: "job"
+      },
+      customerText: "Sim, estou procurando um emprego de meio período.",
+      history: [],
+      agentProfile: repos.getMerchantAgentProfile(merchant.id),
+      data: {
+        messageId: "dedupe-inbound",
+        content: "Sim, estou procurando um emprego de meio período.",
+        from: "customer-dedupe",
+        to: "agent-dedupe",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "dedupe-payload",
+      simulation: true,
+      strictFlowEnabled: true,
+      learnedIntent: null,
+      country
+    });
+
+    const outboundMessages = repos.listConversationMessages(conversation.id, 20)
+      .filter((item) => item.direction === "outbound");
+    expect(outboundMessages).toHaveLength(3);
+    expect(outboundMessages.filter((item) => item.content.startsWith("Posso explicar o trabalho com clareza.")).length).toBe(1);
+    expect(outboundMessages.map((item) => item.rawPayload?.strictFlowStep)).toEqual([
+      "project_intro",
+      "project_intro",
+      "project_intro"
+    ]);
+    expect(refinementProbe.controlledQuestionTypes).toEqual(["none"]);
   });
 });

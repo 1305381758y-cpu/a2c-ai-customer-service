@@ -158,6 +158,23 @@ describe("strict flow runtime", () => {
     expect(lines).toEqual(["第一条", "第二条", "Certo, vou explicar rapidamente: este trabalho online ajuda comerciantes a melhorar vendas e ranqueamento de produtos, e a comissão depende das tarefas. Os ganhos seguem as regras da plataforma. Você tem tempo para continuar o cadastro agora?"]);
     expect(buildInterestProgressReplyParts(input, "interest_screening", "yes", "pt"))
       .toEqual(["第一条", "第二条", "Você tem tempo agora para continuar o cadastro da conta?"]);
+
+    const statement = "Sim, estou procurando um emprego de meio período.";
+    const statementAnalysis = analyzeMessage(statement, "pt-BR");
+    const statementInput: StrictFlowInput = {
+      ...input,
+      analysis: statementAnalysis,
+      customerText: statement,
+      inferredIntent: "job_question",
+      contextualIntent: buildRuleContextualIntent({
+        conversation: input.conversation,
+        analysis: statementAnalysis,
+        customerText: statement,
+        inferredIntent: "job_question"
+      })
+    };
+    expect(buildInterestProgressReplyParts(statementInput, "interest_screening", statement, "pt-BR", "job_question"))
+      .toEqual(["第一条", "第二条", "Você tem tempo agora para continuar o cadastro da conta?"]);
   });
 
   it("advances an interested customer to the registration-intent step without sending a link", () => {
