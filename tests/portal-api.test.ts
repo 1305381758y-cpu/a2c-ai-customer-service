@@ -231,6 +231,15 @@ describe("portal api", () => {
     await enableBuiltInStrictFlow(app, merchantCookie, "甲方测试内置流程");
     const snapshotId = await createTrainingSnapshot(app, merchantCookie);
 
+    const adminCreatedLink = await app.inject({
+      method: "POST",
+      url: `/api/admin/merchants/${created.json().merchant.id}/training-simulator/share-links`,
+      headers: { cookie: adminCookie },
+      payload: { snapshotId, label: "管理员验收对话", expiresInDays: 3 }
+    });
+    expect(adminCreatedLink.statusCode).toBe(200);
+    expect(adminCreatedLink.json().link.snapshotId).toBe(snapshotId);
+
     const createdLink = await app.inject({
       method: "POST",
       url: "/api/merchant/training-simulator/share-links",

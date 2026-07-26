@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { requireUser } from "../auth.js";
 import type { Repositories } from "../repositories.js";
@@ -98,14 +98,13 @@ export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, de
   app.post<{ Body: z.infer<typeof createShareLinkSchema> }>("/api/merchant/training-simulator/share-links", { preHandler: deps.merchantAdmins }, async (request, reply) => {
     const parsed = createShareLinkSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ ok: false, error: "测试链接参数不完整" });
-    try {
-      const merchantId = scopedMerchantId(request);
-      const expiresAt = new Date(Date.now() + parsed.data.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
-      const link = deps.testSnapshots.createShareLink({ merchantId, snapshotId: parsed.data.snapshotId, label: parsed.data.label, expiresAt });
-      return { ok: true, link: { ...link, path: `/training-test/${link.token}` } };
-    } catch (error) {
-      return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "无法创建测试链接" });
-    }
+    return createShareLinkResponse(deps, reply, scopedMerchantId(request), parsed.data);
+  });
+
+  app.post<{ Params: { merchantId: string }; Body: z.infer<typeof createShareLinkSchema> }>("/api/admin/merchants/:merchantId/training-simulator/share-links", { preHandler: deps.adminOnly }, async (request, reply) => {
+    const parsed = createShareLinkSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ ok: false, error: "测试链接参数不完整" });
+    return createShareLinkResponse(deps, reply, request.params.merchantId, parsed.data);
   });
 
   app.delete<{ Params: { id: string } }>("/api/merchant/training-simulator/share-links/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
@@ -163,6 +162,21 @@ export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, de
       productionConfigChanged: Boolean(result.value.testSnapshot?.productionConfigChanged)
     };
   });
+}
+
+function createShareLinkResponse(
+  deps: MerchantTrainingSimulatorRoutesDeps,
+  reply: FastifyReply,
+  merchantId: string,
+  input: z.infer<typeof createShareLinkSchema>
+) {
+  try {
+    const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+    const link = deps.testSnapshots.createShareLink({ merchantId, snapshotId: input.snapshotId, label: input.label, expiresAt });
+    return { ok: true, link: { ...link, path: `/training-test/${link.token}` } };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "无法创建测试链接" });
+  }
 }
 
 async function runSnapshotSimulation(deps: MerchantTrainingSimulatorRoutesDeps, merchantId: string, body: z.infer<typeof simulatorMessageSchema>) {
