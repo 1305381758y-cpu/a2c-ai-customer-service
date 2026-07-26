@@ -15,6 +15,7 @@ type MerchantTrainingSimulatorRoutesDeps = {
   testSnapshots: TestSnapshotRepository;
   testSimulationStore: TestSimulationStore;
   merchantRoles: ReturnType<typeof requireUser>;
+  merchantAdmins: ReturnType<typeof requireUser>;
   adminOnly: ReturnType<typeof requireUser>;
 };
 
@@ -28,6 +29,17 @@ const simulatorMessageSchema = z.object({
   url: z.string().optional(),
   caption: z.string().optional(),
   fileName: z.string().optional()
+});
+
+const createShareLinkSchema = z.object({
+  snapshotId: z.string().trim().min(1),
+  label: z.string().trim().max(80).optional().default("甲方对话测试"),
+  expiresInDays: z.coerce.number().int().min(1).max(30).optional().default(7)
+});
+
+const publicSimulatorMessageSchema = z.object({
+  sessionId: z.string().trim().min(8).max(80).regex(/^[a-zA-Z0-9_-]+$/),
+  content: z.string().trim().min(1).max(4000)
 });
 
 export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, deps: MerchantTrainingSimulatorRoutesDeps): void {
@@ -76,6 +88,80 @@ export function registerMerchantTrainingSimulatorRoutes(app: FastifyInstance, de
     const snapshot = deps.testSnapshots.get(request.params.id);
     if (!snapshot || snapshot.merchantId !== scopedMerchantId(request)) return reply.code(404).send({ ok: false, error: "测试快照不存在" });
     return { ok: true, snapshot };
+  });
+
+  app.get("/api/merchant/training-simulator/share-links", { preHandler: deps.merchantRoles }, async (request) => ({
+    ok: true,
+    rows: deps.testSnapshots.listShareLinks(scopedMerchantId(request))
+  }));
+
+  app.post<{ Body: z.infer<typeof createShareLinkSchema> }>("/api/merchant/training-simulator/share-links", { preHandler: deps.merchantAdmins }, async (request, reply) => {
+    const parsed = createShareLinkSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ ok: false, error: "测试链接参数不完整" });
+    try {
+      const merchantId = scopedMerchantId(request);
+      const expiresAt = new Date(Date.now() + parsed.data.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+      const link = deps.testSnapshots.createShareLink({ merchantId, snapshotId: parsed.data.snapshotId, label: parsed.data.label, expiresAt });
+      return { ok: true, link: { ...link, path: `/training-test/${link.token}` } };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "无法创建测试链接" });
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/merchant/training-simulator/share-links/:id", { preHandler: deps.merchantAdmins }, async (request, reply) => {
+    const revoked = deps.testSnapshots.revokeShareLink(scopedMerchantId(request), request.params.id);
+    return revoked ? { ok: true } : reply.code(404).send({ ok: false, error: "测试链接不存在或已撤销" });
+  });
+
+  app.get<{ Params: { token: string } }>("/api/public/training-simulator/:token", async (request, reply) => {
+    const link = deps.testSnapshots.resolveShareLink(request.params.token);
+    if (!link) return reply.code(404).send({ ok: false, error: "测试链接不存在、已过期或已撤销" });
+    const snapshot = deps.testSnapshots.get(link.snapshotId);
+    if (!snapshot || !snapshot.validation.valid || snapshot.nodeCount !== 11) {
+      return reply.code(409).send({ ok: false, error: "测试配置暂不可用，请联系链接发送方重新生成" });
+    }
+    deps.testSnapshots.recordShareLinkAccess(link.id);
+    return {
+      ok: true,
+      test: {
+        label: link.label,
+        merchantName: snapshot.merchant.name,
+        expiresAt: link.expiresAt,
+        nodeCount: snapshot.nodeCount,
+        snapshotCreatedAt: snapshot.snapshotCreatedAt,
+        productionConfigChanged: !deps.testSnapshots.compareProduction(deps.repos, snapshot)
+      }
+    };
+  });
+
+  app.post<{ Params: { token: string }; Body: z.infer<typeof publicSimulatorMessageSchema> }>("/api/public/training-simulator/:token/messages", async (request, reply) => {
+    const parsed = publicSimulatorMessageSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ ok: false, error: "请输入有效的测试消息" });
+    const link = deps.testSnapshots.resolveShareLink(request.params.token);
+    if (!link) return reply.code(404).send({ ok: false, error: "测试链接不存在、已过期或已撤销" });
+    const result = await runSnapshotSimulation(deps, link.merchantId, {
+      snapshotId: link.snapshotId,
+      customerPhone: `share-${link.id.slice(0, 8)}-${parsed.data.sessionId}`,
+      a2cAccountPhone: "simulation-a2c",
+      nickname: "测试客户",
+      content: parsed.data.content,
+      msgType: "text"
+    });
+    if (!result.ok) return reply.code(result.statusCode).send({ ok: false, error: result.error });
+    deps.testSnapshots.recordShareLinkAccess(link.id);
+    return {
+      ok: true,
+      status: result.value.status,
+      rows: result.value.rows.map((row) => ({
+        id: row.id,
+        direction: row.direction,
+        content: row.content,
+        msgType: row.msgType,
+        language: row.language,
+        createdAt: row.createdAt
+      })),
+      productionConfigChanged: Boolean(result.value.testSnapshot?.productionConfigChanged)
+    };
   });
 }
 

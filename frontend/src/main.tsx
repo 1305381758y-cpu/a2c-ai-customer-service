@@ -7,6 +7,7 @@ import { Login } from "./app/Login.js";
 import { type PortalView } from "./app/navigation.js";
 import { canAccessPortal, portalModeForPath, portalModeLabel, type PortalMode } from "./app/portalMode.js";
 import { Portal } from "./app/Portal.js";
+import { SharedTrainingTestPage } from "./simulator/SharedTrainingTestPage.js";
 import type { User } from "./types.js";
 import { ToastHost } from "./ui/toast.js";
 import "./styles.css";
@@ -16,6 +17,12 @@ import "./styles/responsive-guardrails.css";
 import "./styles/final-overrides.css";
 
 function App() {
+  const sharedTrainingMatch = window.location.pathname.match(/^\/training-test\/([^/]+)\/?$/);
+  if (sharedTrainingMatch) return <><ToastHost /><SharedTrainingTestPage token={decodeURIComponent(sharedTrainingMatch[1])} /></>;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const portalMode: PortalMode = portalModeForPath(window.location.pathname);
   const sessionHintKey = `a2c_authenticated_${portalMode}`;
   const [user, setUser] = useState<User | null>(null);

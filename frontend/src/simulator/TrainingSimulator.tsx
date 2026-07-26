@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { CloudDownload, Send } from "lucide-react";
+import { CloudDownload, Copy, ExternalLink, Link2, Send, Trash2 } from "lucide-react";
 
 import { ConversationComposer } from "../conversations/ConversationComposer.js";
 import type { A2CAccount, ChatMessage, Conversation, SimulatorResponse, Toast } from "../types.js";
@@ -32,13 +32,29 @@ type TestSnapshot = {
   validation: { valid: boolean; errors: string[] };
 };
 
+type ShareLink = {
+  id: string;
+  merchantId: string;
+  snapshotId: string;
+  label: string;
+  status: "active" | "revoked";
+  expiresAt: string;
+  revokedAt: string;
+  lastAccessedAt: string;
+  accessCount: number;
+  createdAt: string;
+};
+
+type CreatedShareLink = ShareLink & { token: string; path: string };
+
 export function TrainingSimulator({
   api,
   notify,
   AsyncButton,
   formatDateTime,
   displayValue,
-  countryLabel
+  countryLabel,
+  canShare
 }: {
   api: ApiClient;
   notify: Notify;
@@ -46,6 +62,7 @@ export function TrainingSimulator({
   formatDateTime: (value: string) => string;
   displayValue: (column: string, value: unknown) => React.ReactNode;
   countryLabel: (value: unknown) => string;
+  canShare: boolean;
 }) {
   const [accounts, setAccounts] = useState<A2CAccount[]>([]);
   const [form, setForm] = useState({
@@ -63,6 +80,11 @@ export function TrainingSimulator({
   const [snapshotId, setSnapshotId] = useState("");
   const [snapshotError, setSnapshotError] = useState("");
   const [productionConfigChanged, setProductionConfigChanged] = useState(false);
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
+  const [shareLabel, setShareLabel] = useState("甲方对话测试");
+  const [shareDays, setShareDays] = useState("7");
+  const [generatedShareUrl, setGeneratedShareUrl] = useState("");
+  const [shareError, setShareError] = useState("");
 
   useEffect(() => {
     setAccountsError("");
@@ -72,6 +94,15 @@ export function TrainingSimulator({
         setAccounts([]);
         setAccountsError(err instanceof Error ? err.message : "客服账号加载失败");
       });
+  }, [api]);
+
+  const loadShareLinks = async () => {
+    const res = await api<{ rows: ShareLink[] }>("/api/merchant/training-simulator/share-links");
+    setShareLinks(res.rows || []);
+  };
+
+  useEffect(() => {
+    loadShareLinks().catch((err) => setShareError(err instanceof Error ? err.message : "测试链接加载失败"));
   }, [api]);
 
   useEffect(() => {
@@ -151,6 +182,45 @@ export function TrainingSimulator({
     });
   };
 
+  const createShareLink = async () => {
+    setShareError("");
+    setGeneratedShareUrl("");
+    if (!snapshotId) {
+      const detail = "请先从线上创建并选择测试快照";
+      setShareError(detail);
+      notify("error", "无法生成测试链接", detail);
+      return;
+    }
+    try {
+      const res = await api<{ link: CreatedShareLink }>("/api/merchant/training-simulator/share-links", {
+        method: "POST",
+        body: JSON.stringify({ snapshotId, label: shareLabel, expiresInDays: Number(shareDays) })
+      });
+      const url = new URL(res.link.path, window.location.origin).toString();
+      setGeneratedShareUrl(url);
+      await loadShareLinks();
+      await copyText(url);
+      notify("success", "测试链接已生成并复制", "请现在发送给甲方。出于安全考虑，链接关闭后不再显示明文，可随时撤销并重新生成。");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "测试链接生成失败";
+      setShareError(detail);
+      notify("error", "测试链接生成失败", detail);
+      throw err;
+    }
+  };
+
+  const revokeShareLink = async (id: string) => {
+    await api(`/api/merchant/training-simulator/share-links/${id}`, { method: "DELETE" });
+    await loadShareLinks();
+    notify("success", "测试链接已撤销", "甲方再次打开该链接时将无法继续测试。");
+  };
+
+  const copyGeneratedLink = async () => {
+    if (!generatedShareUrl) return;
+    await copyText(generatedShareUrl);
+    notify("success", "测试链接已复制");
+  };
+
   return <section className="simulator-layout">
     <div className="memory simulator-panel">
       <h3>内部模拟对话</h3>
@@ -195,6 +265,32 @@ export function TrainingSimulator({
           </details>;
         })()}
       </div>
+      <div className="simulator-share-panel">
+        <div className="section-title">
+          <div><h3>发给甲方测试</h3><p>链接绑定当前快照。甲方无需登录，只能进行隔离模拟对话。</p></div>
+          <Link2 size={19}/>
+        </div>
+        {canShare && <div className="simulator-share-form">
+          <label>测试名称<input value={shareLabel} maxLength={80} onChange={(event) => setShareLabel(event.target.value)} /></label>
+          <label>有效期<select value={shareDays} onChange={(event) => setShareDays(event.target.value)}><option value="1">1 天</option><option value="3">3 天</option><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></label>
+          <AsyncButton onClick={createShareLink} busyText="生成中..." disabled={!snapshotId}><Link2 size={16}/>生成并复制链接</AsyncButton>
+        </div>}
+        {generatedShareUrl && <div className="generated-share-link">
+          <div><strong>链接仅在本次生成后显示</strong><span>{generatedShareUrl}</span></div>
+          <div className="toolbar"><button type="button" onClick={() => void copyGeneratedLink()} title="复制测试链接"><Copy size={16}/>复制</button><a className="button-link" href={generatedShareUrl} target="_blank" rel="noreferrer"><ExternalLink size={16}/>打开</a></div>
+        </div>}
+        {shareError && <div className="error" role="alert">{shareError}</div>}
+        <div className="share-link-list">
+          {shareLinks.length ? shareLinks.map((link) => {
+            const expired = Date.parse(link.expiresAt) <= Date.now();
+            const active = link.status === "active" && !expired;
+            return <article key={link.id}>
+              <div><strong>{link.label}</strong><span>{active ? `有效至 ${formatDateTime(link.expiresAt)}` : link.status === "revoked" ? "已撤销" : "已过期"}</span><small>访问 {link.accessCount} 次{link.lastAccessedAt ? ` · 最近 ${formatDateTime(link.lastAccessedAt)}` : ""}</small></div>
+              {active && canShare && <AsyncButton className="danger ghost" onClick={() => revokeShareLink(link.id)} busyText="撤销中..."><Trash2 size={15}/>撤销</AsyncButton>}
+            </article>;
+          }) : <p className="muted">还没有生成过甲方测试链接。</p>}
+        </div>
+      </div>
       {snapshotError && <div className="error" role="alert">{snapshotError}</div>}
       {productionConfigChanged && <div className="error" role="alert">测试期间线上配置发生变化，本次结果只适用于快照版本，需要基于最新线上配置重新测试。</div>}
       {status && <div className="notice">本轮结果：{displayValue("status", status)}{conversation ? ` · 当前步骤：${displayValue("flowStep", conversation.flowStep || conversation.stage)}` : ""}</div>}
@@ -212,4 +308,19 @@ export function TrainingSimulator({
       </div>
     </div>
   </section>;
+}
+
+async function copyText(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand("copy");
+  input.remove();
 }

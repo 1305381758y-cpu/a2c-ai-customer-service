@@ -67,7 +67,7 @@ function PortalPage({ user, view, timeMode }: { user: User; view: PortalView; ti
     case "scriptFlows": return <ScriptFlowsPage platform={platform} canEdit={canManage} />;
     case "intentLearning": return <IntentLearningPage platform={platform} timeMode={timeMode} />;
     case "training": return <TrainingMaterialsPage platform={false} simple />;
-    case "simulator": return <TrainingSimulator api={api} notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} />;
+    case "simulator": return <TrainingSimulator api={api} notify={notify} AsyncButton={AsyncButton} formatDateTime={formatDateTime} displayValue={displayValue} countryLabel={countryLabel} canShare={canManage} />;
     case "materials": return <TrainingMaterialsPage platform={platform} />;
     case "knowledge": return <KnowledgePage platform={platform} />;
     case "samples": return <SamplesPage platform={platform} />;

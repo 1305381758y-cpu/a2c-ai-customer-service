@@ -200,6 +200,78 @@ describe("portal api", () => {
     await app.close();
   });
 
+  it("shares an isolated snapshot conversation through a revocable public link", async () => {
+    const app = buildApp(testConfig());
+    const adminCookie = await login(app, "admin@test.local", "Admin123456");
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/merchants",
+      headers: { cookie: adminCookie },
+      payload: {
+        name: "甲方测试商户",
+        country: {
+          code: "br",
+          name: "巴西",
+          defaultLanguage: "zh",
+          platformRegisterUrl: "https://register.example",
+          requirePlatformAccount: true,
+          requirePhone: true,
+          requireTelegram: true,
+          requireWhatsApp: false
+        },
+        adminUser: {
+          email: "shared-simulator@test.local",
+          name: "测试商户管理员",
+          password: "Merchant123456"
+        }
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const merchantCookie = await login(app, "shared-simulator@test.local", "Merchant123456");
+    await enableBuiltInStrictFlow(app, merchantCookie, "甲方测试内置流程");
+    const snapshotId = await createTrainingSnapshot(app, merchantCookie);
+
+    const createdLink = await app.inject({
+      method: "POST",
+      url: "/api/merchant/training-simulator/share-links",
+      headers: { cookie: merchantCookie },
+      payload: { snapshotId, label: "验收对话", expiresInDays: 3 }
+    });
+    expect(createdLink.statusCode).toBe(200);
+    const link = createdLink.json().link as { id: string; token: string; path: string; snapshotId: string };
+    expect(link.snapshotId).toBe(snapshotId);
+    expect(link.path).toBe(`/training-test/${link.token}`);
+
+    const list = await app.inject({ method: "GET", url: "/api/merchant/training-simulator/share-links", headers: { cookie: merchantCookie } });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().rows[0].token).toBeUndefined();
+
+    const publicInfo = await app.inject({ method: "GET", url: `/api/public/training-simulator/${link.token}` });
+    expect(publicInfo.statusCode).toBe(200);
+    expect(publicInfo.json().test).toMatchObject({ label: "验收对话", merchantName: "甲方测试商户", nodeCount: 11 });
+    expect(publicInfo.json().test.configHash).toBeUndefined();
+
+    const publicMessage = await app.inject({
+      method: "POST",
+      url: `/api/public/training-simulator/${link.token}/messages`,
+      payload: { sessionId: "client-session-001", content: "你好" }
+    });
+    expect(publicMessage.statusCode).toBe(200);
+    const body = publicMessage.json() as { rows: Array<Record<string, unknown>> };
+    expect(body.rows.some((row) => row.direction === "outbound")).toBe(true);
+    expect(body.rows.every((row) => row.rawPayload === undefined && row.intent === undefined)).toBe(true);
+
+    const productionConversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
+    expect(productionConversations.statusCode).toBe(200);
+    expect(productionConversations.json().rows).toHaveLength(0);
+
+    const revoked = await app.inject({ method: "DELETE", url: `/api/merchant/training-simulator/share-links/${link.id}`, headers: { cookie: merchantCookie } });
+    expect(revoked.statusCode).toBe(200);
+    const afterRevoke = await app.inject({ method: "GET", url: `/api/public/training-simulator/${link.token}` });
+    expect(afterRevoke.statusCode).toBe(404);
+    await app.close();
+  });
+
   it("keeps agent profiles isolated per merchant and applies review candidates after approval", async () => {
     const app = buildApp(testConfig());
     const adminCookie = await login(app, "admin@test.local", "Admin123456");

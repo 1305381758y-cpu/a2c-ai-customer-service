@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -23,6 +23,20 @@ export class TestSnapshotRepository {
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_test_snapshots_merchant ON test_snapshots(merchant_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS test_simulation_share_links (
+        id TEXT PRIMARY KEY,
+        merchant_id TEXT NOT NULL,
+        snapshot_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        label TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT NOT NULL DEFAULT '',
+        last_accessed_at TEXT NOT NULL DEFAULT '',
+        access_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_test_share_links_merchant ON test_simulation_share_links(merchant_id, created_at DESC);
     `);
   }
 
@@ -89,6 +103,72 @@ export class TestSnapshotRepository {
     return (this.db.prepare("SELECT snapshot_json FROM test_snapshots WHERE merchant_id = ? ORDER BY created_at DESC").all(merchantId) as Array<{ snapshot_json: string }>).map((row) => JSON.parse(row.snapshot_json) as TestSnapshotData);
   }
 
+  createShareLink(input: { merchantId: string; snapshotId: string; label: string; expiresAt: string }): TestSimulationShareLinkCreated {
+    const snapshot = this.get(input.snapshotId);
+    if (!snapshot || snapshot.merchantId !== input.merchantId) throw new Error("测试快照不存在或不属于当前商户");
+    if (!snapshot.validation.valid || snapshot.nodeCount !== 11) throw new Error("线上正式流程快照不完整，禁止创建测试链接");
+    const token = randomBytes(32).toString("base64url");
+    const record = {
+      id: randomUUID(),
+      merchantId: input.merchantId,
+      snapshotId: input.snapshotId,
+      label: input.label.trim() || "甲方对话测试",
+      status: "active" as const,
+      expiresAt: input.expiresAt,
+      revokedAt: "",
+      lastAccessedAt: "",
+      accessCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    this.db.prepare(`
+      INSERT INTO test_simulation_share_links(
+        id, merchant_id, snapshot_id, token_hash, label, status, expires_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+    `).run(record.id, record.merchantId, record.snapshotId, hashShareToken(token), record.label, record.expiresAt, record.createdAt);
+    return { ...record, token };
+  }
+
+  listShareLinks(merchantId: string): TestSimulationShareLink[] {
+    const rows = this.db.prepare(`
+      SELECT id, merchant_id, snapshot_id, label, status, expires_at, revoked_at,
+             last_accessed_at, access_count, created_at
+      FROM test_simulation_share_links
+      WHERE merchant_id = ?
+      ORDER BY created_at DESC
+    `).all(merchantId) as TestSimulationShareLinkRow[];
+    return rows.map(mapShareLink);
+  }
+
+  revokeShareLink(merchantId: string, id: string): boolean {
+    const result = this.db.prepare(`
+      UPDATE test_simulation_share_links
+      SET status = 'revoked', revoked_at = ?
+      WHERE id = ? AND merchant_id = ? AND status = 'active'
+    `).run(new Date().toISOString(), id, merchantId);
+    return Number(result.changes) > 0;
+  }
+
+  resolveShareLink(token: string, now = new Date()): TestSimulationShareLink | undefined {
+    const row = this.db.prepare(`
+      SELECT id, merchant_id, snapshot_id, label, status, expires_at, revoked_at,
+             last_accessed_at, access_count, created_at
+      FROM test_simulation_share_links
+      WHERE token_hash = ?
+    `).get(hashShareToken(token)) as TestSimulationShareLinkRow | undefined;
+    if (!row) return undefined;
+    const link = mapShareLink(row);
+    if (link.status !== "active" || Date.parse(link.expiresAt) <= now.getTime()) return undefined;
+    return link;
+  }
+
+  recordShareLinkAccess(id: string): void {
+    this.db.prepare(`
+      UPDATE test_simulation_share_links
+      SET access_count = access_count + 1, last_accessed_at = ?
+      WHERE id = ? AND status = 'active'
+    `).run(new Date().toISOString(), id);
+  }
+
   compareProduction(repos: Repositories, snapshot: TestSnapshotData): boolean {
     const merchant = repos.getMerchant(snapshot.merchantId);
     const countries = merchant ? repos.listMerchantCountries(snapshot.merchantId) : [];
@@ -128,6 +208,53 @@ export class TestSnapshotRepository {
     const value = latest as { updatedAt?: unknown; updated_at?: unknown; id?: unknown };
     return `${count}:${String(value.updatedAt || value.updated_at || value.id || "0")}`;
   }
+}
+
+export type TestSimulationShareLink = {
+  id: string;
+  merchantId: string;
+  snapshotId: string;
+  label: string;
+  status: "active" | "revoked";
+  expiresAt: string;
+  revokedAt: string;
+  lastAccessedAt: string;
+  accessCount: number;
+  createdAt: string;
+};
+
+export type TestSimulationShareLinkCreated = TestSimulationShareLink & { token: string };
+
+type TestSimulationShareLinkRow = {
+  id: string;
+  merchant_id: string;
+  snapshot_id: string;
+  label: string;
+  status: "active" | "revoked";
+  expires_at: string;
+  revoked_at: string;
+  last_accessed_at: string;
+  access_count: number;
+  created_at: string;
+};
+
+function mapShareLink(row: TestSimulationShareLinkRow): TestSimulationShareLink {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    snapshotId: row.snapshot_id,
+    label: row.label,
+    status: row.status,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    lastAccessedAt: row.last_accessed_at,
+    accessCount: Number(row.access_count || 0),
+    createdAt: row.created_at
+  };
+}
+
+function hashShareToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export function validateSnapshot(flow: ScriptFlowRuntime): { valid: boolean; errors: string[] } {

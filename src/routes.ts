@@ -44,7 +44,7 @@ export function registerRoutes(app: FastifyInstance, deps: { config: AppConfig; 
   registerAdminScriptFlowRoutes(app, { repos: deps.repos, adminOnly });
   registerAdminConversationRoutes(app, { config: deps.config, repos: deps.repos, adminOnly });
   registerMerchantTrainingRoutes(app, { config: deps.config, repos: deps.repos, merchantRoles, merchantAdmins });
-  registerMerchantTrainingSimulatorRoutes(app, { repos: deps.repos, conversationEngine: deps.conversationEngine, merchantRoles, adminOnly, testSnapshots: deps.testSnapshots, testSimulationStore: deps.testSimulationStore });
+  registerMerchantTrainingSimulatorRoutes(app, { repos: deps.repos, conversationEngine: deps.conversationEngine, merchantRoles, merchantAdmins, adminOnly, testSnapshots: deps.testSnapshots, testSimulationStore: deps.testSimulationStore });
   registerMerchantCustomerRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantIntentLearningRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
   registerMerchantScriptFlowRoutes(app, { repos: deps.repos, merchantRoles, merchantAdmins });
