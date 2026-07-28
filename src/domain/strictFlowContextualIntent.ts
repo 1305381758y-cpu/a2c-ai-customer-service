@@ -14,6 +14,7 @@ import {
   asksTelegramUsernameHelp,
   asksToAnswerPreviousQuestion,
   asksTrustConcern,
+  asksTelegramVerificationCodeProblem,
   complainsAboutReply,
   contextualQuestionType,
   hasIncompleteRegistrationPhone,
@@ -80,6 +81,14 @@ export function buildRuleContextualIntent(
   });
 
   if (!text) return base("unknown", { source: "none" });
+  if ((step === "telegram_download" || step === "collect_telegram") && asksTelegramVerificationCodeProblem(text)) {
+    return base("need_help", {
+      isQuestion: false,
+      shouldPause: true,
+      nextAction: "handoff Telegram verification code delivery failure",
+      reason: "Telegram phone verification code was not received"
+    });
+  }
   if (step === "wait_registration" && hasIncompleteRegistrationPhone(text)) {
     return base("incomplete_phone", { nextAction: "need_complete_phone", reason: "registration done with incomplete phone" });
   }

@@ -7,6 +7,7 @@ import {
   asksGenericQuestionPermission,
   asksNextStep,
   asksSensitiveInfo,
+  asksTelegramVerificationCodeProblem,
   cancelsPendingCustomerQuestion,
   explicitlyResumesFlow,
   isAcknowledgement,
@@ -124,6 +125,9 @@ export function buildStrictFlowQuestionControlReply(input: StrictFlowInput): Str
   const text = input.customerText.trim();
   const language = normalizeReplyLanguage(input.analysis.language, input.conversation.language, input.country.defaultLanguage);
   const contextualIntent = input.contextualIntent ?? buildRuleContextualIntent(input);
+  if ((step === "telegram_download" || step === "collect_telegram") && asksTelegramVerificationCodeProblem(text)) {
+    return null;
+  }
   if (input.conversation.awaitingCustomerQuestion &&
     (cancelsPendingCustomerQuestion(text) ||
       isExplicitRefusal(text) ||

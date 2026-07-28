@@ -5,6 +5,7 @@ import {
   asksInvestmentConcern,
   asksPaymentConcern,
   asksTelegramExplanation,
+  asksTelegramVerificationCodeProblem,
   asksWhetherTelegramOptional,
   asksWhyTelegramRequired,
   asksTrustConcern,
@@ -42,6 +43,17 @@ export function buildTelegramStepReply(input: StrictFlowInput, context: Telegram
       "wait_registration",
       "need_platform_register",
       naturalizeStrictReply(input, context.step, context.text, context.language, flowScriptLine(input, "not_registered_ack", context.language), "wait_registration", "not_registered")
+    );
+  }
+  if ((context.step === "telegram_download" || context.step === "collect_telegram") && asksTelegramVerificationCodeProblem(context.text)) {
+    return buildStrictFlowResponse(
+      input,
+      context.language,
+      "human_handoff",
+      "ready_for_handoff",
+      flowScriptLine(input, "telegram_verification_code_handoff_ack", context.language),
+      false,
+      "客户注册 Telegram 时手机收不到验证码"
     );
   }
   // Asking why Telegram is needed is not confirmation and must never send the

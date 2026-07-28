@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
-import { isContextualPositive, isPositive } from "../src/domain/strictFlowPredicates.js";
+import {
+  asksTelegramVerificationCodeProblem,
+  asksVerificationCodeProblem,
+  isContextualPositive,
+  isPositive
+} from "../src/domain/strictFlowPredicates.js";
 import { buildTelegramStepReply } from "../src/domain/strictFlowTelegramSteps.js";
 import { isNegativeTelegramAnswer } from "../src/domain/strictFlowTelegram.js";
 import type { Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
@@ -82,6 +87,29 @@ function reply(text: string, flowStep: "telegram_confirm" | "telegram_download" 
 }
 
 describe("strict flow Telegram steps", () => {
+  it("does not confuse a missing invitation code with a Telegram verification code", () => {
+    expect(asksVerificationCodeProblem("Nao recebi o codigo de convite")).toBe(false);
+    expect(asksTelegramVerificationCodeProblem("Nao recebi o codigo de convite")).toBe(false);
+    expect(asksTelegramVerificationCodeProblem("Nao recebi o codigo")).toBe(true);
+  });
+
+  it.each([
+    "手机下载 Telegram 后，注册时一直收不到验证码",
+    "Nao recebi o codigo de verificacao no celular",
+    "Nao recebi o codigo",
+    "No me llega el codigo de verificacion al telefono",
+    "I still have not received the verification code on my phone"
+  ])("hands off when Telegram phone registration cannot receive the verification code: %s", (customerText) => {
+    const result = reply(customerText, "telegram_download");
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.stage).toBe("ready_for_handoff");
+    expect(result.handoffReason).toBe("客户注册 Telegram 时手机收不到验证码");
+    expect(result.reply).toContain("稍等");
+    expect(result.reply).toContain("公司核实");
+    expect(result.reply).not.toContain("截图");
+  });
+
   it("guides customers without Telegram to download it", () => {
     const result = reply("我没有", "telegram_confirm");
 

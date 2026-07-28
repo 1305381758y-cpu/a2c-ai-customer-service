@@ -532,6 +532,61 @@ describe("strict flow reply module", () => {
     expect(outbound?.content).toContain("500 到 2800 BOB");
   });
 
+  it("notifies Telegram and stops the flow when the customer cannot receive the Telegram verification code", async () => {
+    const context = setupConversation("telegram_download");
+    context.conversation.stage = "need_tg_register";
+    context.conversation.extractedPhone = "918273718271";
+    context.conversation.awaitingCustomerQuestion = true;
+    context.repos.updateConversation(context.conversation);
+    const customerText = "Telegram 用手机号注册，但是手机一直收不到验证码";
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText
+    });
+    const a2c = { sendMessage: vi.fn(async () => "real-message-id") } as unknown as A2CClient;
+    const telegram = { sendHandoffMessage: vi.fn<(text: string) => Promise<void>>(async () => undefined) };
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      a2c,
+      telegram,
+      data: {
+        messageId: "inbound-tg-code-fail",
+        content: customerText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-tg-code-fail",
+      simulation: false,
+      strictFlowEnabled: true,
+      inferredIntent: "need_help",
+      contextualIntent,
+      learnedIntent: null,
+      history: []
+    });
+
+    expect(result).toEqual({ handled: true, status: "strict_flow_handoff", conversationId: context.conversation.id });
+    expect(a2c.sendMessage).toHaveBeenCalledOnce();
+    expect(telegram.sendHandoffMessage).toHaveBeenCalledOnce();
+    expect(String(telegram.sendHandoffMessage.mock.calls[0][0])).toContain("接管理由：客户注册 Telegram 时手机收不到验证码");
+    const stored = context.repos.getConversation(context.conversation.id);
+    expect(stored?.status).toBe("human_handoff");
+    expect(stored?.flowStep).toBe("human_handoff");
+    expect(stored?.handoffNotified).toBe(1);
+    const outbound = context.repos.listConversationMessages(context.conversation.id, 10)
+      .find((message) => message.direction === "outbound");
+    expect(outbound?.content).toBe("稍等，我向公司核实解决办法。");
+    expect(outbound?.rawPayload?.handoffReason).toBe("客户注册 Telegram 时手机收不到验证码");
+  });
+
   it("notifies Telegram with a reason after the second registration link load failure", async () => {
     const context = setupConversation("wait_registration");
     const analysis = analyzeMessage("链接还是打不开", "zh");

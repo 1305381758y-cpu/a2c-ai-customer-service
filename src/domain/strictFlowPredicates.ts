@@ -260,7 +260,26 @@ export function asksLookAtCurrentProblem(text: string): boolean {
 }
 
 export function asksVerificationCodeProblem(text: string): boolean {
-  return /(验证码.*(没收到|收不到|没有收到|不来|不到账|不显示)|驗證碼.*(沒收到|收不到|沒有收到|不來|不顯示)|收不到.*验证码|收不到.*驗證碼|没有.*验证码|沒有.*驗證碼|verification code.*(not received|not arrive|didn'?t receive)|code.*(not received|not arrive|didn'?t receive))/i.test(text);
+  const normalized = normalizeCodeDeliveryText(text);
+  const mentionsVerificationCode = /(验证码|驗證碼|短信|sms|verification code|confirmation code|security code|codigo(?: de)? (?:verificacao|confirmacao|seguranca))/i.test(normalized);
+  return mentionsVerificationCode && reportsMissingCodeDelivery(normalized);
+}
+
+export function asksTelegramVerificationCodeProblem(text: string): boolean {
+  const normalized = normalizeCodeDeliveryText(text);
+  if (/(邀请码|邀請碼|invitation code|invite code|codigo de convite|codigo de invitacion)/i.test(normalized)) return false;
+  return (asksVerificationCodeProblem(text) || /\b(?:code|codigo)\b/i.test(normalized)) && reportsMissingCodeDelivery(normalized);
+}
+
+function normalizeCodeDeliveryText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function reportsMissingCodeDelivery(normalized: string): boolean {
+  return /(没收到|沒有收到|没有收到|收不到|一直不来|一直不來|不显示|不顯示|没发来|沒發來|手机没反应|手機沒反應|not receiv|didn'?t get|did not get|haven'?t got|hasn'?t arrived|not arriv|never arriv|not coming|won'?t come|nao (?:recebi|recebo|chegou|chega|esta chegando|estou recebendo)|nao me (?:chegou|chega)|ainda nao (?:recebi|chegou|chega)|no (?:recibi|recibo|llego|llega|esta llegando)|no me (?:llego|llega)|todavia no (?:recibi|llego|llega)|aun no (?:recibi|llego|llega))/i.test(normalized);
 }
 
 export function reportsRegistrationBlocker(text: string): boolean {
