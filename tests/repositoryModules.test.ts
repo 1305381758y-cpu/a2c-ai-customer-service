@@ -60,6 +60,38 @@ describe("repository module composer", () => {
     expect(modules.a2cAccounts.listInviteCodes(oldAccounts[0]!.id, merchant.id)).toEqual([]);
   });
 
+  it("reserves the current A2C account invite code even when other accounts exceed the query window", () => {
+    const modules = setupModules();
+    const merchant = modules.merchants.create("大邀请码池测试商户");
+    const country = modules.settings.ensureDefaultCountry(merchant.id);
+    const accounts = modules.a2cAccounts.sync(merchant.id, [
+      { apiPhone: "account-with-old-codes", verifiedName: "旧邀请码客服" },
+      { apiPhone: "target-account", verifiedName: "目标客服" }
+    ]);
+    const oldAccount = accounts.find((account) => account.apiPhone === "account-with-old-codes")!;
+    const targetAccount = accounts.find((account) => account.apiPhone === "target-account")!;
+
+    for (let index = 0; index < 201; index += 1) {
+      modules.a2cAccounts.createInviteCode(oldAccount.id, { code: `OLD-${index}` }, merchant.id);
+    }
+    modules.a2cAccounts.createInviteCode(targetAccount.id, { code: "TARGET-CODE" }, merchant.id);
+
+    const reserved = modules.a2cAccounts.reserveInviteCodeForConversation({
+      id: "target-conversation",
+      merchantId: merchant.id,
+      countryId: country.id,
+      customerPhone: "target-customer",
+      a2cAccountPhone: targetAccount.apiPhone
+    });
+
+    expect(reserved).toMatchObject({
+      code: "TARGET-CODE",
+      a2cAccountPhone: targetAccount.apiPhone,
+      assignedConversationId: "target-conversation",
+      status: "reserved"
+    });
+  });
+
   it("wires review candidate application back into training content", () => {
     const modules = setupModules();
     const merchant = modules.merchants.create("复盘装配商户");

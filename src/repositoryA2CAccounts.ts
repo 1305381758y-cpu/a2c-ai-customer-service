@@ -262,21 +262,25 @@ export class MerchantA2CAccountRepository {
       return mapA2CInviteCode(existing);
     }
 
-    const availableRows = this.db.sqlite
+    const account = this.list({ merchantId: conversation.merchantId })
+      .find((item) => inviteCodeAccountMatches(item.apiPhone, conversation.a2cAccountPhone));
+    if (!account) return undefined;
+
+    const available = this.db.sqlite
       .prepare(`
         SELECT ic.*, co.code AS country_code, co.name AS country_name
         FROM a2c_invite_codes ic
         LEFT JOIN merchant_countries co ON co.id = ic.country_id
         WHERE ic.merchant_id = ?
+          AND ic.a2c_account_id = ?
           AND (ic.country_id = ? OR ic.country_id = '' OR ic.country_id IS NULL)
           AND ic.status = 'available'
         ORDER BY
           CASE WHEN ic.country_id = ? THEN 0 WHEN ic.country_id = '' THEN 1 ELSE 2 END,
           ic.id ASC
-        LIMIT 200
+        LIMIT 1
       `)
-      .all(conversation.merchantId, conversation.countryId) as Array<Record<string, unknown>>;
-    const available = availableRows.find((row) => inviteCodeAccountMatches(String(row.a2c_account_phone ?? ""), conversation.a2cAccountPhone));
+      .get(conversation.merchantId, account.id, conversation.countryId, conversation.countryId) as Record<string, unknown> | undefined;
     if (!available) return undefined;
 
     const code = mapA2CInviteCode(available);
