@@ -74,6 +74,81 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.reply).toContain("邀请码：INV-TURN");
   });
 
+  it("uses the current客服分组 invite code and its bound teacher throughout the strict flow", () => {
+    const context = setupConversation("registration_intent");
+    const account = context.repos.listMerchantA2CAccounts({ merchantId: context.merchant.id })[0]!;
+    const group = context.repos.createA2CAccountGroup(context.merchant.id, {
+      name: "巴西客服组",
+      countryId: context.country.id
+    });
+    context.repos.setA2CAccountGroupMembers(group.id, context.merchant.id, [account.id]);
+    const invite = context.repos.createGroupInviteCode(group.id, context.merchant.id, {
+      code: "BR-REUSABLE",
+      registerUrl: "https://register.example/?invite={code}",
+      reusable: true
+    });
+    const allowedTeacher = context.repos.createTeacherTgLink(context.merchant.id, context.country.id, {
+      label: "绑定导师",
+      url: "https://t.me/bound_teacher",
+      priority: 1,
+      rotationCount: 1
+    });
+    context.repos.createTeacherTgLink(context.merchant.id, context.country.id, {
+      label: "未绑定导师",
+      url: "https://t.me/unbound_teacher",
+      priority: 99,
+      rotationCount: 99
+    });
+    context.repos.replaceInviteTeacherBindings("group", invite.id, context.merchant.id, [allowedTeacher.id]);
+
+    const registrationText = "sim, o que preciso fazer?";
+    const registrationAnalysis = analyzeMessage(registrationText, "pt-BR");
+    const registrationIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis: registrationAnalysis,
+      customerText: registrationText,
+      inferredIntent: "positive_confirmation"
+    });
+    const registrationTurn = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis: registrationAnalysis,
+      customerText: registrationText,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent: registrationIntent
+    });
+
+    expect(registrationTurn.inviteCode).toMatchObject({ source: "group", code: "BR-REUSABLE", reusable: true });
+    expect(registrationTurn.strictReply.reply).toContain("BR-REUSABLE");
+    expect(registrationTurn.strictReply.reply).not.toContain("正在确认");
+
+    context.conversation.flowStep = "telegram_confirm";
+    context.conversation.extractedPhone = "5511999999999";
+    context.repos.updateConversation(context.conversation);
+    const telegramText = "sim, já tenho Telegram";
+    const telegramAnalysis = analyzeMessage(telegramText, "pt-BR");
+    const telegramIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis: telegramAnalysis,
+      customerText: telegramText,
+      inferredIntent: "positive_confirmation"
+    });
+    const telegramTurn = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis: telegramAnalysis,
+      customerText: telegramText,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent: telegramIntent
+    });
+
+    expect(telegramTurn.strictReply.reply).toContain("https://t.me/bound_teacher");
+    expect(telegramTurn.strictReply.reply).not.toContain("https://t.me/unbound_teacher");
+    expect(telegramTurn.strictReply.nextFlowStep).toBe("human_handoff");
+  });
+
   it("does not reserve invite codes before the registration step needs them", () => {
     const context = setupConversation("interest_screening");
     const analysis = analyzeMessage("你好", "zh");

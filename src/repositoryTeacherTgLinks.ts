@@ -124,11 +124,38 @@ export class TeacherTgLinkRepository {
       };
     }
 
-    const links = this.list(conversation.merchantId, conversation.countryId).filter((item) => item.status === "active" && item.url);
-    const selected = this.pickNext(links);
-    if (!selected && !fallbackUrl) return undefined;
+    const inviteAssignment = this.db.sqlite.prepare(`
+      SELECT invite_source, invite_code_id
+      FROM a2c_invite_assignments
+      WHERE merchant_id = ? AND conversation_id = ? AND status IN ('reserved', 'used')
+      LIMIT 1
+    `).get(conversation.merchantId, conversation.id) as { invite_source: string; invite_code_id: number } | undefined;
+    const configuredBindingCount = inviteAssignment ? Number((this.db.sqlite.prepare(`
+      SELECT COUNT(*) AS count
+      FROM invite_code_teacher_tg_links
+      WHERE merchant_id = ? AND invite_source = ? AND invite_code_id = ?
+    `).get(conversation.merchantId, inviteAssignment.invite_source, inviteAssignment.invite_code_id) as { count?: number } | undefined)?.count ?? 0) : 0;
+    const boundRows = inviteAssignment ? this.db.sqlite.prepare(`
+      SELECT t.*, b.id AS binding_id, b.assigned_count AS binding_assigned_count
+      FROM invite_code_teacher_tg_links b
+      JOIN teacher_tg_links t ON t.id = b.teacher_tg_link_id AND t.merchant_id = b.merchant_id
+      WHERE b.merchant_id = ? AND b.invite_source = ? AND b.invite_code_id = ?
+        AND b.status = 'active' AND t.status = 'active' AND t.country_id = ?
+      ORDER BY t.priority DESC, t.id ASC
+    `).all(conversation.merchantId, inviteAssignment.invite_source, inviteAssignment.invite_code_id, conversation.countryId) as Array<Record<string, unknown>> : [];
+    const boundLinks = boundRows.map((row) => ({
+      link: { ...mapTeacherTgLink(row), assignedCount: Number(row.binding_assigned_count ?? 0) },
+      bindingId: Number(row.binding_id)
+    }));
+    const selectedBound = boundLinks.length
+      ? boundLinks.find((item) => item.link.id === this.pickNext(boundLinks.map((item) => item.link))?.id)
+      : undefined;
+    const links = selectedBound || configuredBindingCount > 0 ? [] : this.list(conversation.merchantId, conversation.countryId).filter((item) => item.status === "active" && item.url);
+    const selected = selectedBound?.link ?? this.pickNext(links);
+    const effectiveFallbackUrl = configuredBindingCount > 0 ? "" : fallbackUrl;
+    if (!selected && !effectiveFallbackUrl) return undefined;
     const id = selected?.id ?? null;
-    const url = selected?.url || fallbackUrl;
+    const url = selected?.url || effectiveFallbackUrl;
     this.db.sqlite.prepare(`
       UPDATE conversations
       SET assigned_teacher_tg_link_id = ?, assigned_teacher_tg_link_url = ?, updated_at = CURRENT_TIMESTAMP
@@ -138,6 +165,9 @@ export class TeacherTgLinkRepository {
     conversation.assignedTeacherTgLinkUrl = url;
     if (selected) {
       this.db.sqlite.prepare("UPDATE teacher_tg_links SET assigned_count = assigned_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(selected.id);
+      if (selectedBound) {
+        this.db.sqlite.prepare("UPDATE invite_code_teacher_tg_links SET assigned_count = assigned_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(selectedBound.bindingId);
+      }
       return { ...selected, assignedCount: selected.assignedCount + 1 };
     }
     return {

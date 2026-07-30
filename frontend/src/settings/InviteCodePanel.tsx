@@ -2,18 +2,20 @@ import React, { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { api, loadRows } from "../app/api.js";
-import type { A2CAccount, InviteCode, MerchantCountry } from "../types.js";
+import type { A2CAccount, InviteCode, MerchantCountry, TeacherTgLink } from "../types.js";
 import { AsyncButton, ClosePanelButton, ConfirmActionButton } from "../ui/components.js";
 import { countryLabel, displayValue, formatDateTime, label } from "../ui/formatters.js";
 import { Pagination, type PagerState } from "../ui/Pagination.js";
 import { notify } from "../ui/toast.js";
 import { inviteCodeEndpoints, inviteCodeStatusCounts } from "./InviteCodePanelHelpers.js";
+import { AccountGroupPanel } from "./AccountGroupPanel.js";
 
 export function A2CAccountsPanel({
   accounts,
   filteredAccounts,
   pager,
   countries,
+  teacherTgLinks,
   platform,
   accountKeyword,
   accountStatus,
@@ -22,12 +24,14 @@ export function A2CAccountsPanel({
   onStatusChange,
   onCountryChange,
   onToggle,
-  onCountry
+  onCountry,
+  reloadAccounts
 }: {
   accounts: A2CAccount[];
   filteredAccounts: A2CAccount[];
   pager: PagerState & { rows: A2CAccount[] };
   countries: MerchantCountry[];
+  teacherTgLinks: TeacherTgLink[];
   platform: boolean;
   accountKeyword: string;
   accountStatus: string;
@@ -37,10 +41,12 @@ export function A2CAccountsPanel({
   onCountryChange: (value: string) => void;
   onToggle: (account: A2CAccount) => Promise<void>;
   onCountry: (account: A2CAccount, countryId: string) => Promise<void>;
+  reloadAccounts: () => Promise<void>;
 }) {
   return <div className="memory">
+    <AccountGroupPanel accounts={accounts} countries={countries} teacherTgLinks={teacherTgLinks} reloadAccounts={reloadAccounts} />
     <div className="account-section-head">
-      <div><h3>A2C客服账号与邀请码池</h3><p>客服账号会自动归属到商户国家。每个客服账号可以绑定多个邀请码，客户注册后邀请码会从可用池里移除。</p></div>
+      <div><h3>客服账号</h3><p>账号加入分组后优先使用分组共享邀请码。下方账号级邀请码用于兼容旧配置和未分组账号。</p></div>
       <span>已保存 {accounts.length} 个账号</span>
     </div>
     <div className="account-filter-bar">
@@ -50,7 +56,7 @@ export function A2CAccountsPanel({
     </div>
     <div className="account-list-meta">当前筛选 {filteredAccounts.length} 个账号，显示第 {(pager.page - 1) * pager.pageSize + (pager.total ? 1 : 0)} - {Math.min(pager.page * pager.pageSize, pager.total)} 个。</div>
     <div className="account-grid">
-      {pager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} platform={platform} onToggle={() => onToggle(row)} onCountry={(countryId) => onCountry(row, countryId)} />)}
+      {pager.rows.map((row) => <A2CAccountCard key={row.id} account={row} countries={countries} teacherTgLinks={teacherTgLinks} platform={platform} onToggle={() => onToggle(row)} onCountry={(countryId) => onCountry(row, countryId)} />)}
       {!accounts.length && <div className="empty-state">填写并保存 A2C 密钥后，点击“同步A2C客服账号”。同步成功后这里会出现每个客服账号的邀请码池。</div>}
       {accounts.length > 0 && !filteredAccounts.length && <div className="empty-state">没有符合筛选条件的客服账号，换个手机号、状态或国家试试。</div>}
     </div>
@@ -58,10 +64,10 @@ export function A2CAccountsPanel({
   </div>;
 }
 
-export function A2CAccountCard({ account, countries, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {
+export function A2CAccountCard({ account, countries, teacherTgLinks, platform, onToggle, onCountry }: { account: A2CAccount; countries: MerchantCountry[]; teacherTgLinks: TeacherTgLink[]; platform: boolean; onToggle: () => Promise<void>; onCountry: (countryId: string) => Promise<void> }) {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [codesError, setCodesError] = useState("");
-  const [draft, setDraft] = useState({ codes: "", registerUrl: "" });
+  const [draft, setDraft] = useState({ codes: "", registerUrl: "", reusable: false });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editorClosed, setEditorClosed] = useState(false);
   const endpoints = inviteCodeEndpoints(platform, account.id);
@@ -86,7 +92,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
   const stats = inviteCodeStatusCounts(codes);
   return <article className="account-panel">
     <div className="account-panel-head">
-      <div><strong>{account.verifiedName || account.apiPhone}</strong><span>{account.apiPhone} · {countryLabel(account.countryName)} · {account.enabled ? "启用" : "停用"}</span></div>
+      <div><strong>{account.verifiedName || account.apiPhone}</strong><span>{account.apiPhone} · {countryLabel(account.countryName)} · {account.groupName || "未分组"} · {account.enabled ? "启用" : "停用"}</span></div>
       <ConfirmActionButton busyText="处理中..." title={account.enabled ? "确认停用客服账号？" : "确认启用客服账号？"} detail={account.enabled ? "停用后，该 A2C 客服账号不会再用于自动回复和分配邀请码；已有会话记录仍会保留。" : "启用后，该 A2C 客服账号会参与自动回复和邀请码分配，请确认账号国家和邀请码池配置正确。"} confirmText={account.enabled ? "停用账号" : "启用账号"} onConfirm={onToggle}>{account.enabled ? "停用账号" : "启用账号"}</ConfirmActionButton>
     </div>
     <div className="account-settings-row">
@@ -99,7 +105,8 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
         <div className="invite-import">
           <label>批量导入<textarea placeholder="一行一个邀请码；也支持逗号、空格分隔" value={draft.codes} onChange={(event) => setDraft({ ...draft, codes: event.target.value })} /></label>
           <label>注册链接模板<input placeholder="例如 https://example.com/register?code={code}" value={draft.registerUrl} onChange={(event) => setDraft({ ...draft, registerUrl: event.target.value })} /></label>
-          <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoints.accountCodes}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ codes: "", registerUrl: draft.registerUrl }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>导入</AsyncButton>
+          <label className="inline-check"><input type="checkbox" checked={draft.reusable} onChange={(event) => setDraft({ ...draft, reusable: event.target.checked })} />允许重复使用</label>
+          <AsyncButton disabled={!draft.codes.trim()} busyText="保存中..." onClick={async () => { const result = await api<{ imported: number; rows: InviteCode[] }>(`${endpoints.accountCodes}/import`, { method: "POST", body: JSON.stringify(draft) }); setCodes(result.rows); setDraft({ ...draft, codes: "" }); notify("success", "邀请码池已保存", `已处理 ${result.imported} 个邀请码`); }}><Plus size={16}/>导入</AsyncButton>
         </div>
         <div className="invite-manager">
           <div className="invite-list">
@@ -113,7 +120,7 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
             {!codesError && !codes.length && <div className="empty-state compact">暂无邀请码，先在上方批量导入。</div>}
           </div>
           <div className="invite-detail">
-            {selectedCode && !editorClosed ? <InviteCodeEditor code={selectedCode} endpoint={endpoints.codeBase} reload={reload} onClose={() => { setSelectedId(null); setEditorClosed(true); }} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
+            {selectedCode && !editorClosed ? <InviteCodeEditor code={selectedCode} endpoint={endpoints.codeBase} teacherTgLinks={teacherTgLinks.filter((link) => link.countryId === account.countryId)} reload={reload} onClose={() => { setSelectedId(null); setEditorClosed(true); }} /> : <div className="empty-state compact">选择一个邀请码后可编辑注册链接、状态和删除。</div>}
           </div>
         </div>
       </div>
@@ -121,23 +128,32 @@ export function A2CAccountCard({ account, countries, platform, onToggle, onCount
   </article>;
 }
 
-function InviteCodeEditor({ code, endpoint, reload, onClose }: { code: InviteCode; endpoint: string; reload: () => Promise<void>; onClose: () => void }) {
-  const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status });
-  useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status }), [code.id, code.code, code.registerUrl, code.status]);
+function InviteCodeEditor({ code, endpoint, teacherTgLinks, reload, onClose }: { code: InviteCode; endpoint: string; teacherTgLinks: TeacherTgLink[]; reload: () => Promise<void>; onClose: () => void }) {
+  const [draft, setDraft] = useState({ code: code.code, registerUrl: code.registerUrl, status: code.status, reusable: Boolean(code.reusable) });
+  const [teacherIds, setTeacherIds] = useState<number[]>([]);
+  const bindingUrl = `/api/merchant/a2c/invite-codes/account/${code.id}/teacher-links`;
+  useEffect(() => setDraft({ code: code.code, registerUrl: code.registerUrl, status: code.status, reusable: Boolean(code.reusable) }), [code.id, code.code, code.registerUrl, code.status, code.reusable]);
+  useEffect(() => {
+    void loadRows<{ teacherTgLinkId: number }>(bindingUrl)
+      .then((rows) => setTeacherIds(rows.map((row) => row.teacherTgLinkId)))
+      .catch((cause) => notify("error", "导师绑定加载失败", cause instanceof Error ? cause.message : "请稍后重试"));
+  }, [bindingUrl]);
   return <div className="invite-editor">
     <div className="invite-editor-title"><div><strong>{code.code}</strong><span>{displayValue("status", code.status)}</span></div><div className="toolbar"><small>{code.updatedAt ? `更新于 ${formatDateTime(code.updatedAt, code.countryName || code.countryId)}` : ""}</small><ClosePanelButton onClose={onClose} /></div></div>
     <div className="invite-editor-grid">
       <label>邀请码<input aria-label="邀请码" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} /></label>
       <label>状态<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="available">{label("available")}</option><option value="reserved">{label("reserved")}</option><option value="used">{label("used")}</option><option value="disabled">{label("disabled")}</option></select></label>
       <label className="wide">注册链接<input aria-label="注册链接" value={draft.registerUrl} placeholder="不填时使用国家/商户开户链接；可包含 {code}" onChange={(event) => setDraft({ ...draft, registerUrl: event.target.value })} /></label>
+      <label className="inline-check"><input type="checkbox" checked={draft.reusable} onChange={(event) => setDraft({ ...draft, reusable: event.target.checked })} />允许重复使用</label>
     </div>
+    <div className="teacher-binding-grid"><strong>绑定导师链接</strong>{teacherTgLinks.map((link) => <label key={link.id}><input type="checkbox" checked={teacherIds.includes(link.id)} onChange={(event) => setTeacherIds(event.target.checked ? [...teacherIds, link.id] : teacherIds.filter((id) => id !== link.id))} /><span>{link.label || link.url}<small>优先级 {link.priority} · 轮询 {link.rotationCount}</small></span></label>)}</div>
     <div className="invite-meta">
       <span>绑定客户：{code.assignedCustomerKey || "未绑定"}</span>
       <span>注册账号：{code.platformAccount || "未填写"}</span>
       <span>使用时间：{code.usedAt ? formatDateTime(code.usedAt, code.countryName || code.countryId) : "未使用"}</span>
     </div>
     <div className="invite-editor-actions">
-      <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await reload(); notify("success", "邀请码已保存"); }}>保存修改</AsyncButton>
+      <AsyncButton busyText="保存中..." onClick={async () => { await api(`${endpoint}/${code.id}`, { method: "PATCH", body: JSON.stringify(draft) }); await api(bindingUrl, { method: "PUT", body: JSON.stringify({ teacherTgLinkIds: teacherIds }) }); await reload(); notify("success", "邀请码和导师绑定已保存"); }}>保存修改</AsyncButton>
       <ConfirmActionButton className="danger" busyText="删除中..." title="确认彻底删除邀请码？" detail={`邀请码 ${code.code} 删除后不可恢复。若它已绑定客户，历史绑定记录可能仍用于排查，但不会再进入可分配池。`} confirmText="彻底删除" onConfirm={async () => { await api(`${endpoint}/${code.id}`, { method: "DELETE" }); await reload(); notify("success", "邀请码已彻底删除"); }}>彻底删除</ConfirmActionButton>
     </div>
   </div>;

@@ -176,6 +176,19 @@ export function migrate(db: DatabaseSync): void {
       FOREIGN KEY(merchant_id) REFERENCES merchants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS a2c_account_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, name),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY(country_id) REFERENCES merchant_countries(id)
+    );
+
     CREATE TABLE IF NOT EXISTS a2c_invite_codes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_id TEXT NOT NULL,
@@ -195,6 +208,57 @@ export function migrate(db: DatabaseSync): void {
       UNIQUE(merchant_id, a2c_account_phone, code),
       FOREIGN KEY(merchant_id) REFERENCES merchants(id),
       FOREIGN KEY(a2c_account_id) REFERENCES merchant_a2c_accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS a2c_group_invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      country_id TEXT NOT NULL DEFAULT '',
+      group_id INTEGER NOT NULL,
+      code TEXT NOT NULL,
+      register_url TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'available',
+      reusable INTEGER NOT NULL DEFAULT 1,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, group_id, code),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY(group_id) REFERENCES a2c_account_groups(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS a2c_invite_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      customer_key TEXT NOT NULL DEFAULT '',
+      invite_source TEXT NOT NULL DEFAULT 'account',
+      invite_code_id INTEGER NOT NULL,
+      invite_code TEXT NOT NULL,
+      register_url TEXT DEFAULT '',
+      platform_account TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'reserved',
+      assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      used_at TEXT DEFAULT '',
+      released_at TEXT DEFAULT '',
+      UNIQUE(merchant_id, conversation_id),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS invite_code_teacher_tg_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id TEXT NOT NULL,
+      invite_source TEXT NOT NULL DEFAULT 'group',
+      invite_code_id INTEGER NOT NULL,
+      teacher_tg_link_id INTEGER NOT NULL,
+      assigned_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(merchant_id, invite_source, invite_code_id, teacher_tg_link_id),
+      FOREIGN KEY(merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY(teacher_tg_link_id) REFERENCES teacher_tg_links(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS customers (
@@ -589,6 +653,7 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "conversations", "pinned_at", "TEXT DEFAULT ''");
   ensureColumn(db, "merchant_a2c_accounts", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "merchant_a2c_accounts", "country_id", "TEXT DEFAULT ''");
+  ensureColumn(db, "merchant_a2c_accounts", "group_id", "INTEGER");
   ensureColumn(db, "a2c_invite_codes", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "a2c_invite_codes", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "a2c_invite_codes", "a2c_account_phone", "TEXT DEFAULT ''");
@@ -599,6 +664,19 @@ export function migrate(db: DatabaseSync): void {
   ensureColumn(db, "a2c_invite_codes", "platform_account", "TEXT DEFAULT ''");
   ensureColumn(db, "a2c_invite_codes", "assigned_at", "TEXT DEFAULT ''");
   ensureColumn(db, "a2c_invite_codes", "used_at", "TEXT DEFAULT ''");
+  ensureColumn(db, "a2c_invite_codes", "reusable", "INTEGER DEFAULT 0");
+  ensureColumn(db, "a2c_invite_codes", "usage_count", "INTEGER DEFAULT 0");
+  ensureColumn(db, "a2c_invite_codes", "last_used_at", "TEXT DEFAULT ''");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_a2c_accounts_group
+      ON merchant_a2c_accounts(merchant_id, group_id);
+    CREATE INDEX IF NOT EXISTS idx_group_invite_codes_allocation
+      ON a2c_group_invite_codes(merchant_id, group_id, status, usage_count);
+    CREATE INDEX IF NOT EXISTS idx_invite_assignments_conversation
+      ON a2c_invite_assignments(merchant_id, conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_invite_teacher_bindings
+      ON invite_code_teacher_tg_links(merchant_id, invite_source, invite_code_id, status);
+  `);
   ensureColumn(db, "customers", "merchant_id", "TEXT DEFAULT 'default'");
   ensureColumn(db, "customers", "country_id", "TEXT DEFAULT ''");
   ensureColumn(db, "customers", "extracted_whatsapp", "TEXT DEFAULT ''");

@@ -59,8 +59,13 @@ export class MerchantRepository {
       this.db.sqlite.prepare("DELETE FROM handoff_events WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM conversations WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM a2c_invite_assignments WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM invite_code_teacher_tg_links WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM a2c_group_invite_codes WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM a2c_invite_codes WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM merchant_a2c_accounts WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM a2c_account_groups WHERE merchant_id = ?").run(id);
+      this.db.sqlite.prepare("DELETE FROM teacher_tg_links WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM users WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM merchant_configs WHERE merchant_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM merchant_countries WHERE merchant_id = ?").run(id);

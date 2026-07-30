@@ -1,4 +1,5 @@
 import type { Db } from "./db.js";
+import { releaseInviteAssignments } from "./repositoryInviteAssignments.js";
 
 export interface CustomerDeleteResult {
   deleted: boolean;
@@ -17,7 +18,10 @@ export function deleteCustomerRecord(
   db.sqlite.exec("BEGIN");
   try {
     const messagesDeleted = conversations.length ? deleteCustomerConversationData(db, merchantId, customerKey, conversations) : 0;
-    if (!conversations.length) releaseCustomerInviteCodes(db, merchantId, customerKey);
+    if (!conversations.length) {
+      releaseCustomerInviteCodes(db, merchantId, customerKey);
+      releaseInviteAssignments(db, merchantId, { customerKey });
+    }
     db.sqlite.prepare("DELETE FROM customer_balance_transactions WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
     db.sqlite.prepare("DELETE FROM customer_memories WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
     const deleted = db.sqlite.prepare("DELETE FROM customers WHERE merchant_id = ? AND customer_key = ?").run(merchantId, customerKey);
@@ -47,6 +51,7 @@ function deleteCustomerConversationData(db: Db, merchantId: string, customerKey:
   db.sqlite.prepare(`DELETE FROM conversation_script_state WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM handoff_events WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
   db.sqlite.prepare(`DELETE FROM customer_memories WHERE conversation_id IN (${placeholders})`).run(...conversationIds);
+  releaseInviteAssignments(db, merchantId, { conversationIds });
   db.sqlite.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...conversationIds);
   db.sqlite
     .prepare(`DELETE FROM training_samples WHERE merchant_id = ? AND (${conversationSampleMarkers.map(() => "keywords LIKE ?").join(" OR ")})`)

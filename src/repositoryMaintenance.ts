@@ -149,6 +149,7 @@ export class MaintenanceRepository {
       const scriptFlows = this.db.sqlite.prepare("DELETE FROM script_flows").run();
       const messages = this.db.sqlite.prepare("DELETE FROM messages").run();
       const handoffEvents = this.db.sqlite.prepare("DELETE FROM handoff_events").run();
+      this.db.sqlite.prepare("DELETE FROM a2c_invite_assignments").run();
       const conversations = this.db.sqlite.prepare("DELETE FROM conversations").run();
       const customers = this.db.sqlite.prepare("DELETE FROM customers").run();
       const inviteCodes = this.db.sqlite
@@ -160,9 +161,12 @@ export class MaintenanceRepository {
               platform_account = '',
               assigned_at = '',
               used_at = '',
+              usage_count = 0,
+              last_used_at = '',
               updated_at = CURRENT_TIMESTAMP
         `)
         .run();
+      this.db.sqlite.prepare("UPDATE a2c_group_invite_codes SET status = 'available', usage_count = 0, last_used_at = '', updated_at = CURRENT_TIMESTAMP WHERE status != 'disabled'").run();
       this.db.sqlite.exec("COMMIT");
       return {
         customerMemoriesDeleted: Number(customerMemories.changes ?? 0),

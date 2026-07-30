@@ -14,7 +14,9 @@ import type {
   MerchantConfigVersionRecord,
   FollowUpCandidate,
   MerchantA2CAccountRecord,
+  A2CAccountGroupRecord,
   A2CInviteCodeRecord,
+  InviteCodeTeacherLinkBindingRecord,
   MerchantCountryRecord,
   UserRecord,
   KnowledgeItemRecord,
@@ -51,7 +53,9 @@ export type {
   MerchantConfigVersionRecord,
   FollowUpCandidate,
   MerchantA2CAccountRecord,
+  A2CAccountGroupRecord,
   A2CInviteCodeRecord,
+  InviteCodeTeacherLinkBindingRecord,
   MerchantCountryRecord,
   UserRecord,
   KnowledgeItemRecord,
@@ -625,6 +629,54 @@ export class Repositories {
     return this.a2cAccounts.patch(id, patch, merchantId);
   }
 
+  listA2CAccountGroups(merchantId: string): A2CAccountGroupRecord[] {
+    return this.a2cAccounts.listGroups(merchantId);
+  }
+
+  createA2CAccountGroup(merchantId: string, input: Record<string, unknown>): A2CAccountGroupRecord {
+    return this.a2cAccounts.createGroup(merchantId, input);
+  }
+
+  patchA2CAccountGroup(id: number, merchantId: string, patch: Record<string, unknown>): A2CAccountGroupRecord | undefined {
+    return this.a2cAccounts.patchGroup(id, merchantId, patch);
+  }
+
+  deleteA2CAccountGroup(id: number, merchantId: string): boolean {
+    return this.a2cAccounts.deleteGroup(id, merchantId);
+  }
+
+  setA2CAccountGroupMembers(id: number, merchantId: string, accountIds: number[]): A2CAccountGroupRecord | undefined {
+    return this.a2cAccounts.setGroupAccounts(id, merchantId, accountIds);
+  }
+
+  listGroupInviteCodes(groupId: number, merchantId: string): A2CInviteCodeRecord[] {
+    return this.a2cAccounts.listGroupInviteCodes(groupId, merchantId);
+  }
+
+  createGroupInviteCode(groupId: number, merchantId: string, input: Record<string, unknown>): A2CInviteCodeRecord {
+    return this.a2cAccounts.createGroupInviteCode(groupId, merchantId, input);
+  }
+
+  importGroupInviteCodes(groupId: number, merchantId: string, input: { codes?: string; registerUrl?: string; reusable?: boolean }): { imported: number; rows: A2CInviteCodeRecord[] } {
+    return this.a2cAccounts.importGroupInviteCodes(groupId, merchantId, input);
+  }
+
+  patchGroupInviteCode(id: number, merchantId: string, patch: Record<string, unknown>): A2CInviteCodeRecord | undefined {
+    return this.a2cAccounts.patchGroupInviteCode(id, merchantId, patch);
+  }
+
+  deleteGroupInviteCode(id: number, merchantId: string): boolean {
+    return this.a2cAccounts.deleteGroupInviteCode(id, merchantId);
+  }
+
+  listInviteTeacherBindings(source: "account" | "group", inviteCodeId: number, merchantId: string): InviteCodeTeacherLinkBindingRecord[] {
+    return this.a2cAccounts.listInviteTeacherBindings(source, inviteCodeId, merchantId);
+  }
+
+  replaceInviteTeacherBindings(source: "account" | "group", inviteCodeId: number, merchantId: string, teacherLinkIds: number[]): InviteCodeTeacherLinkBindingRecord[] {
+    return this.a2cAccounts.replaceInviteTeacherBindings(source, inviteCodeId, merchantId, teacherLinkIds);
+  }
+
   listInviteCodesForA2CAccount(accountId: number, merchantId?: string): A2CInviteCodeRecord[] {
     return this.a2cAccounts.listInviteCodes(accountId, merchantId);
   }
@@ -633,7 +685,7 @@ export class Repositories {
     return this.a2cAccounts.createInviteCode(accountId, input, merchantId);
   }
 
-  importInviteCodesForA2CAccount(accountId: number, input: { codes?: string; registerUrl?: string }, merchantId?: string): { imported: number; rows: A2CInviteCodeRecord[] } {
+  importInviteCodesForA2CAccount(accountId: number, input: { codes?: string; registerUrl?: string; reusable?: boolean }, merchantId?: string): { imported: number; rows: A2CInviteCodeRecord[] } {
     return this.a2cAccounts.importInviteCodes(accountId, input, merchantId);
   }
 

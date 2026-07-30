@@ -123,6 +123,8 @@ export interface MerchantA2CAccountRecord {
   countryCode: string;
   countryName: string;
   defaultLanguage: string;
+  groupId?: number;
+  groupName?: string;
   apiPhone: string;
   wabaId: string;
   status: number;
@@ -142,9 +144,14 @@ export interface A2CInviteCodeRecord {
   countryName: string;
   a2cAccountId: number;
   a2cAccountPhone: string;
+  source?: "account" | "group";
+  groupId?: number;
+  groupName?: string;
   code: string;
   registerUrl: string;
   status: "available" | "reserved" | "used" | "disabled";
+  reusable?: boolean;
+  usageCount?: number;
   assignedCustomerKey: string;
   assignedConversationId: string;
   platformAccount: string;
@@ -152,6 +159,30 @@ export interface A2CInviteCodeRecord {
   usedAt: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface A2CAccountGroupRecord {
+  id: number;
+  merchantId: string;
+  countryId: string;
+  countryCode: string;
+  countryName: string;
+  name: string;
+  status: "active" | "disabled";
+  accountCount: number;
+  inviteCodeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InviteCodeTeacherLinkBindingRecord {
+  id: number;
+  merchantId: string;
+  inviteSource: "account" | "group";
+  inviteCodeId: number;
+  teacherTgLinkId: number;
+  assignedCount: number;
+  status: "active" | "disabled";
 }
 
 export interface MerchantCountryRecord {

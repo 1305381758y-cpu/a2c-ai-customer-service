@@ -24,6 +24,7 @@ import {
   mapConversationMessage,
 } from "./repositoryConversationMappers.js";
 import { learnFromConversationReply } from "./repositoryConversationLearning.js";
+import { releaseInviteAssignments } from "./repositoryInviteAssignments.js";
 import type {
   Conversation,
   ConversationExportRecord,
@@ -340,6 +341,7 @@ export class ConversationRepository {
       this.db.sqlite.prepare("DELETE FROM conversation_script_state WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM messages WHERE conversation_id = ?").run(id);
       this.db.sqlite.prepare("DELETE FROM handoff_events WHERE conversation_id = ?").run(id);
+      releaseInviteAssignments(this.db, mapped.merchantId, { conversationIds: [id] });
       const result = this.db.sqlite.prepare(`DELETE FROM conversations ${where}`).run(id, ...(merchantId ? [merchantId] : []));
       this.deps.refreshCustomerAfterConversationDelete(mapped.merchantId, mapped.countryId, mapped.customerPhone);
       this.db.sqlite.exec("COMMIT");

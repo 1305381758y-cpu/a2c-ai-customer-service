@@ -20,6 +20,7 @@ import {
   restoreMerchantVisibleConfigVersion
 } from "../services/merchantSettings.js";
 import { registerMerchantA2CAccountRoutes } from "./merchantA2CAccountRoutes.js";
+import { registerMerchantA2CGroupRoutes } from "./merchantA2CGroupRoutes.js";
 import { registerMerchantConfigCheckRoutes } from "./merchantConfigCheckRoutes.js";
 import { registerMerchantCountryRoutes } from "./merchantCountryRoutes.js";
 import { registerMerchantInviteCodeRoutes } from "./merchantInviteCodeRoutes.js";
@@ -45,6 +46,7 @@ export function registerMerchantSettingsRoutes(app: FastifyInstance, deps: Merch
   registerMerchantInviteCodeRoutes(app, deps);
   registerMerchantRegistrationTutorialRoutes(app, { ...deps, maskConfig });
   registerMerchantA2CAccountRoutes(app, { ...deps, maskConfig });
+  registerMerchantA2CGroupRoutes(app, deps);
   registerMerchantTelegramRoutes(app, { ...deps, maskConfig });
 }
 

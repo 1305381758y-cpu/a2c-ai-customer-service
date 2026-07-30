@@ -32,7 +32,7 @@ export function createInviteCode(
 export function importInviteCodes(
   repos: Repositories,
   accountIdParam: string,
-  body: { codes?: string; registerUrl?: string },
+  body: { codes?: string; registerUrl?: string; reusable?: boolean },
   merchantId?: string
 ): InviteCodeResult<{ imported: number; rows: A2CInviteCodeRecord[] }> {
   const accountId = parseInviteCodeId(accountIdParam);

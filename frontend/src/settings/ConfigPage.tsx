@@ -289,7 +289,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         statusTone={a2cAccounts.length ? "ok" : "warning"}
         impact="账号停用后不会继续参与回复；邀请码只会分配给其绑定的客服账号。"
       >
-      {!platform && <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} onCountry={changeA2CAccountCountry} />}
+      {!platform && <A2CAccountsPanel accounts={a2cAccounts} filteredAccounts={filteredA2CAccounts} pager={accountPager} countries={countries} teacherTgLinks={teacherTgLinks} platform={platform} accountKeyword={accountKeyword} accountStatus={accountStatus} accountCountryId={accountCountryId} onKeywordChange={(value) => { setAccountKeyword(value); accountPager.setPage(1); }} onStatusChange={(value) => { setAccountStatus(value); accountPager.setPage(1); }} onCountryChange={(value) => { setAccountCountryId(value); accountPager.setPage(1); }} onToggle={toggleA2CAccount} onCountry={changeA2CAccountCountry} reloadAccounts={reloadA2CAccounts} />}
       </SettingsSection>}
       <SettingsSection
         id="handoff"

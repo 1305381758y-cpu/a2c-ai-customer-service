@@ -331,7 +331,7 @@ export function asksForMoreJobInfo(text: string): boolean {
 }
 
 export function asksForRegistrationSteps(text: string): boolean {
-  return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|c[oó]mo.*registr|como.*registr|registrarme|registrarse|pasos.*registro|proceso.*registro|registration steps|register.*steps|how.*register)/i.test(text);
+  return /(教程|注册步骤|注册流程|流程是什么|流程是什麼|怎么注册|怎麼註冊|如何注册|如何註冊|不会注册|不會註冊|教我注册|教我註冊|带我注册|帶我註冊|一步步.*注册|重新发.*步骤|重发.*步骤|再发.*步骤|重新发.*流程|重发.*流程|再走一遍|走一遍流程|重新走|注册.*怎么操作|cadastro.*passo|como.*cadastrar|c[oó]mo.*registr|como.*registr|o que (?:eu )?preciso fazer|o que (?:eu )?devo fazer|que (?:tengo|necesito|debo) que hacer|qué (?:tengo|necesito|debo) que hacer|registrarme|registrarse|pasos.*registro|proceso.*registro|registration steps|register.*steps|how.*register|what do i (?:need to|have to|should) do)/i.test(text);
 }
 
 export function shouldSendRegistrationTutorialImage(text: string, step: StrictFlowStep | "", needsInviteCode: boolean, tutorialUrl = ""): boolean {
