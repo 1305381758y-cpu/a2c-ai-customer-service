@@ -10,7 +10,33 @@ export class MerchantSettingsRepository {
 
   getConfig(merchantId: string): MerchantConfigRecord {
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
-    const row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
+    let row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
+    const country = this.db.sqlite.prepare(`
+      SELECT platform_register_url
+      FROM merchant_countries
+      WHERE merchant_id = ? AND status = 'active'
+      ORDER BY CASE WHEN code = 'default' THEN 1 ELSE 0 END, updated_at DESC, created_at DESC
+      LIMIT 1
+    `).get(merchantId) as { platform_register_url: string } | undefined;
+    if (country) {
+      const configUrl = String(row.platform_register_url ?? "").trim();
+      const countryUrl = String(country.platform_register_url ?? "").trim();
+      if (configUrl !== countryUrl) {
+        const countryIsLegacyPlaceholder = isLegacyRegisterPlaceholder(countryUrl) && !isLegacyRegisterPlaceholder(configUrl);
+        const configIsLegacyPlaceholder = isLegacyRegisterPlaceholder(configUrl) && !isLegacyRegisterPlaceholder(countryUrl);
+        const nextUrl = !configUrl
+          ? countryUrl
+          : !countryUrl || countryIsLegacyPlaceholder
+            ? configUrl
+            : configIsLegacyPlaceholder
+              ? countryUrl
+              : "";
+        if (nextUrl) {
+          this.synchronizePlatformRegisterUrl(merchantId, nextUrl, [configUrl, countryUrl].filter((url) => url !== nextUrl));
+          row = this.db.sqlite.prepare("SELECT * FROM merchant_configs WHERE merchant_id = ?").get(merchantId) as Record<string, unknown>;
+        }
+      }
+    }
     return mapMerchantConfig(row);
   }
 
@@ -46,6 +72,8 @@ export class MerchantSettingsRepository {
       balanceCurrency: "balance_currency"
     };
     this.db.sqlite.prepare("INSERT OR IGNORE INTO merchant_configs (merchant_id) VALUES (?)").run(merchantId);
+    const previousConfig = this.getConfig(merchantId);
+    const previousCountryUrls = this.countryRegisterUrls(merchantId);
     const entries = Object.entries(patch).filter(([key, value]) => key in allowed && (typeof value === "string" || typeof value === "boolean" || typeof value === "number"));
     if (entries.length) {
       const assignments = entries.map(([key]) => `${allowed[key]} = ?`).join(", ");
@@ -58,6 +86,13 @@ export class MerchantSettingsRepository {
         if (key === "aiProvider") return value === "gemini" || value === "deepseek" ? value : "minimax";
         return value as string;
       }), merchantId);
+    }
+    if (typeof patch.platformRegisterUrl === "string") {
+      this.synchronizePlatformRegisterUrl(
+        merchantId,
+        patch.platformRegisterUrl.trim(),
+        [previousConfig.platformRegisterUrl, ...previousCountryUrls]
+      );
     }
     return this.getConfig(merchantId);
   }
@@ -230,6 +265,7 @@ export class MerchantSettingsRepository {
 
   createCountry(merchantId: string, input: Record<string, unknown>): MerchantCountryRecord {
     const current = this.ensurePrimaryCountry(merchantId);
+    const previousConfigUrl = this.getConfig(merchantId).platformRegisterUrl;
     const profile = inferCountryProfile(input, current);
     const code = profile.code;
     const id = current.id;
@@ -262,6 +298,13 @@ export class MerchantSettingsRepository {
       merchantId
     );
     this.reassignToSingleCountry(merchantId, id);
+    if (typeof input.platformRegisterUrl === "string") {
+      this.synchronizePlatformRegisterUrl(
+        merchantId,
+        input.platformRegisterUrl.trim(),
+        [previousConfigUrl, current.platformRegisterUrl]
+      );
+    }
     return this.getCountry(id)!;
   }
 
@@ -281,6 +324,7 @@ export class MerchantSettingsRepository {
     const entries = Object.entries(patch).filter(([key]) => key in allowed);
     if (entries.length) {
       const current = this.getCountry(id);
+      const previousConfigUrl = this.getConfig(merchantId).platformRegisterUrl;
       const normalizedPatch = { ...patch };
       if (current && ("name" in patch || "code" in patch || "defaultLanguage" in patch)) {
         const profile = inferCountryProfile(patch, current);
@@ -299,6 +343,13 @@ export class MerchantSettingsRepository {
       }) as Array<string | number>;
       this.db.sqlite.prepare(`UPDATE merchant_countries SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND merchant_id = ?`).run(...values, id, merchantId);
       this.reassignToSingleCountry(merchantId, id);
+      if (current && typeof patch.platformRegisterUrl === "string") {
+        this.synchronizePlatformRegisterUrl(
+          merchantId,
+          patch.platformRegisterUrl.trim(),
+          [previousConfigUrl, current.platformRegisterUrl]
+        );
+      }
     }
     const row = this.db.sqlite.prepare("SELECT * FROM merchant_countries WHERE id = ? AND merchant_id = ?").get(id, merchantId) as Record<string, unknown> | undefined;
     return row ? mapMerchantCountry(row) : undefined;
@@ -307,6 +358,48 @@ export class MerchantSettingsRepository {
   countryIdForA2CAccount(merchantId: string, apiPhone: string): string {
     void apiPhone;
     return this.defaultCountryId(merchantId);
+  }
+
+  private countryRegisterUrls(merchantId: string): string[] {
+    return (this.db.sqlite.prepare("SELECT platform_register_url FROM merchant_countries WHERE merchant_id = ?").all(merchantId) as Array<{ platform_register_url: string }>)
+      .map((row) => String(row.platform_register_url ?? "").trim())
+      .filter(Boolean);
+  }
+
+  private synchronizePlatformRegisterUrl(merchantId: string, nextUrl: string, previousUrls: string[]): void {
+    const inheritedUrls = [...new Set(previousUrls.map((url) => String(url ?? "").trim()).filter(Boolean))];
+    const inheritedCondition = inheritedUrls.length
+      ? `TRIM(platform_register_url) = '' OR platform_register_url IN (${inheritedUrls.map(() => "?").join(", ")})`
+      : "TRIM(platform_register_url) = ''";
+    const inviteCondition = inheritedUrls.length
+      ? `TRIM(register_url) = '' OR register_url IN (${inheritedUrls.map(() => "?").join(", ")})`
+      : "TRIM(register_url) = ''";
+
+    this.db.sqlite.prepare(`
+      UPDATE merchant_configs
+      SET platform_register_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE merchant_id = ?
+    `).run(nextUrl, merchantId);
+    this.db.sqlite.prepare(`
+      UPDATE merchant_countries
+      SET platform_register_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE merchant_id = ? AND (${inheritedCondition})
+    `).run(nextUrl, merchantId, ...inheritedUrls);
+    this.db.sqlite.prepare(`
+      UPDATE a2c_invite_codes
+      SET register_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE merchant_id = ? AND (${inviteCondition})
+    `).run(nextUrl, merchantId, ...inheritedUrls);
+    this.db.sqlite.prepare(`
+      UPDATE a2c_group_invite_codes
+      SET register_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE merchant_id = ? AND (${inviteCondition})
+    `).run(nextUrl, merchantId, ...inheritedUrls);
+    this.db.sqlite.prepare(`
+      UPDATE a2c_invite_assignments
+      SET register_url = ?
+      WHERE merchant_id = ? AND (${inviteCondition})
+    `).run(nextUrl, merchantId, ...inheritedUrls);
   }
 
   markTelegramBindingInvalid(merchantId: string, error: string): MerchantConfigRecord {
@@ -356,6 +449,15 @@ export class MerchantSettingsRepository {
     this.db.sqlite.prepare("UPDATE training_materials SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
     this.db.sqlite.prepare("UPDATE training_material_items SET country_id = ? WHERE merchant_id = ?").run(countryId, merchantId);
     this.db.sqlite.prepare("UPDATE a2c_invite_codes SET country_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?").run(countryId, merchantId);
+  }
+}
+
+function isLegacyRegisterPlaceholder(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === "google.com" || hostname === "www.google.com";
+  } catch {
+    return false;
   }
 }
 

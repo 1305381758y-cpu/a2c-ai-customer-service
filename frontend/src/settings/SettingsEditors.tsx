@@ -112,14 +112,15 @@ export function CountryMarketSettingsCard({
       <label className="inline-field">国家代码<input readOnly value={countryDraft.code} /></label>
       <label className="inline-field">默认语言<input readOnly value={languageName(countryDraft.defaultLanguage)} /></label>
       <button type="button" className="ghost" onClick={reInferCountryDraft}>重新识别</button>
-      <input placeholder={label("platformRegisterUrl")} value={countryDraft.platformRegisterUrl} onChange={(event) => setCountryDraft({ ...countryDraft, platformRegisterUrl: event.target.value })} />
-      <input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(event) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: event.target.value })} />
+      <label className="inline-field">默认注册链接<input placeholder="例如：https://brps.cc/#/register" value={countryDraft.platformRegisterUrl} onChange={(event) => setCountryDraft({ ...countryDraft, platformRegisterUrl: event.target.value })} /></label>
+      <label className="inline-field">TG引导地址<input placeholder={label("tgRegisterGuideUrl")} value={countryDraft.tgRegisterGuideUrl} onChange={(event) => setCountryDraft({ ...countryDraft, tgRegisterGuideUrl: event.target.value })} /></label>
       <select value={countryDraft.requirePlatformAccount} onChange={(event) => setCountryDraft({ ...countryDraft, requirePlatformAccount: event.target.value })}><option value="true">需要开户注册</option><option value="false">不需要开户注册</option></select>
       <select value={countryDraft.requirePhone} onChange={(event) => setCountryDraft({ ...countryDraft, requirePhone: event.target.value })}><option value="true">需要手机号</option><option value="false">不需要手机号</option></select>
       <select value={countryDraft.requireTelegram} onChange={(event) => setCountryDraft({ ...countryDraft, requireTelegram: event.target.value })}><option value="true">需要TG</option><option value="false">不需要TG</option></select>
       <select value={countryDraft.requireWhatsApp} onChange={(event) => setCountryDraft({ ...countryDraft, requireWhatsApp: event.target.value })}><option value="false">不需要WS</option><option value="true">需要WS</option></select>
       <AsyncButton onClick={saveCountry} busyText="保存中...">保存国家设置</AsyncButton>
     </div>
+    <p className="table-helper">默认注册链接会同步到使用默认值的客服账号和账号组邀请码；单独设置过的专属链接不会被覆盖。</p>
     <p className="table-helper">点击下方国家行也可以载入编辑。</p>
     <Table rows={countries} columns={["code", "name", "defaultLanguage", "platformRegisterUrl", "tgRegisterGuideUrl", "requirePhone", "requireTelegram", "requireWhatsApp", "status"]} rowKey={(row) => row.id} selectedKey={countries[0]?.id} onRow={(row) => { applyCountryDraft(row); notify("success", "已载入国家设置", "修改后点击“保存国家设置”。"); }} />
   </div>;

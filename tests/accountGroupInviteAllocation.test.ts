@@ -80,4 +80,80 @@ describe("客服分组邀请码分配", () => {
     expect(repos.reserveInviteCodeForConversation(conversationB)).toMatchObject({ code: "B-CODE", merchantId: merchantB.id });
     expect(() => repos.replaceInviteTeacherBindings("group", 1, merchantB.id, [])).toThrow(/邀请码不存在/);
   });
+
+  it("修改商户默认注册链接后同步继承型国家和邀请码链接", () => {
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("默认注册链接同步测试");
+    const country = repos.createMerchantCountry(merchant.id, {
+      name: "巴西",
+      code: "br",
+      defaultLanguage: "pt-BR",
+      platformRegisterUrl: "https://www.google.com"
+    });
+    repos.patchMerchantConfig(merchant.id, { platformRegisterUrl: "https://www.google.com" });
+    const account = repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "14303103499" }])[0]!;
+    const group = repos.createA2CAccountGroup(merchant.id, { name: "巴西组", countryId: country.id });
+    repos.setA2CAccountGroupMembers(group.id, merchant.id, [account.id]);
+    repos.createGroupInviteCode(group.id, merchant.id, {
+      code: "INHERITED",
+      registerUrl: "https://www.google.com",
+      reusable: true
+    });
+    repos.createGroupInviteCode(group.id, merchant.id, {
+      code: "CUSTOM",
+      registerUrl: "https://custom.example/register",
+      reusable: true
+    });
+    repos.createInviteCodeForA2CAccount(account.id, {
+      code: "ACCOUNT-INHERITED",
+      registerUrl: "https://www.google.com",
+      reusable: true
+    }, merchant.id);
+    repos.createInviteCodeForA2CAccount(account.id, {
+      code: "ACCOUNT-CUSTOM",
+      registerUrl: "https://account-custom.example/register",
+      reusable: true
+    }, merchant.id);
+
+    repos.patchMerchantConfig(merchant.id, { platformRegisterUrl: "https://brps.cc/#/register" });
+
+    expect(repos.getMerchantConfig(merchant.id).platformRegisterUrl).toBe("https://brps.cc/#/register");
+    expect(repos.getMerchantCountry(country.id)?.platformRegisterUrl).toBe("https://brps.cc/#/register");
+    expect(repos.listGroupInviteCodes(group.id, merchant.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "INHERITED", registerUrl: "https://brps.cc/#/register" }),
+      expect.objectContaining({ code: "CUSTOM", registerUrl: "https://custom.example/register" })
+    ]));
+    expect(repos.listInviteCodesForA2CAccount(account.id, merchant.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ACCOUNT-INHERITED", registerUrl: "https://brps.cc/#/register" }),
+      expect.objectContaining({ code: "ACCOUNT-CUSTOM", registerUrl: "https://account-custom.example/register" })
+    ]));
+  });
+
+  it("读取旧版本遗留的 Google 占位链接时自动修复", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("历史注册链接修复测试");
+    const country = repos.createMerchantCountry(merchant.id, {
+      name: "巴西",
+      code: "br",
+      defaultLanguage: "pt-BR",
+      platformRegisterUrl: "https://www.google.com"
+    });
+    const account = repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "14303103499" }])[0]!;
+    const group = repos.createA2CAccountGroup(merchant.id, { name: "巴西组", countryId: country.id });
+    repos.createGroupInviteCode(group.id, merchant.id, {
+      code: "LEGACY",
+      registerUrl: "https://www.google.com",
+      reusable: true
+    });
+    db.sqlite.prepare(`
+      UPDATE merchant_configs
+      SET platform_register_url = ?, updated_at = datetime('now', '+1 second')
+      WHERE merchant_id = ?
+    `).run("https://brps.cc/#/register", merchant.id);
+
+    expect(repos.getMerchantConfig(merchant.id).platformRegisterUrl).toBe("https://brps.cc/#/register");
+    expect(repos.getMerchantCountry(country.id)?.platformRegisterUrl).toBe("https://brps.cc/#/register");
+    expect(repos.listGroupInviteCodes(group.id, merchant.id)[0]?.registerUrl).toBe("https://brps.cc/#/register");
+  });
 });

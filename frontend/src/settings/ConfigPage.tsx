@@ -116,6 +116,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
     try {
       const saved = await api<Record<string, string | boolean>>(endpoints.config, { method: "PATCH", body: JSON.stringify(form) });
       setForm(saved);
+      await reloadCountries();
       setMessage(configSaveSuccessMessage(saved));
       await reloadConfigVersions();
     } catch (error) {
@@ -166,7 +167,7 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
   const saveCountry = async () => {
     const payload = coercePatch(countryDraft);
     await api(endpoints.countries, { method: "POST", body: JSON.stringify(payload) });
-    await reloadCountries();
+    await Promise.all([reloadConfig(), reloadCountries()]);
     await reloadA2CAccounts();
     notify("success", "国家设置已保存", "所有客服账号会自动归属到这个国家。");
   };
@@ -277,7 +278,6 @@ export function Config({ platform, canEdit = true }: { platform: boolean; canEdi
         statusTone={countries[0] ? "ok" : "warning"}
         impact="影响客户回复语言、话本检索、注册链接、资料完成条件和导师 TG 链接分配。"
       >
-        <ConfigCredentialFields group="fallback" form={form} onChange={setForm} />
         <TutorialImageUploadCard imageUrl={String(form.registrationTutorialImageUrl || "")} file={tutorialImageFile} onFileChange={setTutorialImageFile} onUpload={uploadTutorialImage} />
         <CountryMarketSettingsCard countries={countries} countryDraft={countryDraft} teacherTgLinks={teacherTgLinks} teacherTgDraft={teacherTgDraft} teacherTgLinksUrl={endpoints.teacherTgLinks} reloadTeacherTgLinks={reloadTeacherTgLinks} applyCountryDraft={applyCountryDraft} updateCountryDraftName={updateCountryDraftName} setCountryDraft={setCountryDraft} reInferCountryDraft={reInferCountryDraft} saveCountry={saveCountry} onTeacherTgDraftChange={setTeacherTgDraft} onTeacherTgImport={importTeacherTelegramLinks} />
       </SettingsSection>
