@@ -15,6 +15,7 @@
     "build:web": "vite build --config frontend/vite.config.ts",
     "followups:due": "node scripts/run-followups-due.mjs",
     "ui:copy-smoke": "node scripts/ui-copy-smoke.mjs",
+    "ui:account-group-smoke": "npm run build && node scripts/ui-account-group-smoke.mjs",
     "ui:scroll-smoke": "npm run build && node scripts/ui-scroll-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
