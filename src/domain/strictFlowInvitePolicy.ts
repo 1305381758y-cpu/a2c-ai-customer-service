@@ -14,12 +14,19 @@ import {
   cancelsPendingCustomerQuestion,
   isPositive,
   isReadyToStartRegistration,
+  isRegistrationDoneConfirmation,
   looksLikeQuestion
 } from "./strictFlowPredicates.js";
 
 export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "strictFlowEnabled">): boolean {
   if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country)) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
+  const step = normalizeFlowStep(input.conversation.flowStep);
+  if (step === "wait_registration" && (
+    input.analysis.intent === "platform_register_done" ||
+    input.inferredIntent === "platform_register_done" ||
+    isRegistrationDoneConfirmation(input.customerText)
+  )) return false;
   if (asksGenericQuestionPermission(input.customerText) || asksCustomerCorrection(input.customerText)) return false;
   if (input.conversation.awaitingCustomerQuestion && !cancelsPendingCustomerQuestion(input.customerText)) return false;
   if (asksTrustConcern(input.customerText) ||
@@ -30,7 +37,6 @@ export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant
   if (looksLikeQuestion(input.customerText) &&
     !asksForRegistrationSteps(input.customerText) &&
     !explicitlyRequestsRegistrationPackage(input.customerText)) return false;
-  const step = normalizeFlowStep(input.conversation.flowStep);
   if (step === "send_register_link") return true;
   if (step === "registration_intent") {
     return asksForInviteOrLink(input.customerText, input.analysis.intent) ||

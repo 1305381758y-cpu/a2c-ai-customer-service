@@ -375,4 +375,48 @@ describe("strict flow turn builder", () => {
     expect(result.strictReply.reply).not.toContain("开户链接");
     expect(result.strictReply.reply).not.toContain("邀请码");
   });
+
+  it("prioritizes registration completion over a mixed next-step question", () => {
+    const context = setupConversation("wait_registration");
+    context.conversation.language = "pt-BR";
+    context.repos.updateConversation(context.conversation);
+    const flow = createBuiltInStrictScriptFlow(context.repos, context.merchant.id, {
+      countryId: context.country.id,
+      name: "完整话本副本"
+    }, "运营");
+    if (!flow.ok) throw new Error(flow.error);
+    context.repos.enableScriptFlow(flow.value.flow.id, context.merchant.id, "运营");
+    const activeFlow = context.repos.getActiveScriptFlow(context.merchant.id, context.country.id);
+    const customerText = "Ok, concluí meu cadastro. O que preciso fazer agora?";
+    const analysis = analyzeMessage(customerText, "pt-BR");
+    expect(analysis.intent).toBe("platform_register_done");
+
+    const result = buildStrictFlowTurn({
+      ...context,
+      runtimeConfig: runtimeConfig(),
+      analysis,
+      customerText,
+      strictFlowEnabled: true,
+      inferredIntent: "platform_register_done",
+      contextualIntent: {
+        intent: "workflow_question",
+        source: "ai",
+        answeredPreviousQuestion: true,
+        isQuestion: true,
+        isSubmission: false,
+        shouldPause: false,
+        questionType: "next_step",
+        nextAction: "answer next-step question",
+        reason: "mixed completion and next-step question"
+      },
+      scriptFlow: activeFlow
+    });
+
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.strictReply.nextFlowStep).toBe("wait_registration");
+    expect(result.strictReply.tutorialImageRequested).not.toBe(true);
+    expect(result.strictReply.reply).toContain("número de telefone");
+    expect(result.strictReply.reply).not.toContain("https://");
+    expect(result.strictReply.reply).not.toContain("Código de convite");
+  });
 });
