@@ -39,6 +39,16 @@ function ChatBubble({ message, helpers }: { message: ChatMessage; helpers: Messa
   const canShowOperatorTranslation = Boolean(isOutbound && operatorTranslated && operatorTranslationStatus === "translated" && helpers.normalizeText(operatorTranslated) !== helpers.normalizeText(message.content));
   const operatorTranslationIssue = isOutbound && payload.operatorTranslationError && !canShowOperatorTranslation ? payload.operatorTranslationError : "";
   const sendIssue = isOutbound && payload.a2cSendStatus === "failed" ? `A2C发送失败：${helpers.translateSystemMessage(payload.a2cSendError || "未知错误")}` : "";
+  const tutorialIssue = sendIssue && payload.tutorialImageRequested
+    ? "注册教程图片未发送：前置注册信息发送失败"
+    : "";
+  const analyzedIntent = !isOutbound
+    ? payload.contextualIntent?.intent && payload.contextualIntent.intent !== "unknown"
+      ? payload.contextualIntent.intent
+      : payload.inferredIntent && payload.inferredIntent !== "unknown"
+        ? payload.inferredIntent
+        : message.intent
+    : message.intent;
   const mediaUrl = mediaUrlFromMessage(message);
   return <article className={`chat-bubble ${message.direction}`}>
     <div className="bubble-meta"><span>{isOutbound ? "客服" : "客户"}</span><time>{helpers.formatTime(message.createdAt)}</time></div>
@@ -55,13 +65,14 @@ function ChatBubble({ message, helpers }: { message: ChatMessage; helpers: Messa
       {operatorTranslationIssue && <div className="translation-warning">{helpers.translateSystemMessage(operatorTranslationIssue)}</div>}
     </div>}
     {sendIssue && <div className="translation-warning">{sendIssue}</div>}
+    {tutorialIssue && <div className="translation-warning">{tutorialIssue}</div>}
     {isOutbound && <div className="message-diagnostics">
       <span>{helpers.replyModeLabel(payload.replyMode)}</span>
       {payload.scriptFlowName && <span>话本：{payload.scriptFlowName}</span>}
       {payload.strictFlowStep && <span>{helpers.label(payload.strictFlowStep)}</span>}
       {payload.strictFlowEnabled === true && <span>{payload.scriptFlowName ? "话本流程已命中" : "系统流程已命中"}</span>}
     </div>}
-    <small>{helpers.label(message.intent)} · {helpers.languageName(message.language)}</small>
+    <small>{helpers.label(analyzedIntent)} · {helpers.languageName(message.language)}</small>
   </article>;
 }
 

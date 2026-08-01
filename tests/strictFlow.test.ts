@@ -910,6 +910,61 @@ describe("strict Aston Brazil flow", () => {
     expect(recoveredStep).toBe("wait_registration");
   });
 
+  it("does not recover a flow step from an outbound message that failed to send", () => {
+    const recoveredStep = resolveEffectiveStrictFlowStep(
+      conversation({ flowStep: "interest_screening", stage: "need_platform_register" }),
+      [{
+        ...outboundMessage("项目介绍第一段", "project_intro"),
+        rawPayload: {
+          strictFlow: true,
+          strictFlowStep: "project_intro",
+          nextStrictFlowStep: "registration_intent",
+          a2cSendStatus: "failed"
+        }
+      }]
+    );
+
+    expect(recoveredStep).toBe("interest_screening");
+  });
+
+  it("recovers the committed next step instead of the display step after a successful multipart reply", () => {
+    const recoveredStep = resolveEffectiveStrictFlowStep(
+      conversation({ flowStep: "interest_screening", stage: "need_platform_register" }),
+      [{
+        ...outboundMessage("项目介绍第三段", "project_intro"),
+        rawPayload: {
+          strictFlow: true,
+          strictFlowStep: "project_intro",
+          nextStrictFlowStep: "registration_intent",
+          a2cSendStatus: "sent",
+          replyPartIndex: 2,
+          replyPartCount: 3
+        }
+      }]
+    );
+
+    expect(recoveredStep).toBe("registration_intent");
+  });
+
+  it("does not recover the next step from only a successful prefix of a multipart reply", () => {
+    const recoveredStep = resolveEffectiveStrictFlowStep(
+      conversation({ flowStep: "interest_screening", stage: "need_platform_register" }),
+      [{
+        ...outboundMessage("项目介绍第一段", "project_intro"),
+        rawPayload: {
+          strictFlow: true,
+          strictFlowStep: "project_intro",
+          nextStrictFlowStep: "registration_intent",
+          a2cSendStatus: "sent",
+          replyPartIndex: 0,
+          replyPartCount: 3
+        }
+      }]
+    );
+
+    expect(recoveredStep).toBe("interest_screening");
+  });
+
   it("runs the requested short-confirmation path through registration and Telegram", () => {
     const turns = simulateStrictFlow([
       "你好",

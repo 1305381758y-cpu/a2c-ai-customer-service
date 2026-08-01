@@ -25,6 +25,19 @@ export function resolveStrictFlowStepFromState(
 export function inferStrictFlowStepFromHistory(history: ConversationMessageRecord[]): StrictFlowStep | "" {
   for (const message of [...history].reverse()) {
     if (message.direction !== "outbound") continue;
+    const sendStatus = String(message.rawPayload?.a2cSendStatus ?? "").trim().toLowerCase();
+    // Failed outbound records are useful diagnostics, but they are not
+    // evidence that the customer received a step. Letting them participate in
+    // recovery makes a failed multipart introduction overwrite the committed
+    // conversation state and replay on the customer's next message.
+    if (sendStatus === "failed") continue;
+    const replyPartCount = Number(message.rawPayload?.replyPartCount ?? 1);
+    const replyPartIndex = Number(message.rawPayload?.replyPartIndex ?? 0);
+    // A successful prefix of a multipart reply is not a committed turn. Only
+    // the final delivered part may recover the turn's next state.
+    if (replyPartCount > 1 && replyPartIndex < replyPartCount - 1) continue;
+    const nextPayloadStep = normalizeFlowStep(String(message.rawPayload?.nextStrictFlowStep ?? ""));
+    if (nextPayloadStep) return nextPayloadStep;
     const payloadStep = normalizeFlowStep(String(message.rawPayload?.strictFlowStep ?? ""));
     if (payloadStep) return payloadStep;
     const contentStep = inferStrictFlowStepFromContent(message.content);

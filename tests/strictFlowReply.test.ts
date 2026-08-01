@@ -481,6 +481,70 @@ describe("strict flow reply module", () => {
     expect(context.repos.getConversation(context.conversation.id)?.flowStep).toBe("interest_screening");
   });
 
+  it("records why a requested tutorial image was not sent after registration text failed", async () => {
+    const context = setupConversation("registration_intent");
+    const customerText = "方便注册";
+    const analysis = analyzeMessage(customerText, "zh");
+    const contextualIntent = buildRuleContextualIntent({
+      conversation: context.conversation,
+      analysis,
+      customerText,
+      inferredIntent: "positive_confirmation"
+    });
+    const strictFlowRuntime: StrictFlowRuntimeEngine = {
+      nextTurn: () => ({
+        enabled: true,
+        reply: "注册链接：https://register.example\n邀请码：INV-1",
+        language: "zh",
+        nextFlowStep: "wait_registration",
+        stage: "need_platform_register",
+        needsInviteCode: true,
+        tutorialImageRequested: true
+      })
+    };
+    const a2c = {
+      sendMessage: vi.fn(async () => {
+        throw new Error("simulated transport failure");
+      })
+    } as unknown as A2CClient;
+
+    const result = await generateAndRecordStrictFlowReply({
+      ...context,
+      ai: aiStub() as never,
+      runtimeConfig: runtimeConfig({ REGISTRATION_TUTORIAL_IMAGE_URL: "https://cdn.example/tutorial.jpg" }),
+      analysis,
+      customerText,
+      a2c,
+      telegram: { sendHandoffMessage: vi.fn(async () => undefined) },
+      data: {
+        messageId: "inbound-registration-send-failure",
+        content: customerText,
+        from: "customer-1",
+        to: "agent-1",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "payload-registration-send-failure",
+      simulation: false,
+      strictFlowEnabled: true,
+      inferredIntent: "positive_confirmation",
+      contextualIntent,
+      strictFlowRuntime,
+      learnedIntent: null,
+      history: []
+    });
+
+    const outbounds = context.repos.listConversationMessages(context.conversation.id, 10)
+      .filter((message) => message.direction === "outbound");
+    expect(result.status).toBe("strict_flow_send_failed");
+    expect(outbounds).toHaveLength(1);
+    expect(outbounds[0]?.rawPayload).toMatchObject({
+      a2cSendStatus: "failed",
+      tutorialImageRequested: true,
+      tutorialImageSendPolicy: "after_registration_text_success"
+    });
+  });
+
   it("marks the conversation as handoff after sending the teacher Telegram link", async () => {
     const context = setupConversation("telegram_confirm");
     context.conversation.stage = "need_tg_register";

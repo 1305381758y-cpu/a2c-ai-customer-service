@@ -106,6 +106,7 @@ export async function sendStrictFlowTextOutbound(input: {
       }
     });
     outbounds.push(outbound);
+    if (outbound.sendResult.a2cSendStatus === "failed") break;
     if (index < parts.length - 1 && !input.simulation) {
       await (input.waitBetweenParts ?? delay)(1500);
     }

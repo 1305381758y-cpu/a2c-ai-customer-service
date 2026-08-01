@@ -187,6 +187,76 @@ describe("strict flow multipart outbound", () => {
     expect(waits).toEqual([1500, 1500]);
   });
 
+  it("stops the multipart batch after the first transport failure", async () => {
+    refinementProbe.active = 0;
+    refinementProbe.calls = 0;
+    refinementProbe.maxActive = 0;
+    refinementProbe.removeMarkers = false;
+    refinementProbe.repeatOpening = false;
+    refinementProbe.controlledQuestionTypes = [];
+
+    const config = loadConfig({
+      DATABASE_URL: ":memory:",
+      A2C_BASE_URL: "https://a2c.test",
+      A2C_APP_ID: "app",
+      A2C_APP_SECRET: "secret"
+    });
+    const repos = new Repositories(openDb(":memory:"));
+    const merchant = repos.createMerchant("分段失败商户");
+    const country = repos.createMerchantCountry(merchant.id, {
+      name: "巴西",
+      defaultLanguage: "pt-BR",
+      requirePlatformAccount: true,
+      requirePhone: true,
+      requireTelegram: true
+    });
+    repos.syncMerchantA2CAccounts(merchant.id, [{ apiPhone: "agent-failed-parts", verifiedName: "客服号" }]);
+    const conversation = repos.getOrCreateConversation("customer-failed-parts", "agent-failed-parts", "客户", merchant.id, country.id);
+    const sendMessage = vi.fn(async () => {
+      if (sendMessage.mock.calls.length === 2) throw new Error("rate limited");
+      return `sent-${sendMessage.mock.calls.length}`;
+    });
+
+    const result = await sendStrictFlowTextOutbound({
+      repos,
+      ai: {} as never,
+      runtimeConfig: config,
+      a2c: { sendMessage } as unknown as A2CClient,
+      conversation,
+      strictReply: {
+        enabled: true,
+        reply: "介绍一\n\n介绍二\n\n介绍三",
+        replyParts: ["介绍一", "介绍二", "介绍三"],
+        replyFlowStep: "project_intro",
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        stage: "need_platform_register",
+        needsInviteCode: false
+      },
+      customerText: "yes",
+      history: [],
+      agentProfile: repos.getMerchantAgentProfile(merchant.id),
+      data: {
+        messageId: "failed-parts-inbound",
+        content: "yes",
+        from: "customer-failed-parts",
+        to: "agent-failed-parts",
+        msgType: "text",
+        timestamp: 1783010000
+      },
+      payloadId: "failed-parts-payload",
+      simulation: false,
+      strictFlowEnabled: true,
+      learnedIntent: null,
+      country,
+      waitBetweenParts: async () => undefined
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(result.outbounds).toHaveLength(2);
+    expect(result.outbounds.at(-1)?.sendResult.a2cSendStatus).toBe("failed");
+  });
+
   it("keeps a question acknowledgement at most once across configured parts", async () => {
     refinementProbe.active = 0;
     refinementProbe.calls = 0;

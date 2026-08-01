@@ -4,7 +4,7 @@ import { analyzeMessage } from "../src/domain/analyzer.js";
 import { buildRuleContextualIntent } from "../src/domain/strictFlow.js";
 import { isContextualPositive, isPositive, asksForInviteOrLink } from "../src/domain/strictFlowPredicates.js";
 import { buildRegistrationStepReply } from "../src/domain/strictFlowRegistrationSteps.js";
-import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord } from "../src/repositories.js";
+import type { A2CInviteCodeRecord, Conversation, MerchantCountryRecord, MerchantRecord, ScriptFlowRuntime } from "../src/repositories.js";
 
 const merchant: MerchantRecord = { id: "merchant-1", name: "严格流程商户", status: "active" };
 const country: MerchantCountryRecord = {
@@ -114,6 +114,85 @@ describe("strict flow registration steps", () => {
     expect(result.needsInviteCode).toBe(false);
     expect(result.reply).toMatch(/兼职|工作|收益|佣金/);
     expect(result.reply).not.toContain("邀请码");
+  });
+
+  it("keeps configured project-intro parts when recovering an old conversation on that node", () => {
+    const scriptFlow: ScriptFlowRuntime = {
+      flow: {
+        id: 1,
+        merchantId: merchant.id,
+        countryId: country.id,
+        countryCode: country.code,
+        countryName: country.name,
+        name: "严格业务流程",
+        status: "active",
+        active: true,
+        version: 1,
+        sourceFilename: "",
+        stepCount: 11,
+        createdAt: "",
+        updatedAt: ""
+      },
+      steps: [{
+        id: 3,
+        flowId: 1,
+        merchantId: merchant.id,
+        countryId: country.id,
+        flowCode: "3",
+        flowName: "项目介绍",
+        flowStep: "project_intro",
+        goal: "完整介绍项目",
+        triggerCondition: "客户确认感兴趣",
+        customerExpressions: "sim|yes",
+        standardReply: "Introdução um\nIntrodução dois\nVocê tem tempo para continuar o cadastro agora?",
+        replyParts: ["Introdução um", "Introdução dois", "Você tem tempo para continuar o cadastro agora?"],
+        collectInfo: "",
+        sendLink: false,
+        sendInvite: false,
+        sendTutorialImage: false,
+        nextCondition: "介绍已完整发送",
+        nextFlowCode: "4",
+        nextFlowStep: "registration_intent",
+        forbidden: "",
+        notes: "",
+        sortOrder: 3,
+        enabled: true,
+        createdAt: "",
+        updatedAt: ""
+      }]
+    };
+    const conv = conversation("project_intro");
+    const text = "sim";
+    const analysis = analyzeMessage(text, "pt-BR");
+    const contextualIntent = buildRuleContextualIntent({ conversation: conv, analysis, customerText: text });
+
+    const result = buildRegistrationStepReply({
+      merchant,
+      country,
+      conversation: conv,
+      analysis,
+      customerText: text,
+      inviteCode,
+      config,
+      strictFlowEnabled: true,
+      scriptFlow,
+      contextualIntent
+    }, {
+      language: "pt-BR",
+      step: "project_intro",
+      text,
+      contextualLabel: contextualIntent.intent,
+      positive: true,
+      asksLink: false,
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.replyParts).toEqual(["Introdução um", "Introdução dois", "Você tem tempo para continuar o cadastro agora?"]);
+    expect(result.reply).toContain("Introdução um");
+    expect(result.reply).toContain("Introdução dois");
+    expect(result.reply).toContain("Você tem tempo para continuar o cadastro agora?");
+    expect(result.needsInviteCode).toBe(false);
   });
 
   it("sends the registration link and invite only after the customer is ready", () => {

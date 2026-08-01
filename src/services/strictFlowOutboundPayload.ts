@@ -61,6 +61,8 @@ export function buildStrictFlowOutboundRawPayload(input: StrictFlowOutboundPaylo
     aiFallback: Boolean(strictReply.fallback),
     inviteCodeRequired: Boolean(country.requirePlatformAccount),
     inviteCodeMissing: Boolean(strictReply.needsInviteCode && !inviteCode),
+    tutorialImageRequested: Boolean(strictReply.tutorialImageRequested),
+    tutorialImageSendPolicy: strictReply.tutorialImageRequested ? "after_registration_text_success" : "not_requested",
     replyPartIndex: input.replyPartIndex ?? 0,
     replyPartCount: input.replyPartCount ?? 1,
     assignedInviteCode: inviteCode ? {

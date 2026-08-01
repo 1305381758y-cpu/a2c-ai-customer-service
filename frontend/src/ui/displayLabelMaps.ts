@@ -64,6 +64,8 @@ export const DISPLAY_LABELS: Record<string, string> = {
   flowCode: "流程编号", flowName: "流程名称", flowStep: "系统步骤", goal: "当前节点目标", triggerCondition: "触发条件", customerExpressions: "客户常见表达",
   collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", sendTutorialImage: "发教程图", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
   greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册", no_telegram: "没有TG",
+  positive_confirmation: "肯定确认", acknowledgement: "已知晓", negative_refusal: "明确拒绝", not_available: "暂时没空", not_registered: "尚未注册",
+  telegram_installed: "TG已安装", telegram_username_help: "TG用户名帮助", phone_submission: "提交手机号", incomplete_phone: "手机号不完整", telegram_submission: "提交TG用户名",
   provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
   ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息",
   custom_unknown_question: "未知问题", contextual_acknowledgement: "上下文短确认", custom_unclassified_or_noise: "待判断噪声", custom_unclassified: "待识别新意图",

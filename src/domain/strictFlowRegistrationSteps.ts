@@ -33,7 +33,18 @@ export interface RegistrationStepReplyContext {
 export function buildRegistrationStepReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   if (context.step === "interest_screening") return buildInterestScreeningReply(input, context);
   if (context.step === "project_intro") {
-    return buildStrictFlowResponse(input, context.language, "registration_intent", "need_platform_register", naturalizeStrictReply(input, context.step, context.text, context.language, flowScriptLine(input, "project_intro", context.language), "registration_intent", input.analysis.intent));
+    const nextStep = configuredNextFlowStep(input, "project_intro", "registration_intent");
+    const parts = buildInterestProgressReplyParts(input, context.step, context.text, context.language, input.analysis.intent);
+    const reply = buildStrictFlowResponse(
+      input,
+      context.language,
+      nextStep,
+      stageForFlowStep(nextStep, "need_platform_register"),
+      parts.join("\n\n") || flowScriptLine(input, "project_intro", context.language)
+    );
+    reply.replyParts = parts.length > 1 ? parts : undefined;
+    reply.replyFlowStep = "project_intro";
+    return reply;
   }
   if (context.step === "registration_intent") return buildRegistrationIntentReply(input, context);
 
