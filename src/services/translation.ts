@@ -125,8 +125,31 @@ function localOperatorTranslation(text: string, sourceLanguage: string): string 
     "ok": "好的",
     "gracias": "谢谢"
   };
+  const portugueseDictionary: Record<string, string> = {
+    "oi": "你好",
+    "olá": "你好",
+    "ola": "你好",
+    "bom dia": "早上好",
+    "sim": "是的",
+    "não": "不",
+    "nao": "不",
+    "tenho": "我有",
+    "tenho sim": "我有",
+    "estou disponível": "我现在有空",
+    "estou disponivel": "我现在有空",
+    "estou livre": "我现在有空",
+    "podemos continuar": "我们可以继续",
+    "pode continuar": "可以继续",
+    "pronto": "好了",
+    "o cadastro deu certo": "注册成功了",
+    "obrigado": "谢谢",
+    "obrigada": "谢谢"
+  };
   if (language === "es" || language.startsWith("es-") || spanishDictionary[normalized]) {
     if (spanishDictionary[normalized]) return spanishDictionary[normalized];
+  }
+  if (language === "pt" || language.startsWith("pt-") || portugueseDictionary[normalized]) {
+    if (portugueseDictionary[normalized]) return portugueseDictionary[normalized];
   }
   return "";
 }

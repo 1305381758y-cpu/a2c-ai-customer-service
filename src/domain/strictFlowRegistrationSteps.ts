@@ -90,14 +90,19 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
 
 function buildRegistrationIntentReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, positive, asksLink, inferredIntent } = context;
+  const resumesHeldFlow = explicitlyResumesFlow(text) || input.contextualIntent?.nextAction === "resume held flow";
 
-  if (input.conversation.flowHoldReason === "temporary_pause" && !explicitlyResumesFlow(text) && asksPauseTimingClarification(text)) {
+  if (input.conversation.flowHoldReason && resumesHeldFlow) {
+    const nextStep = nextRegistrationStep(input);
+    return withFlowHold(buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true), "");
+  }
+  if (input.conversation.flowHoldReason === "temporary_pause" && !resumesHeldFlow && asksPauseTimingClarification(text)) {
     return withFlowHold(
       buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_time_clarification_ack", language)),
       "temporary_pause"
     );
   }
-  if (input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && (contextualLabel === "acknowledgement" || positive)) {
+  if (input.conversation.flowHoldReason && !resumesHeldFlow && (contextualLabel === "acknowledgement" || positive)) {
     const key = input.conversation.flowHoldReason === "temporary_pause" ? "temporary_pause_ack" : "refusal_ack";
     return withFlowHold(
       buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, key, language)),
@@ -121,10 +126,6 @@ function buildRegistrationIntentReply(input: StrictFlowInput, context: Registrat
       buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language)),
       "temporary_pause"
     );
-  }
-  if (input.conversation.flowHoldReason === "temporary_pause" && explicitlyResumesFlow(text)) {
-    const nextStep = nextRegistrationStep(input);
-    return withFlowHold(buildStrictFlowResponse(input, language, nextStep, stageForFlowStep(nextStep, "need_platform_register"), registerInstruction(input, language), true), "");
   }
   if (asksForMoreJobInfo(text)) {
     return buildStrictFlowResponse(input, language, "registration_intent", "need_platform_register", flowScriptLine(input, "more_job_info_ack", language));

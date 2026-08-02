@@ -29,7 +29,7 @@ describe("follow-up candidates", () => {
       rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
     });
     db.sqlite
-      .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
+      .prepare("UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE external_id = ?")
       .run("followup-seed");
 
     const candidates = repos.listDueFollowUpCandidates();
@@ -60,7 +60,7 @@ describe("follow-up candidates", () => {
       rawPayload: { replyMode: "strict_flow", a2cSendStatus: "simulated", simulation: true }
     });
     db.sqlite
-      .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
+      .prepare("UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE external_id = ?")
       .run("simulation-followup-seed");
 
     expect(repos.listDueFollowUpCandidates()).toHaveLength(0);
@@ -91,7 +91,7 @@ describe("follow-up candidates", () => {
       rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
     });
     db.sqlite
-      .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
+      .prepare("UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE external_id = ?")
       .run("followup-send-seed");
     const sender = {
       send: vi.fn(async () => ({
@@ -114,7 +114,7 @@ describe("follow-up candidates", () => {
     await expect(processor.processDueFollowUps()).resolves.toEqual({ scanned: 1, sent: 1, skipped: 0, failed: 0 });
 
     expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({
-      content: "您注册到哪一步了？如果卡住，把页面情况发我就行。",
+      content: "注册过程中需要帮助的话，把页面情况告诉我就行。",
       flowStep: "wait_registration",
       conversation: expect.objectContaining({
         customerPhone: "5511913586749",
@@ -149,7 +149,7 @@ describe("follow-up candidates", () => {
       rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
     });
     db.sqlite
-      .prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?")
+      .prepare("UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE external_id = ?")
       .run("followup-custom-seed");
     const sender = {
       send: vi.fn(async () => ({
@@ -203,7 +203,7 @@ describe("follow-up candidates", () => {
       intent: "unknown",
       rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
     });
-    db.sqlite.prepare("UPDATE messages SET created_at = datetime('now', '-3 minutes') WHERE external_id = ?").run("followup-lock-seed");
+    db.sqlite.prepare("UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE external_id = ?").run("followup-lock-seed");
 
     let release!: () => void;
     const sender = {
@@ -264,5 +264,42 @@ describe("follow-up candidates", () => {
       a2cSendStatus: "sent",
       simulation: false
     });
+  });
+
+  it("waits ten minutes and excludes paused, rejected, or question-awaiting conversations", () => {
+    const db = openDb(":memory:");
+    const repos = new Repositories(db);
+    const merchant = repos.createMerchant("跟进边界商户");
+    const cases = [
+      { customer: "too-soon", hold: "", awaiting: 0, age: "-9 minutes", due: false },
+      { customer: "due", hold: "", awaiting: 0, age: "-11 minutes", due: true },
+      { customer: "paused", hold: "temporary_pause", awaiting: 0, age: "-11 minutes", due: false },
+      { customer: "rejected", hold: "rejected", awaiting: 0, age: "-11 minutes", due: false },
+      { customer: "awaiting-question", hold: "", awaiting: 1, age: "-11 minutes", due: false }
+    ] as const;
+
+    for (const item of cases) {
+      const conversation = repos.getOrCreateConversation(item.customer, "agent-boundary", "", merchant.id);
+      conversation.language = "pt-BR";
+      conversation.flowStep = "registration_intent";
+      conversation.flowHoldReason = item.hold;
+      conversation.awaitingCustomerQuestion = Boolean(item.awaiting);
+      repos.updateConversation(conversation);
+      const externalId = `followup-${item.customer}`;
+      repos.insertMessage({
+        conversationId: conversation.id,
+        direction: "outbound",
+        externalId,
+        content: "Mensagem de teste",
+        msgType: "text",
+        language: "pt-BR",
+        intent: "unknown",
+        rawPayload: { replyMode: "strict_flow", a2cSendStatus: "sent" }
+      });
+      db.sqlite.prepare(`UPDATE messages SET created_at = datetime('now', '${item.age}') WHERE external_id = ?`).run(externalId);
+    }
+
+    const candidates = repos.listDueFollowUpCandidates();
+    expect(candidates.map((item) => item.conversation.customerPhone)).toEqual(["due"]);
   });
 });

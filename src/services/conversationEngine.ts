@@ -27,6 +27,7 @@ type InboundProcessingMode = "auto" | "sync" | "async";
 
 export class ConversationEngine {
   private readonly queue: QueuedConversationJob[] = [];
+  private readonly conversationTails = new Map<string, Promise<void>>();
   private activeJobs = 0;
 
   constructor(
@@ -42,7 +43,24 @@ export class ConversationEngine {
   }
 
   async handleInboundMessage(input: InboundConversationMessage): Promise<ConversationEngineResult> {
-    return this.processor.handleInboundMessage(input);
+    const key = conversationExecutionKey(input);
+    const previous = this.conversationTails.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    this.conversationTails.set(key, tail);
+
+    await previous.catch(() => undefined);
+    try {
+      return await this.processor.handleInboundMessage(input);
+    } finally {
+      release();
+      if (this.conversationTails.get(key) === tail) {
+        this.conversationTails.delete(key);
+      }
+    }
   }
 
   async simulateInboundMessage(input: Omit<InboundConversationMessage, "simulation">): Promise<ConversationEngineResult> {
@@ -90,4 +108,9 @@ export class ConversationEngine {
     if (process.env.WEBHOOK_ASYNC_ENABLED === "true") return true;
     return process.env.NODE_ENV !== "test";
   }
+}
+
+function conversationExecutionKey(input: InboundConversationMessage): string {
+  const data = input.payload.data;
+  return [input.merchantId || "auto", data.to || "unknown-agent", data.from || "unknown-customer"].join(":");
 }

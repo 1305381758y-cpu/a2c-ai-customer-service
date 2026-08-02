@@ -62,7 +62,7 @@ export function lastAssistantContent(history: Array<Pick<ConversationMessageReco
 
 export function isContextualShortReply(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return normalized.length > 0 && normalized.length <= 24 && /^(我没有|没有|沒|沒有|无|無|不会|不會|装好了|安装好了|下载好了|好了|好的|好|ok|okay|明白|知道了|yes|no|no lo tengo|no tengo|todavía no|todavia no|aún no|aun no|não|nao|sim|sí|si)$/i.test(normalized);
+  return normalized.length > 0 && normalized.length <= 24 && /^(我没有|没有|沒|沒有|无|無|不会|不會|装好了|安装好了|下载好了|好了|好的|好|ok|okay|明白|知道了|yes|no|no lo tengo|no tengo|todavía no|todavia no|aún no|aun no|não|nao|sim|sí|si|tenho|estou disponível|estou disponivel)$/i.test(normalized);
 }
 
 export function normalizeShortReply(text: string): string {
@@ -71,7 +71,7 @@ export function normalizeShortReply(text: string): string {
 
 export function saysContextualNo(text: string): boolean {
   const normalized = normalizeShortReply(text);
-  return /^(我没有|没有|沒有|没|沒|无|無|还没有|還沒有|没有telegram|没有tg|沒有telegram|沒有tg|no|nope|no lo tengo|no la tengo|no tengo|no tengo telegram|no tengo tg|não tenho|nao tenho|sem telegram)$/i.test(normalized);
+  return /^(我没有|没有|沒有|没|沒|无|無|还没有|還沒有|没有telegram|没有tg|沒有telegram|沒有tg|no|nope|no lo tengo|no la tengo|no tengo|no tengo telegram|no tengo tg|não|nao|não tenho|nao tenho|sem telegram)$/i.test(normalized);
 }
 
 export function saysNotAvailable(text: string): boolean {
@@ -110,6 +110,8 @@ export function isRegistrationInProgress(text: string): boolean {
 }
 
 export function saysTelegramInstalled(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  if (/^(tenho|já tenho|ja tenho)$/i.test(normalized)) return true;
   return /(装好了|安裝好了|安装好了|下载好了|下載好了|已经下载|已下載|已经装|已安装|我有\s*(?:telegram|tg)|installed|downloaded|i (?:already )?have telegram|i have tg|instalei|baixei|j[aá]\s+tenho\s+(?:telegram|tg)|tenho\s+(?:o\s+)?telegram|ya\s+tengo\s+(?:telegram|tg))/i.test(text.trim());
 }
 
@@ -142,7 +144,9 @@ export function hasIncompleteRegistrationPhone(text: string): boolean {
 }
 
 export function isRegistrationDoneConfirmation(text: string): boolean {
-  return /^(好了|好啦|完成了|注册好了|註冊好了|注册完了|註冊完了|已注册|已註冊|done|finished|registered|terminei|concluí|conclui|cadastrei|pronto|finalizado|finalizada|finalic[eé]|terminado|terminada|ya\s+termin[eé]|completado|completada|ya\s+complet[eé]|registrado|registrada)$/i.test(text.trim().replace(/[。.!?！？,，;；:：]+$/g, ""));
+  const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  return /^(好了|好啦|完成了|注册好了|註冊好了|注册完了|註冊完了|已注册|已註冊|done|finished|registered|terminei|concluí|conclui|cadastrei|pronto|finalizado|finalizada|finalic[eé]|terminado|terminada|ya\s+termin[eé]|completado|completada|ya\s+complet[eé]|registrado|registrada)$/i.test(normalized) ||
+    /(?:o\s+)?cadastro\s+(?:deu\s+certo|foi\s+conclu[ií]do|est[aá]\s+pronto|ficou\s+pronto)|consegui\s+(?:fazer\s+)?(?:o\s+)?cadastro|(?:j[aá]\s+)?(?:terminei|conclu[ií])\s+(?:o\s+)?cadastro/i.test(normalized);
 }
 
 export function saysNoTelegram(text: string): boolean {
@@ -245,7 +249,20 @@ export function cancelsPendingCustomerQuestion(text: string): boolean {
 export function explicitlyResumesFlow(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(有空|有空了|我有空|方便|方便了|我方便了|现在可以|現在可以|可以继续了|可以繼續了)$/i.test(normalized)) return true;
-  return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|(?:忙完|处理完|處理完|弄完|办完|辦完)了?.{0,8}(?:可以|能|继续|繼續|开始|開始)|(?:好了|行了|可以了).{0,8}(?:有空|方便|继续|繼續|开始|開始)|i(?:'m| am) (?:ready|available|free)|i can continue now|ready to (?:start|continue|register)|let'?s continue|i(?:'m| am) back|continue registration|send (?:the )?(?:registration )?link|(?:agora|j[aá]).{0,16}(?:tenho tempo|estou livre|estou dispon[ií]vel|posso continuar|podemos continuar)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|(?:ahora|ya).{0,16}(?:tengo tiempo|estoy libre|estoy disponible|puedo continuar|podemos continuar)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
+  return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|(?:忙完|处理完|處理完|弄完|办完|辦完)了?.{0,8}(?:可以|能|继续|繼續|开始|開始)|(?:好了|行了|可以了).{0,8}(?:有空|方便|继续|繼續|开始|開始)|i(?:'m| am) (?:ready|available|free)|i can continue now|ready to (?:start|continue|register)|let'?s continue|i(?:'m| am) back|continue registration|send (?:the )?(?:registration )?link|^(?:estou\s+dispon[ií]vel|estou\s+livre|tenho\s+tempo|podemos\s+continuar|pode\s+continuar|vamos\s+continuar)$|(?:agora|j[aá]).{0,16}(?:tenho tempo|estou livre|estou dispon[ií]vel|posso continuar|podemos continuar)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|^(?:estoy\s+disponible|estoy\s+libre|tengo\s+tiempo|podemos\s+continuar|puede\s+continuar)$|(?:ahora|ya).{0,16}(?:tengo tiempo|estoy libre|estoy disponible|puedo continuar|podemos continuar)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
+}
+
+export function answersAvailabilityQuestionAffirmatively(text: string, previousAssistantMessage = ""): boolean {
+  const normalized = normalizeShortReply(text);
+  const affirmative = /^(有|有的|是|是的|可以|方便|sim|yes|s[ií]|tenho|tenho sim|estou disponível|estou disponivel|estou livre)$/i.test(normalized);
+  if (!affirmative) return false;
+  if (!previousAssistantMessage) return /^(tenho|tenho sim|estou disponível|estou disponivel|estou livre)$/i.test(normalized);
+  return /(有空|有时间|有時間|方便继续|tempo\s+livre|tem\s+tempo|est[aá]\s+livre|dispon[ií]vel|tiene\s+tiempo|est[aá]\s+disponible|are\s+you\s+(?:free|available)|do\s+you\s+have\s+(?:free\s+)?time)/i.test(previousAssistantMessage);
+}
+
+export function answersResumeConfirmation(text: string, previousAssistantMessage = ""): boolean {
+  if (!/(有空|方便继续|可以继续|livre\s+para\s+continuar|dispon[ií]vel\s+para\s+continuar|est[aá]\s+livre|tiene\s+tiempo|free\s+to\s+continue|available\s+to\s+continue)/i.test(previousAssistantMessage)) return false;
+  return /^(是|是的|可以|有空|sim|yes|s[ií]|claro|tenho|estou disponível|estou disponivel|estou livre)$/i.test(normalizeShortReply(text));
 }
 
 export function asksPauseTimingClarification(text: string): boolean {
@@ -353,6 +370,7 @@ export function asksAboutJob(text: string): boolean {
 export function isAffirmativeJobSeekingStatement(text: string): boolean {
   const normalized = text.trim().replace(/[。.!！]+$/g, "");
   if (!normalized || looksLikeQuestion(normalized)) return false;
+  if (/(?:adoraria|gostaria|quero).{0,28}(?:juntar-me|fazer parte|entrar).{0,24}(?:equipe|equipa|time)|(?:preciso|quero|procuro).{0,20}(?:emprego|trabalho|vaga)(?:\s+online)?|c[oó]digo\s+de\s+candidatura|(?:me encantar[ií]a|quisiera).{0,24}(?:unirme|formar parte).{0,20}(?:equipo)|(?:i(?:'d| would) love|i want).{0,24}(?:join|work with).{0,20}(?:team|company)/i.test(normalized)) return true;
   const startsWithConfirmation = /^(?:是的?|对|好的?|可以|行|愿意|sim|claro|yes|yeah|yep|s[ií])(?:\b|[\s,，;；:：])/i.test(normalized);
   if (!startsWithConfirmation) return false;
   return /(?:正在|在).{0,12}(?:找|寻找).{0,12}(?:工作|兼职)|(?:estou|t[oô]).{0,24}(?:procurando|buscando).{0,32}(?:emprego|trabalho|vaga)|(?:estoy).{0,24}(?:buscando|busco).{0,32}(?:trabajo|empleo)|(?:i\s+am|i['’]?m).{0,24}(?:looking|searching).{0,24}(?:job|work)|(?:quero|quiero|want).{0,24}(?:emprego|trabalho|trabajo|job|work)/i.test(normalized);

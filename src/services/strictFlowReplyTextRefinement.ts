@@ -55,16 +55,20 @@ export async function refineStrictFlowReplyText(input: {
       allowLinkOrInvite: false,
       fallbackReply: input.strictReply.reply
     });
+    const duplicate = isNearDuplicateOfRecentReply(languageGuard.reply, input.history);
+    const distinctReply = duplicate
+      ? selectFlowHoldVariant(input.strictReply.flowHoldReason, input.strictReply.language, input.history, languageGuard.reply)
+      : languageGuard.reply;
     return {
-      reply: languageGuard.reply,
+      reply: distinctReply,
       naturalized: {
         reply: input.strictReply.reply,
         used: false,
         error: "流程暂停或拒绝状态保留固定话术"
       },
-      languageGuard,
-      duplicateAvoided: false,
-      variantApplied: false
+      languageGuard: { ...languageGuard, reply: distinctReply },
+      duplicateAvoided: duplicate,
+      variantApplied: duplicate && distinctReply !== languageGuard.reply
     };
   }
 
@@ -328,6 +332,60 @@ function isNearDuplicateOfRecentReply(reply: string, history: Array<{ direction:
     const union = new Set([...left, ...right]).size;
     return union > 0 && overlap / union >= 0.9;
   });
+}
+
+function selectFlowHoldVariant(
+  reason: NonNullable<StrictFlowReply["flowHoldReason"]>,
+  language: string,
+  history: Array<{ direction: string; content: string }>,
+  fallback: string
+): string {
+  const normalizedLanguage = language.toLowerCase();
+  const rejected = reason === "rejected";
+  const candidates = normalizedLanguage.startsWith("pt")
+    ? rejected
+      ? [
+        "Entendido. Não enviarei novas orientações. Se mudar de ideia, pode me chamar.",
+        "Sem problema. Vou encerrar por aqui e não enviarei novas mensagens sobre o cadastro."
+      ]
+      : [
+        "Certo, vou aguardar. Quando estiver disponível, me avise para continuarmos.",
+        "Sem problema. Continue quando puder e me avise; vou esperar por aqui.",
+        "Combinado. Faça o que precisa e me avise quando quiser retomar."
+      ]
+    : normalizedLanguage.startsWith("es")
+      ? rejected
+        ? [
+          "Entendido. No enviaré más indicaciones. Si cambia de opinión, puede escribirme.",
+          "De acuerdo. Lo dejamos aquí y no enviaré más mensajes sobre el registro."
+        ]
+        : [
+          "De acuerdo, esperaré. Cuando esté disponible, avíseme para continuar.",
+          "No hay problema. Continúe cuando pueda y avíseme; esperaré aquí.",
+          "Perfecto. Ocúpese de lo que necesita y avíseme cuando quiera retomar."
+        ]
+      : normalizedLanguage.startsWith("en")
+        ? rejected
+          ? [
+            "Understood. I will not send any more instructions. If you change your mind, you can message me.",
+            "No problem. We will stop here, and I will not send more registration messages."
+          ]
+          : [
+            "Alright, I will wait. Tell me when you are available and we can continue.",
+            "No problem. Continue when you can and let me know; I will wait here.",
+            "Got it. Take care of what you need and tell me when you want to resume."
+          ]
+        : rejected
+          ? [
+            "明白，我不会再发送后续引导。您之后改变想法时再联系我即可。",
+            "好的，我们先结束到这里，我不会再发送注册相关消息。"
+          ]
+          : [
+            "好的，我先等您。方便继续时告诉我就行。",
+            "没问题，您先忙，准备继续时再告诉我。",
+            "明白，您处理好后再联系我，我们从当前步骤继续。"
+          ];
+  return candidates.find((candidate) => !isExactRecentReply(candidate, history)) ?? fallback;
 }
 
 function normalizeReply(value: string): string {

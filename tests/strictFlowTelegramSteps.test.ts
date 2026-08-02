@@ -119,6 +119,14 @@ describe("strict flow Telegram steps", () => {
     expect(result.reply).toMatch(/应用商店|Play Store|App Store/);
   });
 
+  it("understands a bare Portuguese no after asking whether Telegram is installed", () => {
+    const result = reply("Não", "telegram_confirm");
+
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.stage).toBe("need_tg_register");
+    expect(result.reply).not.toContain("https://t.me/teacher");
+  });
+
   it("sends the teacher Telegram link when the customer has installed Telegram", () => {
     const result = reply("装好了", "telegram_download");
 
@@ -134,6 +142,20 @@ describe("strict flow Telegram steps", () => {
     expect(result.nextFlowStep).toBe("human_handoff");
     expect(result.stage).toBe("ready_for_handoff");
     expect(result.reply).toContain("https://t.me/teacher");
+  });
+
+  it("understands tenho as Telegram being available in the confirmation context", () => {
+    const result = reply("Tenho", "telegram_confirm");
+
+    expect(result.nextFlowStep).toBe("human_handoff");
+    expect(result.reply).toContain("https://t.me/teacher");
+  });
+
+  it("keeps an acknowledgement in the Telegram download step without sending the teacher link", () => {
+    const result = reply("Ok", "telegram_download");
+
+    expect(result.nextFlowStep).toBe("telegram_download");
+    expect(result.reply).not.toContain("https://t.me/teacher");
   });
 
   it("answers why Telegram is needed without sending the tutor link or handing off", () => {

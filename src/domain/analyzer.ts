@@ -127,6 +127,7 @@ export function detectLanguage(text: string, fallback = "unknown"): string {
 
   if (dominant) return dominant.language;
   const lower = text.toLowerCase();
+  if (fallback !== "unknown") return normalizeLanguageCode(fallback);
   if (/[A-Za-z]/.test(text)) return "en";
   return lower ? fallback : "unknown";
 }
@@ -204,7 +205,7 @@ function detectLanguageSignals(text: string): Array<{ language: string; score: n
     /\b(xin chào|dang ky|đăng ký|tai khoan|tài khoản|so dien thoai|số điện thoại|cảm ơn)\b/g
   ]);
   addKeywordScore(lower, add, "pt-BR", [
-    /(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|convite|pix|brasil|não|nao|tenho|como faço|como faco|faço|faco|sim|quero)(\s|$|[,.!?;:])/g
+    /(^|\s)(olá|ola|oi|bom dia|boa tarde|boa noite|cadastro|cadastrar|candidatura|conta|telefone|obrigado|obrigada|meu|minha|você|voce|trabalho|emprego|vaga|equipe|equipa|convite|pix|brasil|não|nao|tenho|preciso|procuro|adoraria|gostaria|juntar-me|disponível|disponivel|como faço|como faco|faço|faco|sim|quero)(\s|$|[,.!?;:])/g
   ]);
   addKeywordScore(lower, add, "en", [
     /\b(hello|hi|hey|good morning|good afternoon|good evening|register|registration|phone|number|work|job|link|help|how|yes|ok|telegram|account|open|opened|cannot|can't|failed|error)\b/g
@@ -267,7 +268,7 @@ function isPlatformRegistrationDoneMessage(text: string): boolean {
     .toLowerCase()
     .replace(/[。.!?！？,，;；:：]+$/g, "")
     .trim();
-  const completion = /(完成|好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)/i;
+  const completion = /(完成|好了|已注册|已註冊|注册完|註冊完|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada|deu\s+certo|foi\s+conclu[ií]do|ficou\s+pronto|consegui)/i;
   if (/^(好了|完成了|done|finished|registered|siap|sudah|เสร็จ|terminei|concluí|conclui|cadastrei|registrado|registrada|pronto|finalizado|finalizada|finalicé|finalice|terminado|terminada|completado|completada)$/i.test(normalized)) {
     return true;
   }

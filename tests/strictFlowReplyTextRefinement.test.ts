@@ -429,4 +429,57 @@ describe("strict flow reply text refinement", () => {
     expect(third.reply).not.toMatch(/^(Entendo|Entendi|Compreendo|Claro)/i);
     expect(new Set([first.reply, second.reply, third.reply]).size).toBe(3);
   });
+
+  it("rotates repeated temporary-pause replies without using the model", async () => {
+    const repeated = "Tudo bem, cuide do que precisa agora. Quando estiver disponível, me avise e continuamos.";
+    const ai = { naturalizeStrictFlowText: vi.fn() };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: repeated,
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        flowHoldReason: "temporary_pause",
+        controlledQuestionType: "none"
+      }),
+      customerText: "Tá bem",
+      history: [{ direction: "outbound", content: repeated, intent: "unknown", createdAt: "" }],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).not.toBe(repeated);
+    expect(result.reply).toMatch(/aguardar|quando puder|retomar/i);
+    expect(result.duplicateAvoided).toBe(true);
+    expect(result.variantApplied).toBe(true);
+    expect(ai.naturalizeStrictFlowText).not.toHaveBeenCalled();
+  });
+
+  it("rotates a repeated refusal acknowledgement without restarting the flow", async () => {
+    const repeated = "Tudo bem, não vou incomodar você agora. Se mudar de ideia, pode me chamar.";
+    const ai = { naturalizeStrictFlowText: vi.fn() };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: repeated,
+        language: "pt-BR",
+        nextFlowStep: "registration_intent",
+        flowHoldReason: "rejected",
+        controlledQuestionType: "none"
+      }),
+      customerText: "Obrigado",
+      history: [{ direction: "outbound", content: repeated, intent: "unknown", createdAt: "" }],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).not.toBe(repeated);
+    expect(result.reply).toMatch(/não enviarei|encerrar/i);
+    expect(result.reply).not.toMatch(/cadastro agora|continuar agora/i);
+    expect(result.duplicateAvoided).toBe(true);
+  });
 });

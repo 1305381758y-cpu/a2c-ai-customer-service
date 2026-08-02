@@ -153,4 +153,13 @@ describe("strict flow wait-registration step", () => {
     expect(result.reply).toContain("请将您注册的手机号码");
     expect(result.reply).not.toContain("是否已完成注册");
   });
+
+  it("recognizes natural Portuguese registration completion without resending the registration package", () => {
+    const result = reply("O cadastro deu certo", { language: "pt-BR" });
+
+    expect(result.nextFlowStep).toBe("wait_registration");
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.reply).not.toContain("https://register.example");
+    expect(result.reply).not.toContain("INV-001");
+  });
 });

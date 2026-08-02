@@ -285,6 +285,26 @@ describe("strict Aston Brazil flow", () => {
     expect(result.reply).not.toContain("register.example");
   });
 
+  it.each([
+    "Adoraria juntar-me à sua equipe",
+    "Preciso de um emprego online",
+    "Olá, meu código de candidatura é: 652145"
+  ])("uses a strong initial job-interest statement without asking the same interest question again: %s", (customerText) => {
+    const result = reply(customerText, { language: "pt-BR" });
+
+    expect(result.nextFlowStep).toBe("registration_intent");
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.reply).toMatch(/trabalho|兼职|工作|comissão|佣金/i);
+  });
+
+  it("keeps a polite Portuguese greeting at interest screening instead of treating it as consent", () => {
+    const result = reply("Bom dia", { language: "pt-BR", flowStep: "interest_screening" });
+
+    expect(result.nextFlowStep).toBe("interest_screening");
+    expect(result.needsInviteCode).toBe(false);
+    expect(result.reply).not.toMatch(/https?:\/\//);
+  });
+
   it("keeps Aston on the strict script when the market is still the default country", () => {
     const analysis = analyzeMessage("你好");
     const result = buildStrictFlowReply({

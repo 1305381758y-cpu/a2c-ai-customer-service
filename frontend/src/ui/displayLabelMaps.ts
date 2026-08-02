@@ -65,9 +65,11 @@ export const DISPLAY_LABELS: Record<string, string> = {
   collectInfo: "需要收集的信息", sendLink: "发链接", sendInvite: "发邀请码", sendTutorialImage: "发教程图", nextCondition: "下一步条件", nextFlowCode: "下一流程编号", nextFlowStep: "下一系统步骤", sortOrder: "顺序", notes: "备注",
   greeting: "打招呼", ask_platform_register: "询问开户注册", platform_register_done: "开户注册完成", ask_tg_register: "询问TG注册", no_telegram: "没有TG",
   positive_confirmation: "肯定确认", acknowledgement: "已知晓", negative_refusal: "明确拒绝", not_available: "暂时没空", not_registered: "尚未注册",
+  job_question: "工作内容问题", payment_concern: "费用疑虑", investment_concern: "投资疑虑", earning_concern: "收益疑虑", workflow_question: "流程问题", registration_field_question: "注册字段问题", complaint: "客户投诉", chat: "一般对话", sensitive_request: "敏感请求", unknown_question: "未知问题",
   telegram_installed: "TG已安装", telegram_username_help: "TG用户名帮助", phone_submission: "提交手机号", incomplete_phone: "手机号不完整", telegram_submission: "提交TG用户名",
   provide_phone: "提供手机号", provide_telegram: "提供TG", provide_phone_and_telegram: "提供手机号和TG", ask_link: "索要链接",
   ask_promotion: "询问活动", trust_concern: "信任疑虑", need_help: "需要协助", human_request: "要求人工", irrelevant_or_spam: "无关或垃圾消息",
   custom_unknown_question: "未知问题", contextual_acknowledgement: "上下文短确认", custom_unclassified_or_noise: "待判断噪声", custom_unclassified: "待识别新意图",
+  "resume held flow": "恢复流程", "continue registration flow": "继续开户注册", "repeat the interest question without advancing": "重新确认兴趣",
   language_detection: "语言识别", intent_classification: "意图识别", contextual_intent: "上下文理解", strict_flow_naturalize: "口语化改写", translation: "翻译", availability_check: "配置检测", conversation_review: "对话复盘", training_image_ocr: "素材图片识别", conversation_reply: "普通回复", customer_image_analysis: "客户图片分析", minimax: "MiniMax", gemini: "Gemini", deepseek: "DeepSeek"
 };

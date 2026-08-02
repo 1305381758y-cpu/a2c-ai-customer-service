@@ -42,8 +42,10 @@ export class HandoffRepository {
          AND f.followup_type = 'idle_2m'
         WHERE c.status = 'active'
           AND lm.direction = 'outbound'
-          AND lm.created_at <= datetime('now', '-2 minutes')
+          AND lm.created_at <= datetime('now', '-10 minutes')
           AND COALESCE(c.flow_step, '') NOT IN ('', 'human_handoff', 'ended')
+          AND COALESCE(c.flow_hold_reason, '') = ''
+          AND COALESCE(c.awaiting_customer_question, 0) = 0
           AND lm.raw_payload NOT LIKE '%"a2cSendStatus":"failed"%'
           AND lm.raw_payload NOT LIKE '%"simulation":true%'
           AND f.id IS NULL

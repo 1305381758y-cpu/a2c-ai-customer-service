@@ -31,6 +31,21 @@ describe("operator translation", () => {
     });
   });
 
+  it("uses context-safe local translations for common Portuguese flow replies", async () => {
+    await expect(translateForOperator(config, "Tenho", "pt-BR")).resolves.toMatchObject({
+      translatedText: "我有",
+      status: "translated"
+    });
+    await expect(translateForOperator(config, "Estou disponível", "pt-BR")).resolves.toMatchObject({
+      translatedText: "我现在有空",
+      status: "translated"
+    });
+    await expect(translateForOperator(config, "O cadastro deu certo", "pt-BR")).resolves.toMatchObject({
+      translatedText: "注册成功了",
+      status: "translated"
+    });
+  });
+
   it("uses the AiTasks translation interface for provider-backed operator translations", async () => {
     const ai = {
       translateText: vi.fn(async () => "我要了解注册步骤")

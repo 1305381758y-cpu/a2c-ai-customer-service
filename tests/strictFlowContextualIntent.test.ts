@@ -198,4 +198,66 @@ describe("strictFlowContextualIntent", () => {
     expect(result.nextAction).toBe("answer Telegram question and keep current step");
     expect(result.isQuestion).toBe(true);
   });
+
+  it("uses the previous availability question to understand short Portuguese answers", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent", { language: "pt-BR" }),
+      analysis: analyzeMessage("Tenho", "pt-BR"),
+      customerText: "Tenho"
+    }, [{ direction: "outbound", content: "Você tem tempo livre em casa?" }]);
+
+    expect(result.intent).toBe("positive_confirmation");
+    expect(result.nextAction).toBe("continue registration flow");
+    expect(result.shouldPause).toBe(false);
+  });
+
+  it.each(["Estou disponível", "Estou livre", "Podemos continuar"])("resumes a persisted Portuguese pause: %s", (customerText) => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent", { language: "pt-BR", flowHoldReason: "temporary_pause" }),
+      analysis: analyzeMessage(customerText, "pt-BR"),
+      customerText
+    });
+
+    expect(result.intent).toBe("positive_confirmation");
+    expect(result.nextAction).toBe("resume held flow");
+    expect(result.shouldPause).toBe(false);
+  });
+
+  it("resumes a pause when sim answers an explicit follow-up question", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("registration_intent", { language: "pt-BR", flowHoldReason: "temporary_pause" }),
+      analysis: analyzeMessage("Sim", "pt-BR"),
+      customerText: "Sim"
+    }, [{ direction: "outbound", content: "Você está livre para continuar agora?" }]);
+
+    expect(result.intent).toBe("positive_confirmation");
+    expect(result.nextAction).toBe("resume held flow");
+  });
+
+  it("does not treat a repeated greeting as consent at the interest step", () => {
+    const result = buildRuleContextualIntent({
+      conversation: conversation("interest_screening", { language: "pt-BR" }),
+      analysis: analyzeMessage("Bom dia", "pt-BR"),
+      customerText: "Bom dia"
+    });
+
+    expect(result.intent).toBe("chat");
+    expect(result.nextAction).toBe("repeat the interest question without advancing");
+  });
+
+  it("distinguishes bare Portuguese Telegram yes and no answers", () => {
+    const missing = buildRuleContextualIntent({
+      conversation: conversation("telegram_confirm", { language: "pt-BR" }),
+      analysis: analyzeMessage("Não", "pt-BR"),
+      customerText: "Não"
+    });
+    const installed = buildRuleContextualIntent({
+      conversation: conversation("telegram_confirm", { language: "pt-BR" }),
+      analysis: analyzeMessage("Tenho", "pt-BR"),
+      customerText: "Tenho"
+    });
+
+    expect(missing.intent).toBe("no_telegram");
+    expect(installed.intent).toBe("telegram_installed");
+  });
 });

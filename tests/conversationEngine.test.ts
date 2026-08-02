@@ -132,4 +132,64 @@ describe("ConversationEngine", () => {
     await expect(engine.processDueFollowUps(12)).resolves.toEqual({ scanned: 2, sent: 1, skipped: 1, failed: 0 });
     expect(processor.processDueFollowUps).toHaveBeenCalledWith(12);
   });
+
+  it("serializes messages from the same merchant, agent, and customer", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    const processor = {
+      handleInboundMessage: vi.fn(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        active -= 1;
+        return { status: "replied" };
+      }),
+      processDueFollowUps: vi.fn()
+    };
+    const engine = new ConversationEngine(processor, { asyncProcessing: false });
+    const first = engine.handleInboundMessage({ payload: payload() });
+    const secondPayload = payload();
+    secondPayload.id = "payload-second";
+    secondPayload.data.messageId = "message-second";
+    const second = engine.handleInboundMessage({ payload: secondPayload });
+
+    await vi.waitFor(() => expect(processor.handleInboundMessage).toHaveBeenCalledTimes(1));
+    releases.shift()?.();
+    await vi.waitFor(() => expect(processor.handleInboundMessage).toHaveBeenCalledTimes(2));
+    releases.shift()?.();
+    await Promise.all([first, second]);
+
+    expect(maxActive).toBe(1);
+  });
+
+  it("allows different conversations to run in parallel", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let release!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const processor = {
+      handleInboundMessage: vi.fn(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await blocker;
+        active -= 1;
+        return { status: "replied" };
+      }),
+      processDueFollowUps: vi.fn()
+    };
+    const engine = new ConversationEngine(processor, { asyncProcessing: false });
+    const firstPayload = payload();
+    const secondPayload = payload();
+    secondPayload.data.from = "another-customer";
+
+    const first = engine.handleInboundMessage({ payload: firstPayload });
+    const second = engine.handleInboundMessage({ payload: secondPayload });
+    await vi.waitFor(() => expect(processor.handleInboundMessage).toHaveBeenCalledTimes(2));
+    expect(maxActive).toBe(2);
+    release();
+    await Promise.all([first, second]);
+  });
 });

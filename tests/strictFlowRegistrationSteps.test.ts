@@ -327,7 +327,10 @@ describe("strict flow registration steps", () => {
     "Agora posso continuar",
     "Já estou livre, podemos continuar",
     "Ahora puedo continuar",
-    "Ya estoy libre, podemos continuar"
+    "Ya estoy libre, podemos continuar",
+    "Estou disponível",
+    "Estou livre",
+    "Podemos continuar"
   ])("resumes a temporary pause from semantic availability wording: %s", (customerText) => {
     const resumed = reply(customerText, "registration_intent", {
       flowHoldReason: "temporary_pause"
@@ -377,5 +380,21 @@ describe("strict flow registration steps", () => {
     expect(acknowledgement.flowHoldReason).toBe("rejected");
     expect(acknowledgement.nextFlowStep).toBe("registration_intent");
     expect(acknowledgement.needsInviteCode).toBe(false);
+  });
+
+  it("persists a Portuguese refusal instead of scheduling more registration guidance", () => {
+    const refused = reply("Obg não quero", "registration_intent");
+
+    expect(refused.flowHoldReason).toBe("rejected");
+    expect(refused.nextFlowStep).toBe("registration_intent");
+    expect(refused.needsInviteCode).toBe(false);
+  });
+
+  it("clears a refusal hold only when the customer explicitly asks to resume", () => {
+    const resumed = reply("我改变主意了，可以继续注册", "registration_intent", { flowHoldReason: "rejected" });
+
+    expect(resumed.flowHoldReason).toBe("");
+    expect(resumed.nextFlowStep).toBe("wait_registration");
+    expect(resumed.needsInviteCode).toBe(true);
   });
 });

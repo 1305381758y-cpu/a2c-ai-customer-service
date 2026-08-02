@@ -1,6 +1,8 @@
 import type { ConversationMessageRecord } from "../repositories.js";
 import { isPositiveConfirmation, type ContextualIntentLabel } from "./analyzer.js";
 import {
+  answersAvailabilityQuestionAffirmatively,
+  answersResumeConfirmation,
   asksAboutJob,
   asksCustomerCorrection,
   asksEarningConcern,
@@ -26,6 +28,7 @@ import {
   isAffirmativeJobSeekingStatement,
   explicitlyResumesFlow,
   isPositive,
+  isRepeatGreeting,
   lastAssistantContent,
   looksLikeQuestion,
   mapInternalToContextual,
@@ -128,6 +131,29 @@ export function buildRuleContextualIntent(
       shouldPause: false,
       nextAction: "continue to the configured project introduction",
       reason: "affirmative job-seeking statement"
+    });
+  }
+
+  if (step === "interest_screening" && isRepeatGreeting(text)) {
+    return base("chat", {
+      answeredPreviousQuestion: false,
+      isQuestion: false,
+      shouldPause: false,
+      nextAction: "repeat the interest question without advancing",
+      reason: "greeting does not answer the interest question"
+    });
+  }
+
+  if (step === "registration_intent" && (
+    explicitlyResumesFlow(text) ||
+    answersAvailabilityQuestionAffirmatively(text, previousAssistantMessage) ||
+    (input.conversation.flowHoldReason === "temporary_pause" && answersResumeConfirmation(text, previousAssistantMessage))
+  )) {
+    return base("positive_confirmation", {
+      answeredPreviousQuestion: true,
+      shouldPause: false,
+      nextAction: input.conversation.flowHoldReason === "temporary_pause" ? "resume held flow" : "continue registration flow",
+      reason: input.conversation.flowHoldReason === "temporary_pause" ? "customer explicitly resumed the paused flow" : "customer confirmed availability"
     });
   }
 

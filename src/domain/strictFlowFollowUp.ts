@@ -13,17 +13,23 @@ export function normalizeFollowUpLanguage(language: string, fallback = "zh"): st
 export function buildStrictFlowFollowUp(flowStep: string, language: string): string {
   const step = normalizeFlowStep(flowStep);
   const replyLanguage = normalizeFollowUpLanguage(language);
-  if (step === "interest_screening" || step === "registration_intent" || step === "project_intro") {
-    if (replyLanguage === "en") return "Are you free to continue now? I can guide you step by step.";
-    if (replyLanguage === "pt-BR") return "Você está livre para continuar agora? Posso orientar você passo a passo.";
-    if (replyLanguage === "es") return "¿Tiene tiempo para continuar ahora? Puedo guiarle paso a paso.";
-    return "您现在方便继续吗？我可以一步步带您完成。";
+  if (step === "interest_screening") {
+    if (replyLanguage === "en") return "Would you still like to learn about this online part-time work?";
+    if (replyLanguage === "pt-BR") return "Você ainda gostaria de conhecer melhor este trabalho online de meio período?";
+    if (replyLanguage === "es") return "¿Todavía le gustaría conocer mejor este trabajo en línea a tiempo parcial?";
+    return "您还想继续了解这份线上兼职工作吗？";
+  }
+  if (step === "registration_intent" || step === "project_intro") {
+    if (replyLanguage === "en") return "When you are ready, tell me and we can continue to the next step.";
+    if (replyLanguage === "pt-BR") return "Quando estiver disponível, me avise e podemos continuar para a próxima etapa.";
+    if (replyLanguage === "es") return "Cuando esté disponible, avíseme y podremos continuar con el siguiente paso.";
+    return "您准备好后告诉我，我们再继续下一步。";
   }
   if (step === "wait_registration" || step === "send_register_link") {
-    if (replyLanguage === "en") return "Which registration step are you on now? If anything is stuck, send me what you see and I will help.";
-    if (replyLanguage === "pt-BR") return "Em qual etapa do cadastro você está agora? Se travar em alguma parte, me envie o que aparece e eu ajudo.";
-    if (replyLanguage === "es") return "¿En qué etapa del registro está ahora? Si se atascó, envíeme lo que aparece en la pantalla y le ayudo.";
-    return "您注册到哪一步了？如果卡住，把页面情况发我就行。";
+    if (replyLanguage === "en") return "If you need help with any registration step, tell me what you see and I will help.";
+    if (replyLanguage === "pt-BR") return "Se precisar de ajuda em alguma etapa do cadastro, me diga o que aparece e eu ajudo.";
+    if (replyLanguage === "es") return "Si necesita ayuda con algún paso del registro, dígame qué aparece y le ayudaré.";
+    return "注册过程中需要帮助的话，把页面情况告诉我就行。";
   }
   if (step === "telegram_confirm" || step === "telegram_download" || step === "collect_telegram") {
     if (replyLanguage === "en") return "If Telegram is difficult to set up, tell me where you are stuck and I will guide you.";

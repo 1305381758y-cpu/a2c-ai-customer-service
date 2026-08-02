@@ -3,6 +3,7 @@ import type { Conversation, ConversationMessageRecord } from "../repositories.js
 import { type InternalIntentLabel, type MessageAnalysis } from "./analyzer.js";
 import {
   asksCustomerCorrection,
+  isAffirmativeJobSeekingStatement,
   asksForInviteOrLink,
   asksGenericQuestionPermission,
   asksNextStep,
@@ -70,6 +71,17 @@ export function buildStrictFlowReply(input: StrictFlowInput): StrictFlowReply {
   const inferredIntent = input.inferredIntent ?? "unknown";
 
   if (!step || step === "first_greeting") {
+    if (isAffirmativeJobSeekingStatement(text)) {
+      return buildRegistrationStepReply(input, {
+        language,
+        step: "interest_screening",
+        text,
+        contextualLabel: "positive_confirmation",
+        positive: true,
+        asksLink: false,
+        inferredIntent
+      });
+    }
     return buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "first_greeting", language));
   }
 
