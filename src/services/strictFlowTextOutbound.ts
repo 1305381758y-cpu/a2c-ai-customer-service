@@ -1,6 +1,7 @@
 import type { A2CClient } from "../clients/a2c.js";
 import type { AppConfig } from "../config.js";
 import type { StrictFlowReply } from "../domain/strictFlow.js";
+import { containsNextStepPrompt } from "../domain/strictFlowReplyText.js";
 import type {
   A2CInviteCodeRecord,
   Conversation,
@@ -182,12 +183,23 @@ function removeSameTurnDuplicates(
   refinements: StrictFlowReplyTextRefinementResult[]
 ): Array<{ reply: string; refinement: StrictFlowReplyTextRefinementResult }> {
   const results: Array<{ reply: string; refinement: StrictFlowReplyTextRefinementResult }> = [];
+  const seenRawReplies = new Set<string>();
   const seenReplies = new Set<string>();
   const seenOpenings = new Set<string>();
+  let registrationIntentPromptSeen = false;
 
   for (const refinement of refinements) {
     let reply = refinement.reply.trim();
     if (!reply) continue;
+    const normalizedRawReply = normalizeComparableText(reply);
+    if (!normalizedRawReply || seenRawReplies.has(normalizedRawReply)) continue;
+    seenRawReplies.add(normalizedRawReply);
+
+    const hasRegistrationIntentPrompt = containsNextStepPrompt(reply, "registration_intent");
+    if (hasRegistrationIntentPrompt && registrationIntentPromptSeen) {
+      reply = removeNextStepPrompt(reply, "registration_intent");
+      if (!reply) continue;
+    }
     const opening = firstSentence(reply);
     const normalizedOpening = normalizeComparableText(opening);
     if (opening && normalizedOpening && seenOpenings.has(normalizedOpening)) {
@@ -201,6 +213,7 @@ function removeSameTurnDuplicates(
 
     seenReplies.add(normalizedReply);
     if (normalizedOpening) seenOpenings.add(normalizedOpening);
+    if (hasRegistrationIntentPrompt) registrationIntentPromptSeen = true;
     results.push({
       reply,
       refinement: reply === refinement.reply ? refinement : {
@@ -214,6 +227,15 @@ function removeSameTurnDuplicates(
   }
 
   return results;
+}
+
+function removeNextStepPrompt(value: string, nextStep: "registration_intent"): string {
+  const sentences = value.match(/[^。！？.!?\n]+[。！？.!?]?/g) ?? [value];
+  return sentences
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence && !containsNextStepPrompt(sentence, nextStep))
+    .join(" ")
+    .trim();
 }
 
 function firstSentence(value: string): string {

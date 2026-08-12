@@ -41,6 +41,12 @@ export function buildWaitRegistrationReply(input: StrictFlowInput, context: Wait
   const { language, step, text, contextualLabel, negativeTelegram, asksLink, inferredIntent } = context;
   const linkFailureHandoffReason = "客户反馈无法打开注册链接";
 
+  if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal") {
+    return {
+      ...buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "refusal_ack", language)),
+      flowHoldReason: "rejected"
+    };
+  }
   if (contextualLabel === "incomplete_phone") {
     return buildStrictFlowResponse(input, language, "wait_registration", "need_platform_register", flowScriptLine(input, "incomplete_phone_ack", language));
   }

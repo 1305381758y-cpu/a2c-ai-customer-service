@@ -44,6 +44,8 @@ describe("strict flow registration link failure detection", () => {
       "fica em branco e não abre",
       "a página continua em branco",
       "o link ainda não carrega"
+      ,"O link abre uma tela vazia e não carrega"
+      ,"Já troquei de rede e navegador, mas continua em branco"
     ];
 
     for (const message of messages) {

@@ -16,6 +16,7 @@ import {
   isExplicitRefusal,
   isHesitant,
   isPositive,
+  isPromptInjectionAttempt,
   isRepeatGreeting,
   saysNotAvailable
 } from "./strictFlowPredicates.js";
@@ -165,6 +166,13 @@ function buildCustomerQuestionControlReply(
   contextualIntent: StrictContextualIntent
 ): StrictFlowReply | null {
   if (!step || step === "human_handoff" || step === "ended") return null;
+  if (isPromptInjectionAttempt(text)) {
+    return withAwaitingCustomerQuestion(
+      buildStrictFlowResponse(input, language, step, input.conversation.stage, flowScriptLine(input, "sensitive_info_ack", language)),
+      false,
+      "answer_customer_question"
+    );
+  }
   if (input.analysis.phone || input.analysis.telegram || isExplicitRefusal(text) || cancelsPendingCustomerQuestion(text)) return null;
 
   if (asksCustomerCorrection(text)) {

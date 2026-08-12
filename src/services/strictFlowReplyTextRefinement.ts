@@ -93,11 +93,13 @@ export async function refineStrictFlowReplyText(input: {
   }
 
   if (input.strictReply.nextFlowStep === "human_handoff") {
+    const teacherLinkFallback = localizedTeacherLinkFallback(input.strictReply.reply, input.strictReply.language);
     const languageGuard = await ensureReplyCustomerLanguage(input.runtimeConfig, {
       reply: input.strictReply.reply,
       targetLanguage: input.strictReply.language,
       flowStep: input.strictReply.nextFlowStep,
-      allowLinkOrInvite: false
+      allowLinkOrInvite: false,
+      fallbackReply: teacherLinkFallback || undefined
     });
     return {
       reply: languageGuard.reply,
@@ -289,11 +291,31 @@ export async function refineStrictFlowReplyText(input: {
   };
 }
 
+function localizedTeacherLinkFallback(reply: string, language: string): string {
+  const link = reply.match(/https?:\/\/(?:t\.me|telegram\.me)\/\S+/i)?.[0]?.replace(/[，。,.]+$/, "") || "";
+  if (!link) return "";
+  if (language === "pt-BR") {
+    return `Agora vou enviar o link do Telegram da professora. Abra o link e entre em contato diretamente com ela. Ela vai orientar você nos próximos passos.\n${link}`;
+  }
+  if (language === "es") {
+    return `Ahora le envío el enlace de Telegram de la profesora. Abra el enlace y contacte directamente con ella. Le explicará los próximos pasos.\n${link}`;
+  }
+  if (language === "en") {
+    return `I am sending you the teacher's Telegram link now. Open it and contact her directly. She will guide you through the next steps.\n${link}`;
+  }
+  return `现在把老师的 Telegram 链接发给您。请打开链接并主动联系导师，她会继续指导后续步骤。\n${link}`;
+}
+
 function sanitizeStrictNaturalizedReply(reply: string, fallback: string): { reply: string; rejected: boolean } {
-  if (asksForUnsupportedManualRegistration(reply)) {
+  if (asksForUnsupportedManualRegistration(reply) || containsUnsupportedAssurance(reply)) {
     return { reply: fallback, rejected: true };
   }
   return { reply, rejected: false };
+}
+
+function containsUnsupportedAssurance(text: string): boolean {
+  if (/(?:não|nao) posso garantir|no puedo garantizar|cannot guarantee|can'?t guarantee|无法保证|不能保证/i.test(text)) return false;
+  return /(?:100%|totalmente|completamente)\s+segur[oa]|(?:sem|não há|nao ha)\s+(?:nenhum\s+)?risco|sem nada escondido|rápid[oa]\s+e\s+segur[oa]|garantid[oa]|não é golpe|nao e golpe|100% safe|completely safe|no risk|nothing hidden|guaranteed|not a scam|完全安全|没有任何风险|绝对不会被骗|保证安全|不是骗局|不是诈骗/i.test(text);
 }
 
 function enforceCustomerQuestionBoundary(

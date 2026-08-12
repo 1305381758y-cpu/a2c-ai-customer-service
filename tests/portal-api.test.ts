@@ -3210,17 +3210,17 @@ describe("portal api", () => {
         expect(webhook.json().status).toBe("strict_flow_replied");
       }
 
-      expect(sentMessages).toHaveLength(3);
+      expect(sentMessages).toHaveLength(2);
       const secondReply = String(sentMessages[1].content);
       expect(secondReply).toContain("online part-time job");
-      expect(String(sentMessages[2].content)).toContain("registration");
+      expect(secondReply).toContain("registration");
       expect(secondReply).not.toMatch(/[\u3400-\u9fff]/);
 
       const conversations = await app.inject({ method: "GET", url: "/api/merchant/conversations", headers: { cookie: merchantCookie } });
       const conversationId = conversations.json().rows[0].id as string;
       const messages = await app.inject({ method: "GET", url: `/api/merchant/conversations/${conversationId}/messages`, headers: { cookie: merchantCookie } });
       const outbounds = messages.json().rows.filter((row: { direction: string }) => row.direction === "outbound");
-      expect(outbounds[2].rawPayload).toMatchObject({
+      expect(outbounds[1].rawPayload).toMatchObject({
         strictFlow: true,
         strictFlowStep: "project_intro",
         nextStrictFlowStep: "registration_intent",

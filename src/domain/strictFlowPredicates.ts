@@ -80,6 +80,10 @@ export function saysNotAvailable(text: string): boolean {
   return TEMPORARY_PAUSE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+export function isPromptInjectionAttempt(text: string): boolean {
+  return /(ignore|disregard|forget).{0,30}(previous|prior|above|system).{0,30}(rules?|instructions?|prompt)|(?:system|developer)\s*prompt|developer mode|act as (?:an? )?(?:admin|administrator)|bypass.{0,20}(?:flow|rules?|guard)|skip.{0,20}(?:flow|steps?|rules?)|(?:show|reveal|print|output|send).{0,30}(?:system|developer).{0,12}prompt|ignore.{0,30}(?:regras|instru[cç][oõ]es).{0,20}(?:anteriores|acima)|(?:prompt|instru[cç][oõ]es).{0,12}(?:do sistema|internas)|modo desenvolvedor|finja ser.{0,12}administrador|pule.{0,20}(?:fluxo|etapas|regras)|ignora.{0,30}(?:reglas|instrucciones).{0,20}(?:anteriores|previas)|(?:prompt|instrucciones).{0,12}(?:del sistema|internas)|modo desarrollador|finge ser.{0,12}administrador|salta.{0,20}(?:flujo|pasos|reglas)|忽略.{0,20}(?:之前|以上|所有|系统).{0,20}(?:规则|指令|提示)|(?:系统|开发者)提示词|开发者模式|冒充.{0,8}管理员|跳过.{0,12}(?:流程|步骤|规则)|输出.{0,12}(?:系统|内部).{0,8}(?:提示词|指令)/i.test(text);
+}
+
 const TEMPORARY_PAUSE_PATTERNS = [
   /(等我.{0,8}(几分钟|几分鈡|一下|一会儿|一會兒|分钟|分鐘)|(?:需要|要|得)?(?:等待|等).{0,8}(?:[零一二两三四五六七八九十百\d]+|几|幾)?(?:分钟|分鐘|分鈡|小时|小時)|等到.{0,12}(晚上|下午|明天|今天晚些时候|[0-9]{1,2}\s*[点时])|稍等.{0,8}(几分钟|一下|一会儿|一會兒)|过.{0,4}(几分钟|一会儿|一會兒)|过一会儿|過一會兒|稍后再|晚点再|晚一点再|等一下再)/i,
   /(?:暂时|暫時|现在|現在|目前|这会儿|這會兒|这会|這會|此刻).{0,10}(?:没空|沒空|没有空|沒有空|没时间|沒時間|没有时间|沒有時間|不方便|不行|不能|忙|抽不开身|抽不開身|安排不开|安排不開|走不开|走不開)/i,
@@ -92,6 +96,7 @@ const TEMPORARY_PAUSE_PATTERNS = [
   /(?:right now|at the moment).{0,16}(?:busy|can'?t|cannot|not free|not available|no time)|(?:busy|not free|not available|no time).{0,12}(?:right now|at the moment)?/i,
   /(?:later|in a bit|afterwards).{0,16}(?:continue|do it|register|come back|message)|(?:can only|only can).{0,16}(?:do it|register|continue).{0,12}later|can we continue later|i(?:'ll| will) come back in a bit/i,
   /(?:agora|no momento|neste momento).{0,16}(?:não posso|nao posso|sem tempo|ocupad|indispon[ií]vel)|(?:estou|tô|to).{0,10}(?:ocupad|sem tempo|indispon[ií]vel)/i,
+  /(?:agora|no momento|neste momento).{0,24}(?:não consigo|nao consigo).{0,16}(?:continuar|fazer|cadastro)|(?:preciso|necessito).{0,12}(?:de )?(?:uns?|alguns?)?.{0,8}(?:minut|tempo|momento)/i,
   /(?:pode )?(?:esperar|aguardar).{0,12}(?:um pouco|momento|minut)|me (?:dê|de|dá|da).{0,10}(?:tempo|tempinho|minut|momento)/i,
   /(?:mais tarde|depois|daqui a pouco).{0,16}(?:continu|faço|faco|fazer|falo|falamos|cadastro)|s[oó] consigo.{0,16}(?:mais tarde|depois)|falamos mais tarde/i,
   /(?:ahora|en este momento|por ahora).{0,16}(?:no puedo|no tengo tiempo|ocupad|no estoy disponible)|estoy.{0,10}(?:ocupad|sin tiempo)/i,
@@ -222,6 +227,7 @@ export function asksToAnswerPreviousQuestion(text: string): boolean {
 
 export function asksHowToOpenLink(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  if (/(?:link|p[aá]gina).{0,40}(?:tela vazia|em branco).{0,30}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|(?:tela vazia|em branco).{0,30}(?:n[aã]o|nao).{0,12}(?:carrega|abre)/i.test(normalized)) return true;
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
   if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar|no puedo abrirlo|no puedo cargarlo|todav[ií]a no se puede cargar|todav[ií]a no puedo abrirlo|todav[ií]a no carga|sigue sin cargar|sigue sin abrir|no carga|no abre)$/i.test(normalized)) return true;
   return /(链接.*怎么.*打开|链接.*打不开|链接.*无法.*打开|链接.*不能.*打开|链接.*打不.*开|链接.*加载不了|链接.*无法加载|打不.*链接|打不开.*链接|无法.*打开.*链接|无法.*加载.*链接|怎么打开.*链接|(卡在|卡到|卡住|开在|開在).*(打开链接|打開鏈接|链接|鏈接)|浏览器.*打开|chrome|safari|how.*open.*link|link.*not.*open|link.*won'?t.*open|cannot.*open.*link|abrir.*link|link.*não abre|link.*nao abre|(?:continua|ainda|segue).{0,20}sem carregar|(?:fica|continua).{0,20}em branco|(?:link|p[aá]gina).{0,20}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|no termina de cargar|no hay nada|en blanco|(enlace|link).*no.*(abre|abrir|acceder|carga|cargar)|no me deja.*(entrar|acceder).*(enlace|link))/i.test(text);
@@ -229,6 +235,7 @@ export function asksHowToOpenLink(text: string): boolean {
 
 export function reportsLinkLoadFailure(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
+  if (/(?:link|p[aá]gina).{0,40}(?:tela vazia|em branco).{0,30}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|(?:tela vazia|em branco).{0,30}(?:n[aã]o|nao).{0,12}(?:carrega|abre)/i.test(normalized)) return true;
   if (/^(还是)?(打不开|打不開|无法打开|無法打開|开不了|開不了|进不去|進不去|打不开了|打不開了)$/i.test(normalized)) return true;
   if (/^(no puedo acceder|no logro acceder|no puedo entrar|no me deja entrar|no puedo abrirlo|no puedo cargarlo|todav[ií]a no se puede cargar|todav[ií]a no puedo abrirlo|todav[ií]a no carga|sigue sin cargar|sigue sin abrir|no carga|no abre)$/i.test(normalized)) return true;
   return /(还是.*(打不开|打不開|开不了|開不了|进不去|進不去|加载不出来|載入不出來|无法加载|無法載入)|我说.*(打不开|打不開|无法打开|無法打開|无法加载|無法載入)|没有报错.*(打不开|打不開|加载不出来|无法加载|空白)|没报错.*(打不开|打不開|加载不出来|无法加载|空白)|無報錯.*(打不開|載入不出來)|链接.*(一直加载|加载不出来|无法加载|載入不出來|空白|没反应|沒有反應)|页面.*(加载不出来|无法加载|載入不出來|空白|白屏|没内容|沒有內容)|加载.{0,8}空白|載入.{0,8}空白|白屏|无法加载内容|載入不了內容|cannot load|won'?t load|still.*not.*open|still.*cannot.*open|page.*blank|page.*not.*load|blank page|(?:continua|ainda|segue).{0,20}sem carregar|(?:fica|continua).{0,20}em branco|(?:link|p[aá]gina).{0,20}(?:n[aã]o|nao).{0,12}(?:carrega|abre)|no puedo acceder.*(enlace|link)|no logro acceder.*(enlace|link)|no puedo abrir.*(enlace|link)|no puedo (abrir|cargar)(lo|la|el)?|no se puede (abrir|cargar|acceder)|(todav[ií]a|a[uú]n|sigo|sigue).{0,30}no.{0,20}(carga|abre|abrir|acceder|entrar|puede cargar)|sigo sin poder (acceder|entrar|abrir|cargar)(?:\\s+a\\s+(?:ello|ellos|eso|la p[aá]gina))?|he probado otros m[eé]todos.{0,60}(sin poder|no puedo|no se puede).{0,20}(abrir|acceder|cargar|entrar)|no termina de cargar|no carga[,，]? no hay nada|no hay nada|en blanco|(enlace|link).*no.*(carga|cargar|abre|abrir|acceder)|p[aá]gina.*no.*(carga|cargar|abre)|no carga.*(p[aá]gina|enlace|link))/i.test(text);
@@ -249,6 +256,9 @@ export function cancelsPendingCustomerQuestion(text: string): boolean {
 export function explicitlyResumesFlow(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(有空|有空了|我有空|方便|方便了|我方便了|现在可以|現在可以|可以继续了|可以繼續了)$/i.test(normalized)) return true;
+  const availableNow = /(?:我?现在有空|我?现在方便|我?已经有空|我?已經有空|estou\s+(?:dispon[ií]vel|livre)|tenho\s+tempo|estoy\s+(?:disponible|libre)|tengo\s+tiempo|i(?:'m| am)\s+(?:available|free|ready))/i.test(normalized);
+  const wantsToContinue = /(?:可以|能|要|想).{0,8}(?:继续|繼續|开始|開始)|(?:podemos|posso|vamos|pode)\s+continuar|(?:podemos|puedo|vamos|puede)\s+continuar|(?:can|want to|let'?s)\s+continue/i.test(normalized);
+  if (availableNow && wantsToContinue) return true;
   return /(我现在有空|现在有空|现在方便|我准备好了|准备开始|可以开始注册|继续注册|继续开户|发注册链接|发链接|(?:忙完|处理完|處理完|弄完|办完|辦完)了?.{0,8}(?:可以|能|继续|繼續|开始|開始)|(?:好了|行了|可以了).{0,8}(?:有空|方便|继续|繼續|开始|開始)|i(?:'m| am) (?:ready|available|free)|i can continue now|ready to (?:start|continue|register)|let'?s continue|i(?:'m| am) back|continue registration|send (?:the )?(?:registration )?link|^(?:estou\s+dispon[ií]vel|estou\s+livre|tenho\s+tempo|podemos\s+continuar|pode\s+continuar|vamos\s+continuar)$|(?:agora|j[aá]).{0,16}(?:tenho tempo|estou livre|estou dispon[ií]vel|posso continuar|podemos continuar)|estou pront[oa]|podemos continuar (?:o )?cadastro|vamos continuar (?:o )?cadastro|envie (?:o )?link|^(?:estoy\s+disponible|estoy\s+libre|tengo\s+tiempo|podemos\s+continuar|puede\s+continuar)$|(?:ahora|ya).{0,16}(?:tengo tiempo|estoy libre|estoy disponible|puedo continuar|podemos continuar)|estoy list[oa]|podemos continuar (?:con )?el registro|vamos a continuar (?:con )?el registro|env[ií]e (?:el )?enlace)/i.test(normalized);
 }
 
@@ -332,7 +342,7 @@ export function complainsAboutReply(text: string): boolean {
 export function isExplicitRefusal(text: string): boolean {
   const normalized = text.trim().replace(/[。.!?！？,，;；:：]+$/g, "");
   if (/^(不是|不|否|不了|不要|不用|no|nope|nah|não|nao)$/i.test(normalized)) return true;
-  return /(不接受|不想接受|不用了|不需要|不了|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|do not accept|don't accept|stop|não quero|nao quero|não aceito|nao aceito|sem interesse|pare)/i.test(text);
+  return /(不接受|不想接受|不用了|不需要|算了|没兴趣|不想|不要|别发了|不要再发|停止|no thanks|not interested|do not accept|don't accept|stop|não\s+precis(?:o|ar)|nao\s+precis(?:o|ar)|não quero|nao quero|não aceito|nao aceito|sem interesse|deixa pra lá|deixa pra la|pare)/i.test(text);
 }
 
 export function isHesitant(text: string): boolean {
@@ -377,5 +387,5 @@ export function isAffirmativeJobSeekingStatement(text: string): boolean {
 }
 
 export function isRepeatGreeting(text: string): boolean {
-  return /^(你好|您好|在吗|在不在|嗨|hi|hello|hey|good morning|good afternoon|good evening|ol[aá]|oi|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
+  return /^(你好|您好|在吗|在不在|嗨|hi+|hello+|hey+|good morning|good afternoon|good evening|ol[aá]+|o+i+|bom dia|boa tarde|boa noite|こんにちは|こんばんは)\s*[。.!?？！]*$/i.test(text);
 }

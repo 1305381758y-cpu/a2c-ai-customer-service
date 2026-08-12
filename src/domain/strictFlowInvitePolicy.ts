@@ -18,10 +18,11 @@ import {
   looksLikeQuestion
 } from "./strictFlowPredicates.js";
 
-export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "strictFlowEnabled">): boolean {
+export function strictFlowNeedsInviteCode(input: Pick<StrictFlowInput, "merchant" | "country" | "conversation" | "analysis" | "customerText" | "inferredIntent" | "contextualIntent" | "strictFlowEnabled">): boolean {
   if (!(input.strictFlowEnabled ?? isStrictFlowEnabled(input.merchant, input.country)) || !input.country.requirePlatformAccount) return false;
   if (input.conversation.extractedPhone && input.conversation.extractedTelegram) return false;
   const step = normalizeFlowStep(input.conversation.flowStep);
+  if (input.contextualIntent && ["chat", "negative_refusal", "not_available", "platform_register_done"].includes(input.contextualIntent.intent)) return false;
   if (step === "wait_registration" && (
     input.analysis.intent === "platform_register_done" ||
     input.inferredIntent === "platform_register_done" ||

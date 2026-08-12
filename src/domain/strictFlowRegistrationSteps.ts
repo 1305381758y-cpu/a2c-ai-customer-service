@@ -11,6 +11,7 @@ import {
   complainsAboutReply,
   isExplicitRefusal,
   explicitlyResumesFlow,
+  saysNotAvailable,
   isReadyToStartRegistration,
   isRegistrationDoneConfirmation
 } from "./strictFlowPredicates.js";
@@ -33,6 +34,19 @@ export interface RegistrationStepReplyContext {
 export function buildRegistrationStepReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   if (context.step === "interest_screening") return buildInterestScreeningReply(input, context);
   if (context.step === "project_intro") {
+    const resumesHeldFlow = explicitlyResumesFlow(context.text) || input.contextualIntent?.nextAction === "resume held flow";
+    if (context.contextualLabel === "not_available" || saysNotAvailable(context.text)) {
+      return withFlowHold(
+        buildStrictFlowResponse(input, context.language, "project_intro", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", context.language)),
+        "temporary_pause"
+      );
+    }
+    if (input.conversation.flowHoldReason && !resumesHeldFlow && (context.contextualLabel === "acknowledgement" || context.positive)) {
+      return withFlowHold(
+        buildStrictFlowResponse(input, context.language, "project_intro", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", context.language)),
+        input.conversation.flowHoldReason
+      );
+    }
     const nextStep = configuredNextFlowStep(input, "project_intro", "registration_intent");
     const parts = buildInterestProgressReplyParts(input, context.step, context.text, context.language, input.analysis.intent);
     const reply = buildStrictFlowResponse(
@@ -44,6 +58,7 @@ export function buildRegistrationStepReply(input: StrictFlowInput, context: Regi
     );
     reply.replyParts = parts.length > 1 ? parts : undefined;
     reply.replyFlowStep = "project_intro";
+    reply.flowHoldReason = "";
     return reply;
   }
   if (context.step === "registration_intent") return buildRegistrationIntentReply(input, context);
@@ -54,11 +69,25 @@ export function buildRegistrationStepReply(input: StrictFlowInput, context: Regi
 
 function buildInterestScreeningReply(input: StrictFlowInput, context: RegistrationStepReplyContext): StrictFlowReply {
   const { language, step, text, contextualLabel, positive, asksLink, inferredIntent } = context;
+  const resumesHeldFlow = explicitlyResumesFlow(text) || input.contextualIntent?.nextAction === "resume held flow";
+
+  if (input.conversation.flowHoldReason && !resumesHeldFlow && (contextualLabel === "acknowledgement" || positive)) {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language)),
+      input.conversation.flowHoldReason
+    );
+  }
+  if (contextualLabel === "not_available" || saysNotAvailable(text)) {
+    return withFlowHold(
+      buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "temporary_pause_ack", language)),
+      "temporary_pause"
+    );
+  }
 
   if (contextualLabel === "negative_refusal" || inferredIntent === "negative_refusal" || isExplicitRefusal(text)) {
     return buildStrictFlowResponse(input, language, "interest_screening", "need_platform_register", flowScriptLine(input, "refusal_ack", language));
   }
-  if (positive || asksAboutJob(text) || asksEarningConcern(text)) {
+  if (positive || resumesHeldFlow || asksAboutJob(text) || asksEarningConcern(text)) {
     const configuredStep = configuredNextFlowStep(input, "interest_screening", "registration_intent");
     const nextStep = configuredStep === "project_intro"
       ? configuredNextFlowStep(input, "project_intro", "registration_intent")
@@ -68,6 +97,7 @@ function buildInterestScreeningReply(input: StrictFlowInput, context: Registrati
     reply.replyParts = parts;
     reply.reply = parts.join("\n\n");
     reply.replyFlowStep = "project_intro";
+    reply.flowHoldReason = "";
     return reply;
   }
   if (inferredIntent === "ask_platform_register" || input.analysis.intent === "ask_platform_register") {

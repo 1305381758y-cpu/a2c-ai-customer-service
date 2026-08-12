@@ -178,6 +178,34 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).not.toMatch(/registramos por aquí|nombre.*Telegram/i);
   });
 
+  it("rejects naturalized guarantees and hidden-risk assurances", async () => {
+    const ai = {
+      naturalizeStrictFlowText: vi.fn(async () => ({
+        text: "O cadastro é rápido e seguro, sem nada escondido e sem nenhum risco.",
+        used: true,
+        error: ""
+      }))
+    };
+
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "As regras e a verificação seguem a página. Se algo não ficar claro, pode perguntar.",
+        language: "pt-BR",
+        controlledQuestionType: "trust"
+      }),
+      customerText: "É seguro?",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).toContain("regras e a verificação");
+    expect(result.reply).not.toMatch(/sem nada escondido|sem nenhum risco|rápido e seguro/i);
+    expect(result.naturalized.used).toBe(false);
+  });
+
   it("does not naturalize customer-visible handoff acknowledgements", async () => {
     const ai = {
       naturalizeStrictFlowText: vi.fn(async () => ({
@@ -208,6 +236,28 @@ describe("strict flow reply text refinement", () => {
     expect(result.reply).toBe("Estoy verificándolo ahora. Espere un momento, por favor.");
     expect(result.reply).not.toMatch(/compañero|pasarlo|revise directo/i);
     expect(result.naturalized).toMatchObject({ used: false, error: "接管提示保留固定话术" });
+  });
+
+  it("preserves a teacher Telegram link when handoff wording needs a local language fallback", async () => {
+    const ai = { naturalizeStrictFlowText: vi.fn() };
+    const result = await refineStrictFlowReplyText({
+      ai: ai as never,
+      runtimeConfig: config(),
+      strictReply: strictReply({
+        reply: "现在把老师的 Telegram 链接发给您，请主动联系导师。https://t.me/local_teacher",
+        language: "pt-BR",
+        nextFlowStep: "human_handoff",
+        stage: "ready_for_handoff"
+      }),
+      customerText: "Tenho Telegram",
+      history: [],
+      agentProfile: agentProfile(),
+      scriptFlow: scriptFlow()
+    });
+
+    expect(result.reply).toContain("https://t.me/local_teacher");
+    expect(result.reply).toMatch(/entre em contato diretamente/i);
+    expect(result.reply).not.toMatch(/verificando suas informações/i);
   });
 
   it("keeps active merchant script-flow wording unchanged", async () => {

@@ -59,7 +59,8 @@ export function buildStrictFlowTurn(input: {
     analysis: input.analysis,
     customerText: input.customerText,
     strictFlowEnabled: input.strictFlowEnabled,
-    inferredIntent: input.inferredIntent
+    inferredIntent: input.inferredIntent,
+    contextualIntent: input.contextualIntent
   });
   const inviteCode = needsInviteCode
     ? input.repos.reserveInviteCodeForConversation(input.conversation)

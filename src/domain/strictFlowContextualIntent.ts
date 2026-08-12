@@ -28,6 +28,7 @@ import {
   isAffirmativeJobSeekingStatement,
   explicitlyResumesFlow,
   isPositive,
+  isPromptInjectionAttempt,
   isRepeatGreeting,
   lastAssistantContent,
   looksLikeQuestion,
@@ -40,6 +41,7 @@ import {
   saysTelegramUsernameMissing
 } from "./strictFlowPredicates.js";
 import { normalizeFlowStep } from "./strictFlowState.js";
+import { resolveNodeTurnSemantic } from "./strictFlowNodeSemantics.js";
 import type { StrictContextualIntent, StrictFlowInput } from "./strictFlowTypes.js";
 
 const FLOW_CONTROL_INTENTS = new Set<ContextualIntentLabel>([
@@ -84,6 +86,14 @@ export function buildRuleContextualIntent(
   });
 
   if (!text) return base("unknown", { source: "none" });
+  if (isPromptInjectionAttempt(text)) {
+    return base("sensitive_request", {
+      isQuestion: true,
+      shouldPause: true,
+      nextAction: "reject instruction override and keep current step",
+      reason: "prompt injection attempt"
+    });
+  }
   if ((step === "telegram_download" || step === "collect_telegram") && asksTelegramVerificationCodeProblem(text)) {
     return base("need_help", {
       isQuestion: false,
@@ -108,6 +118,74 @@ export function buildRuleContextualIntent(
   }
   if (input.analysis.telegram) return base("telegram_submission", { nextAction: "save telegram and check handoff", reason: "telegram detected" });
   if (input.analysis.phone) return base("phone_submission", { nextAction: "save phone and continue telegram step", reason: "phone detected" });
+  const nodeSemantic = resolveNodeTurnSemantic({
+    step,
+    text,
+    language: input.analysis.language || input.conversation.language,
+    previousAssistantMessage
+  });
+  if (nodeSemantic.semantic === "greeting") {
+    return base("chat", {
+      answeredPreviousQuestion: false,
+      isQuestion: false,
+      shouldPause: false,
+      nextAction: step === "interest_screening"
+        ? "repeat the interest question without advancing"
+        : "acknowledge greeting and keep the current node",
+      reason: nodeSemantic.reason
+    });
+  }
+  if (nodeSemantic.semantic === "negative_refusal") {
+    return base("negative_refusal", {
+      answeredPreviousQuestion: true,
+      shouldPause: true,
+      nextAction: "stop registration guidance",
+      reason: nodeSemantic.reason
+    });
+  }
+  if (nodeSemantic.semantic === "registration_completed") {
+    return base("platform_register_done", {
+      answeredPreviousQuestion: true,
+      shouldPause: false,
+      nextAction: "ask for registered phone",
+      reason: nodeSemantic.reason
+    });
+  }
+  if (nodeSemantic.semantic === "positive_confirmation") {
+    const resumesHeldFlow = isPreRegistrationStep(step) && input.conversation.flowHoldReason === "temporary_pause";
+    return base("positive_confirmation", {
+      answeredPreviousQuestion: true,
+      shouldPause: false,
+      nextAction: resumesHeldFlow
+        ? "resume held flow"
+        : step === "registration_intent"
+          ? "continue registration flow"
+          : "continue the current node",
+      reason: nodeSemantic.reason
+    });
+  }
+  if (nodeSemantic.semantic === "acknowledgement") {
+    const keepsHeldFlow = isPreRegistrationStep(step) && Boolean(input.conversation.flowHoldReason);
+    // At interest screening a short Portuguese "sim/ss/simm" still answers
+    // the underlying interest question after a safety or boundary response.
+    // Do not require the immediately preceding assistant message to repeat
+    // the binary question, unless the conversation is explicitly paused or
+    // waiting for the customer to state a question.
+    if (step === "interest_screening" && !keepsHeldFlow && !input.conversation.awaitingCustomerQuestion) {
+      return base("positive_confirmation", {
+        answeredPreviousQuestion: true,
+        shouldPause: false,
+        nextAction: "continue to the configured project introduction",
+        reason: "Portuguese affirmative shorthand confirms interest after a safe boundary response"
+      });
+    }
+    return base("acknowledgement", {
+      answeredPreviousQuestion: true,
+      shouldPause: keepsHeldFlow,
+      nextAction: keepsHeldFlow ? "keep the persisted flow hold" : "acknowledge the current node without advancing",
+      reason: nodeSemantic.reason
+    });
+  }
   if (asksCustomerCorrection(text)) {
     return base("complaint", {
       isQuestion: true,
@@ -144,7 +222,7 @@ export function buildRuleContextualIntent(
     });
   }
 
-  if (step === "registration_intent" && (
+  if (isPreRegistrationStep(step) && (
     explicitlyResumesFlow(text) ||
     answersAvailabilityQuestionAffirmatively(text, previousAssistantMessage) ||
     (input.conversation.flowHoldReason === "temporary_pause" && answersResumeConfirmation(text, previousAssistantMessage))
@@ -200,10 +278,10 @@ export function buildRuleContextualIntent(
   if (step === "registration_intent" && isExplicitRefusal(text)) {
     return base("negative_refusal", { answeredPreviousQuestion: true, nextAction: "pause after refusal", reason: "explicit refusal" });
   }
-  if (step === "registration_intent" && saysNotAvailable(text)) {
+  if (isPreRegistrationStep(step) && saysNotAvailable(text)) {
     return base("not_available", { answeredPreviousQuestion: true, nextAction: "pause politely", reason: "not available now" });
   }
-  if (step === "registration_intent" && input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && isAcknowledgement(text)) {
+  if (isPreRegistrationStep(step) && input.conversation.flowHoldReason && !explicitlyResumesFlow(text) && isAcknowledgement(text)) {
     return base("acknowledgement", {
       answeredPreviousQuestion: true,
       shouldPause: true,
@@ -214,7 +292,7 @@ export function buildRuleContextualIntent(
   // A short acknowledgement immediately after a temporary unavailability
   // response means "understood", not "I am available now". Keep the flow
   // paused until the customer explicitly says they are ready.
-  if (step === "registration_intent" && isAcknowledgement(text) && saysNotAvailable(previousCustomerMessage)) {
+  if (isPreRegistrationStep(step) && isAcknowledgement(text) && saysNotAvailable(previousCustomerMessage)) {
     return base("acknowledgement", { answeredPreviousQuestion: true, shouldPause: true, nextAction: "wait until customer says ready", reason: "acknowledgement after temporary unavailability" });
   }
   if ((step === "telegram_download" || step === "collect_telegram") && isAcknowledgement(text)) {
@@ -253,4 +331,8 @@ export function buildRuleContextualIntent(
     });
   }
   return base("unknown", { source: "none" });
+}
+
+function isPreRegistrationStep(step: ReturnType<typeof normalizeFlowStep>): boolean {
+  return step === "interest_screening" || step === "project_intro" || step === "registration_intent";
 }

@@ -431,8 +431,8 @@ describe("strict flow reply module", () => {
     const strictFlowRuntime: StrictFlowRuntimeEngine = {
       nextTurn: () => ({
         enabled: true,
-        reply: "第一段介绍\n\n第二段说明",
-        replyParts: ["第一段介绍", "第二段说明"],
+        reply: "Primeira parte da apresentação.\n\nSegunda parte da apresentação.",
+        replyParts: ["Primeira parte da apresentação.", "Segunda parte da apresentação."],
         replyFlowStep: "project_intro",
         language: "pt-BR",
         nextFlowStep: "registration_intent",

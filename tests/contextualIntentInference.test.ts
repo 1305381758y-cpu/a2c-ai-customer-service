@@ -86,6 +86,44 @@ describe("contextual intent inference", () => {
     expect(ai.classifyContextualIntent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { text: "Bom dia", step: "registration_intent", expected: "chat" },
+    { text: "Fiz", step: "wait_registration", expected: "platform_register_done" },
+    { text: "Não precisar", step: "wait_registration", expected: "negative_refusal" }
+  ])("keeps high-confidence node semantics ahead of AI: $text", async ({ text, step, expected }) => {
+    const ai = aiTasksMock({
+      classifyContextualIntent: vi.fn(async () => ({
+        intent: "positive_confirmation" as const,
+        answeredPreviousQuestion: true,
+        isQuestion: false,
+        shouldPause: false,
+        questionType: "none" as const,
+        nextAction: "advance",
+        reason: "incorrect AI result"
+      }))
+    });
+
+    const result = await inferStrictFlowContextualIntent({
+      ai,
+      runtimeConfig,
+      conversation: conversation({ flowStep: step as Conversation["flowStep"], language: "pt-BR" }),
+      analysis: { ...analyzeMessage(text, "pt-BR"), intent: "unknown" },
+      customerText: text,
+      strictFlowEnabled: true,
+      history: [{
+        direction: "outbound",
+        content: step === "wait_registration" ? "Quando terminar o cadastro, avise." : "Você tem tempo livre em casa?",
+        intent: "unknown",
+        createdAt: "2026-08-06T00:00:00.000Z"
+      }],
+      inferredIntent: "positive_confirmation"
+    });
+
+    expect(result.intent).toBe(expected);
+    expect(result.source).toBe("rule");
+    expect(ai.classifyContextualIntent).not.toHaveBeenCalled();
+  });
+
   it("asks AI for contextual classification when strict flow text is unclear", async () => {
     const ai = aiTasksMock();
 
